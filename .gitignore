@@ -1,0 +1,68 @@
+# ---- dependencies ----
+node_modules/
+.pnp
+.pnp.*
+
+# ---- env / secrets (NEVER commit) ----
+.env
+.env.local
+.env.*.local
+client/.env
+server/.env
+
+# MCP server config — contains an API key, keep local only
+.mcp.json
+
+# env templates — excluded per project preference
+.env.example
+client/.env.example
+server/.env.example
+
+# ---- build output ----
+dist/
+build/
+client/dist/
+server/dist/
+*.tsbuildinfo
+
+# ---- caches ----
+.vite/
+.cache/
+.eslintcache
+.turbo/
+*.tmp
+
+# ---- prisma local db files ----
+*.db
+*.db-journal
+
+# ---- planning / reference docs (kept local, not pushed) ----
+app_structure_system_blueprint.md
+Progress_Tracking_App_Plan.md
+Stitch_UI_Prompts.md
+design-reference/
+
+# ---- logs ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- coverage / test output ----
+coverage/
+
+# ---- editor / OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# NOTE:
+# - Landing-page media IS committed now (client/public/assets/) per request.
+# - Kept in git: server/prisma/migrations/**, schema.prisma, source code, CLAUDE.md, README.md.
+
+# Uploaded daily-log attachments (runtime files, not source)
+server/uploads/

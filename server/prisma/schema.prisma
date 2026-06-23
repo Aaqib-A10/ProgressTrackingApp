@@ -1,0 +1,501 @@
+// PulseTrack — Prisma schema (Phase 1 core).
+// Source of truth for the data model: Progress_Tracking_App_Plan.md (§2–§5, §9)
+// and CLAUDE.md "Domain rules". Marketing models (SEO/Social/Content/Kanban/
+// editorial calendar) are added in Phase 3.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  MEMBER // own data only
+  TEAM_LEAD // whole department
+  SUB_DEPT_LEAD // one Marketing sub-department
+  SUPER_ADMIN // everything
+}
+
+/// Account approval state. Team Leads self-register as PENDING and must be
+/// approved by a Super Admin before they can log in. Everyone else is ACTIVE.
+enum UserStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+/// Kinds of team-roster changes recorded for the Team History view.
+enum TeamEventType {
+  INVITED
+  REMOVED
+  REACTIVATED
+}
+
+enum DepartmentType {
+  ITAD
+  LEAD_GEN
+  MARKETING
+}
+
+/// Status of a daily entry. A non-SUBMITTED day carries no metrics and is
+/// excluded from averages/targets (leave-aware rule).
+enum DayStatus {
+  SUBMITTED
+  ON_LEAVE
+  HOLIDAY
+  OFF
+}
+
+enum TagType {
+  VERTICAL  // Lead Gen industry verticals (School District, Telecom, ...)
+  LEAD_TYPE // Lead Gen lead categories (New Lead, BBR, RTLG)
+  PLATFORM  // Social platforms (Facebook, LinkedIn, ...)
+  CAMPAIGN
+  DATA_SOURCE
+}
+
+enum TargetPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum TargetScope {
+  DEPARTMENT
+  SUB_DEPARTMENT
+  USER
+}
+
+enum LeaveType {
+  ON_LEAVE
+  HOLIDAY
+  OFF
+}
+
+/// Tone of a piece of Team Lead → employee feedback.
+enum FeedbackSentiment {
+  PRAISE
+  NEUTRAL
+  IMPROVEMENT
+}
+
+// ---------- Org structure ----------
+
+model Department {
+  id        String         @id @default(cuid())
+  type      DepartmentType @unique
+  name      String
+  createdAt DateTime       @default(now())
+
+  subDepartments SubDepartment[]
+  users          User[]
+  tags           Tag[]
+  targets        Target[]
+  feedback       Feedback[]
+}
+
+model SubDepartment {
+  id           String     @id @default(cuid())
+  name         String
+  slug         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+
+  users   User[]
+  targets Target[]
+
+  @@unique([departmentId, slug])
+}
+
+// ---------- Users & auth ----------
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String? // null for SSO-only accounts
+  googleId     String? @unique
+  name         String
+  role         Role       @default(MEMBER)
+  status       UserStatus @default(ACTIVE)
+  isActive     Boolean    @default(true)
+
+  departmentId    String?
+  department      Department?    @relation(fields: [departmentId], references: [id])
+  subDepartmentId String?
+  subDepartment   SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itadEntries    ItadDailyEntry[]
+  leadGenEntries LeadGenDailyEntry[]
+  seoEntries     SeoDailyEntry[]
+  socialEntries  SocialDailyEntry[]
+  marketingTasks MarketingTask[]
+  leaveDays      LeaveDay[]
+  targets        Target[]            @relation("UserTargets")
+  setTargets     Target[]            @relation("TargetSetBy")
+  auditLogs      AuditLog[]
+
+  feedbackAuthored Feedback[]      @relation("FeedbackAuthored")
+  feedbackReceived Feedback[]      @relation("FeedbackReceived")
+  feedbackReplies  FeedbackReply[] @relation("FeedbackReplies")
+
+  attachments EntryAttachment[]
+
+  @@index([departmentId])
+  @@index([subDepartmentId])
+}
+
+// ---------- Daily-log file attachments (ITAD / Lead Gen) ----------
+
+enum AttachmentKind {
+  ITAD
+  LEAD_GEN
+}
+
+/// A file an employee attaches to their daily log (Excel, Word, PDF, ...).
+/// Linked by user + kind + date so it survives entry re-submission.
+model EntryAttachment {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind         AttachmentKind
+  date         DateTime       @db.Date
+  storedName   String // randomized filename on disk
+  originalName String // name shown to the user
+  mimeType     String
+  size         Int
+  createdAt    DateTime       @default(now())
+
+  @@index([userId, kind, date])
+}
+
+// ---------- ITAD daily entries (§4.1) ----------
+
+model ItadDailyEntry {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime  @db.Date
+  status DayStatus @default(SUBMITTED)
+
+  callsDialed Int @default(0)
+  connected   Int @default(0)
+  voicemail   Int @default(0)
+  emailsSent  Int @default(0)
+  interested  Int @default(0)
+  workingOn   Int @default(0)
+  closed      Int @default(0)
+  rfqs        Int @default(0)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One entry per user per day — re-submitting upserts, never duplicates.
+  @@unique([userId, date])
+  @@index([date])
+}
+
+// ---------- Lead Gen daily entries (§5.1) ----------
+
+model LeadGenDailyEntry {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime  @db.Date
+  status DayStatus @default(SUBMITTED)
+
+  leadsGenerated     Int @default(0)
+  accountsResearched Int @default(0)
+  contactsFound      Int @default(0)
+  qualifiedMql       Int @default(0)
+  handedToSql        Int @default(0)
+
+  dataSource String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  verticalCounts LeadGenVerticalCount[]
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+/// Leads-per-vertical breakdown for a Lead Gen entry (§5.1).
+model LeadGenVerticalCount {
+  id      String            @id @default(cuid())
+  entryId String
+  entry   LeadGenDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tagId   String
+  tag     Tag               @relation(fields: [tagId], references: [id])
+  count   Int               @default(0)
+
+  @@unique([entryId, tagId])
+}
+
+// ---------- Team roster history (Team Lead invites / removals) ----------
+
+/// An append-only log of team membership changes, scoped to a department.
+/// Member name/email are snapshotted so history reads correctly over time.
+model TeamMemberEvent {
+  id           String        @id @default(cuid())
+  departmentId String
+  actorId      String? // who performed the action (Team Lead / Admin)
+  actorName    String
+  memberId     String? // affected member
+  memberName   String
+  memberEmail  String
+  type         TeamEventType
+  createdAt    DateTime      @default(now())
+
+  @@index([departmentId, createdAt])
+}
+
+// ---------- Tags (TL-managed lists: verticals, platforms, ...) ----------
+
+model Tag {
+  id           String      @id @default(cuid())
+  name         String
+  type         TagType
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+
+  verticalCounts LeadGenVerticalCount[]
+  socialCounts   SocialPlatformCount[]
+
+  @@unique([departmentId, type, name])
+}
+
+// ---------- Targets (§3) ----------
+
+model Target {
+  id        String       @id @default(cuid())
+  scope     TargetScope
+  metricKey String // e.g. "callsDialed", "leadsGenerated", "connectRate"
+  period    TargetPeriod
+  value     Float
+
+  departmentId    String?
+  department      Department?    @relation(fields: [departmentId], references: [id])
+  subDepartmentId String?
+  subDepartment   SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+  userId          String?
+  user            User?          @relation("UserTargets", fields: [userId], references: [id])
+
+  setById       String?
+  setBy         User?    @relation("TargetSetBy", fields: [setById], references: [id])
+  effectiveFrom DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([departmentId, metricKey])
+  @@index([userId, metricKey])
+}
+
+// ---------- Leave / holidays (§3, leave-aware rule) ----------
+
+/// Company-wide non-working days.
+model Holiday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+}
+
+/// Per-user leave/off days (set by user or admin). Excluded from averages.
+model LeaveDay {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  type      LeaveType @default(ON_LEAVE)
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+// ---------- Audit trail (§9) ----------
+
+/// Edit history so submitted numbers cannot be quietly changed.
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  entityType String // "ItadDailyEntry", "Target", ...
+  entityId   String
+  action     String // "CREATE" | "UPDATE" | "DELETE"
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// ========== Marketing (Phase 3) — §6 ==========
+
+enum MarketingDiscipline {
+  SEO
+  SOCIAL
+  CONTENT
+}
+
+/// Kanban / editorial pipeline stages (§6.4).
+enum TaskStatus {
+  BACKLOG
+  IN_PROGRESS
+  IN_REVIEW
+  SCHEDULED
+  PUBLISHED
+}
+
+enum ContentType {
+  BLOG
+  LANDING_PAGE
+  SOCIAL_COPY
+  VIDEO_SCRIPT
+  EMAIL
+  OTHER
+}
+
+// ---------- SEO daily activity (§6.1) ----------
+model SeoDailyEntry {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime  @db.Date
+  status DayStatus @default(SUBMITTED)
+
+  keywordsTracked Int @default(0)
+  pagesOptimized  Int @default(0)
+  backlinksBuilt  Int @default(0)
+  technicalFixes  Int @default(0)
+  organicTraffic  Int @default(0) // manually entered key figure (GSC/GA4 integration later)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+// ---------- Social daily activity (§6.2) ----------
+model SocialDailyEntry {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime  @db.Date
+  status DayStatus @default(SUBMITTED)
+
+  postsPublished Int @default(0)
+  postsScheduled Int @default(0)
+  reach          Int @default(0)
+  engagement     Int @default(0)
+  followersGained Int @default(0)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  platformCounts SocialPlatformCount[]
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+/// Posts-per-platform breakdown for a social entry.
+model SocialPlatformCount {
+  id      String           @id @default(cuid())
+  entryId String
+  entry   SocialDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tagId   String
+  tag     Tag              @relation(fields: [tagId], references: [id])
+  posts   Int              @default(0)
+
+  @@unique([entryId, tagId])
+}
+
+// ---------- Marketing tasks: Kanban board + editorial calendar + content (§6.3/§6.4) ----------
+model MarketingTask {
+  id          String              @id @default(cuid())
+  title       String
+  description String?
+  discipline  MarketingDiscipline
+  status      TaskStatus          @default(BACKLOG)
+  order       Int                 @default(0) // position within its column
+
+  assigneeId String?
+  assignee   User?   @relation(fields: [assigneeId], references: [id])
+
+  // Content-specific (when discipline = CONTENT)
+  contentType ContentType?
+  wordCount   Int?
+  wordTarget  Int?
+
+  // Editorial calendar — planned vs actual
+  dueDate       DateTime? @db.Date
+  scheduledDate DateTime? @db.Date
+  publishedDate DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([discipline])
+  @@index([scheduledDate])
+}
+
+// ========== Feedback & reviews (TL ↔ employee) ==========
+
+/// A Team Lead's feedback to an employee. Two-way: the thread carries replies
+/// from either participant. Per-participant read timestamps drive the unread
+/// bell + dashboard badge (latest activity newer than your read = unread).
+model Feedback {
+  id          String            @id @default(cuid())
+  authorId    String
+  author      User              @relation("FeedbackAuthored", fields: [authorId], references: [id])
+  recipientId String
+  recipient   User              @relation("FeedbackReceived", fields: [recipientId], references: [id])
+  departmentId String?
+  department  Department?       @relation(fields: [departmentId], references: [id])
+
+  title     String?
+  body      String
+  sentiment FeedbackSentiment @default(NEUTRAL)
+
+  recipientReadAt DateTime?
+  authorReadAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  replies FeedbackReply[]
+
+  @@index([recipientId])
+  @@index([authorId])
+}
+
+/// A reply within a feedback thread, from either participant.
+model FeedbackReply {
+  id         String   @id @default(cuid())
+  feedbackId String
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation("FeedbackReplies", fields: [authorId], references: [id])
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([feedbackId])
+}

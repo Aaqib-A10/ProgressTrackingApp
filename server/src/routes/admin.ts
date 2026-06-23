@@ -1,0 +1,44 @@
+import { Router } from 'express'
+import {
+  listUsers, createUser, updateUser,
+  listTeamMembers, inviteTeamMember, removeTeamMember, listTeamHistory,
+  listTargets, upsertTarget,
+  listTags, createTag, updateTag,
+  listHolidays, createHoliday, deleteHoliday,
+  listLeave, listLeaveMembers, createLeave, deleteLeave,
+} from '../controllers/adminController'
+import { requireAuth } from '../middleware/auth'
+import { asyncHandler } from '../lib/asyncHandler'
+
+export const adminRouter = Router()
+
+adminRouter.use(requireAuth)
+
+// Users (Super Admin)
+adminRouter.get('/users', asyncHandler(listUsers))
+adminRouter.post('/users', asyncHandler(createUser))
+adminRouter.patch('/users/:id', asyncHandler(updateUser))
+
+// Team Members (Team Lead — own department roster + invites)
+adminRouter.get('/team-members', asyncHandler(listTeamMembers))
+adminRouter.post('/team-members', asyncHandler(inviteTeamMember))
+adminRouter.delete('/team-members/:id', asyncHandler(removeTeamMember))
+adminRouter.get('/team-history', asyncHandler(listTeamHistory))
+
+// Targets (TL / Admin)
+adminRouter.get('/targets', asyncHandler(listTargets))
+adminRouter.post('/targets', asyncHandler(upsertTarget))
+
+// Tags (TL / Admin)
+adminRouter.get('/tags', asyncHandler(listTags))
+adminRouter.post('/tags', asyncHandler(createTag))
+adminRouter.patch('/tags/:id', asyncHandler(updateTag))
+
+// Holidays & Leave (TL / Admin)
+adminRouter.get('/holidays', asyncHandler(listHolidays))
+adminRouter.post('/holidays', asyncHandler(createHoliday))
+adminRouter.delete('/holidays/:id', asyncHandler(deleteHoliday))
+adminRouter.get('/leave', asyncHandler(listLeave))
+adminRouter.get('/leave/members', asyncHandler(listLeaveMembers))
+adminRouter.post('/leave', asyncHandler(createLeave))
+adminRouter.delete('/leave/:id', asyncHandler(deleteLeave))

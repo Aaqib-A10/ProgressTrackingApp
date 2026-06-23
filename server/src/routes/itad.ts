@@ -1,0 +1,13 @@
+import { Router } from 'express'
+import { getMyEntry, upsertMyEntry, teamView } from '../controllers/itadController'
+import { itadAnalytics } from '../controllers/analyticsController'
+import { requireAuth } from '../middleware/auth'
+import { asyncHandler } from '../lib/asyncHandler'
+
+export const itadRouter = Router()
+
+itadRouter.use(requireAuth)
+itadRouter.get('/entries', asyncHandler(getMyEntry))
+itadRouter.put('/entries', asyncHandler(upsertMyEntry))
+itadRouter.get('/team', asyncHandler(teamView))
+itadRouter.get('/analytics', asyncHandler(itadAnalytics))

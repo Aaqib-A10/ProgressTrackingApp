@@ -1,0 +1,98 @@
+import { api } from './api'
+import type { Role, Department, UserStatus } from './types'
+
+// ---------- Users ----------
+export interface AdminUser {
+  id: string
+  name: string
+  email: string
+  role: Role
+  department: Department | null
+  subDepartment: string | null
+  status: UserStatus
+  isActive: boolean
+}
+export interface CreateUserInput {
+  name: string
+  email: string
+  role: Role
+  department?: Department | null
+  subDepartmentSlug?: string | null
+  password?: string
+}
+export const listUsers = () => api.get<{ users: AdminUser[] }>('/admin/users')
+export const createUser = (input: CreateUserInput) => api.post<{ user: AdminUser; tempPassword?: string }>('/admin/users', input)
+export const updateUser = (id: string, patch: Partial<{ role: Role; department: Department | null; subDepartmentSlug: string | null; status: UserStatus; isActive: boolean }>) =>
+  api.patch<{ user: AdminUser }>(`/admin/users/${id}`, patch)
+
+// ---------- Team Members (Team Lead) ----------
+export interface TeamMember {
+  id: string
+  name: string
+  email: string
+  role: Role
+  subDepartment: string | null
+  status: UserStatus
+  isActive: boolean
+}
+export const listTeamMembers = () => api.get<{ members: TeamMember[] }>('/admin/team-members')
+export const inviteTeamMember = (input: { name: string; email: string; subDepartmentSlug?: string | null }) =>
+  api.post<{ member: TeamMember; tempPassword: string }>('/admin/team-members', input)
+export const removeTeamMember = (id: string) => api.del<void>(`/admin/team-members/${id}`)
+
+export type TeamEventType = 'INVITED' | 'REMOVED' | 'REACTIVATED'
+export interface TeamEvent {
+  id: string
+  memberName: string
+  memberEmail: string
+  actorName: string
+  type: TeamEventType
+  createdAt: string
+}
+export const listTeamHistory = () => api.get<{ events: TeamEvent[] }>('/admin/team-history')
+
+// ---------- Targets ----------
+export interface AdminTarget {
+  id: string
+  department: Department | null
+  metricKey: string
+  period: 'DAILY' | 'WEEKLY' | 'MONTHLY'
+  value: number
+}
+export const listTargets = () => api.get<{ targets: AdminTarget[] }>('/admin/targets')
+export const upsertTarget = (input: { department: Department; metricKey: string; period: 'DAILY' | 'WEEKLY' | 'MONTHLY'; value: number }) =>
+  api.post<{ target: AdminTarget }>('/admin/targets', input)
+
+// ---------- Tags ----------
+export interface AdminTag {
+  id: string
+  name: string
+  type: 'VERTICAL' | 'PLATFORM' | 'CAMPAIGN' | 'DATA_SOURCE'
+  department: Department | null
+  isActive: boolean
+}
+export const listTags = () => api.get<{ tags: AdminTag[] }>('/admin/tags')
+export const createTag = (input: { name: string; type: AdminTag['type']; department: Department }) => api.post<{ tag: AdminTag }>('/admin/tags', input)
+export const updateTag = (id: string, patch: Partial<{ name: string; isActive: boolean }>) => api.patch<{ tag: AdminTag }>(`/admin/tags/${id}`, patch)
+
+// ---------- Holidays & Leave ----------
+export interface Holiday {
+  id: string
+  date: string
+  name: string
+}
+export interface LeaveRow {
+  id: string
+  userId: string
+  userName: string
+  date: string
+  type: 'ON_LEAVE' | 'HOLIDAY' | 'OFF'
+  note: string
+}
+export const listHolidays = () => api.get<{ holidays: Holiday[] }>('/admin/holidays')
+export const createHoliday = (input: { date: string; name: string }) => api.post<{ holiday: Holiday }>('/admin/holidays', input)
+export const deleteHoliday = (id: string) => api.del(`/admin/holidays/${id}`)
+export const listLeave = () => api.get<{ leave: LeaveRow[] }>('/admin/leave')
+export const listLeaveMembers = () => api.get<{ members: { id: string; name: string }[] }>('/admin/leave/members')
+export const createLeave = (input: { userId: string; date: string; type: LeaveRow['type']; note?: string }) => api.post<{ leave: LeaveRow }>('/admin/leave', input)
+export const deleteLeave = (id: string) => api.del(`/admin/leave/${id}`)
