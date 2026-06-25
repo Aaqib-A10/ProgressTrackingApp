@@ -3,9 +3,17 @@
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM = process.env.MAIL_FROM || 'PulseTrack <noreply@pulsetrack.online>'
+const REPLY_TO = process.env.MAIL_REPLY_TO || 'noreply@pulsetrack.online'
 const APP_URL = process.env.APP_URL || 'http://localhost:5173'
 
-async function send(to: string, subject: string, html: string): Promise<void> {
+interface SendOpts {
+  to: string
+  subject: string
+  html: string
+  text: string // plain-text alternative — improves inbox placement vs HTML-only
+}
+
+async function send({ to, subject, html, text }: SendOpts): Promise<void> {
   if (!RESEND_API_KEY) {
     // eslint-disable-next-line no-console
     console.warn('[mail] RESEND_API_KEY not set — skipping email to', to)
@@ -15,12 +23,16 @@ async function send(to: string, subject: string, html: string): Promise<void> {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to, subject, html }),
+      body: JSON.stringify({ from: FROM, to, subject, html, text, reply_to: REPLY_TO }),
     })
+    const bodyText = await res.text().catch(() => '')
     if (!res.ok) {
       // eslint-disable-next-line no-console
-      console.error('[mail] Resend error', res.status, await res.text().catch(() => ''))
+      console.error('[mail] Resend error', res.status, bodyText)
+      return
     }
+    // eslint-disable-next-line no-console
+    console.log('[mail] sent to', to, '-', bodyText)
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('[mail] send failed:', e)
@@ -48,9 +60,18 @@ export function sendInviteEmail(opts: { to: string; name: string; token: string;
   const tempLine = opts.tempPassword
     ? `<p style="color:#64748B;font-size:13px">Or log in with a temporary password: <code style="background:#F1F5F9;padding:2px 6px;border-radius:4px">${opts.tempPassword}</code></p>`
     : ''
-  return send(
-    opts.to,
-    'You are invited to PulseTrack',
-    shell(`Welcome, ${opts.name}!`, `<p style="font-size:14px;line-height:1.5">${intro} Click below to set your password and get started.</p>${button(link, 'Set password & join')}${tempLine}<p style="font-size:13px;color:#64748B">This link is valid for 7 days.</p>`),
+  const html = shell(
+    `Welcome, ${opts.name}!`,
+    `<p style="font-size:14px;line-height:1.5">${intro} Click below to set your password and get started.</p>${button(link, 'Set password & join')}${tempLine}<p style="font-size:13px;color:#64748B">This link is valid for 7 days.</p>`,
   )
+  const text = [
+    `Welcome, ${opts.name}!`,
+    '',
+    `${intro} Set your password and get started:`,
+    link,
+    opts.tempPassword ? `\nOr log in with a temporary password: ${opts.tempPassword}` : '',
+    '',
+    'This link is valid for 7 days. If you didn\'t expect this email, you can ignore it.',
+  ].filter((l) => l !== '').join('\n')
+  return send({ to: opts.to, subject: 'You are invited to PulseTrack', html, text })
 }
