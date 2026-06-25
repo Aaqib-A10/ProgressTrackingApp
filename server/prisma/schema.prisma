@@ -119,6 +119,7 @@ model User {
   id           String  @id @default(cuid())
   email        String  @unique
   passwordHash String? // null for SSO-only accounts
+  tempPassword String? // last issued temp credential, visible to the Team Lead until the member changes their own password
   googleId     String? @unique
   name         String
   role         Role       @default(MEMBER)
@@ -284,7 +285,9 @@ model Target {
   scope     TargetScope
   metricKey String // e.g. "callsDialed", "leadsGenerated", "connectRate"
   period    TargetPeriod
-  value     Float
+  value     Float // kept as the headline goal (= maxValue) for status/trend references
+  minValue  Float? // acceptable lower bound of the target range
+  maxValue  Float? // goal / upper bound of the target range
 
   departmentId    String?
   department      Department?    @relation(fields: [departmentId], references: [id])

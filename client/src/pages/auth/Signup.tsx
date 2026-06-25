@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import { AuthLayout } from './AuthLayout'
 import { TextField, PasswordField, PasswordStrength } from '../../components/ui/Input'
@@ -22,6 +22,7 @@ const selectClass =
 export default function Signup() {
   const { signup } = useAuth()
   const { addToast } = useToast()
+  const navigate = useNavigate()
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -44,8 +45,9 @@ export default function Signup() {
 
     setSubmitting(true)
     try {
-      await signup({ name, email, password, companyName: companyName || undefined, department })
-      setSubmitted(true)
+      const result = await signup({ name, email, password, companyName: companyName || undefined, department })
+      if (result.pending) setSubmitted(true)
+      else navigate('/app/dashboard', { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.')
     } finally {

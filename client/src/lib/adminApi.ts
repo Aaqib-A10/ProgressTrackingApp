@@ -34,11 +34,16 @@ export interface TeamMember {
   subDepartment: string | null
   status: UserStatus
   isActive: boolean
+  /** Last issued temp password — visible until the member sets their own (then null). */
+  tempPassword: string | null
 }
 export const listTeamMembers = () => api.get<{ members: TeamMember[] }>('/admin/team-members')
 export const inviteTeamMember = (input: { name: string; email: string; subDepartmentSlug?: string | null }) =>
   api.post<{ member: TeamMember; tempPassword: string }>('/admin/team-members', input)
 export const removeTeamMember = (id: string) => api.del<void>(`/admin/team-members/${id}`)
+/** Reset (or set) a member's password; returns the new value to show the TL. */
+export const resetTeamMemberPassword = (id: string, password?: string) =>
+  api.post<{ tempPassword: string }>(`/admin/team-members/${id}/reset-password`, password ? { password } : {})
 
 export type TeamEventType = 'INVITED' | 'REMOVED' | 'REACTIVATED'
 export interface TeamEvent {
@@ -58,10 +63,13 @@ export interface AdminTarget {
   metricKey: string
   period: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   value: number
+  minValue: number | null
+  maxValue: number | null
 }
 export const listTargets = () => api.get<{ targets: AdminTarget[] }>('/admin/targets')
-export const upsertTarget = (input: { department: Department; metricKey: string; period: 'DAILY' | 'WEEKLY' | 'MONTHLY'; value: number }) =>
+export const upsertTarget = (input: { department: Department; metricKey: string; period: 'DAILY' | 'WEEKLY' | 'MONTHLY'; minValue: number; maxValue: number }) =>
   api.post<{ target: AdminTarget }>('/admin/targets', input)
+export const deleteTarget = (id: string) => api.del<void>(`/admin/targets/${id}`)
 
 // ---------- Tags ----------
 export interface AdminTag {

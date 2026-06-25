@@ -85,23 +85,20 @@ export async function signup(req: Request, res: Response): Promise<void> {
     return
   }
 
-  // Team Lead self-registration: created PENDING and awaiting Super Admin approval.
-  // No auth cookie is set — they cannot enter the app until approved.
-  await prisma.user.create({
+  // Team Lead self-registration: account is activated immediately and signed in.
+  const user = await prisma.user.create({
     data: {
       name,
       email,
       passwordHash: await hashPassword(password),
       role: 'TEAM_LEAD',
-      status: 'PENDING',
+      status: 'ACTIVE',
       departmentId: dept.id,
     },
   })
 
-  res.status(201).json({
-    pending: true,
-    message: 'Your Team Lead account request has been sent to the admin for approval.',
-  })
+  setAuthCookie(res, signToken({ sub: user.id, role: user.role }))
+  res.status(201).json({ user: await publicUser(user.id) })
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
@@ -182,7 +179,8 @@ export async function changePassword(req: AuthedRequest, res: Response): Promise
     res.status(400).json({ error: 'Current password is incorrect' })
     return
   }
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(parsed.data.newPassword) } })
+  // Member set their own secret — clear the TL-visible temp credential.
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(parsed.data.newPassword), tempPassword: null } })
   res.json({ ok: true })
 }
 

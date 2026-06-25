@@ -38,7 +38,7 @@ export async function itadAnalytics(req: AuthedRequest, res: Response): Promise<
   const prev = previousRange(range)
   const prev2 = previousRange(prev)
 
-  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER' }, select: { id: true } })
+  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER', isActive: true }, select: { id: true } })
   const ids = members.map((m) => m.id)
   const target = await prisma.target.findFirst({ where: { scope: 'DEPARTMENT', departmentId: dept.id, metricKey: 'callsDialed', period: 'DAILY' } })
   const dailyDialTarget = target?.value ?? 0
@@ -120,7 +120,7 @@ export async function leadgenAnalytics(req: AuthedRequest, res: Response): Promi
   const prev = previousRange(range)
   const prev2 = previousRange(prev)
 
-  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER' }, select: { id: true } })
+  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER', isActive: true }, select: { id: true } })
   const ids = members.map((m) => m.id)
   const target = await prisma.target.findFirst({ where: { scope: 'DEPARTMENT', departmentId: dept.id, metricKey: 'leadsGenerated', period: 'WEEKLY' } })
   const weeklyLeadTarget = target?.value ?? 0

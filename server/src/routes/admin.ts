@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import {
   listUsers, createUser, updateUser,
-  listTeamMembers, inviteTeamMember, removeTeamMember, listTeamHistory,
-  listTargets, upsertTarget,
+  listTeamMembers, inviteTeamMember, removeTeamMember, resetTeamMemberPassword, listTeamHistory,
+  listTargets, upsertTarget, deleteTarget,
   listTags, createTag, updateTag,
   listHolidays, createHoliday, deleteHoliday,
   listLeave, listLeaveMembers, createLeave, deleteLeave,
@@ -23,11 +23,13 @@ adminRouter.patch('/users/:id', asyncHandler(updateUser))
 adminRouter.get('/team-members', asyncHandler(listTeamMembers))
 adminRouter.post('/team-members', asyncHandler(inviteTeamMember))
 adminRouter.delete('/team-members/:id', asyncHandler(removeTeamMember))
+adminRouter.post('/team-members/:id/reset-password', asyncHandler(resetTeamMemberPassword))
 adminRouter.get('/team-history', asyncHandler(listTeamHistory))
 
 // Targets (TL / Admin)
 adminRouter.get('/targets', asyncHandler(listTargets))
 adminRouter.post('/targets', asyncHandler(upsertTarget))
+adminRouter.delete('/targets/:id', asyncHandler(deleteTarget))
 
 // Tags (TL / Admin)
 adminRouter.get('/tags', asyncHandler(listTags))

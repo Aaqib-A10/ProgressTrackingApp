@@ -35,9 +35,9 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
       prisma.leadGenDailyEntry.findMany({ where: { date: inRange(range) } }),
       prisma.leadGenDailyEntry.findMany({ where: { date: inRange(prev) } }),
       prisma.leadGenDailyEntry.findMany({ where: { date: todayValue } }),
-      itadDept ? prisma.user.count({ where: { departmentId: itadDept.id, role: 'MEMBER' } }) : 0,
-      leadDept ? prisma.user.count({ where: { departmentId: leadDept.id, role: 'MEMBER' } }) : 0,
-      mktDept ? prisma.user.count({ where: { departmentId: mktDept.id, role: 'MEMBER' } }) : 0,
+      itadDept ? prisma.user.count({ where: { departmentId: itadDept.id, role: 'MEMBER', isActive: true } }) : 0,
+      leadDept ? prisma.user.count({ where: { departmentId: leadDept.id, role: 'MEMBER', isActive: true } }) : 0,
+      mktDept ? prisma.user.count({ where: { departmentId: mktDept.id, role: 'MEMBER', isActive: true } }) : 0,
     ])
 
   const it = sumItad(itadCur)

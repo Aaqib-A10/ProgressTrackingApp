@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Trash2 } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import type { Department } from '../../../lib/types'
-import { listTargets, upsertTarget, type AdminTarget } from '../../../lib/adminApi'
+import { listTargets, upsertTarget, deleteTarget, type AdminTarget } from '../../../lib/adminApi'
 
 const DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'ITAD', label: 'ITAD' },
@@ -29,7 +30,8 @@ export default function AdminTargets() {
   const [department, setDepartment] = useState<Department>('ITAD')
   const [metricKey, setMetricKey] = useState('callsDialed')
   const [period, setPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY')
-  const [value, setValue] = useState(100)
+  const [minValue, setMinValue] = useState(80)
+  const [maxValue, setMaxValue] = useState(100)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -43,8 +45,12 @@ export default function AdminTargets() {
 
   async function save(e: FormEvent) {
     e.preventDefault()
+    if (maxValue < minValue) {
+      addToast({ type: 'error', message: 'Max value must be greater than or equal to min value.' })
+      return
+    }
     try {
-      const { target } = await upsertTarget({ department, metricKey, period, value })
+      const { target } = await upsertTarget({ department, metricKey, period, minValue, maxValue })
       setTargets((ts) => {
         const idx = ts.findIndex((t) => t.department === target.department && t.metricKey === target.metricKey && t.period === target.period)
         if (idx >= 0) return ts.map((t, i) => (i === idx ? target : t))
@@ -56,11 +62,39 @@ export default function AdminTargets() {
     }
   }
 
+  async function remove(t: AdminTarget) {
+    const prev = targets
+    setTargets((ts) => ts.filter((x) => x.id !== t.id))
+    try {
+      await deleteTarget(t.id)
+      addToast({ type: 'success', message: 'Target deleted.' })
+    } catch {
+      setTargets(prev)
+      addToast({ type: 'error', message: 'Could not delete target.' })
+    }
+  }
+
   const columns: Column<AdminTarget>[] = [
     { key: 'department', header: 'Department', render: (t) => (t.department ? t.department.replace('_', ' ') : '—') },
     { key: 'metricKey', header: 'Metric', render: (t) => t.metricKey },
     { key: 'period', header: 'Period', render: (t) => t.period.toLowerCase() },
-    { key: 'value', header: 'Target', align: 'right', render: (t) => t.value },
+    { key: 'min', header: 'Min', align: 'right', render: (t) => t.minValue ?? '—' },
+    { key: 'max', header: 'Max', align: 'right', render: (t) => t.maxValue ?? t.value },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (t) => (
+        <button
+          onClick={() => remove(t)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger"
+          aria-label="Delete target"
+          title="Delete target"
+        >
+          <Trash2 size={16} />
+        </button>
+      ),
+    },
   ]
 
   return (
@@ -68,7 +102,7 @@ export default function AdminTargets() {
       <h1 className="text-headline-lg text-ink">Target Setting</h1>
 
       <Card title="Set / Update Target">
-        <form onSubmit={save} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-5">
+        <form onSubmit={save} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-6">
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
             <select className={sel} value={department} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setMetricKey((METRICS[d] ?? [])[0]?.key ?? '') }}>
@@ -90,8 +124,12 @@ export default function AdminTargets() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-body-sm font-semibold text-ink">Value</label>
-            <input type="number" min={0} className={sel} value={value} onChange={(e) => setValue(parseInt(e.target.value, 10) || 0)} />
+            <label className="mb-1 block text-body-sm font-semibold text-ink">Min value</label>
+            <input type="number" min={0} className={sel} value={minValue} onChange={(e) => setMinValue(parseInt(e.target.value, 10) || 0)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-body-sm font-semibold text-ink">Max value</label>
+            <input type="number" min={0} className={sel} value={maxValue} onChange={(e) => setMaxValue(parseInt(e.target.value, 10) || 0)} />
           </div>
           <Button type="submit">Save</Button>
         </form>

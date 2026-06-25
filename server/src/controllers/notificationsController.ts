@@ -35,7 +35,7 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   // TL/Admin: members who haven't submitted today.
   if ((me.role === 'TEAM_LEAD' || me.role === 'SUPER_ADMIN') && (dept === 'ITAD' || dept === 'LEAD_GEN' || me.role === 'SUPER_ADMIN')) {
     const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
-    const members = await prisma.user.findMany({ where: { role: 'MEMBER', ...deptFilter }, include: { department: true, subDepartment: true } })
+    const members = await prisma.user.findMany({ where: { role: 'MEMBER', isActive: true, ...deptFilter }, include: { department: true, subDepartment: true } })
     let missing = 0
     for (const m of members) if (!(await submittedToday(m.id, m.department?.type, m.subDepartment?.slug))) missing++
     if (missing > 0) {
@@ -78,7 +78,7 @@ export async function getNotSubmitted(req: AuthedRequest, res: Response): Promis
 
   const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
   const members = await prisma.user.findMany({
-    where: { role: 'MEMBER', ...deptFilter },
+    where: { role: 'MEMBER', isActive: true, ...deptFilter },
     include: { department: true, subDepartment: true },
     orderBy: { name: 'asc' },
   })

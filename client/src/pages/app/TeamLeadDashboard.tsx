@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
@@ -24,6 +25,7 @@ export default function TeamLeadDashboard() {
   const { range, custom } = useRange()
   const { addToast } = useToast()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [data, setData] = useState<TeamDashboard | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -115,6 +117,7 @@ export default function TeamLeadDashboard() {
               columns={subColumns}
               rows={data.todaySubmissions}
               getRowId={(r) => r.id}
+              onRowClick={(r) => navigate(`/app/members/${r.id}`)}
               emptyMessage="No team members yet."
             />
           </Card>

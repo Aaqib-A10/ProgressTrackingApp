@@ -27,7 +27,7 @@ function statusFor(entry: { status: string } | undefined): SubmissionStatus {
 }
 
 async function deptMembers(departmentId: string): Promise<User[]> {
-  return prisma.user.findMany({ where: { departmentId, role: 'MEMBER' }, orderBy: { name: 'asc' } })
+  return prisma.user.findMany({ where: { departmentId, role: 'MEMBER', isActive: true }, orderBy: { name: 'asc' } })
 }
 
 async function dailyTarget(departmentId: string, metricKey: string, period: 'DAILY' | 'WEEKLY'): Promise<number> {

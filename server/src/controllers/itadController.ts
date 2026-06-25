@@ -154,7 +154,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const dailyDialTarget = await itadDailyTarget(dept.id)
 
   const members = await prisma.user.findMany({
-    where: { departmentId: dept.id, role: 'MEMBER' },
+    where: { departmentId: dept.id, role: 'MEMBER', isActive: true },
     orderBy: { name: 'asc' },
   })
   const memberIds = members.map((m) => m.id)

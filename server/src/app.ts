@@ -21,6 +21,11 @@ import { attachmentsRouter } from './routes/attachments'
 export function createApp(): Express {
   const app = express()
 
+  // Behind the Traefik gateway (TLS terminated there) + Nginx, trust forwarded
+  // headers so req.secure / req.protocol reflect the original HTTPS request
+  // (X-Forwarded-Proto). Needed for the `secure` auth cookie to behave correctly.
+  app.set('trust proxy', true)
+
   app.use(
     cors({
       origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',

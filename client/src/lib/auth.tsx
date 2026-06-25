@@ -57,7 +57,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Team Lead self-registration creates a PENDING account — it does NOT log in.
   const signup = useCallback(async (input: SignupInput): Promise<SignupResult> => {
-    const res = await api.post<{ pending?: boolean; message?: string }>('/auth/signup', { ...input })
+    const res = await api.post<{ user?: CurrentUser; pending?: boolean; message?: string }>('/auth/signup', { ...input })
+    // New flow: registration activates + logs the user in immediately.
+    if (res.user) {
+      setUser(res.user)
+      return { pending: false, message: '' }
+    }
     return { pending: res.pending ?? true, message: res.message ?? 'Your request has been sent for approval.' }
   }, [])
 

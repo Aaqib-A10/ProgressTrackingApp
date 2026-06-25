@@ -146,6 +146,7 @@ export async function listTeamMembers(req: AuthedRequest, res: Response): Promis
       subDepartment: u.subDepartment?.slug ?? null,
       status: u.status,
       isActive: u.isActive,
+      tempPassword: u.tempPassword,
     })),
   })
 }
@@ -173,33 +174,35 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
     return
   }
   const v = parsed.data
-  if (await prisma.user.findUnique({ where: { email: v.email } })) {
+  const existing = await prisma.user.findUnique({ where: { email: v.email } })
+  // Only a genuinely active account blocks re-use; a previously removed
+  // (soft-deleted) account is reactivated below so the TL can re-add them.
+  if (existing && existing.isActive) {
     res.status(409).json({ error: 'Email already in use' })
     return
   }
 
   // Marketing members can belong to a sub-department (SEO / Social / Content).
-  let subDepartmentId: string | undefined
+  let subDepartmentId: string | null = null
   if (me.department.type === 'MARKETING' && v.subDepartmentSlug) {
     const sub = await prisma.subDepartment.findUnique({
       where: { departmentId_slug: { departmentId: me.departmentId, slug: v.subDepartmentSlug } },
     })
-    subDepartmentId = sub?.id
+    subDepartmentId = sub?.id ?? null
   }
 
   const tempPassword = randomBytes(6).toString('base64url')
-  const user = await prisma.user.create({
-    data: {
-      name: v.name,
-      email: v.email,
-      role: 'MEMBER',
-      status: 'ACTIVE',
-      passwordHash: await hashPassword(tempPassword),
-      departmentId: me.departmentId,
-      subDepartmentId,
-    },
-    include: { subDepartment: { select: { slug: true } } },
-  })
+  const passwordHash = await hashPassword(tempPassword)
+  const user = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: { name: v.name, role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash, tempPassword, departmentId: me.departmentId, subDepartmentId },
+        include: { subDepartment: { select: { slug: true } } },
+      })
+    : await prisma.user.create({
+        data: { name: v.name, email: v.email, role: 'MEMBER', status: 'ACTIVE', passwordHash, tempPassword, departmentId: me.departmentId, subDepartmentId },
+        include: { subDepartment: { select: { slug: true } } },
+      })
   await prisma.teamMemberEvent.create({
     data: {
       departmentId: me.departmentId,
@@ -208,7 +211,7 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
       memberId: user.id,
       memberName: user.name,
       memberEmail: user.email,
-      type: 'INVITED',
+      type: existing ? 'REACTIVATED' : 'INVITED',
     },
   })
   res.status(201).json({
@@ -220,9 +223,47 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
       subDepartment: user.subDepartment?.slug ?? null,
       status: user.status,
       isActive: user.isActive,
+      tempPassword: user.tempPassword,
     },
     tempPassword,
   })
+}
+
+const resetPwSchema = z.object({ password: z.string().min(8, 'Password must be at least 8 characters').optional() })
+
+/** POST /api/admin/team-members/:id/reset-password — TL sets/regenerates a member's password. */
+export async function resetTeamMemberPassword(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  if (!me.departmentId) {
+    res.status(400).json({ error: 'You are not assigned to a department' })
+    return
+  }
+  const parsed = resetPwSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  const target = await prisma.user.findUnique({ where: { id: req.params.id } })
+  if (!target) {
+    res.status(404).json({ error: 'Member not found' })
+    return
+  }
+  // A Team Lead may only reset members of their own department (not leads/self).
+  if (target.departmentId !== me.departmentId || target.id === me.id || (target.role !== 'MEMBER' && target.role !== 'SUB_DEPT_LEAD')) {
+    res.status(403).json({ error: 'You can only manage members of your own team' })
+    return
+  }
+
+  const tempPassword = parsed.data.password ?? randomBytes(6).toString('base64url')
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { passwordHash: await hashPassword(tempPassword), tempPassword },
+  })
+  res.json({ tempPassword })
 }
 
 /**
@@ -318,15 +359,18 @@ export async function listTargets(req: AuthedRequest, res: Response): Promise<vo
     include: { department: { select: { type: true } } },
     orderBy: [{ departmentId: 'asc' }, { metricKey: 'asc' }],
   })
-  res.json({ targets: targets.map((t) => ({ id: t.id, department: t.department?.type ?? null, metricKey: t.metricKey, period: t.period, value: t.value })) })
+  res.json({ targets: targets.map((t) => ({ id: t.id, department: t.department?.type ?? null, metricKey: t.metricKey, period: t.period, value: t.value, minValue: t.minValue, maxValue: t.maxValue })) })
 }
 
-const targetSchema = z.object({
-  department: z.nativeEnum(DepartmentType),
-  metricKey: z.string().min(1),
-  period: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
-  value: z.number().min(0),
-})
+const targetSchema = z
+  .object({
+    department: z.nativeEnum(DepartmentType),
+    metricKey: z.string().min(1),
+    period: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
+    minValue: z.number().min(0),
+    maxValue: z.number().min(0),
+  })
+  .refine((d) => d.maxValue >= d.minValue, { message: 'Max value must be greater than or equal to min value' })
 
 export async function upsertTarget(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
@@ -348,11 +392,33 @@ export async function upsertTarget(req: AuthedRequest, res: Response): Promise<v
     res.status(403).json({ error: 'Can only set targets for your department' })
     return
   }
+  const { minValue, maxValue } = parsed.data
+  const fields = { minValue, maxValue, value: maxValue, setById: me.id } // value mirrors the goal (max) for existing references
   const existing = await prisma.target.findFirst({ where: { scope: 'DEPARTMENT', departmentId: dept.id, metricKey: parsed.data.metricKey, period: parsed.data.period } })
   const target = existing
-    ? await prisma.target.update({ where: { id: existing.id }, data: { value: parsed.data.value, setById: me.id } })
-    : await prisma.target.create({ data: { scope: 'DEPARTMENT', departmentId: dept.id, metricKey: parsed.data.metricKey, period: parsed.data.period, value: parsed.data.value, setById: me.id } })
-  res.json({ target: { id: target.id, department: parsed.data.department, metricKey: target.metricKey, period: target.period, value: target.value } })
+    ? await prisma.target.update({ where: { id: existing.id }, data: fields })
+    : await prisma.target.create({ data: { scope: 'DEPARTMENT', departmentId: dept.id, metricKey: parsed.data.metricKey, period: parsed.data.period, ...fields } })
+  res.json({ target: { id: target.id, department: parsed.data.department, metricKey: target.metricKey, period: target.period, value: target.value, minValue: target.minValue, maxValue: target.maxValue } })
+}
+
+/** DELETE /api/admin/targets/:id — remove a target (TL: own department only). */
+export async function deleteTarget(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'SUPER_ADMIN' && me.role !== 'TEAM_LEAD') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const target = await prisma.target.findUnique({ where: { id: req.params.id } })
+  if (!target) {
+    res.status(404).json({ error: 'Target not found' })
+    return
+  }
+  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+    res.status(403).json({ error: 'Can only delete targets for your department' })
+    return
+  }
+  await prisma.target.delete({ where: { id: target.id } })
+  res.status(204).end()
 }
 
 // =================== Tags (TL / Admin) ===================

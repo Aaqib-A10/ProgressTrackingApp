@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Plus, Trash2, UserPlus, UserMinus, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, UserPlus, UserMinus, RotateCcw, KeyRound, Copy } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
@@ -15,6 +15,7 @@ import {
   listTeamMembers,
   inviteTeamMember,
   removeTeamMember,
+  resetTeamMemberPassword,
   listTeamHistory,
   type TeamMember,
   type TeamEvent,
@@ -48,6 +49,14 @@ export default function TeamMembers() {
   const [open, setOpen] = useState(false)
   const [toRemove, setToRemove] = useState<TeamMember | null>(null)
   const [removing, setRemoving] = useState(false)
+  const [toReset, setToReset] = useState<TeamMember | null>(null)
+
+  const copyPw = useCallback((text: string) => {
+    navigator.clipboard?.writeText(text).then(
+      () => addToast({ type: 'success', message: 'Password copied' }),
+      () => undefined,
+    )
+  }, [addToast])
 
   const loadHistory = useCallback(() => {
     listTeamHistory()
@@ -95,18 +104,43 @@ export default function TeamMembers() {
     { key: 'role', header: 'Role', render: (m) => ROLE_LABEL[m.role] + (m.subDepartment ? ` · ${m.subDepartment}` : '') },
     { key: 'status', header: 'Status', render: (m) => <Badge tone={STATUS_META[m.status].tone} dot>{STATUS_META[m.status].label}</Badge> },
     {
+      key: 'password',
+      header: 'Password',
+      render: (m) =>
+        m.tempPassword ? (
+          <span className="inline-flex items-center gap-1.5">
+            <code className="rounded bg-slate-100 px-1.5 py-0.5 text-body-sm text-ink">{m.tempPassword}</code>
+            <button onClick={() => copyPw(m.tempPassword!)} className="text-ink-muted hover:text-ink" title="Copy password" aria-label="Copy password">
+              <Copy size={14} />
+            </button>
+          </span>
+        ) : (
+          <span className="text-body-sm text-ink-muted">Set by member</span>
+        ),
+    },
+    {
       key: 'actions',
       header: '',
       align: 'right',
       render: (m) => (
-        <button
-          onClick={() => setToRemove(m)}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger"
-          aria-label={`Remove ${m.name}`}
-          title="Remove from team"
-        >
-          <Trash2 size={16} />
-        </button>
+        <div className="inline-flex items-center gap-1">
+          <button
+            onClick={() => setToReset(m)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-primary/10 hover:text-primary"
+            aria-label={`Reset password for ${m.name}`}
+            title="Reset / change password"
+          >
+            <KeyRound size={16} />
+          </button>
+          <button
+            onClick={() => setToRemove(m)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger"
+            aria-label={`Remove ${m.name}`}
+            title="Remove from team"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       ),
     },
   ]
@@ -191,7 +225,76 @@ export default function TeamMembers() {
           immediately. This is recorded in Team History and can be reversed by an admin.
         </p>
       </Modal>
+
+      {toReset && (
+        <ResetPasswordModal
+          member={toReset}
+          onClose={() => setToReset(null)}
+          onDone={(id, pw) => setMembers((ms) => ms.map((m) => (m.id === id ? { ...m, tempPassword: pw } : m)))}
+        />
+      )}
     </div>
+  )
+}
+
+/** Reset or set a specific member's password and reveal the new value to the Team Lead. */
+function ResetPasswordModal({
+  member,
+  onClose,
+  onDone,
+}: {
+  member: TeamMember
+  onClose: () => void
+  onDone: (id: string, password: string) => void
+}) {
+  const { addToast } = useToast()
+  const [pw, setPw] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(useCustom: boolean) {
+    if (busy) return
+    if (useCustom && pw.trim().length < 8) {
+      addToast({ type: 'error', message: 'Password must be at least 8 characters' })
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await resetTeamMemberPassword(member.id, useCustom ? pw.trim() : undefined)
+      onDone(member.id, res.tempPassword)
+      addToast({ type: 'success', message: `New password for ${member.name}: ${res.tempPassword}`, duration: 9000 })
+      onClose()
+    } catch (err) {
+      addToast({ type: 'error', message: err instanceof ApiError ? err.message : 'Could not reset password.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Reset password — ${member.name}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => submit(false)} disabled={busy}>Generate random</Button>
+          <Button onClick={() => submit(true)} disabled={busy || pw.trim().length < 8}>Set password</Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-body-md text-ink-muted">
+          Set a password for <span className="font-medium text-ink">{member.email}</span>, or generate a random one.
+          The new password is shown in the roster so you can share it; it disappears once the member changes it.
+        </p>
+        <TextField
+          label="New password (min 8 chars)"
+          placeholder="Leave blank to generate randomly"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+        />
+      </div>
+    </Modal>
   )
 }
 
