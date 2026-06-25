@@ -7,7 +7,7 @@ export interface SignupInput {
   email: string
   password: string
   companyName?: string
-  department: Department
+  department: Department | 'QA'
 }
 
 export interface SignupResult {

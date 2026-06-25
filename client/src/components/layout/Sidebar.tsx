@@ -5,6 +5,7 @@ import { cn } from '../../lib/cn'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
+import { getQaUnreadCount } from '../../lib/qaApi'
 import { filterNav } from './navConfig'
 
 function initials(name: string): string {
@@ -20,15 +21,15 @@ export function Sidebar({ user }: { user: CurrentUser }) {
   const groups = filterNav(user.role, user.department)
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
+  const [unreadQa, setUnreadQa] = useState(0)
 
-  // Poll the unread feedback count; also refetch on navigation (reading a
-  // thread marks it read, so the badge should drop promptly).
+  // Poll unread counts; also refetch on navigation (reading marks as read).
   useEffect(() => {
     let active = true
-    const load = () =>
-      getUnreadFeedbackCount()
-        .then((r) => active && setUnreadFeedback(r.count))
-        .catch(() => undefined)
+    const load = () => {
+      getUnreadFeedbackCount().then((r) => active && setUnreadFeedback(r.count)).catch(() => undefined)
+      getQaUnreadCount().then((r) => active && setUnreadQa(r.count)).catch(() => undefined)
+    }
     load()
     const timer = setInterval(load, 30000)
     return () => {
@@ -85,6 +86,11 @@ export function Sidebar({ user }: { user: CurrentUser }) {
                           {item.to === '/app/feedback' && unreadFeedback > 0 && (
                             <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
                               {unreadFeedback > 9 ? '9+' : unreadFeedback}
+                            </span>
+                          )}
+                          {item.to === '/app/qa/my' && unreadQa > 0 && (
+                            <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
+                              {unreadQa > 9 ? '9+' : unreadQa}
                             </span>
                           )}
                           {item.badge && (

@@ -12,6 +12,7 @@ import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
 import { formatNumber, formatPercent } from '../../lib/format'
 import { getTeamDashboard, type TeamDashboard, type DashSubmission } from '../../lib/dashboardApi'
+import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 
 const RANGE_LABEL: Record<string, string> = {
   today: 'Today',
@@ -65,6 +66,8 @@ export default function TeamLeadDashboard() {
           {user?.department?.replace('_', ' ')} · {RANGE_LABEL[range] ?? 'This Month'}
         </p>
       </div>
+
+      <EmployeeOfMonthCard />
 
       {loading || !data ? (
         <div className="text-body-md text-ink-muted">Loading…</div>

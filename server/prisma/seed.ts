@@ -27,6 +27,7 @@ async function main() {
     ['ITAD', 'ITAD'],
     ['LEAD_GEN', 'Lead Generation'],
     ['MARKETING', 'Marketing'],
+    ['CSR', 'CSR'],
   ] as [DepartmentType, string][]) {
     const dept = await prisma.department.upsert({
       where: { type },
@@ -89,7 +90,7 @@ async function main() {
     })
   }
 
-  await user('admin@pulsetrack.app', 'Alex Rivera', 'SUPER_ADMIN')
+  const admin = await user('admin@pulsetrack.app', 'Alex Rivera', 'SUPER_ADMIN')
   await user('maria.lopez@pulsetrack.app', 'Maria Lopez', 'TEAM_LEAD', 'ITAD')
   const itadMembers = [
     await user('sarah.jenkins@pulsetrack.app', 'Sarah Jenkins', 'MEMBER', 'ITAD'),
@@ -102,6 +103,15 @@ async function main() {
     await user('aisha.khan@pulsetrack.app', 'Aisha Khan', 'MEMBER', 'LEAD_GEN'),
     await user('leo.martin@pulsetrack.app', 'Leo Martin', 'MEMBER', 'LEAD_GEN'),
   ]
+
+  // --- CSR department (evaluated by QA, no daily form) ---
+  await user('bilal.csr@pulsetrack.app', 'Bilal Ahmed', 'TEAM_LEAD', 'CSR')
+  await user('zoya.csr@pulsetrack.app', 'Zoya Malik', 'MEMBER', 'CSR')
+  await user('hamza.csr@pulsetrack.app', 'Hamza Sheikh', 'MEMBER', 'CSR')
+
+  // --- QA team (no department; scores ITAD + CSR agents) ---
+  await user('hina.qa@pulsetrack.app', 'Hina Qureshi', 'QA')
+  await user('omar.qalead@pulsetrack.app', 'Omar Sheikh', 'QA_LEAD')
 
   // Marketing team (TL + sub-department leads/members)
   await user('nadia.marketing@pulsetrack.app', 'Nadia Hassan', 'TEAM_LEAD', 'MARKETING')
@@ -229,6 +239,61 @@ async function main() {
       where: { userId_date: { userId: socialMember.id, date: dbDateFromString(mDays[i]) } },
       update: {},
       create: { userId: socialMember.id, date: dbDateFromString(mDays[i]), status: 'SUBMITTED', postsPublished: 2 + (i % 3), postsScheduled: 3, reach: 5000 + i * 200, engagement: 300 + i * 15, followersGained: 20 + i },
+    })
+  }
+
+  // --- QA scorecard: exact Call Quality Monitoring Form (flat points, bands 50/64/82) ---
+  const existingCard = await prisma.qaScorecard.findFirst({ where: { name: 'Call Quality Monitoring Form' } })
+  if (!existingCard) {
+    const yesNo = (texts: string[]) => ({ create: texts.map((text, i) => ({ text, type: 'YES_NO' as const, maxScore: 1, order: i })) })
+    const rating = (texts: string[]) => ({ create: texts.map((text, i) => ({ text, type: 'RATING' as const, maxScore: 10, order: i })) })
+    await prisma.qaScorecard.create({
+      data: {
+        name: 'Call Quality Monitoring Form',
+        description: 'Standard 20-question call-quality form (Yes/No + 1–10), scored by total points.',
+        passThreshold: 50,
+        bandGood: 64,
+        bandExcellent: 82,
+        createdById: admin.id,
+        categories: {
+          create: [
+            { name: 'Greeting', order: 0, questions: yesNo([
+              'Did the agent say thank you for calling or apply a local greeting?',
+              'Did the agent mention the company name?',
+              'Did the agent mention his/her name?',
+              'Did the agent offer assistance to the caller?',
+              'If the call was transferred did the agent adapt the greeting accordingly?',
+            ]) },
+            { name: 'Handling Contact', order: 1, questions: yesNo([
+              'Did the agent ask for / confirm the caller’s name?',
+              'Did the agent ask for / confirm the caller’s company name?',
+              'Did the agent maintain professionalism throughout?',
+              'Did the agent display an accurate and appropriate tone during the call?',
+              'Did the agent avoid jargon or technical confusion?',
+            ]) },
+            { name: 'Solution Information', order: 2, questions: rating([
+              'Full details of the call were obtained and understood',
+              'Did the agent build rapport with the prospect?',
+            ]) },
+            { name: 'Notifications', order: 3, questions: rating([
+              'Did the agent maintain an engaging and confident tone?',
+              'Agent did not interrupt or talk over the customer',
+            ]) },
+            { name: 'Telephony skills', order: 4, questions: rating([
+              'Correct procedures followed for placing a customer on hold',
+              'Did the agent tailor the pitch based on customer needs?',
+            ]) },
+            { name: 'Soft skills', order: 5, questions: rating([
+              'Agent used effective questioning skills',
+              'Agent demonstrated active listening',
+            ]) },
+            { name: 'End call', order: 6, questions: rating([
+              'Did the agent avoid misleading statements?',
+              'Did the agent handle the interaction efficiently?',
+            ]) },
+          ],
+        },
+      },
     })
   }
 

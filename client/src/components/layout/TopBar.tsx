@@ -25,6 +25,8 @@ const NOTIF_ICON: Record<AppNotification['type'], React.ReactNode> = {
 const NOTIF_LINK: Record<string, string> = {
   'team-missing': '/app/team/not-submitted',
   'feedback-unread': '/app/feedback',
+  'qa-unread': '/app/qa/my',
+  'qa-coaching': '/app/qa/analytics',
 }
 
 export function TopBar({ user, range, custom, onRangeChange, onApplyCustom }: TopBarProps) {

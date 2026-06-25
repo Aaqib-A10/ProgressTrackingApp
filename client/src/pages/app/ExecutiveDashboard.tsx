@@ -8,6 +8,7 @@ import { useRange } from '../../components/layout/AppShell'
 import { useToast } from '../../components/ui/Toast'
 import { formatNumber, formatPercent, formatSignedPercent } from '../../lib/format'
 import { getExecutiveDashboard, type ExecutiveDashboardData, type ExecBenchmarkRow, type DashKpi } from '../../lib/dashboardApi'
+import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 
 function Delta({ value }: { value: number }) {
   const pos = value >= 0
@@ -62,6 +63,8 @@ export default function ExecutiveDashboard() {
         <h1 className="text-headline-lg text-ink">Executive Overview</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Company-wide performance across all departments</p>
       </div>
+
+      <EmployeeOfMonthCard />
 
       {loading || !data ? (
         <div className="text-body-md text-ink-muted">Loading…</div>

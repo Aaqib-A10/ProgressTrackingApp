@@ -4,7 +4,8 @@ import { z } from 'zod'
 import { DepartmentType, TagType, Role, LeaveType, UserStatus } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { hashPassword } from '../lib/auth'
+import { hashPassword, signInviteToken } from '../lib/auth'
+import { sendInviteEmail } from '../lib/mail'
 import { dbDateFromString, dateStringFromDb } from '../lib/time'
 
 function loadUser(id: string) {
@@ -72,6 +73,8 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
   const user = await prisma.user.create({
     data: { name: v.name, email: v.email, role: v.role, passwordHash: await hashPassword(tempPassword), departmentId: dept?.id ?? null, subDepartmentId },
   })
+  // Email the invitee a "set password & join" link (best-effort).
+  await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword: v.password ? undefined : tempPassword })
   res.status(201).json({
     user: { id: user.id, name: user.name, email: user.email, role: user.role, department: v.department ?? null, subDepartment: v.subDepartmentSlug ?? null, status: user.status, isActive: user.isActive },
     tempPassword: v.password ? undefined : tempPassword,
@@ -214,6 +217,8 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
       type: existing ? 'REACTIVATED' : 'INVITED',
     },
   })
+  // Email the member a "set password & join" link (best-effort).
+  await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword })
   res.status(201).json({
     member: {
       id: user.id,

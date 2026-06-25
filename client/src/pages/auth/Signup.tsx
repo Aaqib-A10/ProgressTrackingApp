@@ -8,13 +8,9 @@ import { useAuth } from '../../lib/auth'
 import { useToast } from '../../components/ui/Toast'
 import { ApiError } from '../../lib/api'
 import type { Department } from '../../lib/types'
+import { SIGNUP_TEAM_OPTIONS } from '../../lib/departments'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const DEPARTMENTS: { value: Department; label: string }[] = [
-  { value: 'ITAD', label: 'ITAD' },
-  { value: 'LEAD_GEN', label: 'Lead Generation' },
-  { value: 'MARKETING', label: 'Marketing' },
-]
 
 const selectClass =
   'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
@@ -29,7 +25,7 @@ export default function Signup() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [companyName, setCompanyName] = useState('')
-  const [department, setDepartment] = useState<Department | ''>('')
+  const [department, setDepartment] = useState<Department | 'QA' | ''>('')
   const [error, setError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -120,10 +116,10 @@ export default function Signup() {
         <PasswordStrength value={password} />
         <TextField label="Company name" placeholder="TechGen Inc." value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
         <div>
-          <label className="mb-1 block text-body-sm font-semibold text-ink">Department you’ll lead</label>
-          <select className={selectClass} value={department} onChange={(e) => setDepartment(e.target.value as Department)}>
-            <option value="">Select department</option>
-            {DEPARTMENTS.map((d) => (
+          <label className="mb-1 block text-body-sm font-semibold text-ink">Team you’ll lead</label>
+          <select className={selectClass} value={department} onChange={(e) => setDepartment(e.target.value as Department | 'QA')}>
+            <option value="">Select team</option>
+            {SIGNUP_TEAM_OPTIONS.map((d) => (
               <option key={d.value} value={d.value}>{d.label}</option>
             ))}
           </select>

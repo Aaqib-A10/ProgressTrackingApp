@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, UserPlus, UserMinus, RotateCcw, KeyRound, Copy } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -43,6 +44,7 @@ const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-m
 export default function TeamMembers() {
   const { user } = useAuth()
   const { addToast } = useToast()
+  const navigate = useNavigate()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [events, setEvents] = useState<TeamEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,7 +112,7 @@ export default function TeamMembers() {
         m.tempPassword ? (
           <span className="inline-flex items-center gap-1.5">
             <code className="rounded bg-slate-100 px-1.5 py-0.5 text-body-sm text-ink">{m.tempPassword}</code>
-            <button onClick={() => copyPw(m.tempPassword!)} className="text-ink-muted hover:text-ink" title="Copy password" aria-label="Copy password">
+            <button onClick={(e) => { e.stopPropagation(); copyPw(m.tempPassword!) }} className="text-ink-muted hover:text-ink" title="Copy password" aria-label="Copy password">
               <Copy size={14} />
             </button>
           </span>
@@ -125,7 +127,7 @@ export default function TeamMembers() {
       render: (m) => (
         <div className="inline-flex items-center gap-1">
           <button
-            onClick={() => setToReset(m)}
+            onClick={(e) => { e.stopPropagation(); setToReset(m) }}
             className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-primary/10 hover:text-primary"
             aria-label={`Reset password for ${m.name}`}
             title="Reset / change password"
@@ -133,7 +135,7 @@ export default function TeamMembers() {
             <KeyRound size={16} />
           </button>
           <button
-            onClick={() => setToRemove(m)}
+            onClick={(e) => { e.stopPropagation(); setToRemove(m) }}
             className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger"
             aria-label={`Remove ${m.name}`}
             title="Remove from team"
@@ -161,7 +163,7 @@ export default function TeamMembers() {
         {loading ? (
           <div className="p-5 text-body-md text-ink-muted">Loading…</div>
         ) : (
-          <DataTable columns={columns} rows={members} getRowId={(m) => m.id} emptyMessage="No active members — invite your first employee." />
+          <DataTable columns={columns} rows={members} getRowId={(m) => m.id} onRowClick={(m) => navigate(`/app/members/${m.id}`)} emptyMessage="No active members — invite your first employee." />
         )}
       </Card>
 

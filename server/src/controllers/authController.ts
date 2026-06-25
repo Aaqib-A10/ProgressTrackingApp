@@ -50,7 +50,8 @@ const signupSchema = z.object({
   email: z.string().email('Enter a valid work email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   companyName: z.string().optional(),
-  department: z.nativeEnum(DepartmentType),
+  // A real department (ITAD/LEAD_GEN/MARKETING/CSR) or 'QA' to request a QA Team Lead role.
+  department: z.string().min(1),
 })
 
 const loginSchema = z.object({
@@ -79,13 +80,27 @@ export async function signup(req: Request, res: Response): Promise<void> {
     return
   }
 
-  const dept = await prisma.department.findUnique({ where: { type: department } })
+  // QA Team Lead self-registration: created PENDING, awaiting Super Admin approval.
+  if (department === 'QA') {
+    await prisma.user.create({
+      data: { name, email, passwordHash: await hashPassword(password), role: 'QA_LEAD', status: 'PENDING' },
+    })
+    res.status(201).json({ pending: true, message: 'Your QA Team Lead request has been sent to the admin for approval.' })
+    return
+  }
+
+  const DEPARTMENTS: DepartmentType[] = ['ITAD', 'LEAD_GEN', 'MARKETING', 'CSR']
+  if (!DEPARTMENTS.includes(department as DepartmentType)) {
+    res.status(400).json({ error: 'Unknown department' })
+    return
+  }
+  const dept = await prisma.department.findUnique({ where: { type: department as DepartmentType } })
   if (!dept) {
     res.status(400).json({ error: 'Unknown department' })
     return
   }
 
-  // Team Lead self-registration: account is activated immediately and signed in.
+  // Department Team Lead self-registration: activated immediately and signed in.
   const user = await prisma.user.create({
     data: {
       name,

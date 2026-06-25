@@ -2,6 +2,8 @@ import {
   LayoutDashboard,
   FileBarChart,
   MessageSquare,
+  ClipboardCheck,
+  ClipboardList,
   Phone,
   Users,
   LineChart,
@@ -49,7 +51,18 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'My Reports', to: '/app/reports', icon: FileBarChart, hideFor: ['SUPER_ADMIN'] },
       { label: 'My Analytics', to: '/app/analytics', icon: LineChart, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
       { label: 'My Team', to: '/app/team/members', icon: Users, roles: ['TEAM_LEAD'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
+    ],
+  },
+  {
+    title: 'Quality Assurance',
+    items: [
+      { label: 'Evaluate', to: '/app/qa/evaluate', icon: ClipboardCheck, roles: ['QA', 'QA_LEAD'] },
+      { label: 'Scorecards', to: '/app/qa/scorecards', icon: ClipboardList, roles: ['QA', 'QA_LEAD'] },
+      { label: 'QA Analytics', to: '/app/qa/analytics', icon: LineChart, roles: ['QA', 'QA_LEAD'] },
+      { label: 'QA Team', to: '/app/qa/evaluators', icon: Users, roles: ['QA_LEAD'] },
+      { label: 'Team QA', to: '/app/qa/team', icon: Users, roles: ['TEAM_LEAD'], departments: ['ITAD', 'CSR'] },
     ],
   },
   {

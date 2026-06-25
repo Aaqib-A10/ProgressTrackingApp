@@ -7,6 +7,7 @@ import { Card } from '../../components/ui/Card'
 import { Badge, FeedbackSentimentBadge } from '../../components/ui/Badge'
 import { listFeedback, type FeedbackThread } from '../../lib/feedbackApi'
 import { fromNow } from '../../lib/datetime'
+import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 
 const TL_ROLES = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
 
@@ -86,6 +87,8 @@ export default function DashboardHome() {
           />
         )}
       </div>
+
+      <EmployeeOfMonthCard />
 
       <RecentFeedback />
     </div>

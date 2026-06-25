@@ -1,0 +1,16 @@
+-- AlterTable
+ALTER TABLE "QaCategory" ALTER COLUMN "weight" SET DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "QaEvaluation" ADD COLUMN     "band" TEXT NOT NULL DEFAULT 'Unacceptable',
+ADD COLUMN     "customerNumber" TEXT;
+
+-- AlterTable
+ALTER TABLE "QaEvaluationCategory" ADD COLUMN     "earned" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN     "maxPossible" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ALTER COLUMN "weight" SET DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "QaScorecard" ADD COLUMN     "bandExcellent" DOUBLE PRECISION NOT NULL DEFAULT 82,
+ADD COLUMN     "bandGood" DOUBLE PRECISION NOT NULL DEFAULT 64,
+ALTER COLUMN "passThreshold" SET DEFAULT 50;

@@ -20,6 +20,14 @@ const TeamMembers = lazy(() => import('../pages/app/TeamMembers'))
 const MemberProfile = lazy(() => import('../pages/app/MemberProfile'))
 const Feedback = lazy(() => import('../pages/app/Feedback'))
 const FeedbackThread = lazy(() => import('../pages/app/FeedbackThread'))
+const QaEvaluate = lazy(() => import('../pages/app/qa/QaEvaluate'))
+const QaScorecards = lazy(() => import('../pages/app/qa/QaScorecards'))
+const QaAnalytics = lazy(() => import('../pages/app/qa/QaAnalytics'))
+const QaTeam = lazy(() => import('../pages/app/qa/QaTeam'))
+const QaEvaluators = lazy(() => import('../pages/app/qa/QaEvaluators'))
+const MyQaScores = lazy(() => import('../pages/app/qa/MyQaScores'))
+const QaEvaluationsList = lazy(() => import('../pages/app/qa/QaEvaluationsList'))
+const QaEvaluationDetail = lazy(() => import('../pages/app/qa/QaEvaluationDetail'))
 const ItadDailyLog = lazy(() => import('../pages/app/itad/ItadDailyLog'))
 const ItadTeamView = lazy(() => import('../pages/app/itad/ItadTeamView'))
 const ItadAnalytics = lazy(() => import('../pages/app/itad/ItadAnalytics'))
@@ -72,6 +80,16 @@ export const router = createBrowserRouter([
       // Feedback (all roles — members receive, leads author & receive replies)
       { path: 'feedback', element: <Feedback /> },
       { path: 'feedback/:id', element: <FeedbackThread /> },
+
+      // Quality Assurance
+      { path: 'qa/evaluate', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaEvaluate /></RequireRole> },
+      { path: 'qa/scorecards', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaScorecards /></RequireRole> },
+      { path: 'qa/analytics', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaAnalytics /></RequireRole> },
+      { path: 'qa/team', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaTeam /></RequireRole> },
+      { path: 'qa/evaluators', element: <RequireRole roles={['QA_LEAD', 'SUPER_ADMIN']}><QaEvaluators /></RequireRole> },
+      { path: 'qa/my', element: <MyQaScores /> },
+      { path: 'qa/evaluations', element: <RequireRole roles={['QA', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaEvaluationsList /></RequireRole> },
+      { path: 'qa/evaluations/:id', element: <QaEvaluationDetail /> },
 
       // ITAD
       { path: 'itad/log', element: <ItadDailyLog /> },

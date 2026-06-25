@@ -12,6 +12,7 @@ import { adminRouter } from './routes/admin'
 import { notificationsRouter } from './routes/notifications'
 import { membersRouter } from './routes/members'
 import { feedbackRouter } from './routes/feedback'
+import { qaRouter } from './routes/qa'
 import { attachmentsRouter } from './routes/attachments'
 
 /**
@@ -47,6 +48,7 @@ export function createApp(): Express {
   app.use('/api/notifications', notificationsRouter)
   app.use('/api/members', membersRouter)
   app.use('/api/feedback', feedbackRouter)
+  app.use('/api/qa', qaRouter)
   app.use('/api/attachments', attachmentsRouter)
 
   // Fallback 404 for unknown API paths.

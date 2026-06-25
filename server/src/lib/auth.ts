@@ -38,3 +38,8 @@ export function verifyResetToken(token: string): string {
   if (payload.kind !== 'reset') throw new Error('Not a reset token')
   return payload.sub
 }
+
+/** Longer-lived "set your password & join" token for invite emails (7 days). */
+export function signInviteToken(userId: string): string {
+  return jwt.sign({ sub: userId, kind: 'reset' }, JWT_SECRET, { expiresIn: '7d' })
+}

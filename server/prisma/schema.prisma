@@ -18,6 +18,8 @@ enum Role {
   MEMBER // own data only
   TEAM_LEAD // whole department
   SUB_DEPT_LEAD // one Marketing sub-department
+  QA // quality-assurance evaluator (scores ITAD/CSR agents)
+  QA_LEAD // manages the QA team (all QA powers + QA-team oversight)
   SUPER_ADMIN // everything
 }
 
@@ -40,6 +42,7 @@ enum DepartmentType {
   ITAD
   LEAD_GEN
   MARKETING
+  CSR
 }
 
 /// Status of a daily entry. A non-SUBMITTED day carries no metrics and is
@@ -97,6 +100,7 @@ model Department {
   tags           Tag[]
   targets        Target[]
   feedback       Feedback[]
+  qaEvaluations  QaEvaluation[]
 }
 
 model SubDepartment {
@@ -148,6 +152,10 @@ model User {
   feedbackReceived Feedback[]      @relation("FeedbackReceived")
   feedbackReplies  FeedbackReply[] @relation("FeedbackReplies")
 
+  qaAuthored   QaEvaluation[] @relation("QaAuthored")
+  qaReceived   QaEvaluation[] @relation("QaReceived")
+  qaScorecards QaScorecard[]
+
   attachments EntryAttachment[]
 
   @@index([departmentId])
@@ -159,6 +167,7 @@ model User {
 enum AttachmentKind {
   ITAD
   LEAD_GEN
+  QA_RECORDING
 }
 
 /// A file an employee attaches to their daily log (Excel, Word, PDF, ...).
@@ -174,6 +183,8 @@ model EntryAttachment {
   mimeType     String
   size         Int
   createdAt    DateTime       @default(now())
+
+  qaEvaluation QaEvaluation? // set when this attachment is a QA call recording
 
   @@index([userId, kind, date])
 }
@@ -501,4 +512,139 @@ model FeedbackReply {
   createdAt  DateTime @default(now())
 
   @@index([feedbackId])
+}
+
+// ========== Quality Assurance (call-quality evaluations) ==========
+
+enum QaQuestionType {
+  RATING // scored 0..maxScore (default 10)
+  YES_NO // Yes = full marks, No = 0
+}
+
+enum QaEvaluationStatus {
+  DRAFT
+  SUBMITTED
+}
+
+/// A configurable scorecard template: weighted categories of questions.
+model QaScorecard {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  departmentType DepartmentType? // null = applies to any department
+  passThreshold  Float           @default(50) // "Acceptable" line; below this = Unacceptable
+  bandGood       Float           @default(64) // >= this = "A good result"
+  bandExcellent  Float           @default(82) // >= this = "Excellent"
+  isActive       Boolean         @default(true)
+  createdById    String?
+  createdBy      User?           @relation(fields: [createdById], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  categories  QaCategory[]
+  evaluations QaEvaluation[]
+}
+
+model QaCategory {
+  id          String      @id @default(cuid())
+  scorecardId String
+  scorecard   QaScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  name        String
+  weight      Float       @default(0) // flat-points model: sections are headings (weight unused)
+  order       Int         @default(0)
+
+  questions QaQuestion[]
+
+  @@index([scorecardId])
+}
+
+model QaQuestion {
+  id           String         @id @default(cuid())
+  categoryId   String
+  category     QaCategory     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  text         String
+  type         QaQuestionType @default(RATING)
+  maxScore     Int            @default(10)
+  criticalFail Boolean        @default(false)
+  allowNA      Boolean        @default(true)
+  order        Int            @default(0)
+
+  @@index([categoryId])
+}
+
+/// A completed evaluation of an agent. Stores SNAPSHOTS of the scorecard so
+/// later template edits never change historical scores.
+model QaEvaluation {
+  id            String       @id @default(cuid())
+  scorecardId   String?
+  scorecard     QaScorecard? @relation(fields: [scorecardId], references: [id])
+  scorecardName String
+  evaluatorId   String
+  evaluator     User         @relation("QaAuthored", fields: [evaluatorId], references: [id])
+  agentId       String
+  agent         User         @relation("QaReceived", fields: [agentId], references: [id])
+  departmentId  String?
+  department    Department?  @relation(fields: [departmentId], references: [id])
+
+  callReference         String?
+  customerNumber        String?
+  callDate              DateTime?
+  recordingAttachmentId String?          @unique
+  recording             EntryAttachment? @relation(fields: [recordingAttachmentId], references: [id])
+
+  status                QaEvaluationStatus @default(SUBMITTED)
+  totalScore            Float              @default(0) // 0..100
+  band                  String             @default("Unacceptable") // Unacceptable | Acceptable | Good | Excellent
+  passed                Boolean            @default(false)
+  criticalFailTriggered Boolean            @default(false)
+  coachingNeeded        Boolean            @default(false)
+  overallComments       String?
+
+  agentReadAt         DateTime?
+  agentAcknowledgedAt DateTime?
+  agentRebuttal       String?
+
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categories QaEvaluationCategory[]
+  answers    QaAnswer[]
+
+  @@index([agentId])
+  @@index([evaluatorId])
+  @@index([departmentId, createdAt])
+}
+
+/// Per-category snapshot of a completed evaluation (powers category analytics).
+model QaEvaluationCategory {
+  id           String       @id @default(cuid())
+  evaluationId String
+  evaluation   QaEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  name         String
+  weight       Float        @default(0)
+  earned       Float        @default(0) // points earned in this section
+  maxPossible  Float        @default(0) // points available (excludes N/A)
+  scorePct     Float // 0..100
+  comment      String?
+  order        Int          @default(0)
+
+  @@index([evaluationId])
+}
+
+/// Per-question snapshot of a completed evaluation (powers the detail view).
+model QaAnswer {
+  id           String         @id @default(cuid())
+  evaluationId String
+  evaluation   QaEvaluation   @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  categoryName String
+  questionText String
+  type         QaQuestionType
+  maxScore     Int            @default(10)
+  criticalFail Boolean        @default(false)
+  score        Int? // null when isNA
+  isNA         Boolean        @default(false)
+  order        Int            @default(0)
+
+  @@index([evaluationId])
 }

@@ -10,14 +10,13 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { useRange } from '../../components/layout/AppShell'
 import { useToast } from '../../components/ui/Toast'
 import { ROLE_LABEL } from '../../lib/types'
+import { DEPARTMENT_LABEL as DEPT_LABEL } from '../../lib/departments'
 import { formatNumber, formatPercent } from '../../lib/format'
 import { fromNow } from '../../lib/datetime'
 import { ITAD_METRICS } from '../../lib/itadApi'
 import { LEADGEN_METRICS } from '../../lib/leadgenApi'
 import { getMemberProfile, type MemberProfileResponse, type MemberEntryRow } from '../../lib/membersApi'
 import { listMemberFeedback, createFeedback, type FeedbackThread, type Sentiment } from '../../lib/feedbackApi'
-
-const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing' }
 const RANGE_LABEL: Record<string, string> = { today: 'Today', week: 'This Week', month: 'This Month', rolling3m: 'Last 3 Months', custom: 'Custom Range' }
 
 export default function MemberProfile() {

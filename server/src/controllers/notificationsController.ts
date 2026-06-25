@@ -55,6 +55,20 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
     })
   }
 
+  // QA: agent has new evaluations to read.
+  const unreadQa = await prisma.qaEvaluation.count({ where: { agentId: me.id, status: 'SUBMITTED', agentReadAt: null } })
+  if (unreadQa > 0) {
+    notifications.push({ id: 'qa-unread', type: 'info', title: 'QA review completed', body: `You have ${unreadQa} new QA evaluation${unreadQa > 1 ? 's' : ''}.`, date: today })
+  }
+
+  // Manager (ITAD/CSR Team Lead): team members below target need coaching.
+  if (me.role === 'TEAM_LEAD' && me.departmentId && (me.department?.type === 'ITAD' || me.department?.type === 'CSR')) {
+    const coaching = await prisma.qaEvaluation.count({ where: { departmentId: me.departmentId, status: 'SUBMITTED', coachingNeeded: true, agentAcknowledgedAt: null } })
+    if (coaching > 0) {
+      notifications.push({ id: 'qa-coaching', type: 'alert', title: 'Coaching needed', body: `${coaching} QA evaluation${coaching > 1 ? 's' : ''} below target in your team.`, date: today })
+    }
+  }
+
   // Informational.
   notifications.push({ id: 'welcome', type: 'info', title: 'Reports update live', body: 'Team totals and dashboards refresh as people submit.', date: today })
 

@@ -8,6 +8,7 @@ import { TextField } from '../../../components/ui/Input'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
+import { DEPARTMENTS } from '../../../lib/departments'
 import { listUsers, createUser, updateUser, type AdminUser } from '../../../lib/adminApi'
 
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
@@ -16,12 +17,7 @@ const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
   REJECTED: { label: 'Rejected', tone: 'danger' },
 }
 
-const ROLES: Role[] = ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
-const DEPARTMENTS: { value: Department; label: string }[] = [
-  { value: 'ITAD', label: 'ITAD' },
-  { value: 'LEAD_GEN', label: 'Lead Generation' },
-  { value: 'MARKETING', label: 'Marketing' },
-]
+const ROLES: Role[] = ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD', 'QA', 'QA_LEAD', 'SUPER_ADMIN']
 const SUBDEPTS = [
   { value: 'seo', label: 'SEO' },
   { value: 'social', label: 'Social Media' },
