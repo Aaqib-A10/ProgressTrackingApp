@@ -8,8 +8,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/Toast'
 import { formatPercent } from '../../../lib/format'
 import {
-  listQaAgents, listScorecards, getScorecard, listEvaluations, createEvaluation, uploadRecording,
-  type QaAgentRow, type ScorecardSummary, type ScorecardFull, type EvaluationSummary,
+  listQaAgents, listScorecards, getScorecard, listEvaluations, createEvaluation, uploadRecording, getAgentActivity,
+  type QaAgentRow, type ScorecardSummary, type ScorecardFull, type EvaluationSummary, type AgentActivity,
 } from '../../../lib/qaApi'
 import type { BadgeTone } from '../../../components/ui/Badge'
 import { computeLiveScore, type AnswerState } from '../../../lib/qaScore'
@@ -204,6 +204,8 @@ function AgentEvaluation({ dept, agent, onBack }: { dept: Dept; agent: QaAgentRo
         )}
       </Card>
 
+      <CallActivity agentId={agent.id} />
+
       {/* Evaluation form */}
       <Card title="New Evaluation" action={
         <select value={scorecardId} onChange={(e) => setScorecardId(e.target.value)} className="h-9 rounded-btn border border-line bg-card px-2 text-body-sm text-ink">
@@ -270,7 +272,56 @@ function AgentEvaluation({ dept, agent, onBack }: { dept: Dept; agent: QaAgentRo
   )
 }
 
-function ScoreInput({ question, value, onChange }: { question: ScorecardFull['categories'][number]['questions'][number]; value?: AnswerState; onChange: (v: AnswerState) => void }) {
+/** The agent's call volume (ITAD daily logs) this week & month — context for QA before scoring. */
+function CallActivity({ agentId }: { agentId: string }) {
+  const [data, setData] = useState<AgentActivity | null>(null)
+  useEffect(() => {
+    setData(null)
+    getAgentActivity(agentId).then(setData).catch(() => setData({ hasData: false, department: null, periods: [] }))
+  }, [agentId])
+
+  if (!data) return <Card title="Call activity"><p className="py-3 text-center text-body-sm text-ink-muted">Loading…</p></Card>
+  if (!data.hasData) {
+    return (
+      <Card title="Call activity">
+        <p className="py-2 text-body-sm text-ink-muted">No call logs for this agent{data.department ? ` (${data.department} has no daily call form)` : ''}.</p>
+      </Card>
+    )
+  }
+  const metrics: { key: keyof AgentActivity['periods'][number]; label: string }[] = [
+    { key: 'callsDialed', label: 'Calls dialed' },
+    { key: 'connected', label: 'Connected' },
+    { key: 'voicemail', label: 'Voicemail' },
+    { key: 'emailsSent', label: 'Emails' },
+    { key: 'interested', label: 'Interested' },
+    { key: 'closed', label: 'Closed' },
+    { key: 'rfqs', label: 'RFQs' },
+  ]
+  return (
+    <Card title="Call activity" subtitle="From the agent's ITAD daily logs">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {data.periods.map((p) => (
+          <div key={p.key} className="rounded-card border border-line p-4">
+            <div className="mb-2 flex items-baseline justify-between">
+              <p className="text-body-md font-semibold text-ink">{p.label}</p>
+              <p className="text-body-sm text-ink-muted">{p.daysLogged} day{p.daysLogged === 1 ? '' : 's'} logged</p>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              {metrics.map((m) => (
+                <div key={m.key} className="flex items-center justify-between">
+                  <dt className="text-body-sm text-ink-muted">{m.label}</dt>
+                  <dd className="text-body-md font-semibold tabular-nums text-ink">{p[m.key] as number}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+export function ScoreInput({ question, value, onChange }: { question: ScorecardFull['categories'][number]['questions'][number]; value?: AnswerState; onChange: (v: AnswerState) => void }) {
   const isNA = !!value?.isNA
   const score = value?.score ?? null
   const btn = (active: boolean) =>

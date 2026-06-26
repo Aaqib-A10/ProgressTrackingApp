@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, Pencil } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { TextArea } from '../../../components/ui/Input'
@@ -49,7 +49,17 @@ export default function QaEvaluationDetail() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <Back />
+      <div className="flex items-center justify-between">
+        <Back />
+        {data.canEdit && (
+          <Link
+            to={`/app/qa/evaluations/${data.id}/edit`}
+            className="inline-flex items-center gap-1.5 rounded-btn border border-line bg-card px-3 py-1.5 text-body-sm font-semibold text-ink hover:bg-slate-50"
+          >
+            <Pencil size={14} /> Edit
+          </Link>
+        )}
+      </div>
 
       <Card>
         <div className="flex flex-wrap items-center gap-4">

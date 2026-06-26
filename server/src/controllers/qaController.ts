@@ -379,12 +379,18 @@ export async function createEvaluation(req: AuthedRequest, res: Response): Promi
 }
 
 type EvalFull = Prisma.QaEvaluationGetPayload<{
-  include: { evaluator: true; agent: true; categories: true; answers: true; recording: true }
+  include: { evaluator: true; agent: true; categories: true; answers: true; recording: true; scorecard: true }
 }>
-function serializeEvaluation(e: EvalFull) {
+function serializeEvaluation(e: EvalFull, canEdit: boolean) {
+  const bands = e.scorecard
+    ? { passThreshold: e.scorecard.passThreshold, bandGood: e.scorecard.bandGood, bandExcellent: e.scorecard.bandExcellent }
+    : { passThreshold: 50, bandGood: 64, bandExcellent: 82 }
   return {
     id: e.id,
+    scorecardId: e.scorecardId,
     scorecardName: e.scorecardName,
+    bands,
+    canEdit,
     evaluator: thin(e.evaluator),
     agent: thin(e.agent),
     callReference: e.callReference,
@@ -405,7 +411,7 @@ function serializeEvaluation(e: EvalFull) {
       .map((c) => ({ name: c.name, earned: c.earned, maxPossible: c.maxPossible, scorePct: c.scorePct, comment: c.comment })),
     answers: [...e.answers]
       .sort((a, b) => a.order - b.order)
-      .map((a) => ({ categoryName: a.categoryName, questionText: a.questionText, type: a.type, maxScore: a.maxScore, criticalFail: a.criticalFail, score: a.score, isNA: a.isNA })),
+      .map((a) => ({ order: a.order, categoryName: a.categoryName, questionText: a.questionText, type: a.type, maxScore: a.maxScore, criticalFail: a.criticalFail, score: a.score, isNA: a.isNA })),
   }
 }
 
@@ -420,7 +426,7 @@ export async function getEvaluation(req: AuthedRequest, res: Response): Promise<
   const me = await loadMe(req.user!.id)
   const e = await prisma.qaEvaluation.findUnique({
     where: { id: req.params.id },
-    include: { evaluator: true, agent: true, categories: true, answers: true, recording: true },
+    include: { evaluator: true, agent: true, categories: true, answers: true, recording: true, scorecard: true },
   })
   if (!e) {
     res.status(404).json({ error: 'Evaluation not found' })
@@ -433,7 +439,145 @@ export async function getEvaluation(req: AuthedRequest, res: Response): Promise<
   if (me.id === e.agentId && !e.agentReadAt) {
     await prisma.qaEvaluation.update({ where: { id: e.id }, data: { agentReadAt: new Date() } })
   }
-  res.json({ evaluation: serializeEvaluation(e) })
+  const canEdit = isQaLead(me.role) || e.evaluatorId === me.id
+  res.json({ evaluation: serializeEvaluation(e, canEdit) })
+}
+
+const updateEvalSchema = z.object({
+  callReference: z.string().max(120).nullable().optional(),
+  customerNumber: z.string().max(120).nullable().optional(),
+  callDate: z.string().nullable().optional(),
+  overallComments: z.string().max(4000).nullable().optional(),
+  sectionComments: z.array(z.object({ name: z.string(), comment: z.string().max(2000).nullable().optional() })).optional(),
+  answers: z.array(z.object({ order: z.number().int(), score: z.number().int().min(0).max(100).nullable(), isNA: z.boolean() })),
+})
+
+/** PUT /api/qa/evaluations/:id — the evaluator (or QA-lead/admin) edits a submitted evaluation. */
+export async function updateEvaluation(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadMe(req.user!.id)
+  const e = await prisma.qaEvaluation.findUnique({
+    where: { id: req.params.id },
+    include: { categories: true, answers: true, scorecard: true },
+  })
+  if (!e) {
+    res.status(404).json({ error: 'Evaluation not found' })
+    return
+  }
+  if (!(isQaLead(me.role) || e.evaluatorId === me.id)) {
+    res.status(403).json({ error: 'Only the evaluator can edit this evaluation' })
+    return
+  }
+  const parsed = updateEvalSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  const v = parsed.data
+
+  // Re-score from the (immutable) answer snapshots + the submitted scores, grouped by category.
+  const newByOrder = new Map(v.answers.map((a) => [a.order, a]))
+  const answersSorted = [...e.answers].sort((a, b) => a.order - b.order)
+  const catIndexList = [...new Set(answersSorted.map((a) => Math.floor(a.order / 100)))].sort((a, b) => a - b)
+  const scored: ScoredCategory[] = []
+  const answerUpdates: { id: string; score: number | null; isNA: boolean }[] = []
+  for (const ci of catIndexList) {
+    const qs = answersSorted.filter((a) => Math.floor(a.order / 100) === ci)
+    const sQuestions = qs.map((a) => {
+      const upd = newByOrder.get(a.order)
+      const isNA = upd ? upd.isNA || upd.score === null : a.isNA
+      const score = isNA ? null : upd ? upd.score : a.score
+      answerUpdates.push({ id: a.id, score, isNA })
+      return { type: a.type as 'RATING' | 'YES_NO', maxScore: a.maxScore, criticalFail: a.criticalFail, score, isNA }
+    })
+    scored.push({ questions: sQuestions })
+  }
+  const bands = e.scorecard
+    ? { passThreshold: e.scorecard.passThreshold, bandGood: e.scorecard.bandGood, bandExcellent: e.scorecard.bandExcellent }
+    : { passThreshold: 50, bandGood: 64, bandExcellent: 82 }
+  const result = scoreEvaluation(scored, bands)
+
+  const commentByName = new Map((v.sectionComments ?? []).map((s) => [s.name, s.comment ?? null]))
+  const catRows = [...e.categories].sort((a, b) => a.order - b.order)
+
+  await prisma.$transaction([
+    ...answerUpdates.map((u) => prisma.qaAnswer.update({ where: { id: u.id }, data: { score: u.score, isNA: u.isNA } })),
+    ...catRows.map((c, i) =>
+      prisma.qaEvaluationCategory.update({
+        where: { id: c.id },
+        data: {
+          earned: result.categories[i]?.earned ?? 0,
+          maxPossible: result.categories[i]?.maxPossible ?? 0,
+          scorePct: result.categories[i]?.scorePct ?? 0,
+          comment: commentByName.has(c.name) ? commentByName.get(c.name)! : c.comment,
+        },
+      }),
+    ),
+    prisma.qaEvaluation.update({
+      where: { id: e.id },
+      data: {
+        callReference: v.callReference !== undefined ? v.callReference : e.callReference,
+        customerNumber: v.customerNumber !== undefined ? v.customerNumber : e.customerNumber,
+        callDate: v.callDate !== undefined ? (v.callDate ? new Date(v.callDate) : null) : e.callDate,
+        overallComments: v.overallComments !== undefined ? v.overallComments : e.overallComments,
+        totalScore: result.totalScore,
+        band: result.band,
+        passed: result.passed,
+        criticalFailTriggered: result.criticalFailTriggered,
+        coachingNeeded: !result.passed,
+        agentReadAt: null, // re-notify the agent that the review changed
+      },
+    }),
+  ])
+  res.json({ id: e.id, totalScore: result.totalScore, band: result.band, passed: result.passed, criticalFailTriggered: result.criticalFailTriggered })
+}
+
+/** GET /api/qa/agents/:id/activity — the agent's call activity (ITAD daily logs) this week & month. */
+export async function agentActivity(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadMe(req.user!.id)
+  const agent = await prisma.user.findUnique({ where: { id: req.params.id }, include: { department: true } })
+  if (!agent) {
+    res.status(404).json({ error: 'Agent not found' })
+    return
+  }
+  const allowed = isQa(me.role) || (me.role === 'TEAM_LEAD' && me.departmentId && me.departmentId === agent.departmentId) || me.id === agent.id
+  if (!allowed) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const deptType = agent.department?.type ?? null
+  // Call activity comes from ITAD daily logs; CSR has no daily form yet.
+  if (deptType !== 'ITAD') {
+    res.json({ hasData: false, department: deptType, periods: [] })
+    return
+  }
+  const defs: { key: RangeKey; label: string }[] = [
+    { key: 'week', label: 'This week' },
+    { key: 'month', label: 'This month' },
+  ]
+  const periods = []
+  for (const d of defs) {
+    const r = periodRange(d.key, {})
+    const entries = await prisma.itadDailyEntry.findMany({
+      where: { userId: agent.id, status: 'SUBMITTED', date: { gte: dbDateFromString(r.startDate), lte: dbDateFromString(r.endDate) } },
+    })
+    const sum = (f: 'callsDialed' | 'connected' | 'voicemail' | 'emailsSent' | 'interested' | 'closed' | 'rfqs') =>
+      entries.reduce((s, e) => s + (e[f] as number), 0)
+    periods.push({
+      key: d.key,
+      label: d.label,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      daysLogged: entries.length,
+      callsDialed: sum('callsDialed'),
+      connected: sum('connected'),
+      voicemail: sum('voicemail'),
+      emailsSent: sum('emailsSent'),
+      interested: sum('interested'),
+      closed: sum('closed'),
+      rfqs: sum('rfqs'),
+    })
+  }
+  res.json({ hasData: true, department: deptType, periods })
 }
 
 /** GET /api/qa/evaluations?agentId= — list (summaries) for an agent. */

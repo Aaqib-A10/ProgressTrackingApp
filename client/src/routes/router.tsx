@@ -25,6 +25,7 @@ const QaScorecards = lazy(() => import('../pages/app/qa/QaScorecards'))
 const QaAnalytics = lazy(() => import('../pages/app/qa/QaAnalytics'))
 const QaTeam = lazy(() => import('../pages/app/qa/QaTeam'))
 const QaEvaluators = lazy(() => import('../pages/app/qa/QaEvaluators'))
+const QaEvaluationEdit = lazy(() => import('../pages/app/qa/QaEvaluationEdit'))
 const MyQaScores = lazy(() => import('../pages/app/qa/MyQaScores'))
 const QaEvaluationsList = lazy(() => import('../pages/app/qa/QaEvaluationsList'))
 const QaEvaluationDetail = lazy(() => import('../pages/app/qa/QaEvaluationDetail'))
@@ -90,6 +91,7 @@ export const router = createBrowserRouter([
       { path: 'qa/my', element: <MyQaScores /> },
       { path: 'qa/evaluations', element: <RequireRole roles={['QA', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaEvaluationsList /></RequireRole> },
       { path: 'qa/evaluations/:id', element: <QaEvaluationDetail /> },
+      { path: 'qa/evaluations/:id/edit', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaEvaluationEdit /></RequireRole> },
 
       // ITAD
       { path: 'itad/log', element: <ItadDailyLog /> },

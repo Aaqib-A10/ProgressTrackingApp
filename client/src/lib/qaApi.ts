@@ -114,9 +114,13 @@ export interface EvaluationSummary {
   unread: boolean
   createdAt: string
 }
+export interface EvaluationBands { passThreshold: number; bandGood: number; bandExcellent: number }
 export interface EvaluationDetail {
   id: string
+  scorecardId: string | null
   scorecardName: string
+  bands: EvaluationBands
+  canEdit: boolean
   evaluator: { id: string; name: string; email: string; role: string }
   agent: { id: string; name: string; email: string; role: string }
   callReference: string | null
@@ -133,12 +137,43 @@ export interface EvaluationDetail {
   agentRebuttal: string | null
   createdAt: string
   categories: { name: string; earned: number; maxPossible: number; scorePct: number; comment: string | null }[]
-  answers: { categoryName: string; questionText: string; type: QaQuestionType; maxScore: number; criticalFail: boolean; score: number | null; isNA: boolean }[]
+  answers: { order: number; categoryName: string; questionText: string; type: QaQuestionType; maxScore: number; criticalFail: boolean; score: number | null; isNA: boolean }[]
 }
 
+export interface EvaluationUpdateInput {
+  callReference?: string | null
+  customerNumber?: string | null
+  overallComments?: string | null
+  sectionComments: { name: string; comment: string | null }[]
+  answers: { order: number; score: number | null; isNA: boolean }[]
+}
 export const createEvaluation = (input: EvaluationInput) =>
   api.post<{ id: string; totalScore: number; band: string; passed: boolean; criticalFailTriggered: boolean }>('/qa/evaluations', input)
+export const updateEvaluation = (id: string, input: EvaluationUpdateInput) =>
+  api.put<{ id: string; totalScore: number; band: string; passed: boolean; criticalFailTriggered: boolean }>(`/qa/evaluations/${id}`, input)
 export const getEvaluation = (id: string) => api.get<{ evaluation: EvaluationDetail }>(`/qa/evaluations/${id}`)
+
+// ---------- Agent call activity (ITAD daily logs) ----------
+export interface AgentActivityPeriod {
+  key: string
+  label: string
+  startDate: string
+  endDate: string
+  daysLogged: number
+  callsDialed: number
+  connected: number
+  voicemail: number
+  emailsSent: number
+  interested: number
+  closed: number
+  rfqs: number
+}
+export interface AgentActivity {
+  hasData: boolean
+  department: string | null
+  periods: AgentActivityPeriod[]
+}
+export const getAgentActivity = (agentId: string) => api.get<AgentActivity>(`/qa/agents/${agentId}/activity`)
 export const listEvaluations = (agentId?: string) =>
   api.get<{ evaluations: EvaluationSummary[] }>(`/qa/evaluations${agentId ? `?agentId=${agentId}` : ''}`)
 export const myEvaluations = () => api.get<{ evaluations: EvaluationSummary[] }>('/qa/my-evaluations')
