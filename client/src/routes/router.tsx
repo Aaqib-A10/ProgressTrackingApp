@@ -13,6 +13,7 @@ import { RequireAuth, RequireRole, AppShellRoute } from './guards'
 // Recharts/dnd-kit. Suspense boundary lives in <AppShell>.
 const DashboardIndex = lazy(() => import('../pages/app/DashboardIndex'))
 const MyReports = lazy(() => import('../pages/app/MyReports'))
+const ReportsMonthly = lazy(() => import('../pages/app/ReportsMonthly'))
 const MyPerformance = lazy(() => import('../pages/app/MyPerformance'))
 const Settings = lazy(() => import('../pages/app/Settings'))
 const NotSubmitted = lazy(() => import('../pages/app/NotSubmitted'))
@@ -75,6 +76,7 @@ export const router = createBrowserRouter([
 
       // Team submission status + per-member profiles (TL/Admin)
       { path: 'team/members', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><TeamMembers /></RequireRole> },
+      { path: 'reports/monthly', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ReportsMonthly /></RequireRole> },
       { path: 'team/not-submitted', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><NotSubmitted /></RequireRole> },
       { path: 'members/:id', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><MemberProfile /></RequireRole> },
 

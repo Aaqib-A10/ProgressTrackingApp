@@ -1,9 +1,21 @@
 import type { Response } from 'express'
+import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { dbDateFromString, periodRange, type RangeKey, type DateRange } from '../lib/time'
+import { companyToday, dbDateFromString, periodRange, type RangeKey, type DateRange } from '../lib/time'
 import { aggregateAgent as aggregateItad, itadKpis, sumItad } from '../lib/itad'
 import { aggregateAgent as aggregateLeadGen, leadGenKpis, sumLeadGen } from '../lib/leadgen'
+import { buildMonthlyReport } from '../lib/reports'
+import { renderMonthlyReportEmail } from '../lib/reportEmail'
+import { sendMail } from '../lib/mail'
+
+/** Configured management recipients for the scheduled reports (comma-separated env). */
+export function reportRecipients(): string[] {
+  return (process.env.REPORT_RECIPIENTS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
 
 const inRange = (r: DateRange) => ({ gte: dbDateFromString(r.startDate), lte: dbDateFromString(r.endDate) })
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
@@ -92,4 +104,102 @@ export async function exportTeamCsv(req: AuthedRequest, res: Response): Promise<
   res.setHeader('Content-Type', 'text/csv; charset=utf-8')
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
   res.send(csv(rows))
+}
+
+const REPORT_DEPTS = ['ITAD', 'LEAD_GEN'] as const
+type ReportDept = (typeof REPORT_DEPTS)[number]
+
+/** Default to the previous calendar month (the month a monthly report is "about"). */
+export function previousMonth(): string {
+  return DateTime.fromISO(companyToday()).minus({ months: 1 }).toFormat('yyyy-MM')
+}
+
+/** GET /api/reports/monthly?department=ITAD|LEAD_GEN&month=YYYY-MM — structured monthly team report. */
+export async function monthlyReport(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, include: { department: true } })
+  const deptParam = String(req.query.department || '').toUpperCase()
+  if (!REPORT_DEPTS.includes(deptParam as ReportDept)) {
+    res.status(400).json({ error: 'department must be ITAD or LEAD_GEN' })
+    return
+  }
+  const departmentType = deptParam as ReportDept
+
+  // RBAC: Super Admin sees any department; a Team Lead only their own.
+  if (me.role !== 'SUPER_ADMIN') {
+    if (me.role !== 'TEAM_LEAD' || me.department?.type !== departmentType) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+  }
+
+  const month = /^\d{4}-\d{2}$/.test(String(req.query.month)) ? String(req.query.month) : previousMonth()
+  const report = await buildMonthlyReport(departmentType, month)
+  if (!report) {
+    res.status(404).json({ error: 'Department not found' })
+    return
+  }
+  res.json({ report })
+}
+
+/** GET /api/reports/monthly/preview?department=&month= — render the EXACT email HTML (no send).
+ *  Auth is cookie-based, so opening this URL in a logged-in browser tab Just Works. */
+export async function previewMonthlyReport(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, include: { department: true } })
+  const deptParam = String(req.query.department || '').toUpperCase()
+  if (!REPORT_DEPTS.includes(deptParam as ReportDept)) {
+    res.status(400).send('department must be ITAD or LEAD_GEN')
+    return
+  }
+  const departmentType = deptParam as ReportDept
+  if (me.role !== 'SUPER_ADMIN') {
+    if (me.role !== 'TEAM_LEAD' || me.department?.type !== departmentType) {
+      res.status(403).send('Forbidden')
+      return
+    }
+  }
+  const month = /^\d{4}-\d{2}$/.test(String(req.query.month)) ? String(req.query.month) : previousMonth()
+  const report = await buildMonthlyReport(departmentType, month)
+  if (!report) {
+    res.status(404).send('Department not found')
+    return
+  }
+  const { html } = renderMonthlyReportEmail(report)
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.send(html)
+}
+
+/** POST /api/reports/monthly/send — email the report now. Body: { department, month?, to? }. */
+export async function sendMonthlyReport(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, include: { department: true } })
+  const body = (req.body ?? {}) as { department?: string; month?: string; to?: string | string[] }
+  const deptParam = String(body.department || '').toUpperCase()
+  if (!REPORT_DEPTS.includes(deptParam as ReportDept)) {
+    res.status(400).json({ error: 'department must be ITAD or LEAD_GEN' })
+    return
+  }
+  const departmentType = deptParam as ReportDept
+  if (me.role !== 'SUPER_ADMIN') {
+    if (me.role !== 'TEAM_LEAD' || me.department?.type !== departmentType) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+  }
+
+  // Recipients: explicit `to` override (for testing) else the configured management list.
+  const override = body.to ? (Array.isArray(body.to) ? body.to : [body.to]) : []
+  const recipients = (override.length ? override : reportRecipients()).map((s) => s.trim()).filter(Boolean)
+  if (recipients.length === 0) {
+    res.status(400).json({ error: 'No recipients — set REPORT_RECIPIENTS or pass "to".' })
+    return
+  }
+
+  const month = /^\d{4}-\d{2}$/.test(String(body.month)) ? String(body.month) : previousMonth()
+  const report = await buildMonthlyReport(departmentType, month)
+  if (!report) {
+    res.status(404).json({ error: 'Department not found' })
+    return
+  }
+  const { subject, html, text } = renderMonthlyReportEmail(report)
+  await sendMail({ to: recipients, subject, html, text })
+  res.json({ sent: true, department: departmentType, month, recipients })
 }

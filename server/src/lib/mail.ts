@@ -7,13 +7,13 @@ const REPLY_TO = process.env.MAIL_REPLY_TO || 'noreply@pulsetrack.online'
 const APP_URL = process.env.APP_URL || 'http://localhost:5173'
 
 interface SendOpts {
-  to: string
+  to: string | string[]
   subject: string
   html: string
   text: string // plain-text alternative — improves inbox placement vs HTML-only
 }
 
-async function send({ to, subject, html, text }: SendOpts): Promise<void> {
+export async function sendMail({ to, subject, html, text }: SendOpts): Promise<void> {
   if (!RESEND_API_KEY) {
     // eslint-disable-next-line no-console
     console.warn('[mail] RESEND_API_KEY not set — skipping email to', to)
@@ -73,5 +73,5 @@ export function sendInviteEmail(opts: { to: string; name: string; token: string;
     '',
     'This link is valid for 7 days. If you didn\'t expect this email, you can ignore it.',
   ].filter((l) => l !== '').join('\n')
-  return send({ to: opts.to, subject: 'You are invited to PulseTrack', html, text })
+  return sendMail({ to: opts.to, subject: 'You are invited to PulseTrack', html, text })
 }

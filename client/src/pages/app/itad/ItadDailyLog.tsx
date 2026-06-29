@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Phone, PhoneCall, Voicemail, Mail, Heart, Briefcase, CheckCircle2, FileText, UploadCloud } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Phone, PhoneCall, Voicemail, Mail, Heart, Briefcase, CheckCircle2, FileText, UploadCloud, RotateCcw } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { NumberStepper } from '../../../components/ui/NumberStepper'
@@ -8,6 +8,7 @@ import { Toggle } from '../../../components/ui/Toggle'
 import { RadialGauge } from '../../../components/charts/RadialGauge'
 import { CHART } from '../../../components/charts/chartTheme'
 import { useToast } from '../../../components/ui/Toast'
+import { useAuth } from '../../../lib/auth'
 import {
   ITAD_METRICS,
   getMyItadEntry,
@@ -34,6 +35,7 @@ function zeroTotals(): ItadTotals {
 
 export default function ItadDailyLog() {
   const { addToast } = useToast()
+  const { user } = useAuth()
   const [data, setData] = useState<ItadEntryResponse | null>(null)
   const [metrics, setMetrics] = useState<ItadTotals>(zeroTotals)
   const [onLeave, setOnLeave] = useState(false)
@@ -41,21 +43,55 @@ export default function ItadDailyLog() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
+  // Local draft memory: agents tally numbers across the day, so in-progress (unsubmitted)
+  // values survive a page refresh. Keyed per user + day; cleared on submit.
+  const draftKeyRef = useRef<string | null>(null)
+  function saveDraft(m: ItadTotals, n: string, leave: boolean) {
+    const key = draftKeyRef.current
+    if (!key) return
+    try {
+      localStorage.setItem(key, JSON.stringify({ metrics: m, notes: n, onLeave: leave }))
+    } catch {
+      /* storage unavailable (private mode / quota) — drafts just won't persist */
+    }
+  }
+
   useEffect(() => {
     getMyItadEntry()
       .then((res) => {
         setData(res)
-        if (res.entry) {
-          setOnLeave(res.entry.status !== 'SUBMITTED')
-          setNotes(res.entry.notes)
-          setMetrics(
-            ITAD_METRICS.reduce((acc, m) => ({ ...acc, [m.key]: res.entry![m.key] }), {} as ItadTotals),
-          )
+        const key = `itad-draft:${user?.id ?? 'me'}:${res.date}`
+        draftKeyRef.current = key
+        // Base values from any saved entry, then overlay the local draft (latest edits win).
+        let baseMetrics = res.entry
+          ? (ITAD_METRICS.reduce((acc, m) => ({ ...acc, [m.key]: res.entry![m.key] }), {} as ItadTotals))
+          : zeroTotals()
+        let baseNotes = res.entry?.notes ?? ''
+        let baseLeave = res.entry ? res.entry.status !== 'SUBMITTED' : false
+        try {
+          const raw = localStorage.getItem(key)
+          if (raw) {
+            const d = JSON.parse(raw) as { metrics?: Partial<ItadTotals>; notes?: string; onLeave?: boolean }
+            if (d.metrics) baseMetrics = { ...baseMetrics, ...d.metrics }
+            if (typeof d.notes === 'string') baseNotes = d.notes
+            if (typeof d.onLeave === 'boolean') baseLeave = d.onLeave
+          }
+        } catch {
+          /* ignore malformed draft */
         }
+        setMetrics(baseMetrics)
+        setNotes(baseNotes)
+        setOnLeave(baseLeave)
       })
       .catch(() => addToast({ type: 'error', message: 'Could not load today’s entry.' }))
       .finally(() => setLoading(false))
-  }, [addToast])
+  }, [addToast, user?.id])
+
+  function clearEntry() {
+    const zeros = zeroTotals()
+    setMetrics(zeros)
+    saveDraft(zeros, notes, onLeave)
+  }
 
   const target = data?.stats.dailyDialTarget ?? 0
   const callsGoal = target ? metrics.callsDialed / target : 0
@@ -74,6 +110,8 @@ export default function ItadDailyLog() {
         notes,
         ...(onLeave ? {} : metrics),
       })
+      // Saved server-side now — drop the local draft so it can't override the saved values.
+      if (draftKeyRef.current) localStorage.removeItem(draftKeyRef.current)
       addToast({ type: 'success', message: onLeave ? 'Marked as On Leave today.' : 'Daily entry submitted.' })
     } catch {
       addToast({ type: 'error', message: 'Could not submit. Please try again.' })
@@ -93,7 +131,14 @@ export default function ItadDailyLog() {
         </div>
         <label className="flex items-center gap-3 rounded-btn border border-line bg-card px-4 py-2">
           <span className="text-body-sm font-medium text-ink-muted">On Leave / Off Today</span>
-          <Toggle checked={onLeave} onChange={setOnLeave} label="On leave today" />
+          <Toggle
+            checked={onLeave}
+            onChange={(v) => {
+              setOnLeave(v)
+              saveDraft(metrics, notes, v)
+            }}
+            label="On leave today"
+          />
         </label>
       </div>
 
@@ -108,7 +153,13 @@ export default function ItadDailyLog() {
                   label={m.label}
                   icon={ICONS[m.key]}
                   value={metrics[m.key]}
-                  onChange={(v) => setMetrics((prev) => ({ ...prev, [m.key]: v }))}
+                  onChange={(v) =>
+                    setMetrics((prev) => {
+                      const next = { ...prev, [m.key]: v }
+                      saveDraft(next, notes, onLeave)
+                      return next
+                    })
+                  }
                   disabled={onLeave}
                 />
               ))}
@@ -118,7 +169,10 @@ export default function ItadDailyLog() {
               <label className="mb-1 block text-body-sm font-medium text-ink-muted">Notes / Comments</label>
               <textarea
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => {
+                  setNotes(e.target.value)
+                  saveDraft(metrics, e.target.value, onLeave)
+                }}
                 rows={3}
                 placeholder="Add any specific context for today's activity…"
                 className="w-full rounded-btn border border-line bg-bg p-3 text-body-md text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
@@ -131,9 +185,14 @@ export default function ItadDailyLog() {
             <AttachmentsCard kind="ITAD" date={data?.date} disabled={onLeave} />
           </div>
 
-          <Button className="mt-6 w-full" size="lg" onClick={submit} disabled={submitting} leadingIcon={<UploadCloud size={18} />}>
-            {submitting ? 'Submitting…' : onLeave ? 'Submit On-Leave Day' : 'Submit Day'}
-          </Button>
+          <div className="mt-6 flex gap-3">
+            <Button variant="secondary" size="lg" onClick={clearEntry} disabled={submitting || onLeave} leadingIcon={<RotateCcw size={16} />}>
+              Clear
+            </Button>
+            <Button className="flex-1" size="lg" onClick={submit} disabled={submitting} leadingIcon={<UploadCloud size={18} />}>
+              {submitting ? 'Submitting…' : onLeave ? 'Submit On-Leave Day' : 'Submit Day'}
+            </Button>
+          </div>
         </div>
 
         {/* Today vs Avg */}

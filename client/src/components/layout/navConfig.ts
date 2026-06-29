@@ -51,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'My Reports', to: '/app/reports', icon: FileBarChart, hideFor: ['SUPER_ADMIN'] },
       { label: 'My Analytics', to: '/app/analytics', icon: LineChart, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
       { label: 'My Team', to: '/app/team/members', icon: Users, roles: ['TEAM_LEAD'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart, roles: ['TEAM_LEAD', 'SUPER_ADMIN'], departments: ['ITAD', 'LEAD_GEN'] },
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
     ],
