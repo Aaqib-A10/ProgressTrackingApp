@@ -90,7 +90,7 @@ async function main() {
     })
   }
 
-  const admin = await user('admin@pulsetrack.app', 'Alex Rivera', 'SUPER_ADMIN')
+  const admin = await user('admin@pulsetrack.app', 'Super Admin', 'SUPER_ADMIN')
   await user('maria.lopez@pulsetrack.app', 'Maria Lopez', 'TEAM_LEAD', 'ITAD')
   const itadMembers = [
     await user('sarah.jenkins@pulsetrack.app', 'Sarah Jenkins', 'MEMBER', 'ITAD'),
