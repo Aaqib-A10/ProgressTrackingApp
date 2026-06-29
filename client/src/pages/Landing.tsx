@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Activity, Zap, Users, TrendingUp, KanbanSquare, LayoutDashboard, CalendarDays,
+  Zap, Users, TrendingUp, KanbanSquare, LayoutDashboard, CalendarDays,
   FileBarChart, Target, Clock, Smartphone, Star, ArrowRight, ChevronDown,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import { Logo } from '../components/Logo'
 
 const img = (name: string) => `/assets/images/${name}`
 
@@ -146,11 +147,8 @@ export default function Landing() {
       <div className="relative overflow-hidden bg-gradient-to-b from-[#eef3fb] to-[#f4f7fc] pb-16">
         {/* logo header — always in front */}
         <header className="relative z-50 mx-auto max-w-7xl px-6 pt-7 sm:px-12 lg:px-16">
-          <Link to="/" className="inline-flex items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-700 text-white shadow-md">
-              <Activity size={22} strokeWidth={2.4} />
-            </span>
-            <span className="text-2xl font-bold tracking-tight text-ink">Pulse<span className="text-primary">Track</span></span>
+          <Link to="/" className="inline-flex items-center">
+            <Logo className="h-9 w-auto text-ink" />
           </Link>
         </header>
 
@@ -317,11 +315,8 @@ export default function Landing() {
       <footer className="border-t border-line bg-card">
         <div className="mx-auto flex max-w-7xl flex-col gap-10 px-8 py-12 sm:px-12 lg:flex-row lg:items-start lg:gap-x-20 lg:px-20">
           <div className="max-w-xs">
-            <div className="inline-flex items-center gap-2.5">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-700 text-white shadow-md">
-                <Activity size={22} strokeWidth={2.4} />
-              </span>
-              <span className="text-2xl font-bold tracking-tight text-ink">Pulse<span className="text-primary">Track</span></span>
+            <div className="inline-flex items-center">
+              <Logo className="h-9 w-auto text-ink" />
             </div>
             <p className="mt-3 text-body-sm text-ink-muted">The single source of truth for every team's progress.</p>
           </div>

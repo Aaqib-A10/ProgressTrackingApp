@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Activity, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { Logo } from '../Logo'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
@@ -40,15 +41,9 @@ export function Sidebar({ user }: { user: CurrentUser }) {
 
   return (
     <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-line bg-card">
-      {/* Brand — normalized to PulseTrack everywhere */}
-      <div className="flex items-center gap-3 px-5 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-btn bg-primary text-white">
-          <Activity size={20} />
-        </div>
-        <div>
-          <div className="text-headline-md leading-tight text-ink">PulseTrack</div>
-          <div className="text-body-sm text-ink-muted">Performance Suite</div>
-        </div>
+      {/* Brand */}
+      <div className="flex items-center px-5 py-5">
+        <Logo className="h-8 w-auto text-ink" />
       </div>
 
       {/* Nav */}
