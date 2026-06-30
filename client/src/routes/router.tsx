@@ -35,6 +35,7 @@ const ItadTeamView = lazy(() => import('../pages/app/itad/ItadTeamView'))
 const ItadAnalytics = lazy(() => import('../pages/app/itad/ItadAnalytics'))
 const LeadGenDailyForm = lazy(() => import('../pages/app/leadgen/LeadGenDailyForm'))
 const LeadGenTeamView = lazy(() => import('../pages/app/leadgen/LeadGenTeamView'))
+const LeadGenBreakdown = lazy(() => import('../pages/app/leadgen/LeadGenBreakdown'))
 const LeadGenAnalytics = lazy(() => import('../pages/app/leadgen/LeadGenAnalytics'))
 const MarketingBoard = lazy(() => import('../pages/app/marketing/MarketingBoard'))
 const SeoActivity = lazy(() => import('../pages/app/marketing/SeoActivity'))
@@ -103,6 +104,7 @@ export const router = createBrowserRouter([
       // Lead Generation
       { path: 'leadgen/log', element: <LeadGenDailyForm /> },
       { path: 'leadgen/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenTeamView /></RequireRole> },
+      { path: 'leadgen/breakdown', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenBreakdown /></RequireRole> },
       { path: 'leadgen/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenAnalytics /></RequireRole> },
 
       // Marketing

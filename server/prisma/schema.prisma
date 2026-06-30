@@ -648,3 +648,25 @@ model QaAnswer {
 
   @@index([evaluationId])
 }
+
+/// Kind of a Lead Gen monthly breakdown row.
+enum BreakdownKind {
+  CAMPAIGN
+  INDUSTRY
+}
+
+/// Month-level Lead Gen breakdown by campaign (BBR, RTLG, …) and industry
+/// (IT Services, Health Care, …). Maintained by TL/Admin; powers the Team View
+/// summary cards. One row per (month, category); month is "YYYY-MM".
+model LeadGenBreakdown {
+  id        String        @id @default(cuid())
+  month     String // "YYYY-MM"
+  category  String
+  kind      BreakdownKind @default(INDUSTRY)
+  count     Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([month, category])
+  @@index([month])
+}

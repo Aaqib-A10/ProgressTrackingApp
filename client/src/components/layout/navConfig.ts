@@ -16,6 +16,7 @@ import {
   UserCog,
   Tags,
   CalendarOff,
+  Building2,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -79,6 +80,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Daily Log', to: '/app/leadgen/log', icon: Phone, departments: ['LEAD_GEN'], hideFor: ['SUPER_ADMIN'] },
       { label: 'Team View', to: '/app/leadgen/team', icon: Users, departments: ['LEAD_GEN'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
+      { label: 'Monthly Breakdown', to: '/app/leadgen/breakdown', icon: Building2, departments: ['LEAD_GEN'], roles: ADMIN_ROLES },
       { label: 'Analytics', to: '/app/leadgen/analytics', icon: LineChart, departments: ['LEAD_GEN'], roles: TL_ROLES },
     ],
   },

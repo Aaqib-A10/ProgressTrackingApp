@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, BadgeCheck, Send, Contact, Trophy, Download } from 'lucide-react'
+import { Users, Megaphone, Building2, Trophy, Download } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { StatCard } from '../../../components/StatCard'
 import { Badge, SubmissionBadge, PerfFlagBadge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/DataTable'
-import { StackedBarChart } from '../../../components/charts/StackedBarChart'
 import { FunnelChart } from '../../../components/charts/FunnelChart'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
 import { formatNumber, formatPercent } from '../../../lib/format'
 import { downloadTeamCsv } from '../../../lib/reports'
 import { getLeadGenTeam, type LeadGenTeamResponse, type LeadGenAgentRow } from '../../../lib/leadgenApi'
+import { getLeadGenBreakdown, type LeadGenBreakdown } from '../../../lib/leadgenBreakdownApi'
 
 const RANGE_LABEL: Record<string, string> = {
   today: 'Today',
@@ -27,7 +27,13 @@ export default function LeadGenTeamView() {
   const { addToast } = useToast()
   const navigate = useNavigate()
   const [data, setData] = useState<LeadGenTeamResponse | null>(null)
+  const [breakdown, setBreakdown] = useState<LeadGenBreakdown | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const monthLabel = useMemo(
+    () => new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    [],
+  )
 
   useEffect(() => {
     let active = true
@@ -40,6 +46,17 @@ export default function LeadGenTeamView() {
       active = false
     }
   }, [range, custom, addToast])
+
+  // Month-level campaign/industry breakdown (independent of the range filter).
+  useEffect(() => {
+    let active = true
+    getLeadGenBreakdown()
+      .then((res) => active && setBreakdown(res))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
 
   const columns: Column<LeadGenAgentRow>[] = [
     {
@@ -91,18 +108,25 @@ export default function LeadGenTeamView() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard to="/app/leadgen/analytics" label="Total Leads" value={formatNumber(data.team.totals.leadsGenerated)} delta={data.deltas.leadsGenerated} caption={data.target.weeklyLeads ? `Target ${data.target.weeklyLeads}/wk` : 'vs prev period'} icon={<Users size={16} />} />
-            <StatCard to="/app/leadgen/analytics" label="Qualified (MQL)" value={formatNumber(data.team.totals.qualifiedMql)} delta={data.deltas.qualifiedMql} caption="vs prev period" icon={<BadgeCheck size={16} />} />
-            <StatCard to="/app/leadgen/analytics" label="MQL → SQL" value={formatPercent(data.team.kpis.mqlToSql)} delta={data.deltas.mqlToSql} caption="vs prev period" icon={<Send size={16} />} />
-            <StatCard to="/app/leadgen/analytics" label="Contacts Found" value={formatNumber(data.team.totals.contactsFound)} delta={data.deltas.contactsFound} caption="vs prev period" icon={<Contact size={16} />} />
+            <StatCard label="Total Leads Generated" value={formatNumber(breakdown?.leadsGenerated ?? data.team.totals.leadsGenerated)} caption={monthLabel} icon={<Users size={16} />} />
+            <StatCard to="/app/leadgen/breakdown" label="BBR" value={formatNumber(breakdown?.bbr ?? 0)} caption="Campaign · this month" icon={<Megaphone size={16} />} />
+            <StatCard to="/app/leadgen/breakdown" label="RTLG" value={formatNumber(breakdown?.rtlg ?? 0)} caption="Campaign · this month" icon={<Megaphone size={16} />} />
+            <StatCard to="/app/leadgen/breakdown" label="Top Industry" value={breakdown?.topIndustry?.category || '—'} caption={breakdown?.topIndustry ? `${formatNumber(breakdown.topIndustry.count)} leads this month` : 'no data — add a breakdown'} icon={<Building2 size={16} />} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card title="Leads by Vertical" subtitle="Volume over time">
-              {data.byVertical.data.length ? (
-                <StackedBarChart data={data.byVertical.data} xKey="label" series={data.byVertical.series} />
+            <Card title="Leads by Industry" subtitle={`This month · ${monthLabel}`}>
+              {breakdown && breakdown.industries.length ? (
+                <ul className="space-y-1.5">
+                  {breakdown.industries.map((v) => (
+                    <li key={v.category} className="flex items-center justify-between border-b border-line/60 py-1 last:border-0">
+                      <span className="text-body-md text-ink">{v.category}</span>
+                      <span className="text-body-md font-semibold tabular-nums text-ink">{formatNumber(v.count)}</span>
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <p className="py-10 text-center text-body-sm text-ink-muted">No vertical data in this period.</p>
+                <p className="py-10 text-center text-body-sm text-ink-muted">No industry breakdown yet — <a href="/app/leadgen/breakdown" className="text-primary hover:underline">add this month's figures</a>.</p>
               )}
             </Card>
             <Card title="Lead Pipeline" subtitle="Researched → Handed to Sales">
