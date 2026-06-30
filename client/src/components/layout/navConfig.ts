@@ -62,9 +62,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Evaluate', to: '/app/qa/evaluate', icon: ClipboardCheck, roles: ['QA', 'QA_LEAD'] },
       { label: 'Scorecards', to: '/app/qa/scorecards', icon: ClipboardList, roles: ['QA', 'QA_LEAD'] },
-      { label: 'QA Analytics', to: '/app/qa/analytics', icon: LineChart, roles: ['QA', 'QA_LEAD'] },
+      { label: 'QA Analytics', to: '/app/qa/analytics', icon: LineChart, roles: ['QA', 'QA_LEAD', 'TEAM_LEAD'] },
       { label: 'QA Team', to: '/app/qa/evaluators', icon: Users, roles: ['QA_LEAD'] },
-      { label: 'Team QA', to: '/app/qa/team', icon: Users, roles: ['TEAM_LEAD'], departments: ['ITAD', 'CSR'] },
     ],
   },
   {

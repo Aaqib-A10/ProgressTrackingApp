@@ -23,7 +23,6 @@ const Feedback = lazy(() => import('../pages/app/Feedback'))
 const FeedbackThread = lazy(() => import('../pages/app/FeedbackThread'))
 const QaEvaluate = lazy(() => import('../pages/app/qa/QaEvaluate'))
 const QaScorecards = lazy(() => import('../pages/app/qa/QaScorecards'))
-const QaAnalytics = lazy(() => import('../pages/app/qa/QaAnalytics'))
 const QaTeam = lazy(() => import('../pages/app/qa/QaTeam'))
 const QaEvaluators = lazy(() => import('../pages/app/qa/QaEvaluators'))
 const QaEvaluationEdit = lazy(() => import('../pages/app/qa/QaEvaluationEdit'))
@@ -88,8 +87,7 @@ export const router = createBrowserRouter([
       // Quality Assurance
       { path: 'qa/evaluate', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaEvaluate /></RequireRole> },
       { path: 'qa/scorecards', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaScorecards /></RequireRole> },
-      { path: 'qa/analytics', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaAnalytics /></RequireRole> },
-      { path: 'qa/team', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaTeam /></RequireRole> },
+      { path: 'qa/analytics', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaTeam /></RequireRole> },
       { path: 'qa/evaluators', element: <RequireRole roles={['QA_LEAD', 'SUPER_ADMIN']}><QaEvaluators /></RequireRole> },
       { path: 'qa/my', element: <MyQaScores /> },
       { path: 'qa/evaluations', element: <RequireRole roles={['QA', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaEvaluationsList /></RequireRole> },
