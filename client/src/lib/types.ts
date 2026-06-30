@@ -1,7 +1,7 @@
 // Shared client-side domain types. Mirrors the server Prisma enums.
 
 export type Role = 'MEMBER' | 'TEAM_LEAD' | 'SUB_DEPT_LEAD' | 'QA' | 'QA_LEAD' | 'SUPER_ADMIN'
-export type Department = 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR'
+export type Department = 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE'
 export type UserStatus = 'PENDING' | 'ACTIVE' | 'REJECTED'
 
 /** Canonical role labels (normalization checklist — no "Agent"/"TL" drift). */

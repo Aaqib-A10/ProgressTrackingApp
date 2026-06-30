@@ -36,6 +36,10 @@ const LeadGenDailyForm = lazy(() => import('../pages/app/leadgen/LeadGenDailyFor
 const LeadGenTeamView = lazy(() => import('../pages/app/leadgen/LeadGenTeamView'))
 const LeadGenBreakdown = lazy(() => import('../pages/app/leadgen/LeadGenBreakdown'))
 const LeadGenAnalytics = lazy(() => import('../pages/app/leadgen/LeadGenAnalytics'))
+const EcommerceDailyLog = lazy(() => import('../pages/app/ecommerce/EcommerceDailyLog'))
+const EcommerceTeamView = lazy(() => import('../pages/app/ecommerce/EcommerceTeamView'))
+const EcommerceBoard = lazy(() => import('../pages/app/ecommerce/EcommerceBoard'))
+const EcommerceStock = lazy(() => import('../pages/app/ecommerce/EcommerceStock'))
 const MarketingBoard = lazy(() => import('../pages/app/marketing/MarketingBoard'))
 const SeoActivity = lazy(() => import('../pages/app/marketing/SeoActivity'))
 const SocialActivity = lazy(() => import('../pages/app/marketing/SocialActivity'))
@@ -104,6 +108,12 @@ export const router = createBrowserRouter([
       { path: 'leadgen/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenTeamView /></RequireRole> },
       { path: 'leadgen/breakdown', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenBreakdown /></RequireRole> },
       { path: 'leadgen/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenAnalytics /></RequireRole> },
+
+      // Ecommerce
+      { path: 'ecommerce/log', element: <EcommerceDailyLog /> },
+      { path: 'ecommerce/board', element: <EcommerceBoard /> },
+      { path: 'ecommerce/stock', element: <EcommerceStock /> },
+      { path: 'ecommerce/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><EcommerceTeamView /></RequireRole> },
 
       // Marketing
       { path: 'marketing/board', element: <MarketingBoard /> },

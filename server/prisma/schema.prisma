@@ -43,6 +43,7 @@ enum DepartmentType {
   LEAD_GEN
   MARKETING
   CSR
+  ECOMMERCE
 }
 
 /// Status of a daily entry. A non-SUBMITTED day carries no metrics and is
@@ -60,6 +61,8 @@ enum TagType {
   PLATFORM  // Social platforms (Facebook, LinkedIn, ...)
   CAMPAIGN
   DATA_SOURCE
+  MARKETPLACE // Ecommerce marketplaces (Amazon, eBay, Walmart, Newegg)
+  TASK_TYPE   // Ecommerce listing task types (BTO, Kits, Pricing, ...)
 }
 
 enum TargetPeriod {
@@ -101,6 +104,7 @@ model Department {
   targets        Target[]
   feedback       Feedback[]
   qaEvaluations  QaEvaluation[]
+  stockRequests  StockRequest[]
 }
 
 model SubDepartment {
@@ -157,6 +161,12 @@ model User {
   qaScorecards QaScorecard[]
 
   attachments EntryAttachment[]
+
+  ecommerceEntries  EcommerceDailyEntry[]
+  ecomTasksAssigned EcommerceTask[]       @relation("EcomTaskAssignee")
+  ecomTasksCreated  EcommerceTask[]       @relation("EcomTaskCreator")
+  stockAssignedTo   StockRequest[]        @relation("StockAssignee")
+  stockAssignedBy   StockRequest[]        @relation("StockAssigner")
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -285,6 +295,9 @@ model Tag {
 
   verticalCounts LeadGenVerticalCount[]
   socialCounts   SocialPlatformCount[]
+
+  ecomTaskLines        EcommerceListingLine[] @relation("LineTaskType")
+  ecomMarketplaceLines EcommerceListingLine[] @relation("LineMarketplace")
 
   @@unique([departmentId, type, name])
 }
@@ -669,4 +682,97 @@ model LeadGenBreakdown {
 
   @@unique([month, category])
   @@index([month])
+}
+
+// ============================ Ecommerce department ============================
+
+enum EcomTaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum StockStatus {
+  REQUESTED
+  ASSIGNED
+  RESOLVED
+}
+
+enum StockAction {
+  STOCK_IN
+  STOCK_OUT
+}
+
+/// One Ecommerce daily report per user per day; listing counts live in the lines.
+model EcommerceDailyEntry {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime  @db.Date
+  status DayStatus @default(SUBMITTED)
+  notes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines EcommerceListingLine[]
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+/// A single (task type × marketplace × #listings) line on a daily report.
+model EcommerceListingLine {
+  id            String              @id @default(cuid())
+  entryId       String
+  entry         EcommerceDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  taskTypeId    String
+  taskType      Tag                 @relation("LineTaskType", fields: [taskTypeId], references: [id])
+  marketplaceId String
+  marketplace   Tag                 @relation("LineMarketplace", fields: [marketplaceId], references: [id])
+  listings      Int                 @default(0)
+
+  @@index([entryId])
+}
+
+/// Shared Ecommerce task board (Kanban). HOD assigns; the whole team sees all.
+model EcommerceTask {
+  id           String         @id @default(cuid())
+  title        String
+  description  String?
+  source       String? // free-text "from" — who/where the task came from
+  status       EcomTaskStatus @default(TODO)
+  order        Int            @default(0)
+  assignedToId String?
+  assignedTo   User?          @relation("EcomTaskAssignee", fields: [assignedToId], references: [id])
+  createdById  String?
+  createdBy    User?          @relation("EcomTaskCreator", fields: [createdById], references: [id])
+  dueDate      DateTime?      @db.Date
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([status])
+  @@index([assignedToId])
+}
+
+/// Out-of-stock request → HOD assigns a stock-in/out action to an agent.
+model StockRequest {
+  id              String      @id @default(cuid())
+  departmentId    String
+  department      Department  @relation(fields: [departmentId], references: [id])
+  itemName        String
+  requestedByName String // free text — operations person (outside the app)
+  note            String?
+  requestedAt     DateTime    @default(now())
+  status          StockStatus @default(REQUESTED)
+
+  action       StockAction?
+  assignedToId String?
+  assignedTo   User?        @relation("StockAssignee", fields: [assignedToId], references: [id])
+  assignedById String?
+  assignedBy   User?        @relation("StockAssigner", fields: [assignedById], references: [id])
+  assignedAt   DateTime?
+  resolvedAt   DateTime?
+
+  @@index([departmentId, status])
 }

@@ -27,6 +27,8 @@ const NOTIF_LINK: Record<string, string> = {
   'feedback-unread': '/app/feedback',
   'qa-unread': '/app/qa/my',
   'qa-coaching': '/app/qa/analytics',
+  'stock-requests': '/app/ecommerce/stock',
+  'stock-assigned': '/app/ecommerce/stock',
 }
 
 export function TopBar({ user, range, custom, onRangeChange, onApplyCustom }: TopBarProps) {

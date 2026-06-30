@@ -17,6 +17,8 @@ import {
   Tags,
   CalendarOff,
   Building2,
+  ShoppingCart,
+  Boxes,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -81,6 +83,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Team View', to: '/app/leadgen/team', icon: Users, departments: ['LEAD_GEN'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Monthly Breakdown', to: '/app/leadgen/breakdown', icon: Building2, departments: ['LEAD_GEN'], roles: ADMIN_ROLES },
       { label: 'Analytics', to: '/app/leadgen/analytics', icon: LineChart, departments: ['LEAD_GEN'], roles: TL_ROLES },
+    ],
+  },
+  {
+    title: 'Ecommerce',
+    items: [
+      { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, departments: ['ECOMMERCE'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'] },
+      { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, departments: ['ECOMMERCE'] },
+      { label: 'Team View', to: '/app/ecommerce/team', icon: Users, departments: ['ECOMMERCE'], roles: TL_ROLES, badge: { text: 'HOD', tone: 'accent' } },
     ],
   },
   {

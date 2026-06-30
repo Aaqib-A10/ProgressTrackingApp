@@ -14,6 +14,7 @@ async function submittedToday(userId: string, dept?: string | null, sub?: string
   if (dept === 'LEAD_GEN') return !!(await prisma.leadGenDailyEntry.findUnique({ where: key }))
   if (dept === 'MARKETING' && sub === 'seo') return !!(await prisma.seoDailyEntry.findUnique({ where: key }))
   if (dept === 'MARKETING' && sub === 'social') return !!(await prisma.socialDailyEntry.findUnique({ where: key }))
+  if (dept === 'ECOMMERCE') return !!(await prisma.ecommerceDailyEntry.findUnique({ where: key }))
   return true // no daily form for this user → nothing to remind
 }
 
@@ -33,7 +34,7 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   }
 
   // TL/Admin: members who haven't submitted today.
-  if ((me.role === 'TEAM_LEAD' || me.role === 'SUPER_ADMIN') && (dept === 'ITAD' || dept === 'LEAD_GEN' || me.role === 'SUPER_ADMIN')) {
+  if ((me.role === 'TEAM_LEAD' || me.role === 'SUPER_ADMIN') && (dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || me.role === 'SUPER_ADMIN')) {
     const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
     const members = await prisma.user.findMany({ where: { role: 'MEMBER', isActive: true, ...deptFilter }, include: { department: true, subDepartment: true } })
     let missing = 0
@@ -66,6 +67,22 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
     const coaching = await prisma.qaEvaluation.count({ where: { departmentId: me.departmentId, status: 'SUBMITTED', coachingNeeded: true, agentAcknowledgedAt: null } })
     if (coaching > 0) {
       notifications.push({ id: 'qa-coaching', type: 'alert', title: 'Coaching needed', body: `${coaching} QA evaluation${coaching > 1 ? 's' : ''} below target in your team.`, date: today })
+    }
+  }
+
+  // Ecommerce HOD: out-of-stock requests awaiting assignment.
+  if (me.role === 'TEAM_LEAD' && me.departmentId && me.department?.type === 'ECOMMERCE') {
+    const pending = await prisma.stockRequest.count({ where: { departmentId: me.departmentId, status: 'REQUESTED' } })
+    if (pending > 0) {
+      notifications.push({ id: 'stock-requests', type: 'alert', title: `${pending} stock request${pending > 1 ? 's' : ''}`, body: `${pending} out-of-stock item${pending > 1 ? 's need' : ' needs'} assignment.`, date: today })
+    }
+  }
+
+  // Ecommerce agent: stock tasks assigned to me.
+  if (me.department?.type === 'ECOMMERCE') {
+    const mine = await prisma.stockRequest.count({ where: { assignedToId: me.id, status: 'ASSIGNED' } })
+    if (mine > 0) {
+      notifications.push({ id: 'stock-assigned', type: 'info', title: 'Stock task assigned', body: `You have ${mine} stock task${mine > 1 ? 's' : ''} to action.`, date: today })
     }
   }
 

@@ -18,6 +18,7 @@ async function main() {
     ['LEAD_GEN', 'Lead Generation'],
     ['MARKETING', 'Marketing'],
     ['CSR', 'CSR'],
+    ['ECOMMERCE', 'Ecommerce'],
   ] as [DepartmentType, string][]) {
     const dept = await prisma.department.upsert({ where: { type }, update: { name }, create: { type, name } })
     departments[type] = dept.id
@@ -56,6 +57,21 @@ async function main() {
       where: { departmentId_type_name: { departmentId: departments.MARKETING, type: 'PLATFORM', name } },
       update: {},
       create: { departmentId: departments.MARKETING, type: 'PLATFORM', name },
+    })
+  }
+  // Ecommerce marketplaces + listing task types (admin-editable).
+  for (const name of ['Amazon', 'eBay', 'Walmart', 'Newegg']) {
+    await prisma.tag.upsert({
+      where: { departmentId_type_name: { departmentId: departments.ECOMMERCE, type: 'MARKETPLACE', name } },
+      update: {},
+      create: { departmentId: departments.ECOMMERCE, type: 'MARKETPLACE', name },
+    })
+  }
+  for (const name of ['BTO Listings', 'Kits', 'Pricing', 'General Listings']) {
+    await prisma.tag.upsert({
+      where: { departmentId_type_name: { departmentId: departments.ECOMMERCE, type: 'TASK_TYPE', name } },
+      update: {},
+      create: { departmentId: departments.ECOMMERCE, type: 'TASK_TYPE', name },
     })
   }
 
