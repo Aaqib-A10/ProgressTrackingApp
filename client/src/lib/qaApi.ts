@@ -194,6 +194,44 @@ export interface QaAnalytics {
 export const getQaAnalytics = (department: 'ITAD' | 'CSR' | '' , range: RangeKey, custom?: CustomRange | null) =>
   api.get<QaAnalytics>(`/qa/analytics?${department ? `department=${department}&` : ''}${rangeQuery(range, custom)}`)
 
+// ---------- Team Lead QA dashboard (rich per-agent analytics) ----------
+export interface QaDashAgent {
+  id: string
+  name: string
+  initials: string
+  avg: number
+  evals: number
+  passCalls: number
+  failCalls: number
+  cats: Record<string, number>
+  flag: 'good' | 'warn' | 'coach'
+}
+export interface QaTeamDashboard {
+  range: { startDate: string; endDate: string; key: RangeKey }
+  department: string
+  teamLead: { id: string; name: string } | null
+  scorecard: string | null
+  bands: { good: number; excellent: number; target: number }
+  totals: {
+    evaluations: number
+    avgScore: number
+    passRate: number
+    coachingCount: number
+    topPerformer: { name: string; avg: number } | null
+    agentCount: number
+  }
+  qualityDistribution: { band: string; count: number }[]
+  scoreBands: { label: string; count: number }[]
+  passFail: { pass: number; fail: number }
+  categoryNames: string[]
+  categories: { name: string; avg: number }[]
+  catGap: { name: string; avg: number; gap: number; weakest: { name: string; score: number } | null }[]
+  agents: QaDashAgent[]
+  weekly: { week: string; scores: Record<string, number> }[]
+}
+export const getQaTeamDashboard = (department: 'ITAD' | 'CSR' | '', range: RangeKey, custom?: CustomRange | null) =>
+  api.get<QaTeamDashboard>(`/qa/team-dashboard?${department ? `department=${department}&` : ''}${rangeQuery(range, custom)}`)
+
 export interface EmployeeOfMonth {
   month: string
   minEvaluations: number

@@ -749,6 +749,163 @@ export async function qaAnalytics(req: AuthedRequest, res: Response): Promise<vo
   })
 }
 
+// ============================ Team Lead QA dashboard ============================
+
+const QA_EXCELLENT = 82
+const QA_GOOD = 64
+const QA_TARGET = 82 // category gap target
+const round1 = (n: number) => Math.round(n * 10) / 10
+const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0)
+function qaInitials(name: string): string {
+  return name.split(' ').map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+}
+function qaFlag(avg: number): 'good' | 'warn' | 'coach' {
+  return avg >= QA_EXCELLENT ? 'good' : avg >= QA_GOOD ? 'warn' : 'coach'
+}
+
+/** GET /api/qa/team-dashboard?department=ITAD|CSR&range=&start=&end=
+ *  Rich per-agent QA analytics for the Team Lead view (ranking, categories, weekly trend, heatmap). */
+export async function qaTeamDashboard(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadMe(req.user!.id)
+  // RBAC: Team Lead → own department; QA/Admin → any (or all) department.
+  let departmentId: string | undefined
+  let deptType = req.query.department as string | undefined
+  if (me.role === 'TEAM_LEAD') {
+    if (!me.departmentId) { res.status(400).json({ error: 'No department' }); return }
+    departmentId = me.departmentId
+    deptType = me.department?.type
+  } else if (!isQa(me.role)) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  } else if (deptType && QA_DEPTS.includes(deptType as (typeof QA_DEPTS)[number])) {
+    const d = await prisma.department.findUnique({ where: { type: deptType as 'ITAD' | 'CSR' } })
+    departmentId = d?.id
+  }
+
+  const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
+  const range = periodRange(rangeKey, { start: req.query.start as string, end: req.query.end as string })
+  const start = new Date(range.startDate + 'T00:00:00Z')
+  const end = new Date(range.endDate + 'T23:59:59Z')
+
+  const [teamLead, evals] = await Promise.all([
+    departmentId
+      ? prisma.user.findFirst({ where: { departmentId, role: 'TEAM_LEAD', isActive: true }, select: { id: true, name: true } })
+      : Promise.resolve(null),
+    prisma.qaEvaluation.findMany({
+      where: { status: 'SUBMITTED', ...(departmentId ? { departmentId } : {}), createdAt: { gte: start, lte: end } },
+      include: { agent: { select: { id: true, name: true } }, categories: { select: { name: true, scorePct: true, order: true } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
+
+  // Categories must come from ONE scorecard, else mixed forms produce apples-to-oranges
+  // columns. Lock onto the dominant scorecard in the period (by evaluation count).
+  const scCount = new Map<string, number>()
+  for (const e of evals) scCount.set(e.scorecardName, (scCount.get(e.scorecardName) ?? 0) + 1)
+  const primaryScorecard = [...scCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  const catEvals = evals.filter((e) => e.scorecardName === primaryScorecard)
+
+  // Canonical category column order (lowest order wins), from the primary scorecard only.
+  const catOrder = new Map<string, number>()
+  for (const e of catEvals) for (const c of e.categories) {
+    if (!catOrder.has(c.name) || c.order < catOrder.get(c.name)!) catOrder.set(c.name, c.order)
+  }
+  const categoryNames = [...catOrder.entries()].sort((a, b) => a[1] - b[1]).map(([n]) => n)
+
+  // Per-agent aggregation. Scores/pass/fail span ALL evals; category cells only the
+  // primary scorecard (so heatmap/breakdown columns line up).
+  interface Agg { id: string; name: string; scores: number[]; pass: number; fail: number; cats: Map<string, number[]> }
+  const byAgent = new Map<string, Agg>()
+  for (const e of evals) {
+    let a = byAgent.get(e.agentId)
+    if (!a) { a = { id: e.agentId, name: e.agent.name, scores: [], pass: 0, fail: 0, cats: new Map() }; byAgent.set(e.agentId, a) }
+    a.scores.push(e.totalScore)
+    if (e.passed) a.pass++; else a.fail++
+  }
+  for (const e of catEvals) {
+    const a = byAgent.get(e.agentId)!
+    for (const c of e.categories) (a.cats.get(c.name) ?? a.cats.set(c.name, []).get(c.name)!).push(c.scorePct)
+  }
+
+  const agents = [...byAgent.values()]
+    .map((a) => {
+      const avg = round1(mean(a.scores))
+      const cats: Record<string, number> = {}
+      for (const [name, arr] of a.cats) cats[name] = Math.round(mean(arr))
+      return { id: a.id, name: a.name, initials: qaInitials(a.name), avg, evals: a.scores.length, passCalls: a.pass, failCalls: a.fail, cats, flag: qaFlag(avg) }
+    })
+    .sort((x, y) => y.avg - x.avg)
+
+  // Team category averages + gap-to-target + weakest agent per category.
+  const categories = categoryNames.map((name) => {
+    const all = catEvals.flatMap((e) => e.categories.filter((c) => c.name === name).map((c) => c.scorePct))
+    return { name, avg: Math.round(mean(all)) }
+  })
+  const catGap = categoryNames.map((name) => {
+    const avg = categories.find((c) => c.name === name)!.avg
+    let weakest: { name: string; score: number } | null = null
+    for (const a of agents) {
+      if (a.cats[name] === undefined) continue
+      if (!weakest || a.cats[name] < weakest.score) weakest = { name: a.name, score: a.cats[name] }
+    }
+    return { name, avg, gap: avg - QA_TARGET, weakest }
+  })
+
+  // Weekly per-agent trend.
+  const weekMap = new Map<string, { label: string; perAgent: Map<string, number[]> }>()
+  for (const e of evals) {
+    const wk = DateTime.fromJSDate(e.createdAt, { zone: 'utc' }).startOf('week')
+    const key = wk.toISODate()!
+    let w = weekMap.get(key)
+    if (!w) { w = { label: 'W/c ' + wk.toFormat('LLL d'), perAgent: new Map() }; weekMap.set(key, w) }
+    ;(w.perAgent.get(e.agent.name) ?? w.perAgent.set(e.agent.name, []).get(e.agent.name)!).push(e.totalScore)
+  }
+  const weekly = [...weekMap.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, w]) => ({
+    week: w.label,
+    scores: Object.fromEntries([...w.perAgent.entries()].map(([n, arr]) => [n, Math.round(mean(arr))])),
+  }))
+
+  // Distributions (agent-level).
+  const qualityDistribution = [
+    { band: 'Excellent', count: agents.filter((a) => a.avg >= QA_EXCELLENT).length },
+    { band: 'Watch', count: agents.filter((a) => a.avg >= QA_GOOD && a.avg < QA_EXCELLENT).length },
+    { band: 'Coach', count: agents.filter((a) => a.avg < QA_GOOD).length },
+  ]
+  const scoreBands = [
+    { label: 'Unacceptable (<50%)', count: agents.filter((a) => a.avg < 50).length },
+    { label: 'Acceptable (50–63%)', count: agents.filter((a) => a.avg >= 50 && a.avg < 64).length },
+    { label: 'Good (64–81%)', count: agents.filter((a) => a.avg >= 64 && a.avg < 82).length },
+    { label: 'Excellent (82%+)', count: agents.filter((a) => a.avg >= 82).length },
+  ]
+
+  const totalEvals = evals.length
+  const totalPass = evals.filter((e) => e.passed).length
+  const avgScore = round1(mean(evals.map((e) => e.totalScore)))
+
+  res.json({
+    range: { ...range, key: rangeKey },
+    department: deptType ?? 'All',
+    teamLead,
+    scorecard: primaryScorecard,
+    bands: { good: QA_GOOD, excellent: QA_EXCELLENT, target: QA_TARGET },
+    totals: {
+      evaluations: totalEvals,
+      avgScore,
+      passRate: totalEvals ? Math.round((totalPass / totalEvals) * 1000) / 10 : 0,
+      coachingCount: agents.filter((a) => a.avg < QA_GOOD).length,
+      topPerformer: agents.length ? { name: agents[0].name, avg: agents[0].avg } : null,
+      agentCount: agents.length,
+    },
+    qualityDistribution,
+    scoreBands,
+    passFail: { pass: totalPass, fail: totalEvals - totalPass },
+    categoryNames,
+    categories,
+    catGap,
+    agents,
+    weekly,
+  })
+}
+
 // ============================ Employee of the Month ============================
 
 /** GET /api/qa/employee-of-month?month=YYYY-MM — per-department winner by avg QA score. */

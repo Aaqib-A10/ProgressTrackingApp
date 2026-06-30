@@ -3,7 +3,7 @@ import {
   listScorecards, getScorecard, createScorecard, updateScorecard, archiveScorecard,
   listAgents, listEvaluators, agentActivity,
   createEvaluation, updateEvaluation, getEvaluation, listEvaluations, myEvaluations, acknowledgeEvaluation, qaUnreadCount,
-  qaAnalytics, employeeOfMonth,
+  qaAnalytics, qaTeamDashboard, employeeOfMonth,
   uploadRecording, downloadRecording,
 } from '../controllers/qaController'
 import { requireAuth, requireRole } from '../middleware/auth'
@@ -35,6 +35,7 @@ qaRouter.post('/evaluations', requireRole('QA', 'QA_LEAD', 'SUPER_ADMIN'), async
 qaRouter.get('/my-evaluations', asyncHandler(myEvaluations))
 qaRouter.get('/unread-count', asyncHandler(qaUnreadCount))
 qaRouter.get('/analytics', asyncHandler(qaAnalytics))
+qaRouter.get('/team-dashboard', requireRole('QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD'), asyncHandler(qaTeamDashboard))
 qaRouter.get('/employee-of-month', asyncHandler(employeeOfMonth))
 qaRouter.get('/evaluations/:id', asyncHandler(getEvaluation))
 qaRouter.put('/evaluations/:id', requireRole('QA', 'QA_LEAD', 'SUPER_ADMIN'), asyncHandler(updateEvaluation))
