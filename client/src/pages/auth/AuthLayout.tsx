@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { Star } from 'lucide-react'
-import { Logo } from '../../components/Logo'
+import { Activity, Star } from 'lucide-react'
 
 interface Testimonial {
   quote: string
@@ -23,7 +22,9 @@ export function AuthLayout({ children, headline, testimonial }: AuthLayoutProps)
       </div>
 
       <div className="relative hidden flex-col overflow-hidden bg-gradient-to-br from-primary to-accent p-10 text-white lg:flex">
-        <Logo className="h-9 w-auto text-white" />
+        <div className="flex items-center gap-2 text-headline-md font-semibold">
+          <Activity size={22} /> PulseTrack
+        </div>
 
         <h2 className="mt-14 max-w-md text-[2rem] font-bold leading-tight tracking-tight">{headline}</h2>
 
