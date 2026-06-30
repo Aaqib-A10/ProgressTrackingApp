@@ -3,7 +3,7 @@ import { Trophy } from 'lucide-react'
 import { Card } from './ui/Card'
 import { getEmployeeOfMonth, type EmployeeOfMonth } from '../lib/qaApi'
 
-/** Employee of the Month per department (by avg QA score). Visible to everyone. */
+/** Top Achiever per department (by avg QA score, must clear the benchmark). Visible to everyone. */
 export function EmployeeOfMonthCard() {
   const [data, setData] = useState<EmployeeOfMonth | null>(null)
   const [failed, setFailed] = useState(false)
@@ -21,8 +21,8 @@ export function EmployeeOfMonthCard() {
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-warning/20 text-warning"><Trophy size={20} /></span>
         <div>
-          <p className="text-label-md uppercase tracking-wide text-warning">Employee of the Month</p>
-          <p className="text-body-sm text-ink-muted">{monthLabel} · by QA score</p>
+          <p className="text-label-md uppercase tracking-wide text-warning">Top Achiever</p>
+          <p className="text-body-sm text-ink-muted">{monthLabel} · by QA score{data ? ` · ${data.minScore}%+ benchmark` : ''}</p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -34,6 +34,10 @@ export function EmployeeOfMonthCard() {
                 <span className="text-headline-md text-ink">{w.winner.name}</span>
                 <span className="text-headline-md font-bold tabular-nums text-warning">{w.winner.avg}%</span>
               </div>
+            ) : w.topScore != null ? (
+              <p className="mt-1 text-body-md text-ink-muted">
+                No top achiever — best was <span className="font-semibold tabular-nums text-ink">{w.topScore}%</span>, below the {data?.minScore ?? 80}% benchmark
+              </p>
             ) : (
               <p className="mt-1 text-body-md text-ink-muted">Not enough evaluations yet</p>
             )}

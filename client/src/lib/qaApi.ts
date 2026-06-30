@@ -181,7 +181,7 @@ export const acknowledgeEvaluation = (id: string, rebuttal?: string) =>
   api.post<{ ok: true }>(`/qa/evaluations/${id}/acknowledge`, rebuttal ? { rebuttal } : {})
 export const getQaUnreadCount = () => api.get<{ count: number }>('/qa/unread-count')
 
-// ---------- Analytics + Employee of the Month ----------
+// ---------- Analytics + Top Achiever ----------
 export interface QaAnalytics {
   range: { startDate: string; endDate: string; key: RangeKey }
   totals: { evaluations: number; avgScore: number; passRate: number }
@@ -235,7 +235,10 @@ export const getQaTeamDashboard = (department: 'ITAD' | 'CSR' | '', range: Range
 export interface EmployeeOfMonth {
   month: string
   minEvaluations: number
-  winners: { department: string; winner: { name: string; avg: number; count: number } | null }[]
+  /** Top Achiever benchmark — agents must average at least this score to qualify. */
+  minScore: number
+  /** `topScore` is set when a leading agent exists but fell below the benchmark. */
+  winners: { department: string; winner: { name: string; avg: number; count: number } | null; topScore?: number }[]
 }
 export const getEmployeeOfMonth = (month?: string) =>
   api.get<EmployeeOfMonth>(`/qa/employee-of-month${month ? `?month=${month}` : ''}`)

@@ -906,7 +906,7 @@ export async function qaTeamDashboard(req: AuthedRequest, res: Response): Promis
   })
 }
 
-// ============================ Employee of the Month ============================
+// ============================ Top Achiever ============================
 
 /** GET /api/qa/employee-of-month?month=YYYY-MM — per-department winner by avg QA score. */
 export async function employeeOfMonth(req: AuthedRequest, res: Response): Promise<void> {
@@ -914,6 +914,7 @@ export async function employeeOfMonth(req: AuthedRequest, res: Response): Promis
   const start = DateTime.fromISO(monthStr + '-01', { zone: 'utc' }).startOf('month')
   const end = start.endOf('month')
   const MIN_EVALS = 3
+  const MIN_SCORE = 80 // Top Achiever benchmark: only agents averaging >= 80% qualify.
 
   const evals = await prisma.qaEvaluation.findMany({
     where: { status: 'SUBMITTED', createdAt: { gte: start.toJSDate(), lte: end.toJSDate() }, department: { type: { in: ['ITAD', 'CSR'] } } },
@@ -939,10 +940,13 @@ export async function employeeOfMonth(req: AuthedRequest, res: Response): Promis
       const avg = a.scores.reduce((s, x) => s + x, 0) / a.scores.length
       if (!best || avg > best.avg) best = { name: a.name, avg: Math.round(avg * 10) / 10, count: a.scores.length }
     }
+    // Apply the Top Achiever benchmark: a leading agent below MIN_SCORE doesn't qualify,
+    // but we still surface their score so the UI can explain why there's no achiever.
+    if (best && best.avg < MIN_SCORE) return { department: dept, winner: null, topScore: best.avg }
     return { department: dept, winner: best }
   })
 
-  res.json({ month: monthStr, minEvaluations: MIN_EVALS, winners })
+  res.json({ month: monthStr, minEvaluations: MIN_EVALS, minScore: MIN_SCORE, winners })
 }
 
 // ============================ QA team (QA-lead oversight) ============================
