@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Activity, Settings } from 'lucide-react'
+import { Activity, Settings, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
 import { getQaUnreadCount } from '../../lib/qaApi'
-import { filterNav } from './navConfig'
+import { filterNav, type NavGroup } from './navConfig'
+
+const NAV_STORE = 'pt-nav-expanded'
+const pathInGroup = (group: NavGroup, path: string) =>
+  group.items.some((i) => path === i.to || path.startsWith(i.to + '/'))
 
 function initials(name: string): string {
   return name
@@ -22,6 +26,29 @@ export function Sidebar({ user }: { user: CurrentUser }) {
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
   const [unreadQa, setUnreadQa] = useState(0)
+
+  // Collapsible department sections. Default: only the section for the current
+  // route is open; choices persist in localStorage.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    let saved: Record<string, boolean> = {}
+    try { saved = JSON.parse(localStorage.getItem(NAV_STORE) || '{}') } catch { /* ignore */ }
+    const init: Record<string, boolean> = {}
+    for (const g of groups) if (g.title) init[g.title] = g.title in saved ? saved[g.title] : pathInGroup(g, location.pathname)
+    return init
+  })
+  function toggleGroup(title: string) {
+    setExpanded((prev) => {
+      const next = { ...prev, [title]: !prev[title] }
+      try { localStorage.setItem(NAV_STORE, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
+  // Keep the section for the current route open as you navigate.
+  useEffect(() => {
+    const active = groups.find((g) => g.title && pathInGroup(g, location.pathname))
+    if (active?.title) setExpanded((prev) => (prev[active.title!] ? prev : { ...prev, [active.title!]: true }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname])
 
   // Poll unread counts; also refetch on navigation (reading marks as read).
   useEffect(() => {
@@ -53,13 +80,23 @@ export function Sidebar({ user }: { user: CurrentUser }) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
-        {groups.map((group, gi) => (
+        {groups.map((group, gi) => {
+          const collapsible = !!group.title
+          const isOpen = !collapsible || expanded[group.title!]
+          return (
           <div key={group.title ?? gi} className="mb-3">
             {group.title && (
-              <div className="px-3 pb-1 pt-2 text-label-md uppercase text-ink-muted/70">
-                {group.title}
-              </div>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.title!)}
+                className="flex w-full items-center justify-between rounded-btn px-3 pb-1 pt-2 text-label-md uppercase text-ink-muted/70 transition-colors hover:text-ink-muted"
+                aria-expanded={isOpen}
+              >
+                <span>{group.title}</span>
+                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
             )}
+            {isOpen && (
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon
@@ -105,8 +142,10 @@ export function Sidebar({ user }: { user: CurrentUser }) {
                 )
               })}
             </ul>
+            )}
           </div>
-        ))}
+          )
+        })}
       </nav>
 
       {/* Footer links + user card */}

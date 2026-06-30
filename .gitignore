@@ -71,3 +71,4 @@ server/uploads/
 .playwright-mcp/
 **/.playwright-mcp/
 ecom-*.png
+sidebar-*.png
