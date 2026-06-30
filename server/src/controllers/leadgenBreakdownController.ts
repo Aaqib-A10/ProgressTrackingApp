@@ -45,7 +45,7 @@ async function monthLeads(month: string): Promise<number> {
   const end = start.endOf('month')
   const dept = await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } })
   if (!dept) return 0
-  const users = await prisma.user.findMany({ where: { departmentId: dept.id }, select: { id: true } })
+  const users = await prisma.user.findMany({ where: { departmentId: dept.id, isActive: true }, select: { id: true } })
   const agg = await prisma.leadGenDailyEntry.aggregate({
     where: {
       userId: { in: users.map((u) => u.id) },
