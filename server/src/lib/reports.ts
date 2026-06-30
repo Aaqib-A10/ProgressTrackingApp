@@ -44,7 +44,7 @@ export async function buildItadReport(month: string): Promise<ItadReport | null>
   const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
   if (!dept) return null
   const { start, end, monthLabel, weeks } = monthBounds(month)
-  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER', isActive: true }, orderBy: { name: 'asc' } })
+  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD', 'TEAM_LEAD'] }, isActive: true }, orderBy: { name: 'asc' } })
   const ids = members.map((m) => m.id)
   const [entries, evals] = await Promise.all([
     prisma.itadDailyEntry.findMany({ where: { userId: { in: ids }, status: 'SUBMITTED', date: { gte: dbDateFromString(start.toISODate()!), lte: dbDateFromString(end.toISODate()!) } } }),
@@ -135,7 +135,7 @@ export async function buildLeadGenReport(month: string): Promise<LeadGenReport |
   const dept = await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } })
   if (!dept) return null
   const { start, end, monthLabel } = monthBounds(month)
-  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER', isActive: true }, orderBy: { name: 'asc' } })
+  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD', 'TEAM_LEAD'] }, isActive: true }, orderBy: { name: 'asc' } })
   const ids = members.map((m) => m.id)
   const dateWhere = { gte: dbDateFromString(start.toISODate()!), lte: dbDateFromString(end.toISODate()!) }
   const [entries, verticalRows] = await Promise.all([

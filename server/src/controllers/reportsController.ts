@@ -63,7 +63,7 @@ export async function exportTeamCsv(req: AuthedRequest, res: Response): Promise<
   } catch {
     range = periodRange('month')
   }
-  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER', isActive: true }, orderBy: { name: 'asc' } })
+  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD', 'TEAM_LEAD'] }, isActive: true }, orderBy: { name: 'asc' } })
   const ids = members.map((m) => m.id)
 
   let rows: (string | number)[][]
