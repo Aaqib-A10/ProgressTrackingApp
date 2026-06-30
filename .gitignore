@@ -66,3 +66,8 @@ desktop.ini
 
 # Uploaded daily-log attachments (runtime files, not source)
 server/uploads/
+
+# Playwright MCP artifacts + scratch screenshots
+.playwright-mcp/
+**/.playwright-mcp/
+ecom-*.png
