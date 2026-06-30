@@ -1,0 +1,92 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - generic [ref=e9]:
+        - generic [ref=e10]: PulseTrack
+        - generic [ref=e11]: Performance Suite
+    - navigation [ref=e12]:
+      - list [ref=e14]:
+        - listitem [ref=e15]:
+          - link "Dashboard" [ref=e16] [cursor=pointer]:
+            - /url: /app/dashboard
+            - img [ref=e17]
+            - generic [ref=e22]: Dashboard
+        - listitem [ref=e23]:
+          - link "My Reports" [ref=e24] [cursor=pointer]:
+            - /url: /app/reports
+            - img [ref=e25]
+            - generic [ref=e28]: My Reports
+        - listitem [ref=e29]:
+          - link "My Analytics" [ref=e30] [cursor=pointer]:
+            - /url: /app/analytics
+            - img [ref=e31]
+            - generic [ref=e34]: My Analytics
+        - listitem [ref=e35]:
+          - link "My QA Scores" [ref=e36] [cursor=pointer]:
+            - /url: /app/qa/my
+            - img [ref=e37]
+            - generic [ref=e41]: My QA Scores
+        - listitem [ref=e42]:
+          - link "Feedback" [ref=e43] [cursor=pointer]:
+            - /url: /app/feedback
+            - img [ref=e44]
+            - generic [ref=e46]: Feedback
+      - generic [ref=e47]:
+        - generic [ref=e48]: Ecommerce
+        - list [ref=e49]:
+          - listitem [ref=e50]:
+            - link "Daily Log" [ref=e51] [cursor=pointer]:
+              - /url: /app/ecommerce/log
+              - img [ref=e52]
+              - generic [ref=e56]: Daily Log
+          - listitem [ref=e57]:
+            - link "Task Board" [ref=e58] [cursor=pointer]:
+              - /url: /app/ecommerce/board
+              - img [ref=e60]
+              - generic [ref=e62]: Task Board
+          - listitem [ref=e63]:
+            - link "Stock Tracking" [ref=e64] [cursor=pointer]:
+              - /url: /app/ecommerce/stock
+              - img [ref=e65]
+              - generic [ref=e75]: Stock Tracking
+    - generic [ref=e76]:
+      - list [ref=e77]:
+        - listitem [ref=e78]:
+          - link "Settings" [ref=e79] [cursor=pointer]:
+            - /url: /app/settings
+            - img [ref=e80]
+            - text: Settings
+      - generic [ref=e83]:
+        - generic [ref=e84]: AS
+        - generic [ref=e85]:
+          - generic [ref=e86]: Ava Stone
+          - generic [ref=e87]: Member
+  - generic [ref=e88]:
+    - banner [ref=e89]:
+      - button "Go back" [ref=e90] [cursor=pointer]:
+        - img [ref=e91]
+      - generic [ref=e93]:
+        - img [ref=e94]
+        - searchbox "Search anything..." [ref=e97]
+      - generic [ref=e98]:
+        - button "Today" [ref=e99] [cursor=pointer]
+        - button "Week" [ref=e100] [cursor=pointer]
+        - button "Month" [ref=e101] [cursor=pointer]
+        - button "3 Months" [ref=e102] [cursor=pointer]
+        - button "Custom" [ref=e103] [cursor=pointer]:
+          - img [ref=e104]
+          - text: Custom
+      - generic [ref=e106]:
+        - button "Notifications" [ref=e108] [cursor=pointer]:
+          - img [ref=e109]
+        - button "Help" [ref=e113] [cursor=pointer]:
+          - img [ref=e114]
+        - button "AS Ava Stone Member" [ref=e119] [cursor=pointer]:
+          - generic [ref=e120]: AS
+          - generic [ref=e121]:
+            - generic [ref=e122]: Ava Stone
+            - generic [ref=e123]: Member
+          - img [ref=e124]
+    - main [ref=e126]:
+      - img [ref=e128]

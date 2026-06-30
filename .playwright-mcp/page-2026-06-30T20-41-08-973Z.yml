@@ -1,0 +1,40 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - heading "Welcome back" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Log in to your account to continue tracking progress.
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]: Work email
+        - textbox "Work email" [ref=e12]:
+          - /placeholder: you@company.com
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - generic [ref=e15]: Password
+          - generic [ref=e16]:
+            - textbox "Password" [ref=e17]:
+              - /placeholder: ••••••••
+            - button "Show password" [ref=e19] [cursor=pointer]:
+              - img [ref=e20]
+        - link "Forgot password?" [ref=e24] [cursor=pointer]:
+          - /url: /forgot-password
+      - button "Log In" [ref=e25] [cursor=pointer]
+    - generic [ref=e26]: OR LOG IN WITH
+    - button "Log in with Google" [ref=e29] [cursor=pointer]
+    - paragraph [ref=e30]:
+      - text: Don't have an account?
+      - link "Sign up" [ref=e31] [cursor=pointer]:
+        - /url: /signup
+  - generic [ref=e32]:
+    - generic [ref=e33]:
+      - img [ref=e34]
+      - text: PulseTrack
+    - heading "The single source of truth for every team." [level=2] [ref=e36]
+    - generic [ref=e50]:
+      - generic [ref=e51]:
+        - img [ref=e52]
+        - img [ref=e54]
+        - img [ref=e56]
+        - img [ref=e58]
+        - img [ref=e60]
+      - paragraph [ref=e62]: “PulseTrack has completely eliminated our manual reporting friction.”
+      - paragraph [ref=e63]: Head of Lead Gen · Verlex Inc.

@@ -1,0 +1,110 @@
+- generic [ref=e64]:
+  - complementary [ref=e65]:
+    - generic [ref=e66]:
+      - img [ref=e68]
+      - generic [ref=e70]:
+        - generic [ref=e71]: PulseTrack
+        - generic [ref=e72]: Performance Suite
+    - navigation [ref=e73]:
+      - list [ref=e75]:
+        - listitem [ref=e76]:
+          - link "Dashboard" [ref=e77] [cursor=pointer]:
+            - /url: /app/dashboard
+            - img [ref=e79]
+            - generic [ref=e84]: Dashboard
+        - listitem [ref=e85]:
+          - link "My Reports" [ref=e86] [cursor=pointer]:
+            - /url: /app/reports
+            - img [ref=e87]
+            - generic [ref=e90]: My Reports
+        - listitem [ref=e91]:
+          - link "My Analytics" [ref=e92] [cursor=pointer]:
+            - /url: /app/analytics
+            - img [ref=e93]
+            - generic [ref=e96]: My Analytics
+        - listitem [ref=e97]:
+          - link "My QA Scores" [ref=e98] [cursor=pointer]:
+            - /url: /app/qa/my
+            - img [ref=e99]
+            - generic [ref=e103]: My QA Scores
+        - listitem [ref=e104]:
+          - link "Feedback" [ref=e105] [cursor=pointer]:
+            - /url: /app/feedback
+            - img [ref=e106]
+            - generic [ref=e108]: Feedback
+      - generic [ref=e109]:
+        - generic [ref=e110]: Ecommerce
+        - list [ref=e111]:
+          - listitem [ref=e112]:
+            - link "Daily Log" [ref=e113] [cursor=pointer]:
+              - /url: /app/ecommerce/log
+              - img [ref=e114]
+              - generic [ref=e118]: Daily Log
+          - listitem [ref=e119]:
+            - link "Task Board" [ref=e120] [cursor=pointer]:
+              - /url: /app/ecommerce/board
+              - img [ref=e121]
+              - generic [ref=e123]: Task Board
+          - listitem [ref=e124]:
+            - link "Stock Tracking" [ref=e125] [cursor=pointer]:
+              - /url: /app/ecommerce/stock
+              - img [ref=e126]
+              - generic [ref=e136]: Stock Tracking
+    - generic [ref=e137]:
+      - list [ref=e138]:
+        - listitem [ref=e139]:
+          - link "Settings" [ref=e140] [cursor=pointer]:
+            - /url: /app/settings
+            - img [ref=e141]
+            - text: Settings
+      - generic [ref=e144]:
+        - generic [ref=e145]: AS
+        - generic [ref=e146]:
+          - generic [ref=e147]: Ava Stone
+          - generic [ref=e148]: Member
+  - generic [ref=e149]:
+    - banner [ref=e150]:
+      - button "Go back" [ref=e151] [cursor=pointer]:
+        - img [ref=e152]
+      - generic [ref=e154]:
+        - img [ref=e155]
+        - searchbox "Search anything..." [ref=e158]
+      - generic [ref=e159]:
+        - button "Today" [ref=e160] [cursor=pointer]
+        - button "Week" [ref=e161] [cursor=pointer]
+        - button "Month" [ref=e162] [cursor=pointer]
+        - button "3 Months" [ref=e163] [cursor=pointer]
+        - button "Custom" [ref=e164] [cursor=pointer]:
+          - img [ref=e165]
+          - text: Custom
+      - generic [ref=e167]:
+        - button "Notifications" [ref=e169] [cursor=pointer]:
+          - img [ref=e170]
+        - button "Help" [ref=e174] [cursor=pointer]:
+          - img [ref=e175]
+        - button "AS Ava Stone Member" [ref=e180] [cursor=pointer]:
+          - generic [ref=e181]: AS
+          - generic [ref=e182]:
+            - generic [ref=e183]: Ava Stone
+            - generic [ref=e184]: Member
+          - img [ref=e185]
+    - main [ref=e187]:
+      - generic [ref=e188]:
+        - generic [ref=e189]:
+          - generic [ref=e190]:
+            - heading "Welcome back, Ava" [level=1] [ref=e191]
+            - generic [ref=e192]: Member
+          - paragraph [ref=e193]: ECOMMERCE · Here's where you pick up your work.
+        - generic [ref=e195]:
+          - generic [ref=e196]:
+            - img [ref=e198]
+            - generic [ref=e204]:
+              - paragraph [ref=e205]: Top Achiever
+              - paragraph [ref=e206]: June 2026 · by QA score · 80%+ benchmark
+          - generic [ref=e207]:
+            - generic [ref=e208]:
+              - paragraph [ref=e209]: ITAD
+              - paragraph [ref=e210]: Not enough evaluations yet
+            - generic [ref=e211]:
+              - paragraph [ref=e212]: CSR
+              - paragraph [ref=e213]: Not enough evaluations yet

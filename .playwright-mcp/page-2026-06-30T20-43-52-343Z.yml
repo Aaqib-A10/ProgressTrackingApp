@@ -1,0 +1,136 @@
+- generic [ref=e64]:
+  - complementary [ref=e65]:
+    - generic [ref=e66]:
+      - img [ref=e68]
+      - generic [ref=e70]:
+        - generic [ref=e71]: PulseTrack
+        - generic [ref=e72]: Performance Suite
+    - navigation [ref=e73]:
+      - list [ref=e75]:
+        - listitem [ref=e76]:
+          - link "Dashboard" [ref=e77] [cursor=pointer]:
+            - /url: /app/dashboard
+            - img [ref=e79]
+            - generic [ref=e84]: Dashboard
+        - listitem [ref=e85]:
+          - link "My Reports" [ref=e86] [cursor=pointer]:
+            - /url: /app/reports
+            - img [ref=e87]
+            - generic [ref=e90]: My Reports
+        - listitem [ref=e91]:
+          - link "My Team" [ref=e92] [cursor=pointer]:
+            - /url: /app/team/members
+            - img [ref=e93]
+            - generic [ref=e98]: My Team
+        - listitem [ref=e99]:
+          - link "Feedback" [ref=e100] [cursor=pointer]:
+            - /url: /app/feedback
+            - img [ref=e101]
+            - generic [ref=e103]: Feedback
+      - generic [ref=e104]:
+        - generic [ref=e105]: Quality Assurance
+        - list [ref=e106]:
+          - listitem [ref=e107]:
+            - link "QA Analytics" [ref=e108] [cursor=pointer]:
+              - /url: /app/qa/analytics
+              - img [ref=e109]
+              - generic [ref=e112]: QA Analytics
+      - generic [ref=e113]:
+        - generic [ref=e114]: Ecommerce
+        - list [ref=e115]:
+          - listitem [ref=e116]:
+            - link "Daily Log" [ref=e117] [cursor=pointer]:
+              - /url: /app/ecommerce/log
+              - img [ref=e118]
+              - generic [ref=e122]: Daily Log
+          - listitem [ref=e123]:
+            - link "Task Board" [ref=e124] [cursor=pointer]:
+              - /url: /app/ecommerce/board
+              - img [ref=e125]
+              - generic [ref=e127]: Task Board
+          - listitem [ref=e128]:
+            - link "Stock Tracking" [ref=e129] [cursor=pointer]:
+              - /url: /app/ecommerce/stock
+              - img [ref=e130]
+              - generic [ref=e140]: Stock Tracking
+          - listitem [ref=e141]:
+            - link "Team View HOD" [ref=e142] [cursor=pointer]:
+              - /url: /app/ecommerce/team
+              - img [ref=e143]
+              - generic [ref=e148]: Team View
+              - generic [ref=e149]: HOD
+      - generic [ref=e150]:
+        - generic [ref=e151]: Admin
+        - list [ref=e152]:
+          - listitem [ref=e153]:
+            - link "Targets" [ref=e154] [cursor=pointer]:
+              - /url: /app/admin/targets
+              - img [ref=e155]
+              - generic [ref=e159]: Targets
+          - listitem [ref=e160]:
+            - link "Tags" [ref=e161] [cursor=pointer]:
+              - /url: /app/admin/tags
+              - img [ref=e162]
+              - generic [ref=e166]: Tags
+          - listitem [ref=e167]:
+            - link "Holidays & Leave" [ref=e168] [cursor=pointer]:
+              - /url: /app/admin/leave
+              - img [ref=e169]
+              - generic [ref=e173]: Holidays & Leave
+    - generic [ref=e174]:
+      - list [ref=e175]:
+        - listitem [ref=e176]:
+          - link "Settings" [ref=e177] [cursor=pointer]:
+            - /url: /app/settings
+            - img [ref=e178]
+            - text: Settings
+      - generic [ref=e181]:
+        - generic [ref=e182]: NY
+        - generic [ref=e183]:
+          - generic [ref=e184]: Nathan Yaseen
+          - generic [ref=e185]: Team Lead
+  - generic [ref=e186]:
+    - banner [ref=e187]:
+      - button "Go back" [ref=e188] [cursor=pointer]:
+        - img [ref=e189]
+      - generic [ref=e191]:
+        - img [ref=e192]
+        - searchbox "Search anything..." [ref=e195]
+      - generic [ref=e196]:
+        - button "Today" [ref=e197] [cursor=pointer]
+        - button "Week" [ref=e198] [cursor=pointer]
+        - button "Month" [ref=e199] [cursor=pointer]
+        - button "3 Months" [ref=e200] [cursor=pointer]
+        - button "Custom" [ref=e201] [cursor=pointer]:
+          - img [ref=e202]
+          - text: Custom
+      - generic [ref=e204]:
+        - button "Notifications" [ref=e206] [cursor=pointer]:
+          - img [ref=e207]
+        - button "Help" [ref=e211] [cursor=pointer]:
+          - img [ref=e212]
+        - button "NY Nathan Yaseen Team Lead" [ref=e217] [cursor=pointer]:
+          - generic [ref=e218]: NY
+          - generic [ref=e219]:
+            - generic [ref=e220]: Nathan Yaseen
+            - generic [ref=e221]: Team Lead
+          - img [ref=e222]
+    - main [ref=e224]:
+      - generic [ref=e225]:
+        - generic [ref=e226]:
+          - heading "Team Performance Overview" [level=1] [ref=e227]
+          - paragraph [ref=e228]: ECOMMERCE · Today
+        - generic [ref=e230]:
+          - generic [ref=e231]:
+            - img [ref=e233]
+            - generic [ref=e239]:
+              - paragraph [ref=e240]: Top Achiever
+              - paragraph [ref=e241]: · by QA score
+          - generic [ref=e242]:
+            - generic [ref=e243]:
+              - paragraph [ref=e244]: ITAD
+              - paragraph [ref=e245]: Not enough evaluations yet
+            - generic [ref=e246]:
+              - paragraph [ref=e247]: CSR
+              - paragraph [ref=e248]: Not enough evaluations yet
+        - generic [ref=e249]: Loading…

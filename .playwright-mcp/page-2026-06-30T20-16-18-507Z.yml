@@ -1,0 +1,162 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e6]:
+    - complementary [ref=e7]:
+      - generic [ref=e8]:
+        - img [ref=e10]
+        - generic [ref=e12]:
+          - generic [ref=e13]: PulseTrack
+          - generic [ref=e14]: Performance Suite
+      - navigation [ref=e15]:
+        - list [ref=e17]:
+          - listitem [ref=e18]:
+            - link "Dashboard" [ref=e19] [cursor=pointer]:
+              - /url: /app/dashboard
+              - img [ref=e20]
+              - generic [ref=e25]: Dashboard
+          - listitem [ref=e26]:
+            - link "My Reports" [ref=e27] [cursor=pointer]:
+              - /url: /app/reports
+              - img [ref=e28]
+              - generic [ref=e31]: My Reports
+          - listitem [ref=e32]:
+            - link "My Analytics" [ref=e33] [cursor=pointer]:
+              - /url: /app/analytics
+              - img [ref=e34]
+              - generic [ref=e37]: My Analytics
+          - listitem [ref=e38]:
+            - link "My QA Scores" [ref=e39] [cursor=pointer]:
+              - /url: /app/qa/my
+              - img [ref=e40]
+              - generic [ref=e44]: My QA Scores
+          - listitem [ref=e45]:
+            - link "Feedback" [ref=e46] [cursor=pointer]:
+              - /url: /app/feedback
+              - img [ref=e47]
+              - generic [ref=e49]: Feedback
+        - generic [ref=e50]:
+          - generic [ref=e51]: Ecommerce
+          - list [ref=e52]:
+            - listitem [ref=e53]:
+              - link "Daily Log" [ref=e54] [cursor=pointer]:
+                - /url: /app/ecommerce/log
+                - img [ref=e56]
+                - generic [ref=e60]: Daily Log
+            - listitem [ref=e61]:
+              - link "Task Board" [ref=e62] [cursor=pointer]:
+                - /url: /app/ecommerce/board
+                - img [ref=e63]
+                - generic [ref=e65]: Task Board
+            - listitem [ref=e66]:
+              - link "Stock Tracking" [ref=e67] [cursor=pointer]:
+                - /url: /app/ecommerce/stock
+                - img [ref=e68]
+                - generic [ref=e78]: Stock Tracking
+      - generic [ref=e79]:
+        - list [ref=e80]:
+          - listitem [ref=e81]:
+            - link "Settings" [ref=e82] [cursor=pointer]:
+              - /url: /app/settings
+              - img [ref=e83]
+              - text: Settings
+        - generic [ref=e86]:
+          - generic [ref=e87]: AS
+          - generic [ref=e88]:
+            - generic [ref=e89]: Ava Stone
+            - generic [ref=e90]: Member
+    - generic [ref=e91]:
+      - banner [ref=e92]:
+        - button "Go back" [ref=e93] [cursor=pointer]:
+          - img [ref=e94]
+        - generic [ref=e96]:
+          - img [ref=e97]
+          - searchbox "Search anything..." [ref=e100]
+        - generic [ref=e101]:
+          - button "Today" [ref=e102] [cursor=pointer]
+          - button "Week" [ref=e103] [cursor=pointer]
+          - button "Month" [ref=e104] [cursor=pointer]
+          - button "3 Months" [ref=e105] [cursor=pointer]
+          - button "Custom" [ref=e106] [cursor=pointer]:
+            - img [ref=e107]
+            - text: Custom
+        - generic [ref=e109]:
+          - button "Notifications" [ref=e111] [cursor=pointer]:
+            - img [ref=e112]
+          - button "Help" [ref=e116] [cursor=pointer]:
+            - img [ref=e117]
+          - button "AS Ava Stone Member" [ref=e122] [cursor=pointer]:
+            - generic [ref=e123]: AS
+            - generic [ref=e124]:
+              - generic [ref=e125]: Ava Stone
+              - generic [ref=e126]: Member
+            - img [ref=e127]
+      - main [ref=e129]:
+        - generic [ref=e130]:
+          - generic [ref=e131]:
+            - generic [ref=e132]:
+              - heading "Daily Listings Report" [level=1] [ref=e133]
+              - paragraph [ref=e134]: Wednesday, July 1, 2026
+            - generic [ref=e135]:
+              - generic [ref=e136]: On Leave / Off Today
+              - switch "On leave today" [ref=e137] [cursor=pointer]
+          - generic [ref=e139]:
+            - generic [ref=e140]:
+              - generic [ref=e141]:
+                - generic [ref=e143]:
+                  - heading "Listings published" [level=3] [ref=e144]
+                  - paragraph [ref=e145]: One line per task type & marketplace
+                - generic [ref=e146]:
+                  - generic [ref=e147]:
+                    - generic [ref=e148]:
+                      - generic [ref=e149]: Task type
+                      - generic [ref=e150]: Marketplace
+                      - generic [ref=e151]: Listings
+                    - generic [ref=e154]:
+                      - combobox [ref=e155]:
+                        - option "Select task…"
+                        - option "BTO Listings" [selected]
+                        - option "General Listings"
+                        - option "Kits"
+                        - option "Pricing"
+                      - combobox [ref=e156]:
+                        - option "Select marketplace…"
+                        - option "Amazon" [selected]
+                        - option "eBay"
+                        - option "Newegg"
+                        - option "Walmart"
+                      - generic [ref=e158]:
+                        - button "Decrease" [ref=e159] [cursor=pointer]:
+                          - img [ref=e160]
+                        - spinbutton [ref=e161]: "5"
+                        - button "Increase" [ref=e162] [cursor=pointer]:
+                          - img [ref=e163]
+                      - button "Remove line" [ref=e164] [cursor=pointer]:
+                        - img [ref=e165]
+                    - button "Add line" [ref=e168] [cursor=pointer]:
+                      - img [ref=e169]
+                      - text: Add line
+                  - generic [ref=e170]:
+                    - generic [ref=e171]: Notes / Comments
+                    - textbox "Any context for today…" [ref=e172]
+              - button "Submit Day" [ref=e173] [cursor=pointer]:
+                - img [ref=e174]
+                - text: Submit Day
+            - generic [ref=e177]:
+              - generic [ref=e178]:
+                - generic [ref=e179]:
+                  - generic [ref=e180]: Total listings today
+                  - img [ref=e182]
+                - generic [ref=e187]: "5"
+              - generic [ref=e188]:
+                - heading "Recent" [level=3] [ref=e191]
+                - generic [ref=e193]:
+                  - generic [ref=e194]:
+                    - generic [ref=e195]: Avg listings / day
+                    - generic [ref=e196]: "0"
+                  - generic [ref=e197]:
+                    - generic [ref=e198]: Days logged (last 14)
+                    - generic [ref=e199]: "0"
+  - generic [ref=e201]:
+    - img [ref=e203]
+    - generic [ref=e206]: Daily report submitted.
+    - button "Dismiss" [ref=e207] [cursor=pointer]:
+      - img [ref=e208]
