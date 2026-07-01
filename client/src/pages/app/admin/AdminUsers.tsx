@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Plus, Check, X } from 'lucide-react'
+import { Plus, Check, X, Trash2 } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
@@ -9,7 +9,7 @@ import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
 import { DEPARTMENTS } from '../../../lib/departments'
-import { listUsers, createUser, updateUser, type AdminUser } from '../../../lib/adminApi'
+import { listUsers, createUser, updateUser, deleteUser, type AdminUser } from '../../../lib/adminApi'
 
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
   ACTIVE: { label: 'Active', tone: 'success' },
@@ -49,6 +49,18 @@ export default function AdminUsers() {
       })
   }
 
+  function remove(u: AdminUser) {
+    if (!window.confirm(`Delete ${u.name} (${u.email})? This permanently removes the account and their daily entries. This cannot be undone.`)) return
+    const prev = users
+    setUsers((us) => us.filter((x) => x.id !== u.id))
+    deleteUser(u.id)
+      .then(() => addToast({ type: 'success', message: `${u.name} deleted.` }))
+      .catch((e) => {
+        setUsers(prev)
+        addToast({ type: 'error', message: (e as { message?: string })?.message || 'Could not delete user.' })
+      })
+  }
+
   const pending = users.filter((u) => u.status === 'PENDING')
 
   const columns: Column<AdminUser>[] = [
@@ -77,6 +89,16 @@ export default function AdminUsers() {
       render: (u) => (
         <button onClick={() => patch(u.id, { isActive: !u.isActive })}>
           <Badge tone={u.isActive ? 'success' : 'neutral'} dot>{u.isActive ? 'Enabled' : 'Disabled'}</Badge>
+        </button>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (u) => (
+        <button onClick={() => remove(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Delete ${u.name}`} title="Delete user">
+          <Trash2 size={16} />
         </button>
       ),
     },

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import {
-  listUsers, createUser, updateUser,
+  listUsers, createUser, updateUser, deleteUser,
   listTeamMembers, inviteTeamMember, removeTeamMember, resetTeamMemberPassword, listTeamHistory,
   listTargets, upsertTarget, deleteTarget,
   listTags, createTag, updateTag,
@@ -18,6 +18,7 @@ adminRouter.use(requireAuth)
 adminRouter.get('/users', asyncHandler(listUsers))
 adminRouter.post('/users', asyncHandler(createUser))
 adminRouter.patch('/users/:id', asyncHandler(updateUser))
+adminRouter.delete('/users/:id', asyncHandler(deleteUser))
 
 // Team Members (Team Lead — own department roster + invites)
 adminRouter.get('/team-members', asyncHandler(listTeamMembers))

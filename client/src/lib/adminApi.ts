@@ -24,6 +24,7 @@ export const listUsers = () => api.get<{ users: AdminUser[] }>('/admin/users')
 export const createUser = (input: CreateUserInput) => api.post<{ user: AdminUser; tempPassword?: string }>('/admin/users', input)
 export const updateUser = (id: string, patch: Partial<{ role: Role; department: Department | null; subDepartmentSlug: string | null; status: UserStatus; isActive: boolean }>) =>
   api.patch<{ user: AdminUser }>(`/admin/users/${id}`, patch)
+export const deleteUser = (id: string) => api.del<void>(`/admin/users/${id}`)
 
 // ---------- Team Members (Team Lead) ----------
 export interface TeamMember {

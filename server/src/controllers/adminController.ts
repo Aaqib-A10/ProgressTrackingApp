@@ -122,6 +122,46 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
   res.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, department: u.department?.type ?? null, subDepartment: u.subDepartment?.slug ?? null, status: u.status, isActive: u.isActive } })
 }
 
+/** DELETE /api/admin/users/:id — Super Admin permanently deletes a user.
+ *  Their daily entries/leave/attachments/task-comments cascade away; if the user
+ *  authored records that block deletion (feedback / QA evaluations), we tell the
+ *  admin to disable them instead. */
+export async function deleteUser(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const id = req.params.id
+  if (id === me.id) {
+    res.status(400).json({ error: 'You cannot delete your own account.' })
+    return
+  }
+  const target = await prisma.user.findUnique({ where: { id } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  if (target.role === 'SUPER_ADMIN') {
+    const admins = await prisma.user.count({ where: { role: 'SUPER_ADMIN' } })
+    if (admins <= 1) {
+      res.status(400).json({ error: 'Cannot delete the last Super Admin.' })
+      return
+    }
+  }
+  try {
+    await prisma.user.delete({ where: { id } })
+    res.status(204).end()
+  } catch (e) {
+    // Prisma P2003 = FK constraint (user is referenced by feedback / QA / comments).
+    if ((e as { code?: string }).code === 'P2003') {
+      res.status(409).json({ error: 'This user has linked records (feedback or QA evaluations) and can’t be deleted. Disable them instead.' })
+      return
+    }
+    throw e
+  }
+}
+
 // =================== Team Members (Team Lead) ===================
 
 /** GET /api/admin/team-members — roster of the Team Lead's own department. */
