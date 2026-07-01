@@ -41,10 +41,11 @@ export function getTeamDashboard(range: RangeKey, custom?: CustomRange | null) {
 
 // --- Executive (Super Admin) ---
 export interface ExecDeptCard {
-  type: 'ITAD' | 'LEAD_GEN' | 'MARKETING'
+  type: 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE'
   name: string
   members: number
-  submittedToday: number
+  subtitle: string
+  route: string | null
   headline: DashKpi[]
   improvement: string
 }
@@ -52,11 +53,10 @@ export interface ExecDeptCard {
 export interface ExecBenchmarkRow {
   department: string
   members: number
-  submittedToday: number
+  submitted: string
   primaryLabel: string
   primaryValue: number
-  rateLabel: string
-  rateValue: number
+  secondary: string
   delta: number
 }
 

@@ -23,13 +23,6 @@ function Delta({ value }: { value: number }) {
 const fmt = (k: { value: number; format: 'number' | 'percent' }) =>
   k.format === 'percent' ? formatPercent(k.value) : formatNumber(k.value)
 
-/** Where each department card drills into for its full data. */
-const DEPT_ROUTE: Record<string, string> = {
-  ITAD: '/app/itad/team',
-  LEAD_GEN: '/app/leadgen/team',
-  MARKETING: '/app/marketing/analytics',
-}
-
 export default function ExecutiveDashboard() {
   const { range, custom } = useRange()
   const { addToast } = useToast()
@@ -50,10 +43,10 @@ export default function ExecutiveDashboard() {
 
   const benchCols: Column<ExecBenchmarkRow>[] = [
     { key: 'department', header: 'Department', render: (r) => <span className="font-medium text-ink">{r.department}</span> },
-    { key: 'members', header: 'Members', align: 'right', render: (r) => formatNumber(r.members) },
-    { key: 'submittedToday', header: 'Submitted Today', align: 'right', render: (r) => `${r.submittedToday}/${r.members}` },
+    { key: 'members', header: 'Team', align: 'right', render: (r) => formatNumber(r.members) },
+    { key: 'submitted', header: 'Submitted Today', align: 'right', render: (r) => r.submitted },
     { key: 'primary', header: 'Volume', align: 'right', render: (r) => `${formatNumber(r.primaryValue)} ${r.primaryLabel.toLowerCase()}` },
-    { key: 'rate', header: 'Key Rate', align: 'right', render: (r) => `${formatPercent(r.rateValue)} ${r.rateLabel.toLowerCase()}` },
+    { key: 'secondary', header: 'Key metric', align: 'right', render: (r) => r.secondary },
     { key: 'delta', header: 'Trend', align: 'right', render: (r) => <Delta value={r.delta} /> },
   ]
 
@@ -71,9 +64,9 @@ export default function ExecutiveDashboard() {
       ) : (
         <>
           {/* Department summary cards — click through to each department's data */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {data.departments.map((d) => {
-              const to = DEPT_ROUTE[d.type]
+              const to = d.route
               const body = (
                 <>
                   {d.headline.length ? (
@@ -104,12 +97,12 @@ export default function ExecutiveDashboard() {
                   to={to}
                   className="block rounded-card transition-shadow hover:shadow-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
-                  <Card title={d.name} subtitle={`${d.submittedToday}/${d.members} submitted today`} className="h-full hover:border-primary/30">
+                  <Card title={d.name} subtitle={d.subtitle} className="h-full hover:border-primary/30">
                     {body}
                   </Card>
                 </Link>
               ) : (
-                <Card key={d.type} title={d.name} subtitle={`${d.submittedToday}/${d.members} submitted today`}>
+                <Card key={d.type} title={d.name} subtitle={d.subtitle}>
                   {body}
                 </Card>
               )
