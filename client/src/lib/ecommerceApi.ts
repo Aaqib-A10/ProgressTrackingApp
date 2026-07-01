@@ -46,10 +46,14 @@ export interface EcommerceAgentRow {
 }
 export interface EcommerceTeamResponse {
   range: { startDate: string; endDate: string; key: RangeKey }
-  team: { totalListings: number; agents: number; openStockRequests: number; topMarketplace: string | null }
+  team: {
+    totalListings: number; agents: number; openStockRequests: number; topMarketplace: string | null
+    tasksTodo: number; tasksInProgress: number; tasksDone: number
+  }
   byMarketplace: { name: string; listings: number }[]
   agents: EcommerceAgentRow[]
   topAgents: { id: string; name: string; listings: number }[]
+  tasks: EcomTask[]
 }
 
 export const getMyEcommerceEntry = (date?: string) =>

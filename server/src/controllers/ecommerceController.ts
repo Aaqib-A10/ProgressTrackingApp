@@ -153,22 +153,19 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
   res.status(existing ? 200 : 201).json({ entry: serializeEntry(full) })
 }
 
-// ============================ Team view (HOD / Admin) ============================
+// ============================ Team view (whole team) ============================
 
-/** GET /api/ecommerce/team?range= — per-agent listing totals + per-marketplace breakdown. */
+/** GET /api/ecommerce/team?range= — team tasks + per-agent listing totals + marketplace
+ *  breakdown. Visible to the whole Ecommerce team (the team works together). */
 export async function teamView(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
+  if (me.department?.type !== 'ECOMMERCE' && me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
   const dept = await prisma.department.findUnique({ where: { type: 'ECOMMERCE' } })
   if (!dept) {
     res.status(500).json({ error: 'Ecommerce department missing' })
-    return
-  }
-  if (me.role === 'TEAM_LEAD' && me.departmentId !== dept.id) {
-    res.status(403).json({ error: 'Forbidden' })
     return
   }
 
@@ -182,12 +179,13 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   })
   const memberIds = members.map((m) => m.id)
 
-  const [entries, openStock] = await Promise.all([
+  const [entries, openStock, taskRows] = await Promise.all([
     prisma.ecommerceDailyEntry.findMany({
       where: { userId: { in: memberIds }, date: { gte: dbDateFromString(range.startDate), lte: dbDateFromString(range.endDate) } },
       include: { lines: { include: { marketplace: true } } },
     }),
     prisma.stockRequest.count({ where: { departmentId: dept.id, status: { not: 'RESOLVED' } } }),
+    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } } }, orderBy: [{ status: 'asc' }, { order: 'asc' }] }),
   ])
 
   const byUser = new Map<string, typeof entries>()
@@ -217,12 +215,19 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const byMarketplace = [...marketplaceTotals.entries()].map(([name, listings]) => ({ name, listings })).sort((a, b) => b.listings - a.listings)
   const topAgents = [...agents].sort((a, b) => b.totalListings - a.totalListings).slice(0, 3).map((a) => ({ id: a.id, name: a.name, listings: a.totalListings }))
 
+  const tasks = taskRows.map(serializeTask)
   res.json({
     range: { ...range, key: rangeKey },
-    team: { totalListings: teamTotal, agents: agents.length, openStockRequests: openStock, topMarketplace: byMarketplace[0]?.name ?? null },
+    team: {
+      totalListings: teamTotal, agents: agents.length, openStockRequests: openStock, topMarketplace: byMarketplace[0]?.name ?? null,
+      tasksTodo: tasks.filter((t) => t.status === 'TODO').length,
+      tasksInProgress: tasks.filter((t) => t.status === 'IN_PROGRESS').length,
+      tasksDone: tasks.filter((t) => t.status === 'DONE').length,
+    },
     byMarketplace,
     agents,
     topAgents,
+    tasks,
   })
 }
 

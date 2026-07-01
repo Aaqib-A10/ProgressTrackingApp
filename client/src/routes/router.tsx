@@ -113,7 +113,7 @@ export const router = createBrowserRouter([
       { path: 'ecommerce/log', element: <EcommerceDailyLog /> },
       { path: 'ecommerce/board', element: <EcommerceBoard /> },
       { path: 'ecommerce/stock', element: <EcommerceStock /> },
-      { path: 'ecommerce/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><EcommerceTeamView /></RequireRole> },
+      { path: 'ecommerce/team', element: <EcommerceTeamView /> },
 
       // Marketing
       { path: 'marketing/board', element: <MarketingBoard /> },

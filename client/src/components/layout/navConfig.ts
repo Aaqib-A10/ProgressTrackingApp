@@ -91,7 +91,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, departments: ['ECOMMERCE'] },
       { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'] },
       { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, departments: ['ECOMMERCE'] },
-      { label: 'Team View', to: '/app/ecommerce/team', icon: Users, departments: ['ECOMMERCE'], roles: TL_ROLES, badge: { text: 'HOD', tone: 'accent' } },
+      { label: 'Team View', to: '/app/ecommerce/team', icon: Users, departments: ['ECOMMERCE'] },
     ],
   },
   {
