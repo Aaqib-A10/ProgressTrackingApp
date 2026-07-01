@@ -37,7 +37,7 @@ export default function EcommerceTeamView() {
     { key: 'name', header: 'Agent', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
     { key: 'status', header: 'Status', render: (r) => <SubmissionBadge status={r.status} /> },
     { key: 'daysLogged', header: 'Days', align: 'right', render: (r) => r.daysLogged },
-    { key: 'totalListings', header: 'Listings', align: 'right', render: (r) => formatNumber(r.totalListings) },
+    { key: 'totalListings', header: 'Actions', align: 'right', render: (r) => formatNumber(r.totalListings) },
   ]
 
   return (
@@ -55,11 +55,36 @@ export default function EcommerceTeamView() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Total listings" value={formatNumber(data.team.totalListings)} icon={<ShoppingCart size={16} />} />
+            <StatCard label="Total actions" value={formatNumber(data.team.totalActions)} icon={<ShoppingCart size={16} />} />
             <StatCard label="Top marketplace" value={data.team.topMarketplace ?? '—'} icon={<Store size={16} />} />
             <StatCard label="Team members" value={data.team.agents} icon={<Users size={16} />} />
             <StatCard to="/app/ecommerce/stock" label="Open stock requests" value={data.team.openStockRequests} icon={<Boxes size={16} />} />
           </div>
+
+          <Card title="By work type" subtitle="Totals per type & marketplace this period">
+            {data.byType.length === 0 ? (
+              <p className="py-6 text-center text-body-sm text-ink-muted">No activity logged.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {data.byType.map((t) => (
+                  <div key={t.type} className="rounded-card border border-line p-3">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-body-md font-semibold text-ink">{t.type}</span>
+                      <span className="text-headline-md tabular-nums text-ink">{formatNumber(t.total)}</span>
+                    </div>
+                    <ul className="mt-2 space-y-1 border-t border-line pt-2 text-body-sm">
+                      {t.byMarketplace.map((m) => (
+                        <li key={m.name} className="flex items-center justify-between">
+                          <span className="text-ink-muted">{m.name}</span>
+                          <span className="font-medium tabular-nums text-ink">{formatNumber(m.value)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
 
           <Card title="Team tasks" subtitle={`${data.tasks.length} total · ${data.team.tasksTodo} to do · ${data.team.tasksInProgress} in progress · ${data.team.tasksDone} done`}>
             {data.tasks.length === 0 ? (

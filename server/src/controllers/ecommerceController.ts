@@ -22,7 +22,18 @@ async function ecommerceDept(me: Awaited<ReturnType<typeof loadUser>>) {
 }
 
 function deptTags(departmentId: string, type: 'TASK_TYPE' | 'MARKETPLACE') {
-  return prisma.tag.findMany({ where: { departmentId, type, isActive: true }, orderBy: { name: 'asc' } })
+  return prisma.tag.findMany({ where: { departmentId, type, isActive: true }, orderBy: { createdAt: 'asc' } })
+}
+
+/** Group the Ecommerce field (TASK_TYPE) tags by their Type, in seed order. */
+function buildTypes(fieldTags: { id: string; name: string; group: string | null }[]) {
+  const byType = new Map<string, { name: string; fields: { id: string; name: string }[] }>()
+  for (const t of fieldTags) {
+    const g = t.group ?? 'Other'
+    if (!byType.has(g)) byType.set(g, { name: g, fields: [] })
+    byType.get(g)!.fields.push({ id: t.id, name: t.name })
+  }
+  return [...byType.values()]
 }
 
 type EntryWithLines = Prisma.EcommerceDailyEntryGetPayload<{
@@ -77,7 +88,7 @@ export async function getMyEntry(req: AuthedRequest, res: Response): Promise<voi
   res.json({
     date: dateStr,
     entry: entry ? serializeEntry(entry) : null,
-    taskTypes: taskTypes.map((t) => ({ id: t.id, name: t.name })),
+    types: buildTypes(taskTypes),
     marketplaces: marketplaces.map((m) => ({ id: m.id, name: m.name })),
     stats: { avgListings: recentDays ? Math.round(recentListings / recentDays) : 0, daysLogged: recentDays },
   })
@@ -182,7 +193,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const [entries, openStock, taskRows] = await Promise.all([
     prisma.ecommerceDailyEntry.findMany({
       where: { userId: { in: memberIds }, date: { gte: dbDateFromString(range.startDate), lte: dbDateFromString(range.endDate) } },
-      include: { lines: { include: { marketplace: true } } },
+      include: { lines: { include: { marketplace: true, taskType: true } } },
     }),
     prisma.stockRequest.count({ where: { departmentId: dept.id, status: { not: 'RESOLVED' } } }),
     prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } } }, orderBy: [{ status: 'asc' }, { order: 'asc' }] }),
@@ -192,6 +203,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   for (const e of entries) (byUser.get(e.userId) ?? byUser.set(e.userId, []).get(e.userId)!).push(e)
 
   const marketplaceTotals = new Map<string, number>()
+  const typeTotals = new Map<string, { total: number; byMarketplace: Map<string, number> }>()
   const agents = members.map((m) => {
     const es = byUser.get(m.id) ?? []
     const submitted = es.filter((e) => e.status === 'SUBMITTED')
@@ -201,6 +213,11 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       total += l.listings
       perMp.set(l.marketplace.name, (perMp.get(l.marketplace.name) ?? 0) + l.listings)
       marketplaceTotals.set(l.marketplace.name, (marketplaceTotals.get(l.marketplace.name) ?? 0) + l.listings)
+      const g = l.taskType.group ?? 'Other'
+      const tt = typeTotals.get(g) ?? { total: 0, byMarketplace: new Map<string, number>() }
+      tt.total += l.listings
+      tt.byMarketplace.set(l.marketplace.name, (tt.byMarketplace.get(l.marketplace.name) ?? 0) + l.listings)
+      typeTotals.set(g, tt)
     }
     const todayEntry = es.find((e) => dateStringFromDb(e.date) === todayStr)
     const onLeaveToday = !!todayEntry && todayEntry.status !== 'SUBMITTED'
@@ -213,18 +230,22 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
 
   const teamTotal = agents.reduce((s, a) => s + a.totalListings, 0)
   const byMarketplace = [...marketplaceTotals.entries()].map(([name, listings]) => ({ name, listings })).sort((a, b) => b.listings - a.listings)
+  const byType = [...typeTotals.entries()]
+    .map(([type, v]) => ({ type, total: v.total, byMarketplace: [...v.byMarketplace.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value) }))
+    .sort((a, b) => b.total - a.total)
   const topAgents = [...agents].sort((a, b) => b.totalListings - a.totalListings).slice(0, 3).map((a) => ({ id: a.id, name: a.name, listings: a.totalListings }))
 
   const tasks = taskRows.map(serializeTask)
   res.json({
     range: { ...range, key: rangeKey },
     team: {
-      totalListings: teamTotal, agents: agents.length, openStockRequests: openStock, topMarketplace: byMarketplace[0]?.name ?? null,
+      totalActions: teamTotal, totalListings: teamTotal, agents: agents.length, openStockRequests: openStock, topMarketplace: byMarketplace[0]?.name ?? null,
       tasksTodo: tasks.filter((t) => t.status === 'TODO').length,
       tasksInProgress: tasks.filter((t) => t.status === 'IN_PROGRESS').length,
       tasksDone: tasks.filter((t) => t.status === 'DONE').length,
     },
     byMarketplace,
+    byType,
     agents,
     topAgents,
     tasks,

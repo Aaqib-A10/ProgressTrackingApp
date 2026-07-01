@@ -21,10 +21,14 @@ export interface EcommerceEntry {
   lines: ListingLine[]
   totalListings: number
 }
+export interface WorkType {
+  name: string
+  fields: TagOption[]
+}
 export interface EcommerceEntryResponse {
   date: string
   entry: EcommerceEntry | null
-  taskTypes: TagOption[]
+  types: WorkType[]
   marketplaces: TagOption[]
   stats: { avgListings: number; daysLogged: number }
 }
@@ -47,10 +51,11 @@ export interface EcommerceAgentRow {
 export interface EcommerceTeamResponse {
   range: { startDate: string; endDate: string; key: RangeKey }
   team: {
-    totalListings: number; agents: number; openStockRequests: number; topMarketplace: string | null
+    totalActions: number; totalListings: number; agents: number; openStockRequests: number; topMarketplace: string | null
     tasksTodo: number; tasksInProgress: number; tasksDone: number
   }
   byMarketplace: { name: string; listings: number }[]
+  byType: { type: string; total: number; byMarketplace: { name: string; value: number }[] }[]
   agents: EcommerceAgentRow[]
   topAgents: { id: string; name: string; listings: number }[]
   tasks: EcomTask[]

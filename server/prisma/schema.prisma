@@ -288,6 +288,7 @@ model Tag {
   id           String      @id @default(cuid())
   name         String
   type         TagType
+  group        String? // for Ecommerce TASK_TYPE fields: the parent Type (Listings, Pricing, ...)
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
   isActive     Boolean     @default(true)

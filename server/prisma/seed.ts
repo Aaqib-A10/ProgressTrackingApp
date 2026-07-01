@@ -67,12 +67,22 @@ async function main() {
       create: { departmentId: departments.ECOMMERCE, type: 'MARKETPLACE', name },
     })
   }
-  for (const name of ['BTO Listings', 'Kits', 'Pricing', 'General Listings']) {
-    await prisma.tag.upsert({
-      where: { departmentId_type_name: { departmentId: departments.ECOMMERCE, type: 'TASK_TYPE', name } },
-      update: {},
-      create: { departmentId: departments.ECOMMERCE, type: 'TASK_TYPE', name },
-    })
+  // Ecommerce work-type fields, grouped under a Type. Deactivate any old flat
+  // fields first so only the current grouped set is active.
+  await prisma.tag.updateMany({ where: { departmentId: departments.ECOMMERCE, type: 'TASK_TYPE' }, data: { isActive: false } })
+  const ecomFields: [string, string[]][] = [
+    ['Listings', ['BTO', 'Kits', 'General Listings', 'Optimized']],
+    ['Pricing', ['Price Updates', 'Reprices', 'Price Corrections']],
+    ['Inventory Management', ['Restocked', 'Out-of-Stock Flagged', 'Quantity/SKU Updates']],
+  ]
+  for (const [group, fields] of ecomFields) {
+    for (const name of fields) {
+      await prisma.tag.upsert({
+        where: { departmentId_type_name: { departmentId: departments.ECOMMERCE, type: 'TASK_TYPE', name } },
+        update: { group, isActive: true },
+        create: { departmentId: departments.ECOMMERCE, type: 'TASK_TYPE', name, group },
+      })
+    }
   }
 
   // --- Admin account (the only seeded user; all real users are created in-app) ---
