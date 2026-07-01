@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { TrendingUp, TrendingDown, Sparkles, ArrowRight, Users, Building2, ClipboardCheck, Percent, AlertTriangle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Sparkles, ArrowRight, Users, Building2, ClipboardCheck, Percent, AlertTriangle, Boxes, CheckCircle2, UserCheck, GraduationCap } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -8,7 +8,7 @@ import { TrendLineChart } from '../../components/charts/TrendLineChart'
 import { useRange } from '../../components/layout/AppShell'
 import { useToast } from '../../components/ui/Toast'
 import { formatNumber, formatPercent, formatSignedPercent } from '../../lib/format'
-import { getExecutiveDashboard, type ExecutiveDashboardData, type ExecBenchmarkRow, type DashKpi } from '../../lib/dashboardApi'
+import { getExecutiveDashboard, type ExecutiveDashboardData, type ExecBenchmarkRow, type DashKpi, type ExecSummary } from '../../lib/dashboardApi'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 
 function Delta({ value }: { value: number }) {
@@ -23,6 +23,35 @@ function Delta({ value }: { value: number }) {
 
 const fmt = (k: { value: number; format: 'number' | 'percent' }) =>
   k.format === 'percent' ? formatPercent(k.value) : formatNumber(k.value)
+
+function ActionCenter({ summary }: { summary: ExecSummary }) {
+  const items = [
+    { n: summary.pendingApprovals, label: 'Team Lead approvals pending', to: '/app/admin/users', icon: <UserCheck size={16} />, tone: 'text-warning bg-warning/10' },
+    { n: summary.notSubmitted, label: "Haven't submitted today", to: '/app/team/not-submitted', icon: <ClipboardCheck size={16} />, tone: 'text-primary bg-primary/10' },
+    { n: summary.stockRequested, label: 'Stock requests to assign', to: '/app/ecommerce/stock', icon: <Boxes size={16} />, tone: 'text-success bg-success/10' },
+    { n: summary.coachingNeeded, label: 'QA coaching needed', to: '/app/qa/analytics', icon: <GraduationCap size={16} />, tone: 'text-danger bg-danger/10' },
+  ].filter((i) => i.n > 0)
+  return (
+    <Card title="Action Center" subtitle={items.length ? `${summary.alerts} items need attention` : 'You are all caught up'}>
+      {items.length === 0 ? (
+        <div className="flex items-center gap-2 py-2 text-body-md text-success"><CheckCircle2 size={18} /> All clear — nothing needs attention.</div>
+      ) : (
+        <ul className="divide-y divide-line">
+          {items.map((i) => (
+            <li key={i.label}>
+              <Link to={i.to} className="-mx-2 flex items-center gap-3 rounded-btn px-2 py-2.5 hover:bg-slate-50">
+                <span className={'flex h-8 w-8 items-center justify-center rounded-btn ' + i.tone}>{i.icon}</span>
+                <span className="flex-1 text-body-md text-ink">{i.label}</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-body-sm font-semibold tabular-nums text-ink">{i.n}</span>
+                <ArrowRight size={16} className="text-ink-muted" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
 
 export default function ExecutiveDashboard() {
   const { range, custom } = useRange()
@@ -67,6 +96,8 @@ export default function ExecutiveDashboard() {
           <StatCard label="Needs attention" value={data.summary.alerts} caption={`${data.summary.pendingApprovals} approvals · ${data.summary.stockRequested} stock`} icon={<AlertTriangle size={16} />} />
         </div>
       )}
+
+      {data && <ActionCenter summary={data.summary} />}
 
       <EmployeeOfMonthCard />
 
