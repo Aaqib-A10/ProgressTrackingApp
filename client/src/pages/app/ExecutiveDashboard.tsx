@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { TrendingUp, TrendingDown, Sparkles, ArrowRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, Sparkles, ArrowRight, Users, Building2, ClipboardCheck, Percent, AlertTriangle } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
+import { StatCard } from '../../components/StatCard'
 import { DataTable, type Column } from '../../components/DataTable'
 import { TrendLineChart } from '../../components/charts/TrendLineChart'
 import { useRange } from '../../components/layout/AppShell'
@@ -56,6 +57,16 @@ export default function ExecutiveDashboard() {
         <h1 className="text-headline-lg text-ink">Executive Overview</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Company-wide performance across all departments</p>
       </div>
+
+      {data && (
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+          <StatCard label="Employees" value={formatNumber(data.summary.employees)} caption={`${data.summary.departments} departments`} icon={<Users size={16} />} />
+          <StatCard label="Departments" value={data.summary.departments} caption="Active teams" icon={<Building2 size={16} />} />
+          <StatCard label="Submitted today" value={`${data.summary.submittedToday}/${data.summary.formMembers}`} caption="Daily-log teams" icon={<ClipboardCheck size={16} />} />
+          <StatCard label="On-time rate" value={formatPercent(data.summary.onTimeRate / 100)} caption="Logged today" icon={<Percent size={16} />} />
+          <StatCard label="Needs attention" value={data.summary.alerts} caption={`${data.summary.pendingApprovals} approvals · ${data.summary.stockRequested} stock`} icon={<AlertTriangle size={16} />} />
+        </div>
+      )}
 
       <EmployeeOfMonthCard />
 

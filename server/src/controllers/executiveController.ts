@@ -40,6 +40,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     ecomCur, ecomPrev, ecomToday, stockOpen,
     csrCur, csrPrev,
     hcItad, hcLead, hcMkt, hcCsr, hcEcom,
+    employees, pendingApprovals, coachingNeeded, stockRequested,
   ] = await Promise.all([
     prisma.itadDailyEntry.findMany({ where: { date: inRange(range) } }),
     prisma.itadDailyEntry.findMany({ where: { date: inRange(prev) } }),
@@ -60,6 +61,10 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     csrId ? prisma.qaEvaluation.findMany({ where: { departmentId: csrId, status: 'SUBMITTED', createdAt: { gte: new Date(range.startDate + 'T00:00:00Z'), lte: new Date(range.endDate + 'T23:59:59Z') } }, select: { totalScore: true, passed: true } }) : Promise.resolve([]),
     csrId ? prisma.qaEvaluation.findMany({ where: { departmentId: csrId, status: 'SUBMITTED', createdAt: { gte: new Date(prev.startDate + 'T00:00:00Z'), lte: new Date(prev.endDate + 'T23:59:59Z') } }, select: { totalScore: true } }) : Promise.resolve([]),
     headcount('ITAD'), headcount('LEAD_GEN'), headcount('MARKETING'), headcount('CSR'), headcount('ECOMMERCE'),
+    prisma.user.count({ where: { isActive: true, role: { not: 'SUPER_ADMIN' } } }),
+    prisma.user.count({ where: { status: 'PENDING' } }),
+    prisma.qaEvaluation.count({ where: { status: 'SUBMITTED', coachingNeeded: true, agentAcknowledgedAt: null } }),
+    prisma.stockRequest.count({ where: { status: 'REQUESTED' } }),
   ])
 
   // --- ITAD ---
@@ -143,8 +148,29 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     { department: 'Ecommerce', members: hcEcom, submitted: `${submitted(ecomToday).length}/${hcEcom}`, primaryLabel: 'Listings', primaryValue: ecomListings, secondary: `${stockOpen} open stock`, delta: pctDelta(ecomListings, ecomListingsPrev) },
   ]
 
+  // Company summary (KPI header + alert totals).
+  const st = (rows: { status: string }[]) => submitted(rows).length
+  const submittedTodayTotal = st(itadToday) + st(leadToday) + mktToday + st(ecomToday)
+  const formMembers = hcItad + hcLead + hcMkt + hcEcom
+  const notSubmitted =
+    Math.max(0, hcItad - st(itadToday)) + Math.max(0, hcLead - st(leadToday)) +
+    Math.max(0, hcMkt - mktToday) + Math.max(0, hcEcom - st(ecomToday))
+  const summary = {
+    employees,
+    departments: depts.length,
+    submittedToday: submittedTodayTotal,
+    formMembers,
+    onTimeRate: formMembers ? Math.round((submittedTodayTotal / formMembers) * 1000) / 10 : 0,
+    pendingApprovals,
+    notSubmitted,
+    stockRequested,
+    coachingNeeded,
+    alerts: pendingApprovals + notSubmitted + stockRequested + coachingNeeded,
+  }
+
   res.json({
     range: { ...range, key: rangeKey },
+    summary,
     departments,
     combinedTrend,
     benchmark,

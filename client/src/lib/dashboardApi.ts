@@ -60,8 +60,22 @@ export interface ExecBenchmarkRow {
   delta: number
 }
 
+export interface ExecSummary {
+  employees: number
+  departments: number
+  submittedToday: number
+  formMembers: number
+  onTimeRate: number
+  pendingApprovals: number
+  notSubmitted: number
+  stockRequested: number
+  coachingNeeded: number
+  alerts: number
+}
+
 export interface ExecutiveDashboardData {
   range: { startDate: string; endDate: string; key: RangeKey }
+  summary: ExecSummary
   departments: ExecDeptCard[]
   combinedTrend: { metricLabel: string; points: DashTrendPoint[] }
   benchmark: ExecBenchmarkRow[]
