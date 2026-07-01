@@ -79,6 +79,14 @@ export interface EcomTask {
   order: number
   assignee: { id: string; name: string } | null
   dueDate: string | null
+  commentCount: number
+}
+export interface TaskComment {
+  id: string
+  body: string
+  mentions: string[]
+  createdAt: string
+  author: { id: string; name: string }
 }
 export interface BoardColumn {
   status: EcomTaskStatus
@@ -110,6 +118,9 @@ export const getEcommerceBoard = () => api.get<BoardResponse>('/ecommerce/board'
 export const createEcommerceTask = (input: CreateTaskInput) => api.post<{ task: EcomTask }>('/ecommerce/tasks', input)
 export const updateEcommerceTask = (id: string, patch: UpdateTaskInput) => api.patch<{ task: EcomTask }>(`/ecommerce/tasks/${id}`, patch)
 export const deleteEcommerceTask = (id: string) => api.del<void>(`/ecommerce/tasks/${id}`)
+export const getEcommerceTask = (id: string) => api.get<{ task: EcomTask; comments: TaskComment[] }>(`/ecommerce/tasks/${id}`)
+export const addTaskComment = (id: string, body: string, mentions: string[]) =>
+  api.post<{ comment: TaskComment }>(`/ecommerce/tasks/${id}/comments`, { body, mentions })
 
 // ---------- Stock tracking ----------
 export type StockStatus = 'REQUESTED' | 'ASSIGNED' | 'RESOLVED'
@@ -133,7 +144,7 @@ export interface StockListResponse {
 }
 
 export const getEcommerceStock = () => api.get<StockListResponse>('/ecommerce/stock')
-export const createStockRequest = (input: { itemName: string; requestedByName: string; note?: string }) =>
+export const createStockRequest = (input: { itemName: string; action: StockAction; requestedByName: string; note?: string }) =>
   api.post<{ request: StockRequest }>('/ecommerce/stock', input)
 export const assignStockRequest = (id: string, input: { action: StockAction; assignedToId: string }) =>
   api.patch<{ request: StockRequest }>(`/ecommerce/stock/${id}/assign`, input)

@@ -165,6 +165,7 @@ model User {
   ecommerceEntries  EcommerceDailyEntry[]
   ecomTasksAssigned EcommerceTask[]       @relation("EcomTaskAssignee")
   ecomTasksCreated  EcommerceTask[]       @relation("EcomTaskCreator")
+  ecomTaskComments  EcomTaskComment[]     @relation("EcomCommentAuthor")
   stockAssignedTo   StockRequest[]        @relation("StockAssignee")
   stockAssignedBy   StockRequest[]        @relation("StockAssigner")
 
@@ -752,8 +753,25 @@ model EcommerceTask {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
+  comments EcomTaskComment[]
+
   @@index([status])
   @@index([assignedToId])
+}
+
+/// A comment on an Ecommerce task (Jira/Trello-style thread). `mentions` holds the
+/// mentioned users' ids so they can be highlighted (and later notified).
+model EcomTaskComment {
+  id        String        @id @default(cuid())
+  taskId    String
+  task      EcommerceTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation("EcomCommentAuthor", fields: [authorId], references: [id])
+  body      String
+  mentions  String[]
+  createdAt DateTime      @default(now())
+
+  @@index([taskId])
 }
 
 /// Out-of-stock request → HOD assigns a stock-in/out action to an agent.

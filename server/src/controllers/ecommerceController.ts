@@ -263,13 +263,20 @@ function isHod(me: Awaited<ReturnType<typeof loadUser>>): boolean {
   return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'ECOMMERCE')
 }
 
-function serializeTask(t: Prisma.EcommerceTaskGetPayload<{ include: { assignedTo: { select: { id: true; name: true } } } }>) {
+function serializeTask(
+  t: Prisma.EcommerceTaskGetPayload<{ include: { assignedTo: { select: { id: true; name: true } } } }> & { _count?: { comments: number } },
+) {
   return {
     id: t.id, title: t.title, description: t.description ?? '', source: t.source ?? '',
     status: t.status, order: t.order,
     assignee: t.assignedTo ? { id: t.assignedTo.id, name: t.assignedTo.name } : null,
     dueDate: t.dueDate ? dateStringFromDb(t.dueDate) : null,
+    commentCount: t._count?.comments ?? 0,
   }
+}
+
+function serializeComment(c: Prisma.EcomTaskCommentGetPayload<{ include: { author: { select: { id: true; name: true } } } }>) {
+  return { id: c.id, body: c.body, mentions: c.mentions, createdAt: c.createdAt.toISOString(), author: { id: c.author.id, name: c.author.name } }
 }
 
 async function ecommerceMembers(departmentId: string) {
@@ -287,7 +294,7 @@ export async function getBoard(req: AuthedRequest, res: Response): Promise<void>
   if (!dept) { res.status(500).json({ error: 'Ecommerce department missing' }); return }
 
   const [tasks, members] = await Promise.all([
-    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } } }, orderBy: [{ order: 'asc' }, { updatedAt: 'asc' }] }),
+    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } }, _count: { select: { comments: true } } }, orderBy: [{ order: 'asc' }, { updatedAt: 'asc' }] }),
     ecommerceMembers(dept.id),
   ])
   const columns = ECOM_STATUSES.map((status) => ({
@@ -371,6 +378,47 @@ export async function deleteTask(req: AuthedRequest, res: Response): Promise<voi
   res.status(204).end()
 }
 
+/** GET /api/ecommerce/tasks/:id — task detail + comment thread (any team member). */
+export async function getTask(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (!isEcommerce(me)) { res.status(403).json({ error: 'Not an Ecommerce member' }); return }
+  const task = await prisma.ecommerceTask.findUnique({
+    where: { id: req.params.id },
+    include: {
+      assignedTo: { select: { id: true, name: true } },
+      _count: { select: { comments: true } },
+      comments: { include: { author: { select: { id: true, name: true } } }, orderBy: { createdAt: 'asc' } },
+    },
+  })
+  if (!task) { res.status(404).json({ error: 'Task not found' }); return }
+  res.json({ task: serializeTask(task), comments: task.comments.map(serializeComment) })
+}
+
+const commentSchema = z.object({
+  body: z.string().trim().min(1).max(4000),
+  mentions: z.array(z.string()).max(50).optional(),
+})
+
+/** POST /api/ecommerce/tasks/:id/comments — any team member comments (with @mentions). */
+export async function addComment(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (!isEcommerce(me)) { res.status(403).json({ error: 'Not an Ecommerce member' }); return }
+  const task = await prisma.ecommerceTask.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  if (!task) { res.status(404).json({ error: 'Task not found' }); return }
+  const parsed = commentSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }); return }
+  // Keep only mentions that are real active Ecommerce members.
+  const dept = await ecommerceDept(me)
+  const validMentions = parsed.data.mentions?.length
+    ? (await prisma.user.findMany({ where: { id: { in: parsed.data.mentions }, departmentId: dept?.id }, select: { id: true } })).map((u) => u.id)
+    : []
+  const comment = await prisma.ecomTaskComment.create({
+    data: { taskId: task.id, authorId: me.id, body: parsed.data.body, mentions: validMentions },
+    include: { author: { select: { id: true, name: true } } },
+  })
+  res.status(201).json({ comment: serializeComment(comment) })
+}
+
 // ============================ Stock tracking ============================
 
 function serializeStock(s: Prisma.StockRequestGetPayload<{ include: { assignedTo: { select: { id: true; name: true } } } }>) {
@@ -398,11 +446,12 @@ export async function listStock(req: AuthedRequest, res: Response): Promise<void
 
 const stockCreateSchema = z.object({
   itemName: z.string().trim().min(1).max(200),
+  action: z.enum(['STOCK_IN', 'STOCK_OUT']),
   requestedByName: z.string().trim().min(1).max(120),
   note: z.string().max(1000).optional(),
 })
 
-/** POST /api/ecommerce/stock — any Ecommerce member logs an out-of-stock item. */
+/** POST /api/ecommerce/stock — any Ecommerce member logs a stock-in / stock-out. */
 export async function createStock(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
   if (!isEcommerce(me)) { res.status(403).json({ error: 'Not an Ecommerce member' }); return }
@@ -411,7 +460,7 @@ export async function createStock(req: AuthedRequest, res: Response): Promise<vo
   const parsed = stockCreateSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }); return }
   const s = await prisma.stockRequest.create({
-    data: { departmentId: dept.id, itemName: parsed.data.itemName, requestedByName: parsed.data.requestedByName, note: parsed.data.note ?? null },
+    data: { departmentId: dept.id, itemName: parsed.data.itemName, action: parsed.data.action, requestedByName: parsed.data.requestedByName, note: parsed.data.note ?? null },
     include: { assignedTo: { select: { id: true, name: true } } },
   })
   await prisma.auditLog.create({ data: { userId: me.id, entityType: 'StockRequest', entityId: s.id, action: 'CREATE', after: { itemName: s.itemName, requestedByName: s.requestedByName } } })
