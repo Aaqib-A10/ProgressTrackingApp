@@ -73,9 +73,17 @@ export interface ExecSummary {
   alerts: number
 }
 
+export interface ExecQaHealth {
+  avgScore: number
+  passRate: number
+  evaluations: number
+  coachingNeeded: number
+}
+
 export interface ExecutiveDashboardData {
   range: { startDate: string; endDate: string; key: RangeKey }
   summary: ExecSummary
+  qa: ExecQaHealth
   departments: ExecDeptCard[]
   combinedTrend: { metricLabel: string; points: DashTrendPoint[] }
   benchmark: ExecBenchmarkRow[]

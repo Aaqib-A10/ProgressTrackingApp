@@ -24,6 +24,15 @@ function Delta({ value }: { value: number }) {
 const fmt = (k: { value: number; format: 'number' | 'percent' }) =>
   k.format === 'percent' ? formatPercent(k.value) : formatNumber(k.value)
 
+function MiniStat({ label, value, tone = 'text-ink' }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-card border border-line p-3">
+      <p className="text-label-md uppercase text-ink-muted">{label}</p>
+      <p className={'mt-0.5 text-headline-md font-bold tabular-nums ' + tone}>{value}</p>
+    </div>
+  )
+}
+
 function ActionCenter({ summary }: { summary: ExecSummary }) {
   const items = [
     { n: summary.pendingApprovals, label: 'Team Lead approvals pending', to: '/app/admin/users', icon: <UserCheck size={16} />, tone: 'text-warning bg-warning/10' },
@@ -98,6 +107,17 @@ export default function ExecutiveDashboard() {
       )}
 
       {data && <ActionCenter summary={data.summary} />}
+
+      {data && (
+        <Card title="QA health" subtitle="Call quality across ITAD + CSR this period" action={<Link to="/app/qa/analytics" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary">Open QA <ArrowRight size={14} /></Link>}>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <MiniStat label="Avg QA score" value={formatPercent(data.qa.avgScore / 100)} />
+            <MiniStat label="Pass rate" value={formatPercent(data.qa.passRate / 100)} />
+            <MiniStat label="Evaluations" value={formatNumber(data.qa.evaluations)} />
+            <MiniStat label="Coaching needed" value={formatNumber(data.qa.coachingNeeded)} tone={data.qa.coachingNeeded > 0 ? 'text-warning' : 'text-ink'} />
+          </div>
+        </Card>
+      )}
 
       <EmployeeOfMonthCard />
 

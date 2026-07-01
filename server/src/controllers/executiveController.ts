@@ -40,7 +40,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     ecomCur, ecomPrev, ecomToday, stockOpen,
     csrCur, csrPrev,
     hcItad, hcLead, hcMkt, hcCsr, hcEcom,
-    employees, pendingApprovals, coachingNeeded, stockRequested,
+    employees, pendingApprovals, coachingNeeded, stockRequested, allQa,
   ] = await Promise.all([
     prisma.itadDailyEntry.findMany({ where: { date: inRange(range) } }),
     prisma.itadDailyEntry.findMany({ where: { date: inRange(prev) } }),
@@ -65,6 +65,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     prisma.user.count({ where: { status: 'PENDING' } }),
     prisma.qaEvaluation.count({ where: { status: 'SUBMITTED', coachingNeeded: true, agentAcknowledgedAt: null } }),
     prisma.stockRequest.count({ where: { status: 'REQUESTED' } }),
+    prisma.qaEvaluation.findMany({ where: { status: 'SUBMITTED', createdAt: { gte: new Date(range.startDate + 'T00:00:00Z'), lte: new Date(range.endDate + 'T23:59:59Z') } }, select: { totalScore: true, passed: true } }),
   ])
 
   // --- ITAD ---
@@ -168,9 +169,18 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     alerts: pendingApprovals + notSubmitted + stockRequested + coachingNeeded,
   }
 
+  // Company-wide QA health (ITAD + CSR evaluations).
+  const qa = {
+    avgScore: round1(avg(allQa.map((e) => e.totalScore))),
+    passRate: allQa.length ? Math.round((allQa.filter((e) => e.passed).length / allQa.length) * 1000) / 10 : 0,
+    evaluations: allQa.length,
+    coachingNeeded,
+  }
+
   res.json({
     range: { ...range, key: rangeKey },
     summary,
+    qa,
     departments,
     combinedTrend,
     benchmark,
