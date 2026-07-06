@@ -98,11 +98,11 @@ export default function ExecutiveDashboard() {
 
       {data && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-          <StatCard label="Employees" value={formatNumber(data.summary.employees)} caption={`${data.summary.departments} departments`} icon={<Users size={16} />} />
-          <StatCard label="Departments" value={data.summary.departments} caption="Active teams" icon={<Building2 size={16} />} />
-          <StatCard label="Submitted today" value={`${data.summary.submittedToday}/${data.summary.formMembers}`} caption="Daily-log teams" icon={<ClipboardCheck size={16} />} />
-          <StatCard label="On-time rate" value={formatPercent(data.summary.onTimeRate / 100)} caption="Logged today" icon={<Percent size={16} />} />
-          <StatCard label="Needs attention" value={data.summary.alerts} caption={`${data.summary.pendingApprovals} approvals · ${data.summary.stockRequested} stock`} icon={<AlertTriangle size={16} />} />
+          <StatCard to="/app/admin/users" label="Employees" value={formatNumber(data.summary.employees)} caption={`${data.summary.departments} departments`} icon={<Users size={16} />} />
+          <StatCard to="/app/admin/users" label="Departments" value={data.summary.departments} caption="Active teams" icon={<Building2 size={16} />} />
+          <StatCard to="/app/team/not-submitted" label="Submitted today" value={`${data.summary.submittedToday}/${data.summary.formMembers}`} caption="Daily-log teams" icon={<ClipboardCheck size={16} />} />
+          <StatCard to="/app/team/not-submitted" label="On-time rate" value={formatPercent(data.summary.onTimeRate / 100)} caption="Logged today" icon={<Percent size={16} />} />
+          <StatCard to="/app/team/not-submitted" label="Needs attention" value={data.summary.alerts} caption={`${data.summary.pendingApprovals} approvals · ${data.summary.stockRequested} stock`} icon={<AlertTriangle size={16} />} />
         </div>
       )}
 
