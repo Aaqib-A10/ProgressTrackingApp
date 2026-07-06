@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Plus, Check, X, Trash2 } from 'lucide-react'
+import { Plus, Check, X, Trash2, Eye, EyeOff, Copy, RotateCcw } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
@@ -9,7 +9,7 @@ import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
 import { DEPARTMENTS } from '../../../lib/departments'
-import { listUsers, createUser, updateUser, deleteUser, type AdminUser } from '../../../lib/adminApi'
+import { listUsers, createUser, updateUser, deleteUser, resetUserPassword, type AdminUser } from '../../../lib/adminApi'
 
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
   ACTIVE: { label: 'Active', tone: 'success' },
@@ -47,6 +47,16 @@ export default function AdminUsers() {
         setUsers(prev)
         addToast({ type: 'error', message: 'Update failed.' })
       })
+  }
+
+  async function resetPw(u: AdminUser) {
+    try {
+      const { tempPassword } = await resetUserPassword(u.id)
+      setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, tempPassword } : x)))
+      addToast({ type: 'success', message: `New temp password for ${u.name}: ${tempPassword}`, duration: 12000 })
+    } catch (e) {
+      addToast({ type: 'error', message: (e as { message?: string })?.message || 'Could not reset password.' })
+    }
   }
 
   function remove(u: AdminUser) {
@@ -91,6 +101,11 @@ export default function AdminUsers() {
           <Badge tone={u.isActive ? 'success' : 'neutral'} dot>{u.isActive ? 'Enabled' : 'Disabled'}</Badge>
         </button>
       ),
+    },
+    {
+      key: 'password',
+      header: 'Temp password',
+      render: (u) => <PasswordCell u={u} onReset={resetPw} />,
     },
     {
       key: 'actions',
@@ -142,6 +157,30 @@ export default function AdminUsers() {
   )
 }
 
+function PasswordCell({ u, onReset }: { u: AdminUser; onReset: (u: AdminUser) => void }) {
+  const { addToast } = useToast()
+  const [show, setShow] = useState(false)
+  const pw = u.tempPassword
+  return (
+    <div className="flex items-center gap-1.5">
+      {pw ? (
+        <>
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-body-sm text-ink">{show ? pw : '••••••••'}</code>
+          <button onClick={() => setShow((s) => !s)} className="text-ink-muted hover:text-ink" title={show ? 'Hide' : 'Show'}>{show ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+          <button onClick={() => { navigator.clipboard?.writeText(pw); addToast({ type: 'success', message: 'Copied.' }) }} className="text-ink-muted hover:text-ink" title="Copy">
+            <Copy size={14} />
+          </button>
+        </>
+      ) : (
+        <span className="text-body-sm text-ink-muted">set by user</span>
+      )}
+      <button onClick={() => onReset(u)} className="ml-1 flex items-center gap-1 rounded-btn px-1.5 py-0.5 text-body-sm text-ink-muted hover:bg-slate-100 hover:text-primary" title="Reset password">
+        <RotateCcw size={13} /> Reset
+      </button>
+    </div>
+  )
+}
+
 function InviteModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (u: AdminUser) => void }) {
   const { addToast } = useToast()
   const [name, setName] = useState('')
@@ -163,7 +202,7 @@ function InviteModal({ open, onClose, onCreated }: { open: boolean; onClose: () 
         department: department || null,
         subDepartmentSlug: department === 'MARKETING' ? subDept || null : null,
       })
-      onCreated(res.user)
+      onCreated({ ...res.user, tempPassword: res.tempPassword ?? res.user.tempPassword ?? null })
       addToast({ type: 'success', message: res.tempPassword ? `Created. Temp password: ${res.tempPassword}` : 'User created.', duration: 9000 })
       setName(''); setEmail(''); setRole('MEMBER'); setDepartment(''); setSubDept('')
       onClose()

@@ -11,6 +11,7 @@ export interface AdminUser {
   subDepartment: string | null
   status: UserStatus
   isActive: boolean
+  tempPassword: string | null
 }
 export interface CreateUserInput {
   name: string
@@ -25,6 +26,8 @@ export const createUser = (input: CreateUserInput) => api.post<{ user: AdminUser
 export const updateUser = (id: string, patch: Partial<{ role: Role; department: Department | null; subDepartmentSlug: string | null; status: UserStatus; isActive: boolean }>) =>
   api.patch<{ user: AdminUser }>(`/admin/users/${id}`, patch)
 export const deleteUser = (id: string) => api.del<void>(`/admin/users/${id}`)
+export const resetUserPassword = (id: string, password?: string) =>
+  api.post<{ tempPassword: string }>(`/admin/users/${id}/reset-password`, password ? { password } : {})
 
 // ---------- Team Members (Team Lead) ----------
 export interface TeamMember {

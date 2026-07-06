@@ -34,6 +34,7 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
       subDepartment: u.subDepartment?.slug ?? null,
       status: u.status,
       isActive: u.isActive,
+      tempPassword: u.tempPassword ?? null,
     })),
   })
 }
@@ -160,6 +161,35 @@ export async function deleteUser(req: AuthedRequest, res: Response): Promise<voi
     }
     throw e
   }
+}
+
+const adminResetPwSchema = z.object({ password: z.string().min(8).max(72).optional() })
+
+/** POST /api/admin/users/:id/reset-password — Super Admin resets a user's password.
+ *  Sets a new temporary password (random, or a supplied one) and returns it to relay. */
+export async function resetUserPassword(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  if (req.params.id === me.id) {
+    res.status(400).json({ error: 'Change your own password from Settings to avoid locking yourself out.' })
+    return
+  }
+  const target = await prisma.user.findUnique({ where: { id: req.params.id } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  const parsed = adminResetPwSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  const tempPassword = parsed.data.password ?? randomBytes(6).toString('base64url')
+  await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(tempPassword), tempPassword } })
+  res.json({ tempPassword })
 }
 
 // =================== Team Members (Team Lead) ===================
