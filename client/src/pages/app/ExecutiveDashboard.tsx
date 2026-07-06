@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { TrendingUp, TrendingDown, Sparkles, ArrowRight, Users, Building2, ClipboardCheck, Percent, AlertTriangle, Boxes, CheckCircle2, UserCheck, GraduationCap } from 'lucide-react'
+import { TrendingUp, TrendingDown, Sparkles, ArrowRight, Users, Building2, ClipboardCheck, Percent, AlertTriangle, Boxes, CheckCircle2, UserCheck, GraduationCap, Trophy, Activity } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -175,6 +175,46 @@ export default function ExecutiveDashboard() {
           <Card title="Company Activity" subtitle="Total submissions over time">
             <TrendLineChart data={data.combinedTrend.points} />
           </Card>
+
+          {/* Top performers + recent activity */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card title="Top performers" subtitle="Leaders per department this period">
+              {data.topPerformers.length === 0 ? (
+                <p className="py-6 text-center text-body-sm text-ink-muted">No activity yet this period.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {data.topPerformers.map((t) => (
+                    <li key={t.department} className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/15 text-warning"><Trophy size={16} /></span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-body-md font-medium text-ink">{t.name}</p>
+                        <p className="text-body-sm text-ink-muted">{t.department}</p>
+                      </div>
+                      <span className="text-body-sm font-semibold tabular-nums text-ink">{t.metric}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card title="Recent activity" subtitle="Latest across the company">
+              {data.recentActivity.length === 0 ? (
+                <p className="py-6 text-center text-body-sm text-ink-muted">Nothing recent.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {data.recentActivity.map((a, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-ink-muted"><Activity size={12} /></span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-body-sm text-ink">{a.text}</p>
+                        <p className="text-[11px] text-ink-muted">{new Date(a.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
 
           {/* Executive insights */}
           <Card className="border-primary/20 bg-primary/5">

@@ -80,10 +80,23 @@ export interface ExecQaHealth {
   coachingNeeded: number
 }
 
+export interface ExecTopPerformer {
+  department: string
+  name: string
+  metric: string
+}
+export interface ExecActivity {
+  type: string
+  text: string
+  at: string
+}
+
 export interface ExecutiveDashboardData {
   range: { startDate: string; endDate: string; key: RangeKey }
   summary: ExecSummary
   qa: ExecQaHealth
+  topPerformers: ExecTopPerformer[]
+  recentActivity: ExecActivity[]
   departments: ExecDeptCard[]
   combinedTrend: { metricLabel: string; points: DashTrendPoint[] }
   benchmark: ExecBenchmarkRow[]

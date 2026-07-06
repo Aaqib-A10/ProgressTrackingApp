@@ -41,6 +41,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     csrCur, csrPrev,
     hcItad, hcLead, hcMkt, hcCsr, hcEcom,
     employees, pendingApprovals, coachingNeeded, stockRequested, allQa,
+    recentQa, recentTasks, recentStock,
   ] = await Promise.all([
     prisma.itadDailyEntry.findMany({ where: { date: inRange(range) } }),
     prisma.itadDailyEntry.findMany({ where: { date: inRange(prev) } }),
@@ -65,7 +66,10 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     prisma.user.count({ where: { status: 'PENDING' } }),
     prisma.qaEvaluation.count({ where: { status: 'SUBMITTED', coachingNeeded: true, agentAcknowledgedAt: null } }),
     prisma.stockRequest.count({ where: { status: 'REQUESTED' } }),
-    prisma.qaEvaluation.findMany({ where: { status: 'SUBMITTED', createdAt: { gte: new Date(range.startDate + 'T00:00:00Z'), lte: new Date(range.endDate + 'T23:59:59Z') } }, select: { totalScore: true, passed: true } }),
+    prisma.qaEvaluation.findMany({ where: { status: 'SUBMITTED', createdAt: { gte: new Date(range.startDate + 'T00:00:00Z'), lte: new Date(range.endDate + 'T23:59:59Z') } }, select: { totalScore: true, passed: true, agentId: true } }),
+    prisma.qaEvaluation.findMany({ where: { status: 'SUBMITTED' }, orderBy: { createdAt: 'desc' }, take: 6, select: { totalScore: true, createdAt: true, agent: { select: { name: true } }, evaluator: { select: { name: true } } } }),
+    prisma.ecommerceTask.findMany({ orderBy: { createdAt: 'desc' }, take: 6, select: { title: true, createdAt: true, assignedTo: { select: { name: true } } } }),
+    prisma.stockRequest.findMany({ orderBy: { requestedAt: 'desc' }, take: 6, select: { itemName: true, action: true, requestedAt: true, requestedByName: true } }),
   ])
 
   // --- ITAD ---
@@ -177,10 +181,45 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     coachingNeeded,
   }
 
+  // Top performer per department (by their primary metric this period).
+  function topSum<T>(rows: T[], getId: (r: T) => string, getVal: (r: T) => number) {
+    const m = new Map<string, number>()
+    for (const r of rows) m.set(getId(r), (m.get(getId(r)) ?? 0) + getVal(r))
+    let top: { id: string; value: number } | null = null
+    for (const [id, v] of m) if (!top || v > top.value) top = { id, value: v }
+    return top
+  }
+  const itadTop = topSum(submitted(itadCur), (e) => e.userId, (e) => e.callsDialed)
+  const leadTop = topSum(submitted(leadCur), (e) => e.userId, (e) => e.leadsGenerated)
+  const ecomTop = topSum(submitted(ecomCur), (e) => e.userId, (e) => e.lines.reduce((s, l) => s + l.listings, 0))
+  const qaAgg = new Map<string, { sum: number; n: number }>()
+  for (const e of allQa) { const a = qaAgg.get(e.agentId) ?? { sum: 0, n: 0 }; a.sum += e.totalScore; a.n++; qaAgg.set(e.agentId, a) }
+  let qaTop: { id: string; value: number } | null = null
+  for (const [pid, a] of qaAgg) { const v = round1(a.sum / a.n); if (!qaTop || v > qaTop.value) qaTop = { id: pid, value: v } }
+
+  const winnerIds = [itadTop, leadTop, ecomTop, qaTop].filter(Boolean).map((t) => t!.id)
+  const winners = winnerIds.length ? await prisma.user.findMany({ where: { id: { in: winnerIds } }, select: { id: true, name: true } }) : []
+  const nameOf = (uid?: string) => winners.find((w) => w.id === uid)?.name ?? '—'
+  const topPerformers = [
+    itadTop && itadTop.value > 0 ? { department: 'ITAD', name: nameOf(itadTop.id), metric: `${itadTop.value} dials` } : null,
+    leadTop && leadTop.value > 0 ? { department: 'Lead Gen', name: nameOf(leadTop.id), metric: `${leadTop.value} leads` } : null,
+    ecomTop && ecomTop.value > 0 ? { department: 'Ecommerce', name: nameOf(ecomTop.id), metric: `${ecomTop.value} actions` } : null,
+    qaTop ? { department: 'QA', name: nameOf(qaTop.id), metric: `${qaTop.value}% QA` } : null,
+  ].filter(Boolean)
+
+  // Recent activity feed (latest QA evals, tasks, stock logs).
+  const recentActivity = [
+    ...recentQa.map((e) => ({ type: 'qa', text: `${e.evaluator.name} scored ${e.agent.name} ${round1(e.totalScore)}%`, at: e.createdAt.toISOString() })),
+    ...recentTasks.map((t) => ({ type: 'task', text: `Task “${t.title}”${t.assignedTo ? ` · ${t.assignedTo.name}` : ''}`, at: t.createdAt.toISOString() })),
+    ...recentStock.map((s) => ({ type: 'stock', text: `Stock ${s.action === 'STOCK_IN' ? 'in' : 'out'}: ${s.itemName} (by ${s.requestedByName})`, at: s.requestedAt.toISOString() })),
+  ].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 8)
+
   res.json({
     range: { ...range, key: rangeKey },
     summary,
     qa,
+    topPerformers,
+    recentActivity,
     departments,
     combinedTrend,
     benchmark,
