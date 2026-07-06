@@ -74,14 +74,22 @@ export default function AdminUsers() {
   const pending = users.filter((u) => u.status === 'PENDING')
 
   const columns: Column<AdminUser>[] = [
-    { key: 'name', header: 'Name', render: (u) => <span className="font-medium text-ink">{u.name}</span> },
-    { key: 'email', header: 'Email', render: (u) => <span className="text-ink-muted">{u.email}</span> },
+    {
+      key: 'name',
+      header: 'User',
+      render: (u) => (
+        <div className="min-w-0 max-w-[170px]">
+          <div className="truncate font-medium text-ink">{u.name}</div>
+          <div className="truncate text-body-sm text-ink-muted">{u.email}</div>
+        </div>
+      ),
+    },
     { key: 'department', header: 'Department', render: (u) => (u.department ? u.department.replace('_', ' ') : '—') + (u.subDepartment ? ` / ${u.subDepartment}` : '') },
     {
       key: 'role',
       header: 'Role',
       render: (u) => (
-        <select className={sel} value={u.role} onChange={(e) => patch(u.id, { role: e.target.value as Role })}>
+        <select className={sel + ' max-w-[116px]'} value={u.role} onChange={(e) => patch(u.id, { role: e.target.value as Role })}>
           {ROLES.map((r) => (
             <option key={r} value={r}>{ROLE_LABEL[r]}</option>
           ))}
@@ -89,32 +97,36 @@ export default function AdminUsers() {
       ),
     },
     {
-      key: 'approval',
-      header: 'Approval',
-      render: (u) => <Badge tone={STATUS_META[u.status].tone} dot>{STATUS_META[u.status].label}</Badge>,
-    },
-    {
       key: 'enabled',
-      header: 'Enabled',
+      header: 'Status',
       render: (u) => (
-        <button onClick={() => patch(u.id, { isActive: !u.isActive })}>
-          <Badge tone={u.isActive ? 'success' : 'neutral'} dot>{u.isActive ? 'Enabled' : 'Disabled'}</Badge>
+        <button onClick={() => patch(u.id, { isActive: !u.isActive })} title="Toggle enabled">
+          <Badge tone={u.status !== 'ACTIVE' ? STATUS_META[u.status].tone : u.isActive ? 'success' : 'neutral'} dot>
+            {u.status !== 'ACTIVE' ? STATUS_META[u.status].label : u.isActive ? 'Enabled' : 'Disabled'}
+          </Badge>
         </button>
       ),
     },
     {
       key: 'password',
       header: 'Temp password',
-      render: (u) => <PasswordCell u={u} onReset={resetPw} />,
+      render: (u) => <PasswordCell u={u} />,
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Manage',
       align: 'right',
+      headerClassName: 'sticky right-0 z-20 bg-bg',
+      className: 'sticky right-0 z-10 bg-card shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]',
       render: (u) => (
-        <button onClick={() => remove(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Delete ${u.name}`} title="Delete user">
-          <Trash2 size={16} />
-        </button>
+        <div className="flex items-center justify-end gap-0.5">
+          <button onClick={() => resetPw(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label={`Reset password for ${u.name}`} title="Reset password">
+            <RotateCcw size={15} />
+          </button>
+          <button onClick={() => remove(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Delete ${u.name}`} title="Delete user">
+            <Trash2 size={16} />
+          </button>
+        </div>
       ),
     },
   ]
@@ -157,25 +169,17 @@ export default function AdminUsers() {
   )
 }
 
-function PasswordCell({ u, onReset }: { u: AdminUser; onReset: (u: AdminUser) => void }) {
+function PasswordCell({ u }: { u: AdminUser }) {
   const { addToast } = useToast()
   const [show, setShow] = useState(false)
   const pw = u.tempPassword
+  if (!pw) return <span className="text-body-sm text-ink-muted">set by user</span>
   return (
     <div className="flex items-center gap-1.5">
-      {pw ? (
-        <>
-          <code className="rounded bg-slate-100 px-1.5 py-0.5 text-body-sm text-ink">{show ? pw : '••••••••'}</code>
-          <button onClick={() => setShow((s) => !s)} className="text-ink-muted hover:text-ink" title={show ? 'Hide' : 'Show'}>{show ? <EyeOff size={14} /> : <Eye size={14} />}</button>
-          <button onClick={() => { navigator.clipboard?.writeText(pw); addToast({ type: 'success', message: 'Copied.' }) }} className="text-ink-muted hover:text-ink" title="Copy">
-            <Copy size={14} />
-          </button>
-        </>
-      ) : (
-        <span className="text-body-sm text-ink-muted">set by user</span>
-      )}
-      <button onClick={() => onReset(u)} className="ml-1 flex items-center gap-1 rounded-btn px-1.5 py-0.5 text-body-sm text-ink-muted hover:bg-slate-100 hover:text-primary" title="Reset password">
-        <RotateCcw size={13} /> Reset
+      <code className="rounded bg-slate-100 px-1.5 py-0.5 text-body-sm text-ink">{show ? pw : '••••••'}</code>
+      <button onClick={() => setShow((s) => !s)} className="text-ink-muted hover:text-ink" title={show ? 'Hide' : 'Show'}>{show ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+      <button onClick={() => { navigator.clipboard?.writeText(pw); addToast({ type: 'success', message: 'Copied.' }) }} className="text-ink-muted hover:text-ink" title="Copy">
+        <Copy size={14} />
       </button>
     </div>
   )
