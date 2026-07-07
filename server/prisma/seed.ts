@@ -205,8 +205,14 @@ async function main() {
     })
   }
 
+  // --- Default attendance shift (company-wide, null department) ---
+  const defaultShift = await prisma.attendanceShift.findFirst({ where: { departmentId: null } })
+  if (!defaultShift) {
+    await prisma.attendanceShift.create({ data: { departmentId: null, startTime: '09:00', endTime: '18:00', graceMin: 10 } })
+  }
+
   // eslint-disable-next-line no-console
-  console.log('Seed complete — departments, tags, targets, QA scorecards (standard + CSR), and the admin account.')
+  console.log('Seed complete — departments, tags, targets, QA scorecards (standard + CSR), attendance shift, and the admin account.')
   // eslint-disable-next-line no-console
   console.log(`Admin login: admin@pulsetrack.app / "${PASSWORD}". All other users are added in-app.`)
 }

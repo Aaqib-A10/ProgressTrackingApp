@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/auth'
 import { getNotifications, type AppNotification } from '../../lib/notificationsApi'
 import { RangeSelector, type RangeKey, type CustomRange } from './RangeSelector'
 import { Avatar } from './Sidebar'
+import { ClockWidget } from '../attendance/ClockWidget'
 
 export interface TopBarProps {
   user: CurrentUser
@@ -108,6 +109,11 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom }: To
       <RangeSelector value={range} onChange={onRangeChange} custom={custom} onApplyCustom={onApplyCustom} />
 
       <div className="ml-auto flex items-center gap-1">
+        {/* Attendance clock */}
+        <ClockWidget />
+
+        <div className="mx-1 h-6 w-px bg-line" />
+
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button

@@ -105,6 +105,7 @@ model Department {
   feedback       Feedback[]
   qaEvaluations  QaEvaluation[]
   stockRequests  StockRequest[]
+  attendanceShift AttendanceShift?
 }
 
 model SubDepartment {
@@ -148,6 +149,7 @@ model User {
   socialEntries  SocialDailyEntry[]
   marketingTasks MarketingTask[]
   leaveDays      LeaveDay[]
+  attendanceDays AttendanceDay[]
   targets        Target[]            @relation("UserTargets")
   setTargets     Target[]            @relation("TargetSetBy")
   auditLogs      AuditLog[]
@@ -353,6 +355,52 @@ model LeaveDay {
 
   @@unique([userId, date])
   @@index([date])
+}
+
+// ---------- Time & attendance (check-in / check-out / breaks) ----------
+
+/// One attendance record per user per day. Check-in/out are full instants;
+/// the `date` is the company-day bucket (companyToday). Worked/break minutes are
+/// computed on read from these + the breaks, never stored.
+model AttendanceDay {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime  @db.Date
+  checkInAt  DateTime?
+  checkOutAt DateTime?
+  note       String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  breaks BreakEntry[]
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+/// A single break within an attendance day. `endAt` null = break still open.
+model BreakEntry {
+  id        String        @id @default(cuid())
+  dayId     String
+  day       AttendanceDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  startAt   DateTime
+  endAt     DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([dayId])
+}
+
+/// Expected working hours that drive the late / early-leave flags. One row per
+/// department; the row with a null departmentId is the company-wide default.
+model AttendanceShift {
+  id           String      @id @default(cuid())
+  departmentId String?     @unique
+  department   Department? @relation(fields: [departmentId], references: [id])
+  startTime    String // "HH:mm" in company timezone, e.g. "09:00"
+  endTime      String // "HH:mm", e.g. "18:00"
+  graceMin     Int         @default(10)
+  updatedAt    DateTime    @updatedAt
 }
 
 // ---------- Audit trail (§9) ----------

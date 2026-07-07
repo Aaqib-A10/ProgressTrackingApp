@@ -19,6 +19,7 @@ import {
   Building2,
   ShoppingCart,
   Boxes,
+  Clock,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -57,6 +58,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart, roles: ['TEAM_LEAD', 'SUPER_ADMIN'], departments: ['ITAD', 'LEAD_GEN'] },
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
+    ],
+  },
+  {
+    title: 'Attendance',
+    items: [
+      { label: 'My Attendance', to: '/app/attendance/me', icon: Clock },
+      { label: 'Team Attendance', to: '/app/attendance/team', icon: Users, roles: ADMIN_ROLES, badge: { text: 'TL', tone: 'accent' } },
     ],
   },
   {
