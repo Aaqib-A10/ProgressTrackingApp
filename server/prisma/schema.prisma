@@ -150,6 +150,7 @@ model User {
   marketingTasks MarketingTask[]
   leaveDays      LeaveDay[]
   attendanceDays AttendanceDay[]
+  attendanceShift AttendanceShift? @relation("UserShift")
   targets        Target[]            @relation("UserTargets")
   setTargets     Target[]            @relation("TargetSetBy")
   auditLogs      AuditLog[]
@@ -391,16 +392,21 @@ model BreakEntry {
   @@index([dayId])
 }
 
-/// Expected working hours that drive the late / early-leave flags. One row per
-/// department; the row with a null departmentId is the company-wide default.
+/// Expected working hours that drive the late / early-leave / shift-completion
+/// flags. Resolution order per employee: user override → department → company.
+/// A row is one of: company default (both ids null), a department row
+/// (departmentId set), or a per-account override (userId set).
 model AttendanceShift {
-  id           String      @id @default(cuid())
-  departmentId String?     @unique
-  department   Department? @relation(fields: [departmentId], references: [id])
-  startTime    String // "HH:mm" in company timezone, e.g. "09:00"
-  endTime      String // "HH:mm", e.g. "18:00"
-  graceMin     Int         @default(10)
-  updatedAt    DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  departmentId    String?     @unique
+  department      Department? @relation(fields: [departmentId], references: [id])
+  userId          String?     @unique
+  user            User?       @relation("UserShift", fields: [userId], references: [id], onDelete: Cascade)
+  startTime       String // "HH:mm" in company timezone, e.g. "09:00"
+  endTime         String // "HH:mm", e.g. "18:00"
+  graceMin        Int         @default(10)
+  requiredMinutes Int         @default(480) // full-shift target; worked >= this = shift completed
+  updatedAt       DateTime    @updatedAt
 }
 
 // ---------- Audit trail (§9) ----------

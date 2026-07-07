@@ -12,6 +12,9 @@ import {
   putAttendanceShift,
   getAttendanceHistory,
   correctAttendanceDay,
+  getUserShift,
+  putUserShift,
+  clearUserShift,
   formatMinutes,
   type ClockState,
   type Shift,
@@ -19,6 +22,10 @@ import {
   type TeamAttendanceRow,
   type AttendanceDayRow,
 } from '../../../lib/attendanceApi'
+
+/** Minutes → decimal hours string for inputs, e.g. 480 → "8", 510 → "8.5". */
+const minToHours = (min: number) => String(Math.round((min / 60) * 100) / 100)
+const hoursToMin = (h: string) => Math.round((parseFloat(h) || 0) * 60)
 
 const STATE_META: Record<ClockState, { tone: BadgeTone; label: string }> = {
   IN: { tone: 'success', label: 'Working' },
@@ -87,13 +94,26 @@ export default function TeamAttendance() {
       header: 'Member',
       render: (r) => (
         <div>
-          <div className="font-medium text-ink">{r.name}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium text-ink">{r.name}</span>
+            {r.hasOverride && <Badge tone="primary">Custom hours</Badge>}
+          </div>
           {data?.scope === 'COMPANY' && <div className="text-body-sm text-ink-muted">{r.department}</div>}
         </div>
       ),
     },
     { key: 'today', header: 'Today', render: (r) => <Badge tone={STATE_META[r.todayState].tone} dot>{STATE_META[r.todayState].label}</Badge> },
     { key: 'present', header: 'Present', align: 'right', render: (r) => r.presentDays },
+    {
+      key: 'shifts',
+      header: 'Shifts done',
+      align: 'right',
+      render: (r) => (
+        <span className={r.presentDays > 0 && r.completedShifts === r.presentDays ? 'font-semibold text-success' : r.completedShifts < r.presentDays ? 'text-warning' : ''}>
+          {r.completedShifts}/{r.presentDays}
+        </span>
+      ),
+    },
     { key: 'late', header: 'Late', align: 'right', render: (r) => (r.lateDays ? <span className="font-semibold text-warning">{r.lateDays}</span> : '0') },
     { key: 'leave', header: 'Leave', align: 'right', render: (r) => r.leaveDays },
     { key: 'worked', header: 'Worked', align: 'right', render: (r) => formatMinutes(r.totalWorkedMin) },
@@ -188,17 +208,39 @@ function dotColor(state: ClockState): string {
   return { IN: 'bg-success', ON_BREAK: 'bg-warning', OUT: 'bg-slate-400', NOT_IN: 'bg-danger' }[state]
 }
 
+/** Shared start/end/grace/required-hours editor used by the shift + per-account modals. */
+function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) => void }) {
+  const set = (patch: Partial<Shift>) => onChange({ ...value, ...patch })
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Start time"><input type="time" value={value.startTime} onChange={(e) => set({ startTime: e.target.value })} className={inputCls} /></Field>
+        <Field label="End time"><input type="time" value={value.endTime} onChange={(e) => set({ endTime: e.target.value })} className={inputCls} /></Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Grace (minutes)">
+          <input type="number" min={0} max={120} value={value.graceMin} onChange={(e) => set({ graceMin: Number(e.target.value) })} className={inputCls} />
+        </Field>
+        <Field label="Required hours">
+          <input type="number" min={0} max={24} step={0.5} value={minToHours(value.requiredMinutes)} onChange={(e) => set({ requiredMinutes: hoursToMin(e.target.value) })} className={inputCls} />
+        </Field>
+      </div>
+      <p className="text-body-sm text-ink-muted">
+        Late after {value.startTime} + {value.graceMin} min · a day counts as a completed shift once {formatMinutes(value.requiredMinutes)} are worked.
+      </p>
+    </div>
+  )
+}
+
 function ShiftModal({ current, scope, onClose, onSaved }: { current: Shift; scope: 'COMPANY' | 'DEPARTMENT'; onClose: () => void; onSaved: (s: Shift) => void }) {
   const { addToast } = useToast()
-  const [startTime, setStartTime] = useState(current.startTime)
-  const [endTime, setEndTime] = useState(current.endTime)
-  const [graceMin, setGraceMin] = useState(current.graceMin)
+  const [draft, setDraft] = useState<Shift>(current)
   const [saving, setSaving] = useState(false)
 
   async function save() {
     setSaving(true)
     try {
-      const { shift } = await putAttendanceShift({ startTime, endTime, graceMin })
+      const { shift } = await putAttendanceShift(draft)
       addToast({ type: 'success', message: 'Shift updated.' })
       onSaved(shift)
     } catch (e) {
@@ -210,20 +252,89 @@ function ShiftModal({ current, scope, onClose, onSaved }: { current: Shift; scop
 
   return (
     <Modal open onClose={onClose} title="Shift settings" size="sm" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={save} disabled={saving}>Save</Button></>}>
-      <div className="space-y-4">
-        <p className="text-body-sm text-ink-muted">
-          {scope === 'COMPANY' ? 'Company-wide expected hours.' : 'Expected hours for your department.'} Drives late / early-leave flags.
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Start time"><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={inputCls} /></Field>
-          <Field label="End time"><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={inputCls} /></Field>
-        </div>
-        <Field label="Grace period (minutes)">
-          <input type="number" min={0} max={120} value={graceMin} onChange={(e) => setGraceMin(Number(e.target.value))} className={inputCls} />
-        </Field>
-        <p className="text-body-sm text-ink-muted">Check-ins after {startTime} + {graceMin} min count as late.</p>
-      </div>
+      <p className="mb-3 text-body-sm text-ink-muted">
+        {scope === 'COMPANY' ? 'Company-wide default hours (applies to everyone without their own department or personal hours).' : 'Default hours for your department.'}
+      </p>
+      <ShiftFields value={draft} onChange={setDraft} />
     </Modal>
+  )
+}
+
+function WorkingHoursCard({ userId, onChanged }: { userId: string; onChanged: () => void }) {
+  const { addToast } = useToast()
+  const [info, setInfo] = useState<import('../../../lib/attendanceApi').UserShiftResponse | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<Shift | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  function load() {
+    getUserShift(userId).then(setInfo).catch(() => setInfo(null))
+  }
+  useEffect(load, [userId])
+
+  async function save() {
+    if (!draft) return
+    setSaving(true)
+    try {
+      await putUserShift(userId, draft)
+      addToast({ type: 'success', message: 'Personal hours saved.' })
+      setEditing(false)
+      load()
+      onChanged()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not save.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function clear() {
+    setSaving(true)
+    try {
+      await clearUserShift(userId)
+      addToast({ type: 'success', message: 'Reverted to department hours.' })
+      setEditing(false)
+      load()
+      onChanged()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not clear.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!info) return null
+  const eff = info.effective
+
+  return (
+    <div className="mb-4 rounded-card border border-line bg-bg p-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-body-md font-semibold text-ink">Working hours</span>
+            <Badge tone={info.override ? 'primary' : 'neutral'}>{info.override ? 'Personal' : 'Department/company'}</Badge>
+          </div>
+          <p className="mt-0.5 text-body-sm text-ink-muted">
+            {eff.startTime}–{eff.endTime} · required {formatMinutes(eff.requiredMinutes)} · {eff.graceMin}m grace
+          </p>
+        </div>
+        {!editing && (
+          <Button size="sm" variant="secondary" onClick={() => { setDraft(info.override ?? info.fallback); setEditing(true) }}>
+            {info.override ? 'Edit hours' : 'Set personal hours'}
+          </Button>
+        )}
+      </div>
+      {editing && draft && (
+        <div className="mt-3 border-t border-line pt-3">
+          <ShiftFields value={draft} onChange={setDraft} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" onClick={save} disabled={saving}>Save personal hours</Button>
+            {info.override && <Button size="sm" variant="secondary" onClick={clear} disabled={saving}>Use department hours</Button>}
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -235,11 +346,12 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
   const [checkOut, setCheckOut] = useState('')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
+  function loadRows() {
     getAttendanceHistory(range, custom, member.userId)
       .then((r) => setRows(r.rows))
       .catch(() => setRows([]))
-  }, [member.userId, range, custom])
+  }
+  useEffect(loadRows, [member.userId, range, custom])
 
   function startEdit(r: AttendanceDayRow) {
     setEditDate(r.date)
@@ -266,6 +378,7 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
 
   return (
     <Modal open onClose={onClose} title={member.name} size="lg">
+      <WorkingHoursCard userId={member.userId} onChanged={() => { loadRows(); onCorrected() }} />
       <p className="mb-3 text-body-sm text-ink-muted">Attendance history — click a day to correct times.</p>
       {rows == null ? (
         <div className="py-6 text-center text-body-sm text-ink-muted">Loading…</div>
@@ -281,6 +394,8 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
                 <div className="flex-1 text-body-sm tabular-nums text-ink-muted">
                   {r.checkIn ?? '—'} → {r.checkOut ?? '—'} · {formatMinutes(r.workedMin)}
                   {r.late && <span className="ml-2 text-warning">Late</span>}
+                  {r.label === 'PRESENT' && r.completed && <span className="ml-2 text-success">Full shift</span>}
+                  {r.label === 'PRESENT' && !r.completed && r.shortMin != null && r.shortMin > 0 && <span className="ml-2 text-warning">Short {formatMinutes(r.shortMin)}</span>}
                 </div>
                 <button onClick={() => startEdit(r)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Edit times">
                   <Pencil size={14} />

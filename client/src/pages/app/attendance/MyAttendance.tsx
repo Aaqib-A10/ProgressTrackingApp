@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Clock, LogIn, AlertTriangle, CalendarCheck } from 'lucide-react'
+import { Clock, LogIn, AlertTriangle, CalendarCheck, CheckCircle2 } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { StatCard } from '../../../components/StatCard'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
@@ -52,7 +52,9 @@ export default function MyAttendance() {
         <div className="flex flex-wrap gap-1">
           {r.late && <Badge tone="warning">Late</Badge>}
           {r.earlyLeave && <Badge tone="warning">Left early</Badge>}
-          {!r.late && !r.earlyLeave && r.label === 'PRESENT' && <span className="text-body-sm text-ink-muted">On time</span>}
+          {r.label === 'PRESENT' && r.completed && <Badge tone="success">Full shift</Badge>}
+          {r.label === 'PRESENT' && !r.completed && r.shortMin != null && r.shortMin > 0 && <Badge tone="neutral">Short {formatMinutes(r.shortMin)}</Badge>}
+          {!r.late && !r.earlyLeave && !r.completed && r.label === 'PRESENT' && (r.shortMin == null || r.shortMin === 0) && <span className="text-body-sm text-ink-muted">On time</span>}
         </div>
       ),
     },
@@ -70,8 +72,9 @@ export default function MyAttendance() {
       </div>
 
       {s && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <StatCard label="Hours worked" value={formatMinutes(s.totalWorkedMin)} caption="This period" icon={<Clock size={16} />} />
+          <StatCard label="Shifts completed" value={`${s.completedShifts}/${s.presentDays}`} caption={data ? `Full shift = ${formatMinutes(data.shift.requiredMinutes)}` : ''} icon={<CheckCircle2 size={16} />} />
           <StatCard label="Avg check-in" value={s.avgCheckIn ?? '—'} caption={data ? `Shift starts ${data.shift.startTime}` : ''} icon={<LogIn size={16} />} />
           <StatCard label="Late days" value={s.lateDays} caption={`of ${s.presentDays} present`} icon={<AlertTriangle size={16} />} />
           <StatCard label="Days present" value={s.presentDays} caption={`${s.leaveDays} leave · ${s.holidayDays} holiday`} icon={<CalendarCheck size={16} />} />

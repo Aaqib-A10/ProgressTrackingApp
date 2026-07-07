@@ -205,10 +205,10 @@ async function main() {
     })
   }
 
-  // --- Default attendance shift (company-wide, null department) ---
-  const defaultShift = await prisma.attendanceShift.findFirst({ where: { departmentId: null } })
+  // --- Default attendance shift (company-wide, null department + null user) ---
+  const defaultShift = await prisma.attendanceShift.findFirst({ where: { departmentId: null, userId: null } })
   if (!defaultShift) {
-    await prisma.attendanceShift.create({ data: { departmentId: null, startTime: '09:00', endTime: '18:00', graceMin: 10 } })
+    await prisma.attendanceShift.create({ data: { departmentId: null, startTime: '09:00', endTime: '18:00', graceMin: 10, requiredMinutes: 480 } })
   }
 
   // eslint-disable-next-line no-console

@@ -143,8 +143,23 @@ export function ClockWidget() {
               <Stat label="Break" value={formatMinutes(today.breakMin)} />
               <Stat label="In at" value={today.checkInLabel ?? '—'} />
             </div>
-            {today.late && today.state !== 'NOT_IN' && (
-              <p className="mt-2 text-body-sm font-medium text-warning">Checked in late</p>
+            {today.state !== 'NOT_IN' && (
+              <div className="mt-2 space-y-1">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={'h-full rounded-full ' + (today.completed ? 'bg-success' : 'bg-primary')}
+                    style={{ width: `${Math.min(100, Math.round((worked / Math.max(1, today.requiredMin)) * 100))}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-ink-muted">
+                  {today.completed ? (
+                    <span className="font-medium text-success">Full shift complete ✓</span>
+                  ) : (
+                    <>{formatMinutes(worked)} of {formatMinutes(today.requiredMin)} shift</>
+                  )}
+                  {today.late && <span className="ml-1 text-warning">· late</span>}
+                </p>
+              </div>
             )}
           </div>
 

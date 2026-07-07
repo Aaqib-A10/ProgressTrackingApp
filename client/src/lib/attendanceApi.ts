@@ -9,6 +9,7 @@ export interface Shift {
   startTime: string
   endTime: string
   graceMin: number
+  requiredMinutes: number
 }
 
 export interface TodayState {
@@ -22,6 +23,8 @@ export interface TodayState {
   breakMin: number
   late: boolean
   earlyLeave: boolean
+  requiredMin: number
+  completed: boolean
 }
 
 export interface MeResponse {
@@ -45,6 +48,9 @@ export interface AttendanceDayRow {
   breakMin: number
   late: boolean
   earlyLeave: boolean
+  requiredMin: number
+  completed: boolean
+  shortMin: number | null
 }
 
 export interface AttendanceSummary {
@@ -52,6 +58,7 @@ export interface AttendanceSummary {
   leaveDays: number
   holidayDays: number
   lateDays: number
+  completedShifts: number
   totalWorkedMin: number
   avgCheckIn: string | null
 }
@@ -70,10 +77,13 @@ export interface TeamAttendanceRow {
   department: string
   presentDays: number
   lateDays: number
+  completedShifts: number
   leaveDays: number
   totalWorkedMin: number
   totalBreakMin: number
   avgCheckIn: string | null
+  shiftRequiredMin: number
+  hasOverride: boolean
   todayState: ClockState
   todayCheckIn: string | null
 }
@@ -107,6 +117,18 @@ export function getAttendanceTeam(range: RangeKey, custom?: CustomRange | null) 
 }
 export const getAttendanceShift = () => api.get<ShiftScopeResponse>('/attendance/shift')
 export const putAttendanceShift = (input: Shift) => api.put<{ shift: Shift }>('/attendance/shift', input)
+
+export interface UserShiftResponse {
+  /** The person's own override, or null when they inherit dept/company hours. */
+  override: Shift | null
+  /** Hours actually in effect (override → department → company). */
+  effective: Shift
+  /** Department/company hours used when there's no override. */
+  fallback: Shift
+}
+export const getUserShift = (userId: string) => api.get<UserShiftResponse>(`/attendance/shift/user/${userId}`)
+export const putUserShift = (userId: string, input: Shift) => api.put<{ override: Shift }>(`/attendance/shift/user/${userId}`, input)
+export const clearUserShift = (userId: string) => api.del<void>(`/attendance/shift/user/${userId}`)
 export const correctAttendanceDay = (userId: string, date: string, input: { checkIn?: string | null; checkOut?: string | null }) =>
   api.patch<{ day: { date: string; checkIn: string | null; checkOut: string | null } }>(`/attendance/${userId}/${date}`, input)
 

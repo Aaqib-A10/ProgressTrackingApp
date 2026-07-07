@@ -7,23 +7,32 @@ import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 
 type DayWithBreaks = Prisma.AttendanceDayGetPayload<{ include: { breaks: true } }>
-type Shift = { startTime: string; endTime: string; graceMin: number }
+type Shift = { startTime: string; endTime: string; graceMin: number; requiredMinutes: number }
+type ShiftRow = { userId: string | null; departmentId: string | null; startTime: string; endTime: string; graceMin: number; requiredMinutes: number }
 
-const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', graceMin: 10 }
+const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', graceMin: 10, requiredMinutes: 480 }
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
 }
 
-/** Resolve the expected shift for a department (falls back to the company default). */
-async function resolveShift(departmentId: string | null): Promise<Shift> {
-  const rows = await prisma.attendanceShift.findMany({
-    where: departmentId ? { OR: [{ departmentId }, { departmentId: null }] } : { departmentId: null },
-  })
+const toShift = (s: ShiftRow | undefined): Shift =>
+  s ? { startTime: s.startTime, endTime: s.endTime, graceMin: s.graceMin, requiredMinutes: s.requiredMinutes } : DEFAULT_SHIFT
+
+/** Pick the effective shift for an employee: user override → department → company. */
+function pickShiftFor(rows: ShiftRow[], userId: string, departmentId: string | null): Shift {
+  const user = rows.find((r) => r.userId === userId)
   const dept = departmentId ? rows.find((r) => r.departmentId === departmentId) : undefined
-  const company = rows.find((r) => r.departmentId === null)
-  const s = dept ?? company
-  return s ? { startTime: s.startTime, endTime: s.endTime, graceMin: s.graceMin } : DEFAULT_SHIFT
+  const company = rows.find((r) => r.userId === null && r.departmentId === null)
+  return toShift(user ?? dept ?? company)
+}
+
+/** Resolve one employee's effective shift (user → department → company). */
+async function resolveShift(userId: string, departmentId: string | null): Promise<Shift> {
+  const rows = await prisma.attendanceShift.findMany({
+    where: { OR: [{ userId }, { departmentId }, { userId: null, departmentId: null }] },
+  })
+  return pickShiftFor(rows, userId, departmentId)
 }
 
 function hhmm(d: Date): string {
@@ -89,6 +98,7 @@ function liveState(day: DayWithBreaks | null): LiveState {
 
 function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
   const openBreak = day?.breaks.find((b) => !b.endAt) ?? null
+  const worked = day ? workedMinutes(day, now) : null
   return {
     state: liveState(day),
     checkInAt: day?.checkInAt?.toISOString() ?? null,
@@ -96,10 +106,12 @@ function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
     checkOutAt: day?.checkOutAt?.toISOString() ?? null,
     checkOutLabel: day?.checkOutAt ? clockLabel(day.checkOutAt) : null,
     openBreakStartAt: openBreak?.startAt.toISOString() ?? null,
-    workedMin: day ? workedMinutes(day, now) : null,
+    workedMin: worked,
     breakMin: day ? breakMinutes(day, now) : 0,
     late: day?.checkInAt ? isLate(day.checkInAt, shift) : false,
     earlyLeave: day?.checkOutAt ? isEarlyLeave(day.checkOutAt, shift) : false,
+    requiredMin: shift.requiredMinutes,
+    completed: worked != null && worked >= shift.requiredMinutes,
   }
 }
 
@@ -110,7 +122,7 @@ async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
   const dateValue = dbDateFromString(dateStr)
   const [day, shift, leave, holiday] = await Promise.all([
     prisma.attendanceDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } }, include: { breaks: { orderBy: { startAt: 'asc' } } } }),
-    resolveShift(me.departmentId),
+    resolveShift(me.id, me.departmentId),
     prisma.leaveDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } }),
     prisma.holiday.findUnique({ where: { date: dateValue } }),
   ])
@@ -222,16 +234,20 @@ export async function endBreak(req: AuthedRequest, res: Response): Promise<void>
 /** A merged per-day history row (attendance + leave/holiday). */
 function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: string | null, offName: string | null, shift: Shift, now: Date) {
   const label = day?.checkInAt ? 'PRESENT' : offLabel ?? 'ABSENT'
+  const worked = day ? workedMinutes(day, now) : null
   return {
     date: dateStr,
     label, // PRESENT | ON_LEAVE | OFF | HOLIDAY | ABSENT
     offName,
     checkIn: day?.checkInAt ? hhmm(day.checkInAt) : null,
     checkOut: day?.checkOutAt ? hhmm(day.checkOutAt) : null,
-    workedMin: day ? workedMinutes(day, now) : null,
+    workedMin: worked,
     breakMin: day ? breakMinutes(day, day.checkOutAt ?? now) : 0,
     late: day?.checkInAt ? isLate(day.checkInAt, shift) : false,
     earlyLeave: day?.checkOutAt ? isEarlyLeave(day.checkOutAt, shift) : false,
+    requiredMin: shift.requiredMinutes,
+    completed: worked != null && worked >= shift.requiredMinutes,
+    shortMin: worked == null ? null : Math.max(0, shift.requiredMinutes - worked),
   }
 }
 
@@ -273,7 +289,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
     }),
     prisma.leaveDay.findMany({ where: { userId: targetId, date: { gte: startValue, lte: endValue } } }),
     prisma.holiday.findMany({ where: { date: { gte: startValue, lte: endValue } } }),
-    resolveShift(target.departmentId),
+    resolveShift(targetId, target.departmentId),
   ])
 
   const dayByDate = new Map(days.map((d) => [dateStringFromDb(d.date), d]))
@@ -311,6 +327,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
       leaveDays: rows.filter((r) => r.label === 'ON_LEAVE' || r.label === 'OFF').length,
       holidayDays: rows.filter((r) => r.label === 'HOLIDAY').length,
       lateDays: worked.filter((r) => r.late).length,
+      completedShifts: worked.filter((r) => r.completed).length,
       totalWorkedMin,
       avgCheckIn: avgCheckInMin == null ? null : minToHHmm(avgCheckInMin),
     },
@@ -338,11 +355,11 @@ async function scopedMembers(me: Awaited<ReturnType<typeof loadUser>>) {
   })
 }
 
-function pickShift(shifts: { departmentId: string | null; startTime: string; endTime: string; graceMin: number }[], departmentId: string | null): Shift {
-  const dept = departmentId ? shifts.find((s) => s.departmentId === departmentId) : undefined
-  const company = shifts.find((s) => s.departmentId === null)
-  const s = dept ?? company
-  return s ? { startTime: s.startTime, endTime: s.endTime, graceMin: s.graceMin } : DEFAULT_SHIFT
+/** Department-or-company shift (ignores per-user overrides) — for shift-settings display. */
+function pickDeptShift(rows: ShiftRow[], departmentId: string | null): Shift {
+  const dept = departmentId ? rows.find((s) => s.userId === null && s.departmentId === departmentId) : undefined
+  const company = rows.find((s) => s.userId === null && s.departmentId === null)
+  return toShift(dept ?? company)
 }
 
 /**
@@ -383,12 +400,13 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const todayByUser = new Map(todayDays.map((d) => [d.userId, d]))
 
   const rows = members.map((m) => {
-    const shift = pickShift(shifts, m.departmentId)
+    const shift = pickShiftFor(shifts, m.id, m.departmentId)
     const md = daysByUser.get(m.id) ?? []
     const present = md.filter((d) => d.checkInAt)
     const totalWorkedMin = present.reduce((s, d) => s + (workedMinutes(d, now) ?? 0), 0)
     const totalBreakMin = present.reduce((s, d) => s + breakMinutes(d, d.checkOutAt ?? now), 0)
     const lateDays = present.filter((d) => d.checkInAt && isLate(d.checkInAt, shift)).length
+    const completedShifts = present.filter((d) => { const w = workedMinutes(d, now); return w != null && w >= shift.requiredMinutes }).length
     const inMins = present.filter((d) => d.checkInAt).map((d) => localMinutes(d.checkInAt!))
     const avgCheckIn = inMins.length ? minToHHmm(Math.round(inMins.reduce((s, v) => s + v, 0) / inMins.length)) : null
     const today = todayByUser.get(m.id) ?? null
@@ -398,10 +416,13 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       department: m.department?.name ?? '—',
       presentDays: present.length,
       lateDays,
+      completedShifts,
       leaveDays: leaveCount.get(m.id) ?? 0,
       totalWorkedMin,
       totalBreakMin,
       avgCheckIn,
+      shiftRequiredMin: shift.requiredMinutes,
+      hasOverride: shifts.some((s) => s.userId === m.id),
       todayState: liveState(today),
       todayCheckIn: today?.checkInAt ? clockLabel(today.checkInAt) : null,
     }
@@ -414,7 +435,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     range: { ...range, key: rangeKey },
     canEditShift: true,
     scope: me.role === 'SUPER_ADMIN' ? 'COMPANY' : 'DEPARTMENT',
-    shift: pickShift(shifts, me.role === 'SUPER_ADMIN' ? null : me.departmentId),
+    shift: pickDeptShift(shifts, me.role === 'SUPER_ADMIN' ? null : me.departmentId),
     board,
     rows,
     summary: {
@@ -445,7 +466,7 @@ export async function getShift(req: AuthedRequest, res: Response): Promise<void>
   res.json({
     scope: me.role === 'SUPER_ADMIN' ? 'COMPANY' : 'DEPARTMENT',
     departmentId,
-    shift: pickShift(shifts, departmentId),
+    shift: pickDeptShift(shifts, departmentId),
   })
 }
 
@@ -453,6 +474,14 @@ const shiftSchema = z.object({
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
   graceMin: z.number().int().min(0).max(120),
+  requiredMinutes: z.number().int().min(0).max(1440),
+})
+
+const outShift = (s: { startTime: string; endTime: string; graceMin: number; requiredMinutes: number }): Shift => ({
+  startTime: s.startTime,
+  endTime: s.endTime,
+  graceMin: s.graceMin,
+  requiredMinutes: s.requiredMinutes,
 })
 
 /** PUT /api/attendance/shift — upsert the caller's shift (TL: dept, Admin: company). */
@@ -473,11 +502,91 @@ export async function putShift(req: AuthedRequest, res: Response): Promise<void>
   }
   const { departmentId } = await editableShiftScope(me)
   // Null-department can't use upsert on a unique-nullable key — find-then-write.
-  const existing = await prisma.attendanceShift.findFirst({ where: { departmentId } })
+  const existing = await prisma.attendanceShift.findFirst({ where: { departmentId, userId: null } })
   const shift = existing
     ? await prisma.attendanceShift.update({ where: { id: existing.id }, data: parsed.data })
     : await prisma.attendanceShift.create({ data: { departmentId, ...parsed.data } })
-  res.json({ shift: { startTime: shift.startTime, endTime: shift.endTime, graceMin: shift.graceMin } })
+  res.json({ shift: outShift(shift) })
+}
+
+/** GET /api/attendance/shift/user/:userId — a person's override (or null) + effective shift. */
+export async function getUserShift(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const { userId } = req.params
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const shifts = await prisma.attendanceShift.findMany()
+  const own = shifts.find((s) => s.userId === userId)
+  res.json({
+    override: own ? outShift(own) : null,
+    effective: pickShiftFor(shifts, userId, target.departmentId),
+    fallback: pickDeptShift(shifts, target.departmentId), // dept/company hours used when no override
+  })
+}
+
+/** PUT /api/attendance/shift/user/:userId — set a per-account shift override. */
+export async function putUserShift(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const { userId } = req.params
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const parsed = shiftSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  if (parsed.data.endTime <= parsed.data.startTime) {
+    res.status(400).json({ error: 'End time must be after start time.' })
+    return
+  }
+  const existing = await prisma.attendanceShift.findFirst({ where: { userId } })
+  const shift = existing
+    ? await prisma.attendanceShift.update({ where: { id: existing.id }, data: parsed.data })
+    : await prisma.attendanceShift.create({ data: { userId, ...parsed.data } })
+  res.json({ override: outShift(shift) })
+}
+
+/** DELETE /api/attendance/shift/user/:userId — clear the override (revert to dept/company). */
+export async function deleteUserShift(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const { userId } = req.params
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  await prisma.attendanceShift.deleteMany({ where: { userId } })
+  res.status(204).end()
 }
 
 const timeOrNull = z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.literal(''), z.null()]).optional()
