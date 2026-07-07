@@ -664,3 +664,59 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     },
   })
 }
+
+/** Guard: caller is TL/Admin and the target is in their scope. Returns the target or null (after responding). */
+async function requireManageableTarget(me: Awaited<ReturnType<typeof loadUser>>, userId: string, res: Response) {
+  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return null
+  }
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return null
+  }
+  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+    res.status(403).json({ error: 'Forbidden' })
+    return null
+  }
+  return target
+}
+
+const leaveSchema = z.object({ type: z.enum(['ON_LEAVE', 'OFF']), note: z.string().max(300).optional() })
+
+/** PUT /api/attendance/:userId/leave/:date — TL/Admin marks a member On Leave / Off. */
+export async function markLeave(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  const { userId, date } = req.params
+  const target = await requireManageableTarget(me, userId, res)
+  if (!target) return
+  const parsed = leaveSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Pick a leave type (On Leave / Off).' })
+    return
+  }
+  if (date > companyToday()) {
+    // future leave is fine; nothing to guard
+  }
+  const dateValue = dbDateFromString(date)
+  const leave = await prisma.leaveDay.upsert({
+    where: { userId_date: { userId, date: dateValue } },
+    update: { type: parsed.data.type, note: parsed.data.note ?? null },
+    create: { userId, date: dateValue, type: parsed.data.type, note: parsed.data.note ?? null },
+  })
+  await prisma.auditLog.create({
+    data: { userId: me.id, entityType: 'LeaveDay', entityId: leave.id, action: 'UPDATE', after: { userId, date, type: parsed.data.type } },
+  })
+  res.json({ leave: { date, type: leave.type, note: leave.note ?? '' } })
+}
+
+/** DELETE /api/attendance/:userId/leave/:date — remove a leave/off mark. */
+export async function removeLeave(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  const { userId, date } = req.params
+  const target = await requireManageableTarget(me, userId, res)
+  if (!target) return
+  await prisma.leaveDay.deleteMany({ where: { userId, date: dbDateFromString(date) } })
+  res.status(204).end()
+}

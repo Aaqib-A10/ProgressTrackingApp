@@ -129,6 +129,11 @@ export interface UserShiftResponse {
 export const getUserShift = (userId: string) => api.get<UserShiftResponse>(`/attendance/shift/user/${userId}`)
 export const putUserShift = (userId: string, input: Shift) => api.put<{ override: Shift }>(`/attendance/shift/user/${userId}`, input)
 export const clearUserShift = (userId: string) => api.del<void>(`/attendance/shift/user/${userId}`)
+
+export type LeaveMarkType = 'ON_LEAVE' | 'OFF'
+export const markLeave = (userId: string, date: string, input: { type: LeaveMarkType; note?: string }) =>
+  api.put<{ leave: { date: string; type: LeaveMarkType; note: string } }>(`/attendance/${userId}/leave/${date}`, input)
+export const removeLeave = (userId: string, date: string) => api.del<void>(`/attendance/${userId}/leave/${date}`)
 export const correctAttendanceDay = (userId: string, date: string, input: { checkIn?: string | null; checkOut?: string | null }) =>
   api.patch<{ day: { date: string; checkIn: string | null; checkOut: string | null } }>(`/attendance/${userId}/${date}`, input)
 

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMe, checkIn, checkOut, startBreak, endBreak, history, teamView, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay } from '../controllers/attendanceController'
+import { getMe, checkIn, checkOut, startBreak, endBreak, history, teamView, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, removeLeave } from '../controllers/attendanceController'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
@@ -24,4 +24,6 @@ attendanceRouter.put('/shift', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHan
 attendanceRouter.get('/shift/user/:userId', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(getUserShift))
 attendanceRouter.put('/shift/user/:userId', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(putUserShift))
 attendanceRouter.delete('/shift/user/:userId', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(deleteUserShift))
+attendanceRouter.put('/:userId/leave/:date', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(markLeave))
+attendanceRouter.delete('/:userId/leave/:date', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(removeLeave))
 attendanceRouter.patch('/:userId/:date', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(correctDay))

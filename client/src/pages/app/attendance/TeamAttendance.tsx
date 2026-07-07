@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil } from 'lucide-react'
+import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2 } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -15,7 +15,10 @@ import {
   getUserShift,
   putUserShift,
   clearUserShift,
+  markLeave,
+  removeLeave,
   formatMinutes,
+  type LeaveMarkType,
   type ClockState,
   type Shift,
   type TeamAttendanceResponse,
@@ -338,6 +341,59 @@ function WorkingHoursCard({ userId, onChanged }: { userId: string; onChanged: ()
   )
 }
 
+function todayISO(): string {
+  // Local calendar date (company users are single-tz); good enough for a date picker default.
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => void }) {
+  const { addToast } = useToast()
+  const [date, setDate] = useState(todayISO())
+  const [type, setType] = useState<LeaveMarkType>('ON_LEAVE')
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function mark() {
+    if (!date) return
+    setSaving(true)
+    try {
+      await markLeave(userId, date, { type, note: note.trim() || undefined })
+      addToast({ type: 'success', message: `Marked ${type === 'ON_LEAVE' ? 'On Leave' : 'Off'} for ${date}.` })
+      setNote('')
+      onChanged()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not mark leave.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-card border border-line bg-bg p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <CalendarOff size={16} className="text-ink-muted" />
+        <span className="text-body-md font-semibold text-ink">Mark leave / off</span>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
+        <Field label="Type">
+          <select value={type} onChange={(e) => setType(e.target.value as LeaveMarkType)} className={inputCls}>
+            <option value="ON_LEAVE">On Leave</option>
+            <option value="OFF">Off</option>
+          </select>
+        </Field>
+        <label className="block flex-1">
+          <span className="mb-1 block text-body-sm font-semibold text-ink">Note (optional)</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason…" className={inputCls} />
+        </label>
+        <Button size="sm" onClick={mark} disabled={saving}>Mark</Button>
+      </div>
+      <p className="mt-2 text-body-sm text-ink-muted">They can't clock in on a leave/off day, and it's excluded from worked-hours averages.</p>
+    </div>
+  )
+}
+
 function MemberModal({ member, range, custom, onClose, onCorrected }: { member: TeamAttendanceRow; range: import('../../../components/layout/RangeSelector').RangeKey; custom: import('../../../components/layout/RangeSelector').CustomRange | null; onClose: () => void; onCorrected: () => void }) {
   const { addToast } = useToast()
   const [rows, setRows] = useState<AttendanceDayRow[] | null>(null)
@@ -376,10 +432,22 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
     }
   }
 
+  async function unmarkLeave(date: string) {
+    try {
+      await removeLeave(member.userId, date)
+      addToast({ type: 'success', message: 'Leave removed.' })
+      loadRows()
+      onCorrected()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not remove leave.') })
+    }
+  }
+
   return (
     <Modal open onClose={onClose} title={member.name} size="lg">
       <WorkingHoursCard userId={member.userId} onChanged={() => { loadRows(); onCorrected() }} />
-      <p className="mb-3 text-body-sm text-ink-muted">Attendance history — click a day to correct times.</p>
+      <LeaveCard userId={member.userId} onChanged={() => { loadRows(); onCorrected() }} />
+      <p className="mb-3 text-body-sm text-ink-muted">Attendance history — click a day to correct times, or remove a leave day.</p>
       {rows == null ? (
         <div className="py-6 text-center text-body-sm text-ink-muted">Loading…</div>
       ) : rows.length === 0 ? (
@@ -397,9 +465,15 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
                   {r.label === 'PRESENT' && r.completed && <span className="ml-2 text-success">Full shift</span>}
                   {r.label === 'PRESENT' && !r.completed && r.shortMin != null && r.shortMin > 0 && <span className="ml-2 text-warning">Short {formatMinutes(r.shortMin)}</span>}
                 </div>
-                <button onClick={() => startEdit(r)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Edit times">
-                  <Pencil size={14} />
-                </button>
+                {r.label === 'ON_LEAVE' || r.label === 'OFF' ? (
+                  <button onClick={() => unmarkLeave(r.date)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove leave">
+                    <Trash2 size={14} />
+                  </button>
+                ) : r.label === 'HOLIDAY' ? null : (
+                  <button onClick={() => startEdit(r)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Edit times">
+                    <Pencil size={14} />
+                  </button>
+                )}
               </div>
               {editDate === r.date && (
                 <div className="flex flex-wrap items-end gap-3 border-t border-line bg-bg px-3 py-3">
