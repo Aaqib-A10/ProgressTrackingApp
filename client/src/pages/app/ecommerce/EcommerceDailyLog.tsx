@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { UploadCloud, ShoppingCart } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
@@ -14,6 +14,7 @@ export default function EcommerceDailyLog() {
   const [data, setData] = useState<EcommerceEntryResponse | null>(null)
   const [cells, setCells] = useState<Record<string, number>>({})
   const [notes, setNotes] = useState('')
+  const [pricingNotes, setPricingNotes] = useState('')
   const [onLeave, setOnLeave] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -25,6 +26,7 @@ export default function EcommerceDailyLog() {
         if (res.entry) {
           setOnLeave(res.entry.status !== 'SUBMITTED')
           setNotes(res.entry.notes)
+          setPricingNotes(res.entry.pricingNotes)
           const init: Record<string, number> = {}
           for (const l of res.entry.lines) init[key(l.taskTypeId, l.marketplaceId)] = l.listings
           setCells(init)
@@ -48,13 +50,13 @@ export default function EcommerceDailyLog() {
     const lines = Object.entries(cells)
       .filter(([, v]) => v > 0)
       .map(([k, v]) => { const [taskTypeId, marketplaceId] = k.split('::'); return { taskTypeId, marketplaceId, listings: v } })
-    if (!onLeave && lines.length === 0) {
-      addToast({ type: 'error', message: 'Enter at least one number.' })
+    if (!onLeave && lines.length === 0 && !pricingNotes.trim()) {
+      addToast({ type: 'error', message: 'Enter at least one number or a pricing note.' })
       return
     }
     setSubmitting(true)
     try {
-      await upsertEcommerceEntry({ status: onLeave ? 'ON_LEAVE' : 'SUBMITTED', notes, lines: onLeave ? [] : lines })
+      await upsertEcommerceEntry({ status: onLeave ? 'ON_LEAVE' : 'SUBMITTED', notes, pricingNotes, lines: onLeave ? [] : lines })
       addToast({ type: 'success', message: onLeave ? 'Marked as On Leave today.' : 'Daily report submitted.' })
     } catch {
       addToast({ type: 'error', message: 'Could not submit. Please try again.' })
@@ -85,13 +87,24 @@ export default function EcommerceDailyLog() {
             <TypeGrid key={type.name} type={type} marketplaces={marketplaces} cells={cells} setCell={setCell} disabled={onLeave} />
           ))}
 
+          <Card title="Pricing" subtitle="Notes only">
+            <textarea
+              value={pricingNotes}
+              onChange={(e) => setPricingNotes(e.target.value)}
+              rows={3}
+              disabled={onLeave}
+              placeholder="Pricing work today — reprices, corrections, price updates, context…"
+              className="w-full rounded-btn border border-line bg-bg p-3 text-body-md text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+            />
+          </Card>
+
           <Card>
             <label className="mb-1 block text-body-sm font-medium text-ink-muted">Notes / Comments</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any context for today…" className="w-full rounded-btn border border-line bg-bg p-3 text-body-md text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <StatCard label="Total actions today" value={grandTotal.toLocaleString()} icon={<ShoppingCart size={16} />} />
           <Card title="Per type">
             <ul className="space-y-1.5 text-body-sm">
@@ -115,49 +128,100 @@ export default function EcommerceDailyLog() {
   )
 }
 
+/** Accessible numeric grid cell: white field, strong focus, no spinner,
+ *  select-on-focus, Enter/↑/↓ to move down a column, ←/→ across. Navigation is
+ *  scoped to its own grid via onNav so multiple sections don't collide. */
+function NumberCell({ label, value, disabled, onChange, onNav, r, c }: {
+  label: string; value: number; disabled: boolean
+  onChange: (v: number) => void; onNav: (dr: number, dc: number) => void
+  r: number; c: number
+}) {
+  return (
+    <input
+      data-r={r}
+      data-c={c}
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      disabled={disabled}
+      aria-label={label}
+      value={value || ''}
+      placeholder="—"
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => onChange(Math.max(0, Math.floor(Number(e.target.value.replace(/\D/g, '')) || 0)))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); onNav(1, 0) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(-1, 0) }
+      }}
+      className="h-9 w-20 rounded-btn border border-line bg-white px-2 text-right text-body-md tabular-nums text-ink placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-slate-50 disabled:text-slate-400"
+    />
+  )
+}
+
 function TypeGrid({ type, marketplaces, cells, setCell, disabled }: {
   type: WorkType; marketplaces: TagOption[]; cells: Record<string, number>
   setCell: (fieldId: string, mpId: string, v: number) => void; disabled: boolean
 }) {
+  const tableRef = useRef<HTMLTableElement>(null)
   const colTotal = (mpId: string) => type.fields.reduce((s, f) => s + (cells[key(f.id, mpId)] || 0), 0)
   const rowTotal = (fieldId: string) => marketplaces.reduce((s, mp) => s + (cells[key(fieldId, mp.id)] || 0), 0)
   const sectionTotal = type.fields.reduce((s, f) => s + rowTotal(f.id), 0)
 
+  // Move focus within this grid only (scoped to tableRef).
+  const nav = (r: number, c: number) => (dr: number, dc: number) => {
+    const next = tableRef.current?.querySelector<HTMLInputElement>(`input[data-r="${r + dr}"][data-c="${c + dc}"]`)
+    next?.focus()
+  }
+
   return (
-    <Card title={type.name} subtitle={`by marketplace · ${sectionTotal} total`} flush>
+    <Card flush>
+      {/* Distinct, high-contrast section header */}
+      <div className="flex items-baseline justify-between border-b border-line px-4 py-3">
+        <h2 className="text-headline-md font-semibold text-ink">{type.name}</h2>
+        <span className="text-body-sm text-slate-600">{sectionTotal.toLocaleString()} total · by marketplace</span>
+      </div>
+
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] border-collapse text-body-sm">
+        <table ref={tableRef} className="w-full min-w-[560px] border-collapse">
+          {/* Shared column widths keep the TOTAL row aligned under the data cells */}
+          <colgroup>
+            <col className="w-[34%]" />
+            {marketplaces.map((m) => <col key={m.id} />)}
+            <col className="w-24" />
+          </colgroup>
           <thead>
-            <tr className="border-b border-line text-label-md uppercase text-ink-muted">
-              <th className="px-4 py-2.5 text-left font-semibold">Field</th>
-              {marketplaces.map((m) => <th key={m.id} className="px-2 py-2.5 text-center font-semibold">{m.name}</th>)}
-              <th className="px-3 py-2.5 text-right font-semibold">Total</th>
+            <tr className="bg-slate-50 text-label-md uppercase tracking-wide text-slate-600">
+              <th scope="col" className="px-4 py-2.5 text-left font-semibold">Field</th>
+              {marketplaces.map((m) => <th key={m.id} scope="col" className="px-3 py-2.5 text-right font-semibold text-ink">{m.name}</th>)}
+              <th scope="col" className="px-4 py-2.5 text-right font-semibold text-ink">Total</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {type.fields.map((f) => (
+            {type.fields.map((f, r) => (
               <tr key={f.id} className="hover:bg-slate-50/60">
-                <td className="px-4 py-1.5 font-medium text-ink">{f.name}</td>
-                {marketplaces.map((m) => (
-                  <td key={m.id} className="px-1 py-1.5 text-center">
-                    <input
-                      type="number" min={0} inputMode="numeric" disabled={disabled}
-                      value={cells[key(f.id, m.id)] ?? ''}
-                      onChange={(e) => setCell(f.id, m.id, e.target.value === '' ? 0 : Number(e.target.value))}
-                      placeholder="0"
-                      className="h-8 w-16 rounded-btn border border-line bg-bg text-center text-body-sm tabular-nums text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10 disabled:opacity-50"
+                <th scope="row" className="px-4 py-2 text-left text-body-md font-medium text-ink">{f.name}</th>
+                {marketplaces.map((m, c) => (
+                  <td key={m.id} className="px-3 py-2 text-right">
+                    <NumberCell
+                      label={`${f.name} — ${m.name}`}
+                      value={cells[key(f.id, m.id)] || 0}
+                      disabled={disabled}
+                      onChange={(v) => setCell(f.id, m.id, v)}
+                      onNav={nav(r, c)}
+                      r={r}
+                      c={c}
                     />
                   </td>
                 ))}
-                <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{rowTotal(f.id) || ''}</td>
+                <td className="px-4 py-2 text-right text-body-md font-semibold tabular-nums text-ink">{rowTotal(f.id) || '—'}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-line text-label-md uppercase text-ink-muted">
-              <td className="px-4 py-2 text-left font-semibold">Total</td>
-              {marketplaces.map((m) => <td key={m.id} className="px-2 py-2 text-center font-semibold tabular-nums text-ink">{colTotal(m.id) || ''}</td>)}
-              <td className="px-3 py-2 text-right font-bold tabular-nums text-ink">{sectionTotal || ''}</td>
+            <tr className="border-t-2 border-line bg-slate-50">
+              <th scope="row" className="px-4 py-2.5 text-left text-body-md font-bold text-ink">Total</th>
+              {marketplaces.map((m) => <td key={m.id} className="px-3 py-2.5 text-right text-body-md font-semibold tabular-nums text-ink">{colTotal(m.id) || '—'}</td>)}
+              <td className="px-4 py-2.5 text-right text-body-md font-bold tabular-nums text-primary">{sectionTotal.toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>

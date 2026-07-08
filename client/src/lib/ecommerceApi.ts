@@ -18,6 +18,7 @@ export interface EcommerceEntry {
   date: string
   status: EcommerceStatus
   notes: string
+  pricingNotes: string
   lines: ListingLine[]
   totalListings: number
 }
@@ -36,6 +37,7 @@ export interface UpsertEcommerceInput {
   date?: string
   status: EcommerceStatus
   notes?: string
+  pricingNotes?: string
   lines?: ListingLine[]
 }
 
@@ -150,3 +152,30 @@ export const assignStockRequest = (id: string, input: { action: StockAction; ass
   api.patch<{ request: StockRequest }>(`/ecommerce/stock/${id}/assign`, input)
 export const resolveStockRequest = (id: string) =>
   api.patch<{ request: StockRequest }>(`/ecommerce/stock/${id}/resolve`, {})
+
+// ---- Ecommerce meeting notes (shared across the department) ----
+export interface MeetingNote {
+  id: string
+  title: string
+  body: string
+  meetingDate: string
+  deadline: string | null
+  author: { id: string; name: string }
+  createdAt: string
+  updatedAt: string
+  canEdit: boolean
+}
+export interface MeetingNoteInput {
+  title: string
+  body: string
+  meetingDate?: string | null
+  deadline?: string | null
+}
+export const listMeetingNotes = () =>
+  api.get<{ notes: MeetingNote[]; canManage: boolean }>('/ecommerce/meeting-notes')
+export const createMeetingNote = (input: MeetingNoteInput) =>
+  api.post<{ note: MeetingNote }>('/ecommerce/meeting-notes', input)
+export const updateMeetingNote = (id: string, input: Partial<MeetingNoteInput>) =>
+  api.patch<{ note: MeetingNote }>(`/ecommerce/meeting-notes/${id}`, input)
+export const deleteMeetingNote = (id: string) =>
+  api.del<void>(`/ecommerce/meeting-notes/${id}`)

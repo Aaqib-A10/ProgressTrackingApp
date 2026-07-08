@@ -46,6 +46,7 @@ function serializeEntry(e: EntryWithLines) {
     date: dateStringFromDb(e.date),
     status: e.status,
     notes: e.notes ?? '',
+    pricingNotes: e.pricingNotes ?? '',
     lines: e.lines.map((l) => ({ taskTypeId: l.taskTypeId, marketplaceId: l.marketplaceId, listings: l.listings })),
     totalListings: e.lines.reduce((s, l) => s + l.listings, 0),
   }
@@ -88,7 +89,8 @@ export async function getMyEntry(req: AuthedRequest, res: Response): Promise<voi
   res.json({
     date: dateStr,
     entry: entry ? serializeEntry(entry) : null,
-    types: buildTypes(taskTypes),
+    // Pricing is captured as free-text notes, not a numeric grid — keep it out of `types`.
+    types: buildTypes(taskTypes).filter((t) => t.name.toLowerCase() !== 'pricing'),
     marketplaces: marketplaces.map((m) => ({ id: m.id, name: m.name })),
     stats: { avgListings: recentDays ? Math.round(recentListings / recentDays) : 0, daysLogged: recentDays },
   })
@@ -103,6 +105,7 @@ const upsertSchema = z.object({
   date: z.string().optional(),
   status: z.enum(['SUBMITTED', 'ON_LEAVE', 'HOLIDAY', 'OFF']).default('SUBMITTED'),
   notes: z.string().max(2000).optional(),
+  pricingNotes: z.string().max(2000).optional(),
   lines: z.array(lineRow).max(200).optional(),
 })
 
@@ -123,7 +126,7 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
     return
   }
-  const { date, status, notes, lines } = parsed.data
+  const { date, status, notes, pricingNotes, lines } = parsed.data
   const dateStr = date || companyToday()
   if (dateStr > companyToday()) {
     res.status(400).json({ error: 'Cannot log a future date' })
@@ -132,11 +135,13 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
 
   const dateValue = dbDateFromString(dateStr)
   const existing = await prisma.ecommerceDailyEntry.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } })
+  // Pricing notes are cleared on non-submitted (On Leave / Off) days.
+  const pricing = status === 'SUBMITTED' ? pricingNotes?.trim() || null : null
 
   const entry = await prisma.ecommerceDailyEntry.upsert({
     where: { userId_date: { userId: me.id, date: dateValue } },
-    update: { status, notes: notes ?? null },
-    create: { userId: me.id, date: dateValue, status, notes: notes ?? null },
+    update: { status, notes: notes ?? null, pricingNotes: pricing },
+    create: { userId: me.id, date: dateValue, status, notes: notes ?? null, pricingNotes: pricing },
   })
 
   // Replace the lines — only valid dept tags, only on submitted days.
@@ -357,7 +362,12 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
   if (!allowed) { res.status(403).json({ error: 'Only the HOD can edit task details' }); return }
 
   const data: Prisma.EcommerceTaskUpdateInput = {}
-  if (v.status !== undefined) data.status = v.status
+  if (v.status !== undefined) {
+    data.status = v.status
+    // Stamp completion the first time it lands on DONE; clear it if reopened.
+    if (v.status === 'DONE' && task.status !== 'DONE') data.completedAt = new Date()
+    else if (v.status !== 'DONE' && task.status === 'DONE') data.completedAt = null
+  }
   if (v.order !== undefined) data.order = v.order
   if (isHod(me)) {
     if (v.title !== undefined) data.title = v.title
