@@ -98,7 +98,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
               <button
                 type="button"
                 onClick={() => toggleGroup(group.title!)}
-                className="flex w-full items-center justify-between rounded-btn px-3 pb-1 pt-2 text-label-md uppercase text-ink-muted/70 transition-colors hover:text-ink-muted"
+                className="flex w-full items-center justify-between rounded-btn px-3 pb-1 pt-2 text-label-md font-bold uppercase tracking-wide text-ink transition-colors hover:text-black"
                 aria-expanded={isOpen}
               >
                 <span>{group.title}</span>

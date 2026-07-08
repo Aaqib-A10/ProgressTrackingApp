@@ -90,11 +90,12 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-card px-3 sm:gap-4 sm:px-6">
-      {/* Hamburger — opens the nav drawer on mobile */}
+      {/* Hamburger — toggles the sidebar on desktop, opens the drawer on mobile */}
       <button
         onClick={onMenu}
-        className="shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink lg:hidden"
-        aria-label="Open menu"
+        className="shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink"
+        aria-label="Toggle menu"
+        title="Toggle sidebar"
       >
         <Menu size={22} />
       </button>
