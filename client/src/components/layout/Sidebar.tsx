@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Activity, Settings, ChevronDown, ChevronRight } from 'lucide-react'
+import { Activity, Settings, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
@@ -21,7 +21,7 @@ function initials(name: string): string {
     .toUpperCase()
 }
 
-export function Sidebar({ user }: { user: CurrentUser }) {
+export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
   const groups = filterNav(user.role, user.department)
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
@@ -72,10 +72,19 @@ export function Sidebar({ user }: { user: CurrentUser }) {
         <div className="flex h-9 w-9 items-center justify-center rounded-btn bg-primary text-white">
           <Activity size={20} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="text-headline-md leading-tight text-ink">PulseTrack</div>
           <div className="text-body-sm text-ink-muted">Performance Suite</div>
         </div>
+        {/* Close (mobile drawer only) */}
+        <button
+          type="button"
+          onClick={onNavigate}
+          className="-mr-1 rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink lg:hidden"
+          aria-label="Close menu"
+        >
+          <X size={20} />
+        </button>
       </div>
 
       {/* Nav */}
@@ -104,6 +113,7 @@ export function Sidebar({ user }: { user: CurrentUser }) {
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
+                      onClick={onNavigate}
                       className={({ isActive }) =>
                         cn(
                           'group relative flex items-center gap-3 rounded-btn px-3 py-2 text-body-md font-medium transition-colors',
@@ -154,6 +164,7 @@ export function Sidebar({ user }: { user: CurrentUser }) {
           <li>
             <NavLink
               to="/app/settings"
+              onClick={onNavigate}
               className="flex items-center gap-3 rounded-btn px-3 py-2 text-body-md font-medium text-ink-muted hover:bg-slate-50 hover:text-ink"
             >
               <Settings size={18} /> Settings

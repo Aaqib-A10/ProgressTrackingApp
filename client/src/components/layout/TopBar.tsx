@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft } from 'lucide-react'
+import { Search, Bell, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { useAuth } from '../../lib/auth'
 import { getNotifications, type AppNotification } from '../../lib/notificationsApi'
@@ -14,6 +14,8 @@ export interface TopBarProps {
   custom: CustomRange | null
   onRangeChange: (range: RangeKey) => void
   onApplyCustom: (range: CustomRange) => void
+  /** Opens the mobile navigation drawer (hamburger). */
+  onMenu?: () => void
 }
 
 const NOTIF_ICON: Record<AppNotification['type'], React.ReactNode> = {
@@ -32,7 +34,7 @@ const NOTIF_LINK: Record<string, string> = {
   'stock-assigned': '/app/ecommerce/stock',
 }
 
-export function TopBar({ user, range, custom, onRangeChange, onApplyCustom }: TopBarProps) {
+export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMenu }: TopBarProps) {
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -87,17 +89,26 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom }: To
   const hasUnread = notifs.length > 0 && notifKey !== seenKey
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-4 border-b border-line bg-card px-6">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-card px-3 sm:gap-4 sm:px-6">
+      {/* Hamburger — opens the nav drawer on mobile */}
+      <button
+        onClick={onMenu}
+        className="shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink lg:hidden"
+        aria-label="Open menu"
+      >
+        <Menu size={22} />
+      </button>
+
       <button
         onClick={() => navigate(-1)}
-        className="shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink"
+        className="hidden shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink sm:block"
         aria-label="Go back"
         title="Go back"
       >
         <ArrowLeft size={20} />
       </button>
 
-      <div className="relative max-w-md flex-1">
+      <div className="relative hidden max-w-md flex-1 md:block">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
         <input
           type="search"
@@ -105,6 +116,8 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom }: To
           className="h-10 w-full rounded-btn border border-line bg-bg pl-10 pr-3 text-body-md text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
         />
       </div>
+
+      <div className="min-w-0 md:hidden" />
 
       <RangeSelector value={range} onChange={onRangeChange} custom={custom} onApplyCustom={onApplyCustom} />
 
@@ -165,11 +178,11 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom }: To
           )}
         </div>
 
-        <button className="rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Help">
+        <button className="hidden rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink sm:inline-flex" aria-label="Help">
           <HelpCircle size={20} />
         </button>
 
-        <div className="mx-2 h-6 w-px bg-line" />
+        <div className="mx-2 hidden h-6 w-px bg-line sm:block" />
 
         {/* Avatar + menu */}
         <div className="relative" ref={menuRef}>
