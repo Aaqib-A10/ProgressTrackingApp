@@ -36,6 +36,11 @@ server/dist/
 *.db
 *.db-journal
 
+# ---- database dumps / backups (data, keep local; not *.sql so migrations stay tracked) ----
+pulsetrack_backup.sql
+*.dump
+*.sql.gz
+
 # ---- planning / reference docs (kept local, not pushed) ----
 app_structure_system_blueprint.md
 Progress_Tracking_App_Plan.md
@@ -72,3 +77,11 @@ server/uploads/
 **/.playwright-mcp/
 ecom-*.png
 sidebar-*.png
+admin-users-*.png
+exec-*.png
+users-*.png
+mobile-*.png
+rdp-*.png
+member-*.png
+team-attendance.png
+desktop-check.png
