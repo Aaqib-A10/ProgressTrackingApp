@@ -21,6 +21,11 @@ import {
   Boxes,
   Clock,
   Server,
+  ListChecks,
+  ListTodo,
+  StickyNote,
+  Briefcase,
+  Wifi,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -55,6 +60,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Dashboard', to: '/app/dashboard', icon: LayoutDashboard },
       { label: 'My Reports', to: '/app/reports', icon: FileBarChart, hideFor: ['SUPER_ADMIN'] },
       { label: 'My Analytics', to: '/app/analytics', icon: LineChart, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'My Tasks', to: '/app/tasks', icon: ListChecks },
+      { label: 'My To-Do', to: '/app/todo', icon: ListTodo },
       { label: 'My Team', to: '/app/team/members', icon: Users, roles: ['TEAM_LEAD'], hideFor: ['SUPER_ADMIN'] },
       { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart, roles: ['TEAM_LEAD', 'SUPER_ADMIN'], departments: ['ITAD', 'LEAD_GEN'] },
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
@@ -81,6 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'ITAD',
     items: [
       { label: 'Daily Log', to: '/app/itad/log', icon: Phone, departments: ['ITAD'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'Bid Tracker', to: '/app/itad/bids', icon: Briefcase, departments: ['ITAD'] },
       { label: 'Team View', to: '/app/itad/team', icon: Users, departments: ['ITAD'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Analytics', to: '/app/itad/analytics', icon: LineChart, departments: ['ITAD'], roles: TL_ROLES },
     ],
@@ -101,6 +109,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'] },
       { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, departments: ['ECOMMERCE'] },
       { label: 'Team View', to: '/app/ecommerce/team', icon: Users, departments: ['ECOMMERCE'] },
+      { label: 'Meeting Notes', to: '/app/ecommerce/notes', icon: StickyNote, departments: ['ECOMMERCE'] },
       { label: 'RDP Records', to: '/app/ecommerce/rdp', icon: Server, departments: ['ECOMMERCE'], roles: ADMIN_ROLES, badge: { text: 'TL', tone: 'accent' } },
     ],
   },
@@ -122,6 +131,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon, roles: ADMIN_ROLES },
       { label: 'Tags', to: '/app/admin/tags', icon: Tags, roles: ADMIN_ROLES },
       { label: 'Holidays & Leave', to: '/app/admin/leave', icon: CalendarOff, roles: ADMIN_ROLES },
+      { label: 'Office Networks', to: '/app/admin/networks', icon: Wifi, roles: ['SUPER_ADMIN'] },
     ],
   },
 ]

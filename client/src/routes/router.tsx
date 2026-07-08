@@ -32,6 +32,7 @@ const QaEvaluationDetail = lazy(() => import('../pages/app/qa/QaEvaluationDetail
 const ItadDailyLog = lazy(() => import('../pages/app/itad/ItadDailyLog'))
 const ItadTeamView = lazy(() => import('../pages/app/itad/ItadTeamView'))
 const ItadAnalytics = lazy(() => import('../pages/app/itad/ItadAnalytics'))
+const BidTracker = lazy(() => import('../pages/app/itad/BidTracker'))
 const LeadGenDailyForm = lazy(() => import('../pages/app/leadgen/LeadGenDailyForm'))
 const LeadGenTeamView = lazy(() => import('../pages/app/leadgen/LeadGenTeamView'))
 const LeadGenBreakdown = lazy(() => import('../pages/app/leadgen/LeadGenBreakdown'))
@@ -49,10 +50,14 @@ const EditorialCalendar = lazy(() => import('../pages/app/marketing/EditorialCal
 const MarketingAnalytics = lazy(() => import('../pages/app/marketing/MarketingAnalytics'))
 const MyAttendance = lazy(() => import('../pages/app/attendance/MyAttendance'))
 const TeamAttendance = lazy(() => import('../pages/app/attendance/TeamAttendance'))
+const MyTodo = lazy(() => import('../pages/app/MyTodo'))
+const MyTasks = lazy(() => import('../pages/app/MyTasks'))
+const MeetingNotes = lazy(() => import('../pages/app/ecommerce/MeetingNotes'))
 const AdminUsers = lazy(() => import('../pages/app/admin/AdminUsers'))
 const AdminTargets = lazy(() => import('../pages/app/admin/AdminTargets'))
 const AdminTags = lazy(() => import('../pages/app/admin/AdminTags'))
 const AdminLeave = lazy(() => import('../pages/app/admin/AdminLeave'))
+const AdminNetworks = lazy(() => import('../pages/app/admin/AdminNetworks'))
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
 export const router = createBrowserRouter([
@@ -78,6 +83,8 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardIndex /> },
       { path: 'reports', element: <MyReports /> },
       { path: 'analytics', element: <MyPerformance /> },
+      { path: 'todo', element: <MyTodo /> },
+      { path: 'tasks', element: <MyTasks /> },
       { path: 'settings', element: <Settings /> },
       { path: 'profile', element: <Settings /> },
 
@@ -103,6 +110,7 @@ export const router = createBrowserRouter([
 
       // ITAD
       { path: 'itad/log', element: <ItadDailyLog /> },
+      { path: 'itad/bids', element: <BidTracker /> },
       { path: 'itad/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadTeamView /></RequireRole> },
       { path: 'itad/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadAnalytics /></RequireRole> },
 
@@ -117,6 +125,7 @@ export const router = createBrowserRouter([
       { path: 'ecommerce/board', element: <EcommerceBoard /> },
       { path: 'ecommerce/stock', element: <EcommerceStock /> },
       { path: 'ecommerce/team', element: <EcommerceTeamView /> },
+      { path: 'ecommerce/notes', element: <MeetingNotes /> },
       { path: 'ecommerce/rdp', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><RdpRecords /></RequireRole> },
 
       // Marketing
@@ -136,6 +145,7 @@ export const router = createBrowserRouter([
       { path: 'admin/targets', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminTargets /></RequireRole> },
       { path: 'admin/tags', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminTags /></RequireRole> },
       { path: 'admin/leave', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminLeave /></RequireRole> },
+      { path: 'admin/networks', element: <RequireRole roles={['SUPER_ADMIN']}><AdminNetworks /></RequireRole> },
     ],
   },
 
