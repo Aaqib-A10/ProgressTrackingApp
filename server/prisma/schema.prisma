@@ -106,6 +106,8 @@ model Department {
   qaEvaluations  QaEvaluation[]
   stockRequests  StockRequest[]
   attendanceShift AttendanceShift?
+  meetingNotes   MeetingNote[]
+  bids           Bid[]
 }
 
 model SubDepartment {
@@ -171,6 +173,10 @@ model User {
   ecomTaskComments  EcomTaskComment[]     @relation("EcomCommentAuthor")
   stockAssignedTo   StockRequest[]        @relation("StockAssignee")
   stockAssignedBy   StockRequest[]        @relation("StockAssigner")
+
+  todos        TodoItem[]
+  meetingNotes MeetingNote[] @relation("MeetingNoteAuthor")
+  bids         Bid[]         @relation("BidAgent")
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -370,6 +376,8 @@ model AttendanceDay {
   date       DateTime  @db.Date
   checkInAt  DateTime?
   checkOutAt DateTime?
+  checkInIp  String? // client IP recorded at check-in (audit / office-network enforcement)
+  checkOutIp String?
   note       String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -378,6 +386,17 @@ model AttendanceDay {
 
   @@unique([userId, date])
   @@index([date])
+}
+
+/// Admin-managed allowlist of office networks. A check-in/out is accepted only
+/// from an IP inside one of these (unless the list is empty, or the caller is a
+/// Super Admin). `cidr` accepts a bare IP (treated as /32) or CIDR range.
+model OfficeNetwork {
+  id        String   @id @default(cuid())
+  label     String
+  cidr      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 }
 
 /// A single break within an attendance day. `endAt` null = break still open.
@@ -402,10 +421,12 @@ model AttendanceShift {
   department      Department? @relation(fields: [departmentId], references: [id])
   userId          String?     @unique
   user            User?       @relation("UserShift", fields: [userId], references: [id], onDelete: Cascade)
-  startTime       String // "HH:mm" in company timezone, e.g. "09:00"
-  endTime         String // "HH:mm", e.g. "18:00"
+  startTime       String // "HH:mm" in the shift's timezone, e.g. "09:00"
+  endTime         String // "HH:mm", e.g. "18:00". If <= startTime the shift crosses midnight (overnight).
   graceMin        Int         @default(10)
   requiredMinutes Int         @default(480) // full-shift target; worked >= this = shift completed
+  workingDays     Int[]       @default([1, 2, 3, 4, 5]) // 0=Sun … 6=Sat; which weekdays are worked
+  timeZone        String? // IANA tz (e.g. "America/New_York"); null = company timezone
   updatedAt       DateTime    @updatedAt
 }
 
@@ -575,6 +596,7 @@ model MarketingTask {
   dueDate       DateTime? @db.Date
   scheduledDate DateTime? @db.Date
   publishedDate DateTime? @db.Date
+  completedAt   DateTime? // set when the task reaches PUBLISHED; powers "completed by day/week"
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -582,6 +604,7 @@ model MarketingTask {
   @@index([status])
   @@index([discipline])
   @@index([scheduledDate])
+  @@index([assigneeId])
 }
 
 // ========== Feedback & reviews (TL ↔ employee) ==========
@@ -808,9 +831,10 @@ model EcommerceDailyEntry {
   id     String    @id @default(cuid())
   userId String
   user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime  @db.Date
-  status DayStatus @default(SUBMITTED)
-  notes  String?
+  date         DateTime  @db.Date
+  status       DayStatus @default(SUBMITTED)
+  notes        String?
+  pricingNotes String? // free-text Pricing work (replaces the numeric pricing grid)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -848,6 +872,7 @@ model EcommerceTask {
   createdById  String?
   createdBy    User?          @relation("EcomTaskCreator", fields: [createdById], references: [id])
   dueDate      DateTime?      @db.Date
+  completedAt  DateTime? // set when the task reaches DONE; powers "completed by day/week"
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -892,4 +917,87 @@ model StockRequest {
   resolvedAt   DateTime?
 
   @@index([departmentId, status])
+}
+
+// Personal, private to-do list — one owner, not shared. Every user gets one.
+model TodoItem {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  done        Boolean   @default(false)
+  dueDate     DateTime? @db.Date
+  order       Int       @default(0) // position within the list
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// Ecommerce meeting notes — shared across the department. Author edits/deletes
+// their own; TL / Super Admin can manage any. meetingDate defaults to "today"
+// (auto submission date); deadline is optional.
+model MeetingNote {
+  id           String      @id @default(cuid())
+  authorId     String
+  author       User        @relation("MeetingNoteAuthor", fields: [authorId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  title        String
+  body         String
+  meetingDate  DateTime    @db.Date
+  deadline     DateTime?   @db.Date
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([departmentId, meetingDate])
+}
+
+// ---------- ITAD Bid Tracker ----------
+
+enum BidType {
+  RFQ
+  RFP
+  BID
+}
+
+enum BidStatus {
+  ACTIVE // Active Opportunity (default)
+  SUBMITTED
+  WON
+  LOST
+}
+
+enum BidSubmissionType {
+  PHYSICAL
+  EMAIL
+  PORTAL
+}
+
+/// An ITAD sales bid / opportunity. agentId is the submitting user; awardedPrice
+/// is required once status = WON.
+model Bid {
+  id             String             @id @default(cuid())
+  number         Int                @default(autoincrement()) @unique // human-facing bid_id
+  title          String
+  company        String
+  type           BidType
+  district       String?
+  agentId        String
+  agent          User               @relation("BidAgent", fields: [agentId], references: [id])
+  departmentId   String? // the agent's department (ITAD) — scopes team-wide views
+  department     Department?        @relation(fields: [departmentId], references: [id])
+  status         BidStatus          @default(ACTIVE)
+  dueDate        DateTime // date & time
+  reminderSet    Boolean            @default(false)
+  submissionType BidSubmissionType?
+  priceQuoted    Float?
+  awardedPrice   Float? // required when status = WON
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([departmentId, status])
+  @@index([agentId])
+  @@index([dueDate])
 }
