@@ -155,6 +155,12 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
     data.scheduledDate = dbDateFromString(companyToday())
   }
 
+  // Stamp completion the first time a card reaches PUBLISHED; clear it if reopened.
+  if (v.status !== undefined && v.status !== existing.status) {
+    if (v.status === 'PUBLISHED') data.completedAt = new Date()
+    else if (existing.status === 'PUBLISHED') data.completedAt = null
+  }
+
   const task = await prisma.marketingTask.update({
     where: { id: req.params.id },
     data,

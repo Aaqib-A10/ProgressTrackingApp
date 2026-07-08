@@ -8,6 +8,8 @@ import { Badge, FeedbackSentimentBadge } from '../../components/ui/Badge'
 import { listFeedback, type FeedbackThread } from '../../lib/feedbackApi'
 import { fromNow } from '../../lib/datetime'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
+import { AssignedTasksCard } from '../../components/AssignedTasksCard'
+import { TodoList } from '../../components/TodoList'
 
 const TL_ROLES = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
 
@@ -86,6 +88,13 @@ export default function DashboardHome() {
             desc="Track your KPIs, trends and targets over time."
           />
         )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <AssignedTasksCard />
+        <Card title="My To-Do" subtitle="Private to you">
+          <TodoList limit={6} />
+        </Card>
       </div>
 
       <EmployeeOfMonthCard />
