@@ -40,6 +40,7 @@ const EcommerceDailyLog = lazy(() => import('../pages/app/ecommerce/EcommerceDai
 const EcommerceTeamView = lazy(() => import('../pages/app/ecommerce/EcommerceTeamView'))
 const EcommerceBoard = lazy(() => import('../pages/app/ecommerce/EcommerceBoard'))
 const EcommerceStock = lazy(() => import('../pages/app/ecommerce/EcommerceStock'))
+const RdpRecords = lazy(() => import('../pages/app/ecommerce/RdpRecords'))
 const MarketingBoard = lazy(() => import('../pages/app/marketing/MarketingBoard'))
 const SeoActivity = lazy(() => import('../pages/app/marketing/SeoActivity'))
 const SocialActivity = lazy(() => import('../pages/app/marketing/SocialActivity'))
@@ -116,6 +117,7 @@ export const router = createBrowserRouter([
       { path: 'ecommerce/board', element: <EcommerceBoard /> },
       { path: 'ecommerce/stock', element: <EcommerceStock /> },
       { path: 'ecommerce/team', element: <EcommerceTeamView /> },
+      { path: 'ecommerce/rdp', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><RdpRecords /></RequireRole> },
 
       // Marketing
       { path: 'marketing/board', element: <MarketingBoard /> },

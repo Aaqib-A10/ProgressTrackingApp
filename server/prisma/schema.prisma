@@ -409,6 +409,50 @@ model AttendanceShift {
   updatedAt       DateTime    @updatedAt
 }
 
+// ---------- RDP inventory & assignment history (Ecommerce/CSR/Shipping) ----------
+
+/// Which team an RDP belongs to (tabs in the source spreadsheet).
+enum RdpTeam {
+  EC
+  CSR
+  SHIPPING
+}
+
+/// A remote machine identified by provider + address (an IP or an Anydesk ID).
+/// One RDP can be used by several agents; usage over time lives in assignments.
+model Rdp {
+  id        String   @id @default(cuid())
+  team      RdpTeam
+  provider  String // Sj Computers, MaxE Computers, Anydesk, ...
+  address   String // IP address or Anydesk ID (free text)
+  label     String?
+  notes     String?
+  active    Boolean  @default(true) // false = retired
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments RdpAssignment[]
+
+  @@unique([provider, address])
+  @@index([team])
+}
+
+/// A period an agent used an RDP. `unassignedAt` null = currently assigned.
+/// Agent is stored by name (snapshot) so history survives staff changes.
+model RdpAssignment {
+  id           String    @id @default(cuid())
+  rdpId        String
+  rdp          Rdp       @relation(fields: [rdpId], references: [id], onDelete: Cascade)
+  agentName    String
+  assignedAt   DateTime  @default(now())
+  unassignedAt DateTime?
+  note         String?
+  createdAt    DateTime  @default(now())
+
+  @@index([rdpId])
+  @@index([agentName])
+}
+
 // ---------- Audit trail (§9) ----------
 
 /// Edit history so submitted numbers cannot be quietly changed.

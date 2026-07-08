@@ -20,6 +20,7 @@ import {
   ShoppingCart,
   Boxes,
   Clock,
+  Server,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -100,6 +101,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'] },
       { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, departments: ['ECOMMERCE'] },
       { label: 'Team View', to: '/app/ecommerce/team', icon: Users, departments: ['ECOMMERCE'] },
+      { label: 'RDP Records', to: '/app/ecommerce/rdp', icon: Server, departments: ['ECOMMERCE'], roles: ADMIN_ROLES, badge: { text: 'TL', tone: 'accent' } },
     ],
   },
   {

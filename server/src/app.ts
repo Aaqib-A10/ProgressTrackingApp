@@ -10,6 +10,7 @@ import { reportsRouter } from './routes/reports'
 import { marketingRouter } from './routes/marketing'
 import { ecommerceRouter } from './routes/ecommerce'
 import { attendanceRouter } from './routes/attendance'
+import { rdpRouter } from './routes/rdp'
 import { adminRouter } from './routes/admin'
 import { notificationsRouter } from './routes/notifications'
 import { membersRouter } from './routes/members'
@@ -48,6 +49,7 @@ export function createApp(): Express {
   app.use('/api/marketing', marketingRouter)
   app.use('/api/ecommerce', ecommerceRouter)
   app.use('/api/attendance', attendanceRouter)
+  app.use('/api/rdp', rdpRouter)
   app.use('/api/admin', adminRouter)
   app.use('/api/notifications', notificationsRouter)
   app.use('/api/members', membersRouter)
