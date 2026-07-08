@@ -6,6 +6,7 @@ import {
   listTags, createTag, updateTag,
   listHolidays, createHoliday, deleteHoliday,
   listLeave, listLeaveMembers, createLeave, deleteLeave,
+  listOfficeNetworks, createOfficeNetwork, updateOfficeNetwork, deleteOfficeNetwork,
 } from '../controllers/adminController'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
@@ -46,3 +47,9 @@ adminRouter.get('/leave', asyncHandler(listLeave))
 adminRouter.get('/leave/members', asyncHandler(listLeaveMembers))
 adminRouter.post('/leave', asyncHandler(createLeave))
 adminRouter.delete('/leave/:id', asyncHandler(deleteLeave))
+
+// Office networks — IP allowlist for attendance (Super Admin)
+adminRouter.get('/office-networks', asyncHandler(listOfficeNetworks))
+adminRouter.post('/office-networks', asyncHandler(createOfficeNetwork))
+adminRouter.patch('/office-networks/:id', asyncHandler(updateOfficeNetwork))
+adminRouter.delete('/office-networks/:id', asyncHandler(deleteOfficeNetwork))

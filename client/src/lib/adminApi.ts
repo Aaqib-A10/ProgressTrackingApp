@@ -108,3 +108,18 @@ export const listLeave = () => api.get<{ leave: LeaveRow[] }>('/admin/leave')
 export const listLeaveMembers = () => api.get<{ members: { id: string; name: string }[] }>('/admin/leave/members')
 export const createLeave = (input: { userId: string; date: string; type: LeaveRow['type']; note?: string }) => api.post<{ leave: LeaveRow }>('/admin/leave', input)
 export const deleteLeave = (id: string) => api.del(`/admin/leave/${id}`)
+
+// ---- Office networks (IP allowlist for attendance) ----
+export interface OfficeNetwork {
+  id: string
+  label: string
+  cidr: string
+  isActive: boolean
+}
+export const listOfficeNetworks = () =>
+  api.get<{ networks: OfficeNetwork[]; enforced: boolean }>('/admin/office-networks')
+export const createOfficeNetwork = (input: { label: string; cidr: string }) =>
+  api.post<{ network: OfficeNetwork }>('/admin/office-networks', input)
+export const setOfficeNetworkActive = (id: string, isActive: boolean) =>
+  api.patch<{ network: OfficeNetwork }>(`/admin/office-networks/${id}`, { isActive })
+export const deleteOfficeNetwork = (id: string) => api.del(`/admin/office-networks/${id}`)

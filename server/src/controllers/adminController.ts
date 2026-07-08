@@ -7,6 +7,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { hashPassword, signInviteToken } from '../lib/auth'
 import { sendInviteEmail } from '../lib/mail'
 import { dbDateFromString, dateStringFromDb } from '../lib/time'
+import { isValidCidr } from '../lib/ip'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -653,5 +654,68 @@ export async function deleteLeave(req: AuthedRequest, res: Response): Promise<vo
     return
   }
   await prisma.leaveDay.delete({ where: { id: req.params.id } }).catch(() => undefined)
+  res.status(204).end()
+}
+
+// ---- Office networks (IP allowlist for attendance) — Super Admin ----
+
+async function requireSuperAdmin(req: AuthedRequest, res: Response): Promise<boolean> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return false
+  }
+  return true
+}
+
+export async function listOfficeNetworks(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  const networks = await prisma.officeNetwork.findMany({ orderBy: { createdAt: 'asc' } })
+  res.json({
+    networks: networks.map((n) => ({ id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive })),
+    // When empty, enforcement is off (everyone can check in) — surfaced in the UI.
+    enforced: networks.some((n) => n.isActive),
+  })
+}
+
+const officeNetworkSchema = z.object({
+  label: z.string().trim().min(1, 'Label is required').max(100),
+  cidr: z.string().trim().min(1, 'IP or CIDR is required').max(64),
+})
+
+export async function createOfficeNetwork(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  const parsed = officeNetworkSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  if (!isValidCidr(parsed.data.cidr)) {
+    res.status(400).json({ error: 'Enter a valid IPv4 address or CIDR (e.g. 203.0.113.7 or 203.0.113.0/24)' })
+    return
+  }
+  const n = await prisma.officeNetwork.create({ data: { label: parsed.data.label, cidr: parsed.data.cidr } })
+  res.status(201).json({ network: { id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive } })
+}
+
+export async function updateOfficeNetwork(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  const isActive = req.body?.isActive
+  if (typeof isActive !== 'boolean') {
+    res.status(400).json({ error: 'isActive (boolean) required' })
+    return
+  }
+  const existing = await prisma.officeNetwork.findUnique({ where: { id: req.params.id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Network not found' })
+    return
+  }
+  const n = await prisma.officeNetwork.update({ where: { id: existing.id }, data: { isActive } })
+  res.json({ network: { id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive } })
+}
+
+export async function deleteOfficeNetwork(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  await prisma.officeNetwork.deleteMany({ where: { id: req.params.id } })
   res.status(204).end()
 }
