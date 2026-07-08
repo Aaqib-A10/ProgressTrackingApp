@@ -10,6 +10,8 @@ export interface Shift {
   endTime: string
   graceMin: number
   requiredMinutes: number
+  workingDays: number[] // 0=Sun … 6=Sat
+  timeZone: string | null // IANA zone; null = company timezone
 }
 
 export interface TodayState {

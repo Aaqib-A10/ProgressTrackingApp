@@ -211,9 +211,39 @@ function dotColor(state: ClockState): string {
   return { IN: 'bg-success', ON_BREAK: 'bg-warning', OUT: 'bg-slate-400', NOT_IN: 'bg-danger' }[state]
 }
 
-/** Shared start/end/grace/required-hours editor used by the shift + per-account modals. */
+// Day-of-week toggles (0=Sun … 6=Sat) and a curated IANA timezone list.
+const WEEKDAYS = [
+  { n: 0, label: 'Su' },
+  { n: 1, label: 'Mo' },
+  { n: 2, label: 'Tu' },
+  { n: 3, label: 'We' },
+  { n: 4, label: 'Th' },
+  { n: 5, label: 'Fr' },
+  { n: 6, label: 'Sa' },
+]
+const TIMEZONES = [
+  'Asia/Karachi',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Manila',
+  'Asia/Singapore',
+  'Europe/London',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Australia/Sydney',
+  'UTC',
+]
+
+/** Shared start/end/grace/required/working-days/timezone editor used by the shift + per-account modals. */
 function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) => void }) {
   const set = (patch: Partial<Shift>) => onChange({ ...value, ...patch })
+  const overnight = value.endTime <= value.startTime
+  const workingDays = value.workingDays ?? []
+  const toggleDay = (n: number) =>
+    set({ workingDays: workingDays.includes(n) ? workingDays.filter((d) => d !== n) : [...workingDays, n].sort((a, b) => a - b) })
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -228,7 +258,37 @@ function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) =
           <input type="number" min={0} max={24} step={0.5} value={minToHours(value.requiredMinutes)} onChange={(e) => set({ requiredMinutes: hoursToMin(e.target.value) })} className={inputCls} />
         </Field>
       </div>
+      <Field label="Working days">
+        <div className="flex flex-wrap gap-1.5">
+          {WEEKDAYS.map((d) => {
+            const on = workingDays.includes(d.n)
+            return (
+              <button
+                key={d.n}
+                type="button"
+                onClick={() => toggleDay(d.n)}
+                className={
+                  'h-9 w-10 rounded-btn border text-body-sm font-semibold transition-colors ' +
+                  (on ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink-muted hover:border-primary/40')
+                }
+                aria-pressed={on}
+              >
+                {d.label}
+              </button>
+            )
+          })}
+        </div>
+      </Field>
+      <Field label="Time zone">
+        <select value={value.timeZone ?? ''} onChange={(e) => set({ timeZone: e.target.value || null })} className={inputCls}>
+          <option value="">Company default</option>
+          {TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>{tz.replace('_', ' ')}</option>
+          ))}
+        </select>
+      </Field>
       <p className="text-body-sm text-ink-muted">
+        {overnight && <span className="font-semibold text-primary">Overnight shift (crosses midnight). </span>}
         Late after {value.startTime} + {value.graceMin} min · a day counts as a completed shift once {formatMinutes(value.requiredMinutes)} are worked.
       </p>
     </div>
