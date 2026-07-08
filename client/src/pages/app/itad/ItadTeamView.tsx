@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Phone, PhoneCall, Heart, CheckCircle2, Trophy, Download } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
@@ -6,6 +6,7 @@ import { Button } from '../../../components/ui/Button'
 import { StatCard } from '../../../components/StatCard'
 import { Badge, SubmissionBadge, PerfFlagBadge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/DataTable'
+import { ListToolbar } from '../../../components/ListToolbar'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
 import { formatNumber, formatPercent } from '../../../lib/format'
@@ -26,6 +27,12 @@ export default function ItadTeamView() {
   const navigate = useNavigate()
   const [data, setData] = useState<ItadTeamResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+
+  const filteredAgents = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return !q ? data?.agents ?? [] : (data?.agents ?? []).filter((a) => a.name.toLowerCase().includes(q))
+  }, [data, query])
 
   useEffect(() => {
     let active = true
@@ -111,12 +118,15 @@ export default function ItadTeamView() {
             {/* Performance matrix */}
             <div className="lg:col-span-3">
               <Card title="Performance Matrix" subtitle="Per-agent activity with team totals" flush>
+                <div className="border-b border-line px-4 py-2.5">
+                  <ListToolbar query={query} onQuery={setQuery} placeholder="Search agents…" />
+                </div>
                 <DataTable
                   columns={columns}
-                  rows={data.agents}
+                  rows={filteredAgents}
                   getRowId={(r) => r.id}
                   onRowClick={(r) => navigate(`/app/members/${r.id}`)}
-                  emptyMessage="No agents in this team yet."
+                  emptyMessage={query ? 'No agents match your search.' : 'No agents in this team yet.'}
                   totalRow={{
                     cells: {
                       name: 'Team Totals',

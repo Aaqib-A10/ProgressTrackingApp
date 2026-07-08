@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, UserPlus, UserMinus, RotateCcw, KeyRound, Copy } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
@@ -7,6 +7,7 @@ import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { TextField } from '../../components/ui/Input'
 import { DataTable, type Column } from '../../components/DataTable'
+import { ListToolbar } from '../../components/ListToolbar'
 import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
 import { ApiError } from '../../lib/api'
@@ -52,6 +53,12 @@ export default function TeamMembers() {
   const [toRemove, setToRemove] = useState<TeamMember | null>(null)
   const [removing, setRemoving] = useState(false)
   const [toReset, setToReset] = useState<TeamMember | null>(null)
+  const [query, setQuery] = useState('')
+
+  const filteredMembers = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return !q ? members : members.filter((m) => [m.name, m.email].some((f) => (f ?? '').toLowerCase().includes(q)))
+  }, [members, query])
 
   const copyPw = useCallback((text: string) => {
     navigator.clipboard?.writeText(text).then(
@@ -163,7 +170,12 @@ export default function TeamMembers() {
         {loading ? (
           <div className="p-5 text-body-md text-ink-muted">Loading…</div>
         ) : (
-          <DataTable columns={columns} rows={members} getRowId={(m) => m.id} onRowClick={(m) => navigate(`/app/members/${m.id}`)} emptyMessage="No active members — invite your first employee." />
+          <>
+            <div className="border-b border-line px-4 py-2.5">
+              <ListToolbar query={query} onQuery={setQuery} placeholder="Search members by name or email…" />
+            </div>
+            <DataTable columns={columns} rows={filteredMembers} getRowId={(m) => m.id} onRowClick={(m) => navigate(`/app/members/${m.id}`)} emptyMessage={query ? 'No members match your search.' : 'No active members — invite your first employee.'} />
+          </>
         )}
       </Card>
 

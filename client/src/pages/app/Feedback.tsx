@@ -1,17 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageSquare, ChevronRight, MessagesSquare } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { FeedbackSentimentBadge } from '../../components/ui/Badge'
+import { ListToolbar } from '../../components/ListToolbar'
 import { useAuth } from '../../lib/auth'
 import { useToast } from '../../components/ui/Toast'
 import { listFeedback, type FeedbackThread } from '../../lib/feedbackApi'
 import { fromNow } from '../../lib/datetime'
 
+const SENTIMENTS = [
+  { value: 'PRAISE', label: 'Praise' },
+  { value: 'NEUTRAL', label: 'Neutral' },
+  { value: 'IMPROVEMENT', label: 'Improvement' },
+]
+
 export default function Feedback() {
   const { user } = useAuth()
   const { addToast } = useToast()
   const [threads, setThreads] = useState<FeedbackThread[] | null>(null)
+  const [query, setQuery] = useState('')
+  const [sentimentF, setSentimentF] = useState('')
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return (threads ?? []).filter((t) => {
+      if (sentimentF && t.sentiment !== sentimentF) return false
+      if (!q) return true
+      return [t.title ?? '', t.body, t.author.name, t.recipient.name].some((f) => f.toLowerCase().includes(q))
+    })
+  }, [threads, query, sentimentF])
 
   useEffect(() => {
     let active = true
@@ -47,7 +65,15 @@ export default function Feedback() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {threads.map((t) => {
+          <ListToolbar
+            query={query}
+            onQuery={setQuery}
+            placeholder="Search feedback by title, message or person…"
+            filters={[{ key: 'sentiment', allLabel: 'All sentiments', value: sentimentF, onChange: setSentimentF, options: SENTIMENTS }]}
+          />
+          {filtered.length === 0 ? (
+            <p className="py-6 text-center text-body-md text-ink-muted">No feedback matches your search.</p>
+          ) : filtered.map((t) => {
             // The "other" participant relative to the current user.
             const other = user && t.author.id === user.id ? t.recipient : t.author
             return (

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Plus, Check, X, Trash2, Eye, EyeOff, Copy, RotateCcw } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
@@ -6,6 +6,7 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Modal } from '../../../components/ui/Modal'
 import { TextField } from '../../../components/ui/Input'
 import { DataTable, type Column } from '../../../components/DataTable'
+import { ListToolbar } from '../../../components/ListToolbar'
 import { useToast } from '../../../components/ui/Toast'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
 import { DEPARTMENTS } from '../../../lib/departments'
@@ -30,6 +31,10 @@ export default function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [roleF, setRoleF] = useState('')
+  const [deptF, setDeptF] = useState('')
+  const [statusF, setStatusF] = useState('')
 
   useEffect(() => {
     listUsers()
@@ -72,6 +77,17 @@ export default function AdminUsers() {
   }
 
   const pending = users.filter((u) => u.status === 'PENDING')
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return users.filter((u) => {
+      if (roleF && u.role !== roleF) return false
+      if (deptF && (u.department ?? '') !== deptF) return false
+      if (statusF && (u.status ?? '') !== statusF) return false
+      if (!q) return true
+      return [u.name, u.email, u.department ?? '', u.subDepartment ?? ''].some((f) => f.toLowerCase().includes(q))
+    })
+  }, [users, query, roleF, deptF, statusF])
 
   const columns: Column<AdminUser>[] = [
     {
@@ -162,7 +178,25 @@ export default function AdminUsers() {
       )}
 
       <Card flush>
-        {loading ? <div className="p-5 text-body-md text-ink-muted">Loading…</div> : <DataTable columns={columns} rows={users} getRowId={(u) => u.id} />}
+        {loading ? (
+          <div className="p-5 text-body-md text-ink-muted">Loading…</div>
+        ) : (
+          <>
+            <div className="border-b border-line px-4 py-2.5">
+              <ListToolbar
+                query={query}
+                onQuery={setQuery}
+                placeholder="Search by name, email or department…"
+                filters={[
+                  { key: 'role', allLabel: 'All roles', value: roleF, onChange: setRoleF, options: ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] })) },
+                  { key: 'dept', allLabel: 'All departments', value: deptF, onChange: setDeptF, options: DEPARTMENTS.map((d) => ({ value: d.value, label: d.label })) },
+                  { key: 'status', allLabel: 'All statuses', value: statusF, onChange: setStatusF, options: (['ACTIVE', 'PENDING', 'REJECTED'] as UserStatus[]).map((s) => ({ value: s, label: STATUS_META[s].label })) },
+                ]}
+              />
+            </div>
+            <DataTable columns={columns} rows={filtered} getRowId={(u) => u.id} emptyMessage="No users match your search." />
+          </>
+        )}
       </Card>
       <InviteModal open={open} onClose={() => setOpen(false)} onCreated={(u) => setUsers((us) => [u, ...us])} />
     </div>

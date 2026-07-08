@@ -6,6 +6,7 @@ import { Button } from '../../../components/ui/Button'
 import { StatCard } from '../../../components/StatCard'
 import { Badge, SubmissionBadge, PerfFlagBadge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/DataTable'
+import { ListToolbar } from '../../../components/ListToolbar'
 import { FunnelChart } from '../../../components/charts/FunnelChart'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
@@ -29,6 +30,12 @@ export default function LeadGenTeamView() {
   const [data, setData] = useState<LeadGenTeamResponse | null>(null)
   const [breakdown, setBreakdown] = useState<LeadGenBreakdown | null>(null)
   const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+
+  const filteredAgents = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return !q ? data?.agents ?? [] : (data?.agents ?? []).filter((a) => a.name.toLowerCase().includes(q))
+  }, [data, query])
 
   const monthLabel = useMemo(
     () => new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
@@ -137,12 +144,15 @@ export default function LeadGenTeamView() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
             <div className="lg:col-span-3">
               <Card title="Team Performance Matrix" subtitle="Per-member pipeline with team totals" flush>
+                <div className="border-b border-line px-4 py-2.5">
+                  <ListToolbar query={query} onQuery={setQuery} placeholder="Search members…" />
+                </div>
                 <DataTable
                   columns={columns}
-                  rows={data.agents}
+                  rows={filteredAgents}
                   getRowId={(r) => r.id}
                   onRowClick={(r) => navigate(`/app/members/${r.id}`)}
-                  emptyMessage="No members in this team yet."
+                  emptyMessage={query ? 'No members match your search.' : 'No members in this team yet.'}
                   totalRow={{
                     cells: {
                       name: 'Team Totals',

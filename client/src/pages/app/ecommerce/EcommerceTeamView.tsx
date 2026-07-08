@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ShoppingCart, Store, Boxes, Users } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { StatCard } from '../../../components/StatCard'
 import { Badge, SubmissionBadge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/DataTable'
+import { ListToolbar } from '../../../components/ListToolbar'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
 import { formatNumber } from '../../../lib/format'
@@ -22,6 +23,12 @@ export default function EcommerceTeamView() {
   const { addToast } = useToast()
   const [data, setData] = useState<EcommerceTeamResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+
+  const filteredAgents = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return !q ? data?.agents ?? [] : (data?.agents ?? []).filter((a) => a.name.toLowerCase().includes(q))
+  }, [data, query])
 
   useEffect(() => {
     let active = true
@@ -123,11 +130,14 @@ export default function EcommerceTeamView() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
               <Card title="Per-agent listings" subtitle="Output across the period" flush>
+                <div className="border-b border-line px-4 py-2.5">
+                  <ListToolbar query={query} onQuery={setQuery} placeholder="Search agents…" />
+                </div>
                 <DataTable
                   columns={columns}
-                  rows={data.agents}
+                  rows={filteredAgents}
                   getRowId={(r) => r.id}
-                  emptyMessage="No team members yet."
+                  emptyMessage={query ? 'No agents match your search.' : 'No team members yet.'}
                   totalRow={{ cells: { name: 'Team Totals', status: '', daysLogged: '', totalListings: formatNumber(data.team.totalListings) } }}
                   renderRowBanner={(r) => r.onLeaveToday ? (
                     <div className="flex items-center gap-2 rounded-btn bg-warning/10 px-3 py-1.5 text-body-sm font-medium text-warning">
