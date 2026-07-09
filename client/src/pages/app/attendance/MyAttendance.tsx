@@ -13,6 +13,7 @@ const LABEL_META: Record<HistoryLabel, { tone: BadgeTone; text: string }> = {
   ON_LEAVE: { tone: 'primary', text: 'On Leave' },
   OFF: { tone: 'neutral', text: 'Off' },
   HOLIDAY: { tone: 'accent', text: 'Holiday' },
+  WFH: { tone: 'accent', text: 'Work From Home' },
   ABSENT: { tone: 'danger', text: 'Absent' },
 }
 

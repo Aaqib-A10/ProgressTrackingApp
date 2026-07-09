@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight } from 'lucide-react'
+import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight, House } from 'lucide-react'
 import { useToast } from '../ui/Toast'
 import {
   getAttendanceMe,
@@ -93,7 +93,7 @@ export function ClockWidget() {
 
   if (!me) return null
 
-  const { today, offLabel, offName } = me
+  const { today, offLabel, offName, workMode } = me
   const worked = liveWorkedMin(me)
 
   // Off day (leave / holiday) — no clocking.
@@ -126,6 +126,11 @@ export function ClockWidget() {
       >
         <span className={'h-2 w-2 rounded-full ' + meta.dot + (today.state === 'IN' ? ' animate-pulse' : '')} />
         <span className="hidden text-body-sm font-semibold text-ink sm:inline">{pillText}</span>
+        {workMode === 'WFH' && (
+          <span className="hidden items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[11px] font-semibold text-accent sm:inline-flex" title="Working from home">
+            <House size={11} /> WFH
+          </span>
+        )}
         <Clock size={16} className="text-ink-muted sm:hidden" />
       </button>
 

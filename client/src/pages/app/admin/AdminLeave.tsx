@@ -12,7 +12,7 @@ import {
 } from '../../../lib/adminApi'
 
 const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
-const LEAVE_TONE = { ON_LEAVE: 'primary', HOLIDAY: 'accent', OFF: 'neutral' } as const
+const LEAVE_TONE = { ON_LEAVE: 'primary', HOLIDAY: 'accent', OFF: 'neutral', WFH: 'success' } as const
 
 export default function AdminLeave() {
   const { addToast } = useToast()
@@ -121,6 +121,7 @@ export default function AdminLeave() {
                 <option value="ON_LEAVE">On Leave</option>
                 <option value="OFF">Off</option>
                 <option value="HOLIDAY">Holiday</option>
+                <option value="WFH">Work From Home</option>
               </select>
             </div>
             <Button type="submit" className="col-span-2" leadingIcon={<Plus size={16} />}>Record Leave</Button>

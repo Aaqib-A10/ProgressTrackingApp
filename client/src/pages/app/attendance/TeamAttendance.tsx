@@ -419,7 +419,8 @@ function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => voi
     setSaving(true)
     try {
       await markLeave(userId, date, { type, note: note.trim() || undefined })
-      addToast({ type: 'success', message: `Marked ${type === 'ON_LEAVE' ? 'On Leave' : 'Off'} for ${date}.` })
+      const typeLabel = type === 'ON_LEAVE' ? 'On Leave' : type === 'WFH' ? 'Work From Home' : 'Off'
+      addToast({ type: 'success', message: `Marked ${typeLabel} for ${date}.` })
       setNote('')
       onChanged()
     } catch (e) {
@@ -441,6 +442,7 @@ function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => voi
           <select value={type} onChange={(e) => setType(e.target.value as LeaveMarkType)} className={inputCls}>
             <option value="ON_LEAVE">On Leave</option>
             <option value="OFF">Off</option>
+            <option value="WFH">Work From Home</option>
           </select>
         </Field>
         <label className="block flex-1">
@@ -449,7 +451,7 @@ function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => voi
         </label>
         <Button size="sm" onClick={mark} disabled={saving}>Mark</Button>
       </div>
-      <p className="mt-2 text-body-sm text-ink-muted">They can't clock in on a leave/off day, and it's excluded from worked-hours averages.</p>
+      <p className="mt-2 text-body-sm text-ink-muted">They can't clock in on a leave/off day, and it's excluded from worked-hours averages. Work From Home still lets them clock in (off-network) and counts as a worked day.</p>
     </div>
   )
 }
@@ -518,14 +520,14 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
             <div key={r.date} className="rounded-card border border-line">
               <div className="flex items-center gap-3 px-3 py-2.5">
                 <div className="w-28 shrink-0 text-body-sm font-medium text-ink">{fmtDate(r.date)}</div>
-                <Badge tone={r.label === 'PRESENT' ? 'success' : r.label === 'ABSENT' ? 'danger' : 'neutral'}>{r.label === 'PRESENT' ? 'Present' : r.label === 'ABSENT' ? 'Absent' : r.label === 'HOLIDAY' ? 'Holiday' : r.label === 'ON_LEAVE' ? 'Leave' : 'Off'}</Badge>
+                <Badge tone={r.label === 'PRESENT' ? 'success' : r.label === 'ABSENT' ? 'danger' : 'neutral'}>{r.label === 'PRESENT' ? 'Present' : r.label === 'ABSENT' ? 'Absent' : r.label === 'HOLIDAY' ? 'Holiday' : r.label === 'ON_LEAVE' ? 'Leave' : r.label === 'WFH' ? 'WFH' : 'Off'}</Badge>
                 <div className="flex-1 text-body-sm tabular-nums text-ink-muted">
                   {r.checkIn ?? '—'} → {r.checkOut ?? '—'} · {formatMinutes(r.workedMin)}
                   {r.late && <span className="ml-2 text-warning">Late</span>}
                   {r.label === 'PRESENT' && r.completed && <span className="ml-2 text-success">Full shift</span>}
                   {r.label === 'PRESENT' && !r.completed && r.shortMin != null && r.shortMin > 0 && <span className="ml-2 text-warning">Short {formatMinutes(r.shortMin)}</span>}
                 </div>
-                {r.label === 'ON_LEAVE' || r.label === 'OFF' ? (
+                {r.label === 'ON_LEAVE' || r.label === 'OFF' || r.label === 'WFH' ? (
                   <button onClick={() => unmarkLeave(r.date)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove leave">
                     <Trash2 size={14} />
                   </button>

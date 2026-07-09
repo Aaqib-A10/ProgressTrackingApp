@@ -178,13 +178,15 @@ async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
     prisma.leaveDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } }),
     prisma.holiday.findUnique({ where: { date: dateValue } }),
   ])
-  const offLabel = leave ? leave.type : holiday ? 'HOLIDAY' : null
+  const isWfh = leave?.type === 'WFH'
+  const offLabel = leave && !isWfh ? leave.type : holiday ? 'HOLIDAY' : null
   return {
     date: dateStr,
     today: serializeToday(day, shift, now),
     shift,
     offLabel, // 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | null — clocking blocked when set
     offName: holiday?.name ?? null,
+    workMode: isWfh ? 'WFH' : null, // WFH is a worked day: clocking stays enabled
   }
 }
 
@@ -244,19 +246,24 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
   const dateValue = dbDateFromString(dateStr)
 
   const ip = getClientIp(req)
-  const blocked = await officeNetworkBlock(ip, me.role)
-  if (blocked) {
-    res.status(403).json({ error: blocked })
-    return
-  }
 
   const [leave, holiday] = await Promise.all([
     prisma.leaveDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } }),
     prisma.holiday.findUnique({ where: { date: dateValue } }),
   ])
-  if (leave || holiday) {
+  const isWfh = leave?.type === 'WFH'
+  if ((leave && !isWfh) || holiday) {
     res.status(409).json({ error: leave ? 'You are marked off today.' : `Today is a holiday (${holiday!.name}).` })
     return
+  }
+
+  // Office-network gate — skipped on WFH days, where the person works off-site by design.
+  if (!isWfh) {
+    const blocked = await officeNetworkBlock(ip, me.role)
+    if (blocked) {
+      res.status(403).json({ error: blocked })
+      return
+    }
   }
   const existing = await findToday(me.id)
   if (existing?.checkInAt) {
@@ -784,7 +791,7 @@ async function requireManageableTarget(me: Awaited<ReturnType<typeof loadUser>>,
   return target
 }
 
-const leaveSchema = z.object({ type: z.enum(['ON_LEAVE', 'OFF']), note: z.string().max(300).optional() })
+const leaveSchema = z.object({ type: z.enum(['ON_LEAVE', 'OFF', 'WFH']), note: z.string().max(300).optional() })
 
 /** PUT /api/attendance/:userId/leave/:date — TL/Admin marks a member On Leave / Off. */
 export async function markLeave(req: AuthedRequest, res: Response): Promise<void> {
@@ -794,7 +801,7 @@ export async function markLeave(req: AuthedRequest, res: Response): Promise<void
   if (!target) return
   const parsed = leaveSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'Pick a leave type (On Leave / Off).' })
+    res.status(400).json({ error: 'Pick a leave type (On Leave / Off / WFH).' })
     return
   }
   if (date > companyToday()) {

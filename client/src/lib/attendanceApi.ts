@@ -36,9 +36,11 @@ export interface MeResponse {
   /** When set, clocking is blocked (leave/off/holiday). */
   offLabel: OffLabel | null
   offName: string | null
+  /** 'WFH' on a work-from-home day — clocking stays enabled, shown as a badge. */
+  workMode: 'WFH' | null
 }
 
-export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'ABSENT'
+export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'WFH' | 'ABSENT'
 
 export interface AttendanceDayRow {
   date: string
@@ -132,7 +134,7 @@ export const getUserShift = (userId: string) => api.get<UserShiftResponse>(`/att
 export const putUserShift = (userId: string, input: Shift) => api.put<{ override: Shift }>(`/attendance/shift/user/${userId}`, input)
 export const clearUserShift = (userId: string) => api.del<void>(`/attendance/shift/user/${userId}`)
 
-export type LeaveMarkType = 'ON_LEAVE' | 'OFF'
+export type LeaveMarkType = 'ON_LEAVE' | 'OFF' | 'WFH'
 export const markLeave = (userId: string, date: string, input: { type: LeaveMarkType; note?: string }) =>
   api.put<{ leave: { date: string; type: LeaveMarkType; note: string } }>(`/attendance/${userId}/leave/${date}`, input)
 export const removeLeave = (userId: string, date: string) => api.del<void>(`/attendance/${userId}/leave/${date}`)

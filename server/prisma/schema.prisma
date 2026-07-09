@@ -81,6 +81,7 @@ enum LeaveType {
   ON_LEAVE
   HOLIDAY
   OFF
+  WFH // Working from home — a worked day: person can still clock in (off-network allowed) and metrics count.
 }
 
 /// Tone of a piece of Team Lead → employee feedback.

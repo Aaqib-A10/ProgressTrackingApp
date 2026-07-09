@@ -224,10 +224,13 @@ export async function listAgents(req: AuthedRequest, res: Response): Promise<voi
     res.json({ agents: [] })
     return
   }
-  const [members, lead] = await Promise.all([
-    prisma.user.findMany({ where: { departmentId: dept.id, role: 'MEMBER', isActive: true }, orderBy: { name: 'asc' } }),
-    prisma.user.findFirst({ where: { departmentId: dept.id, role: 'TEAM_LEAD', isActive: true }, orderBy: { name: 'asc' } }),
-  ])
+  // The Team Lead is evaluable too (TLs still take calls), so include them in the roster —
+  // not just MEMBERs — otherwise a CSR/ITAD Team Lead can never be scored.
+  const members = await prisma.user.findMany({
+    where: { departmentId: dept.id, role: { in: ['MEMBER', 'TEAM_LEAD'] }, isActive: true },
+    orderBy: { name: 'asc' },
+  })
+  const lead = members.find((m) => m.role === 'TEAM_LEAD') ?? null
   const ids = members.map((m) => m.id)
   const evals = await prisma.qaEvaluation.findMany({
     where: { agentId: { in: ids }, status: 'SUBMITTED' },

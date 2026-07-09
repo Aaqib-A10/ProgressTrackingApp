@@ -98,7 +98,7 @@ export interface LeaveRow {
   userId: string
   userName: string
   date: string
-  type: 'ON_LEAVE' | 'HOLIDAY' | 'OFF'
+  type: 'ON_LEAVE' | 'HOLIDAY' | 'OFF' | 'WFH'
   note: string
 }
 export const listHolidays = () => api.get<{ holidays: Holiday[] }>('/admin/holidays')
