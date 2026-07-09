@@ -27,10 +27,19 @@ import { tasksRouter } from './routes/tasks'
 export function createApp(): Express {
   const app = express()
 
-  // Behind the Traefik gateway (TLS terminated there) + Nginx, trust forwarded
-  // headers so req.secure / req.protocol reflect the original HTTPS request
-  // (X-Forwarded-Proto). Needed for the `secure` auth cookie to behave correctly.
-  app.set('trust proxy', true)
+  // Trust proxy = number of proxy hops in front of Node, so req.ip is the REAL
+  // client IP (used by the office-network attendance check) and req.secure /
+  // req.protocol reflect the original HTTPS request (for the secure auth cookie).
+  //
+  // SECURITY: never use `true` here — it trusts any client-supplied
+  // X-Forwarded-For, letting anyone spoof their IP and bypass the office-network
+  // restriction. Set TRUST_PROXY to the exact hop count instead:
+  //   direct (no proxy)      → leave unset  (req.ip = socket)
+  //   Nginx only             → TRUST_PROXY=1
+  //   Nginx + Traefik/CDN    → TRUST_PROXY=2
+  const tp = process.env.TRUST_PROXY
+  if (tp && /^\d+$/.test(tp)) app.set('trust proxy', Number(tp))
+  else if (tp) app.set('trust proxy', tp) // e.g. a specific subnet like "10.0.0.0/8"
 
   app.use(
     cors({
