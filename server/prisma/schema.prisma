@@ -177,6 +177,7 @@ model User {
   todos        TodoItem[]
   meetingNotes MeetingNote[] @relation("MeetingNoteAuthor")
   bids         Bid[]         @relation("BidAgent")
+  attendanceReminders AttendanceReminder[]
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -397,6 +398,25 @@ model OfficeNetwork {
   cidr      String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+enum ReminderKind {
+  CHECK_IN
+  CHECK_OUT
+}
+
+/// One row per (user, day, kind) once a reminder email has been sent — the
+/// scheduler uses it to avoid sending duplicate check-in/out reminders.
+model AttendanceReminder {
+  id     String       @id @default(cuid())
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime     @db.Date
+  kind   ReminderKind
+  sentAt DateTime     @default(now())
+
+  @@unique([userId, date, kind])
+  @@index([date])
 }
 
 /// A single break within an attendance day. `endAt` null = break still open.

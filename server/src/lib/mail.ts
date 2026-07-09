@@ -75,3 +75,24 @@ export function sendInviteEmail(opts: { to: string; name: string; token: string;
   ].filter((l) => l !== '').join('\n')
   return sendMail({ to: opts.to, subject: 'You are invited to PulseTrack', html, text })
 }
+
+/** Remind an employee to check in or check out. Best-effort (no-ops without a key). */
+export function sendAttendanceReminderEmail(opts: {
+  to: string
+  name: string
+  kind: 'CHECK_IN' | 'CHECK_OUT'
+  shiftLabel: string
+}): Promise<void> {
+  const isIn = opts.kind === 'CHECK_IN'
+  const link = `${APP_URL}/app/attendance/me`
+  const title = isIn ? `Don't forget to check in` : `Remember to check out`
+  const line = isIn
+    ? `Your shift (${opts.shiftLabel}) has started and we haven't seen your check-in yet. Tap below to clock in.`
+    : `Your shift (${opts.shiftLabel}) has ended and you're still clocked in. Tap below to check out.`
+  const html = shell(
+    `Hi ${opts.name},`,
+    `<p style="font-size:14px;line-height:1.5">${line}</p>${button(link, isIn ? 'Check in now' : 'Check out now')}`,
+  )
+  const text = [`Hi ${opts.name},`, '', line, link].join('\n')
+  return sendMail({ to: opts.to, subject: isIn ? 'Reminder: check in for your shift' : 'Reminder: check out of your shift', html, text })
+}
