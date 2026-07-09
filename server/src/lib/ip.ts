@@ -9,6 +9,11 @@ import type { Request } from 'express'
 
 /** The caller's IP, normalized (strips the IPv4-mapped-IPv6 `::ffff:` prefix). */
 export function getClientIp(req: Request): string {
+  // Behind Cloudflare (Tunnel/proxy), CF-Connecting-IP is the true client IP and
+  // cannot be spoofed by the client — Cloudflare overwrites any supplied value.
+  // The origin is only reachable via the tunnel, so this header is trustworthy.
+  const cf = req.headers['cf-connecting-ip']
+  if (typeof cf === 'string' && cf.trim()) return cf.trim().replace(/^::ffff:/, '')
   const raw = req.ip || req.socket.remoteAddress || ''
   return raw.replace(/^::ffff:/, '')
 }

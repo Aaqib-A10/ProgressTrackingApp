@@ -216,6 +216,27 @@ async function officeNetworkBlock(ip: string, role: Role): Promise<string | null
   return 'You must be on the office network to record attendance.'
 }
 
+/**
+ * GET /api/attendance/ip-check — self-diagnostic for the office-network feature.
+ * Any signed-in user can open this to see the IP the server resolves for them and
+ * whether it would pass the current allowlist. Used to confirm the real office IP
+ * (as seen through Cloudflare) before enforcement is switched on.
+ */
+export async function ipCheck(req: AuthedRequest, res: Response): Promise<void> {
+  const ip = getClientIp(req)
+  const nets = await prisma.officeNetwork.findMany({ where: { isActive: true }, select: { cidr: true } })
+  const enforcementActive = nets.length > 0
+  const wouldBeAllowed = !enforcementActive || isLoopback(ip) || ipAllowed(ip, nets.map((n) => n.cidr))
+  res.json({
+    resolvedIp: ip,
+    cfConnectingIp: (req.headers['cf-connecting-ip'] as string) ?? null,
+    xForwardedFor: (req.headers['x-forwarded-for'] as string) ?? null,
+    remoteAddr: req.socket.remoteAddress ?? null,
+    enforcementActive,
+    wouldBeAllowed,
+  })
+}
+
 export async function checkIn(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
   const now = new Date()

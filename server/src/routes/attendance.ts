@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMe, checkIn, checkOut, startBreak, endBreak, history, teamView, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, removeLeave } from '../controllers/attendanceController'
+import { getMe, checkIn, checkOut, startBreak, endBreak, history, teamView, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, removeLeave, ipCheck } from '../controllers/attendanceController'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
@@ -13,6 +13,7 @@ attendanceRouter.post('/check-in', asyncHandler(checkIn))
 attendanceRouter.post('/check-out', asyncHandler(checkOut))
 attendanceRouter.post('/break/start', asyncHandler(startBreak))
 attendanceRouter.post('/break/end', asyncHandler(endBreak))
+attendanceRouter.get('/ip-check', asyncHandler(ipCheck))
 
 // History — own by default; TL/Admin may pass ?userId= within their scope.
 attendanceRouter.get('/history', asyncHandler(history))

@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { ipInCidr, ipAllowed, isValidCidr, isLoopback } from './ip'
+import type { Request } from 'express'
+import { ipInCidr, ipAllowed, isValidCidr, isLoopback, getClientIp } from './ip'
+
+describe('getClientIp', () => {
+  const mk = (headers: Record<string, string>, ip?: string): Request =>
+    ({ headers, ip, socket: { remoteAddress: ip } } as unknown as Request)
+
+  it('prefers CF-Connecting-IP behind Cloudflare', () => {
+    expect(getClientIp(mk({ 'cf-connecting-ip': '119.156.230.29' }, '127.0.0.1'))).toBe('119.156.230.29')
+  })
+  it('falls back to req.ip when no CF header', () => {
+    expect(getClientIp(mk({}, '203.0.113.9'))).toBe('203.0.113.9')
+  })
+  it('strips the IPv4-mapped IPv6 prefix', () => {
+    expect(getClientIp(mk({}, '::ffff:203.0.113.9'))).toBe('203.0.113.9')
+  })
+})
 
 describe('ipInCidr', () => {
   it('matches a bare IP as /32', () => {
