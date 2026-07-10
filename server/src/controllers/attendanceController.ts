@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
+import { isOvernight, shiftMinutes, shiftDayString } from '../lib/shiftDay'
 import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
 import type { Role } from '@prisma/client'
 
@@ -55,24 +56,13 @@ async function resolveShift(userId: string, departmentId: string | null): Promis
   return pickShiftFor(rows, userId, departmentId)
 }
 
-function hhmm(d: Date): string {
-  return DateTime.fromJSDate(d).setZone(COMPANY_TZ).toFormat('HH:mm')
+function hhmm(d: Date, shift?: Shift): string {
+  return DateTime.fromJSDate(d).setZone(shift?.timeZone || COMPANY_TZ).toFormat('HH:mm')
 }
 
-/** 12-hour company-timezone label, e.g. "9:03 AM". */
-function clockLabel(d: Date): string {
-  return DateTime.fromJSDate(d).setZone(COMPANY_TZ).toFormat('h:mm a')
-}
-
-/** Minutes-after-local-midnight for a shift "HH:mm". */
-function shiftMinutes(time: string): number {
-  const [h, m] = time.split(':').map(Number)
-  return h * 60 + m
-}
-
-/** A shift is overnight when its end time is at or before its start time (crosses midnight). */
-function isOvernight(shift: Shift): boolean {
-  return shiftMinutes(shift.endTime) <= shiftMinutes(shift.startTime)
+/** 12-hour label in the shift's timezone (company tz fallback), e.g. "9:03 AM". */
+function clockLabel(d: Date, shift?: Shift): string {
+  return DateTime.fromJSDate(d).setZone(shift?.timeZone || COMPANY_TZ).toFormat('h:mm a')
 }
 
 /** Shift end on a continuous axis where an overnight end rolls into the next day (+1440). */
@@ -154,9 +144,9 @@ function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
   return {
     state: liveState(day),
     checkInAt: day?.checkInAt?.toISOString() ?? null,
-    checkInLabel: day?.checkInAt ? clockLabel(day.checkInAt) : null,
+    checkInLabel: day?.checkInAt ? clockLabel(day.checkInAt, shift) : null,
     checkOutAt: day?.checkOutAt?.toISOString() ?? null,
-    checkOutLabel: day?.checkOutAt ? clockLabel(day.checkOutAt) : null,
+    checkOutLabel: day?.checkOutAt ? clockLabel(day.checkOutAt, shift) : null,
     openBreakStartAt: openBreak?.startAt.toISOString() ?? null,
     workedMin: worked,
     breakMin: day ? breakMinutes(day, now) : 0,
@@ -170,11 +160,13 @@ function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
 /** Load today's day + any leave/holiday marker, and build the widget payload. */
 async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
   const now = new Date()
-  const dateStr = companyToday(now)
+  // The attendance day is resolved in the employee's shift timezone so night
+  // shifts that cross midnight stay on one date (see shiftDayString).
+  const shift = await resolveShift(me.id, me.departmentId)
+  const dateStr = shiftDayString(shift, now)
   const dateValue = dbDateFromString(dateStr)
-  const [day, shift, leave, holiday] = await Promise.all([
+  const [day, leave, holiday] = await Promise.all([
     prisma.attendanceDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } }, include: { breaks: { orderBy: { startAt: 'asc' } } } }),
-    resolveShift(me.id, me.departmentId),
     prisma.leaveDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } }),
     prisma.holiday.findUnique({ where: { date: dateValue } }),
   ])
@@ -196,8 +188,10 @@ export async function getMe(req: AuthedRequest, res: Response): Promise<void> {
   res.json(await buildMePayload(me))
 }
 
-async function findToday(userId: string): Promise<DayWithBreaks | null> {
-  const dateValue = dbDateFromString(companyToday())
+/** The employee's current attendance day, resolved in their shift timezone so an
+ *  overnight shift is found after midnight (see shiftDayString). */
+async function findToday(userId: string, shift: Shift): Promise<DayWithBreaks | null> {
+  const dateValue = dbDateFromString(shiftDayString(shift))
   return prisma.attendanceDay.findUnique({
     where: { userId_date: { userId, date: dateValue } },
     include: { breaks: { orderBy: { startAt: 'asc' } } },
@@ -242,7 +236,8 @@ export async function ipCheck(req: AuthedRequest, res: Response): Promise<void> 
 export async function checkIn(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
   const now = new Date()
-  const dateStr = companyToday(now)
+  const shift = await resolveShift(me.id, me.departmentId)
+  const dateStr = shiftDayString(shift, now)
   const dateValue = dbDateFromString(dateStr)
 
   const ip = getClientIp(req)
@@ -265,7 +260,7 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
       return
     }
   }
-  const existing = await findToday(me.id)
+  const existing = await findToday(me.id, shift)
   if (existing?.checkInAt) {
     res.status(409).json({ error: 'Already checked in today.' })
     return
@@ -290,7 +285,8 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
     return
   }
 
-  const existing = await findToday(me.id)
+  const shift = await resolveShift(me.id, me.departmentId)
+  const existing = await findToday(me.id, shift)
   if (!existing?.checkInAt) {
     res.status(409).json({ error: 'You are not checked in.' })
     return
@@ -308,7 +304,8 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
 export async function startBreak(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
   const now = new Date()
-  const existing = await findToday(me.id)
+  const shift = await resolveShift(me.id, me.departmentId)
+  const existing = await findToday(me.id, shift)
   if (!existing?.checkInAt) {
     res.status(409).json({ error: 'Check in before taking a break.' })
     return
@@ -329,7 +326,8 @@ export async function startBreak(req: AuthedRequest, res: Response): Promise<voi
 export async function endBreak(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
   const now = new Date()
-  const existing = await findToday(me.id)
+  const shift = await resolveShift(me.id, me.departmentId)
+  const existing = await findToday(me.id, shift)
   const open = existing?.breaks.find((b) => !b.endAt)
   if (!open) {
     res.status(409).json({ error: 'No break is running.' })
@@ -347,8 +345,8 @@ function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: s
     date: dateStr,
     label, // PRESENT | ON_LEAVE | OFF | HOLIDAY | ABSENT
     offName,
-    checkIn: day?.checkInAt ? hhmm(day.checkInAt) : null,
-    checkOut: day?.checkOutAt ? hhmm(day.checkOutAt) : null,
+    checkIn: day?.checkInAt ? hhmm(day.checkInAt, shift) : null,
+    checkOut: day?.checkOutAt ? hhmm(day.checkOutAt, shift) : null,
     workedMin: worked,
     breakMin: day ? breakMinutes(day, day.checkOutAt ?? now) : 0,
     late: day?.checkInAt ? isLate(day.checkInAt, shift) : false,
@@ -485,17 +483,25 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const startValue = dbDateFromString(range.startDate)
   const endValue = dbDateFromString(range.endDate)
   const now = new Date()
-  const todayValue = dbDateFromString(companyToday(now))
 
   const members = await scopedMembers(me)
   const memberIds = members.map((m) => m.id)
 
-  const [days, leaves, todayDays, shifts] = await Promise.all([
+  const [days, leaves, shifts] = await Promise.all([
     prisma.attendanceDay.findMany({ where: { userId: { in: memberIds }, date: { gte: startValue, lte: endValue } }, include: { breaks: true } }),
     prisma.leaveDay.findMany({ where: { userId: { in: memberIds }, date: { gte: startValue, lte: endValue } } }),
-    prisma.attendanceDay.findMany({ where: { userId: { in: memberIds }, date: todayValue }, include: { breaks: true } }),
     prisma.attendanceShift.findMany(),
   ])
+
+  // "Today" is per-member: a night-shift employee's live day is anchored in their
+  // own shift timezone, so it can differ from the company calendar date.
+  const shiftByUser = new Map(members.map((m) => [m.id, pickShiftFor(shifts, m.id, m.departmentId)]))
+  const todayDateByUser = new Map([...shiftByUser].map(([id, sh]) => [id, shiftDayString(sh, now)]))
+  const todayValues = [...new Set(todayDateByUser.values())].map(dbDateFromString)
+  const todayDays = await prisma.attendanceDay.findMany({
+    where: { userId: { in: memberIds }, date: { in: todayValues } },
+    include: { breaks: true },
+  })
 
   const daysByUser = new Map<string, DayWithBreaks[]>()
   for (const d of days) {
@@ -505,10 +511,13 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   }
   const leaveCount = new Map<string, number>()
   for (const l of leaves) leaveCount.set(l.userId, (leaveCount.get(l.userId) ?? 0) + 1)
-  const todayByUser = new Map(todayDays.map((d) => [d.userId, d]))
+  const todayByUser = new Map<string, DayWithBreaks>()
+  for (const d of todayDays) {
+    if (dateStringFromDb(d.date) === todayDateByUser.get(d.userId)) todayByUser.set(d.userId, d)
+  }
 
   const rows = members.map((m) => {
-    const shift = pickShiftFor(shifts, m.id, m.departmentId)
+    const shift = shiftByUser.get(m.id)!
     const md = daysByUser.get(m.id) ?? []
     const present = md.filter((d) => d.checkInAt)
     const totalWorkedMin = present.reduce((s, d) => s + (workedMinutes(d, now) ?? 0), 0)
@@ -532,7 +541,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       shiftRequiredMin: shift.requiredMinutes,
       hasOverride: shifts.some((s) => s.userId === m.id),
       todayState: liveState(today),
-      todayCheckIn: today?.checkInAt ? clockLabel(today.checkInAt) : null,
+      todayCheckIn: today?.checkInAt ? clockLabel(today.checkInAt, shift) : null,
     }
   })
 
@@ -700,9 +709,19 @@ export async function deleteUserShift(req: AuthedRequest, res: Response): Promis
 const timeOrNull = z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.literal(''), z.null()]).optional()
 const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull })
 
-/** Combine a "YYYY-MM-DD" + "HH:mm" into a UTC instant anchored in company tz. */
-function instantFrom(dateStr: string, hhmmStr: string): Date {
-  return DateTime.fromISO(`${dateStr}T${hhmmStr}`, { zone: COMPANY_TZ }).toJSDate()
+/**
+ * Combine a "YYYY-MM-DD" (the attendance day) + "HH:mm" into a UTC instant,
+ * anchored in the shift's timezone. For an overnight shift a time in the
+ * post-midnight portion (before the shift start) belongs to the NEXT calendar
+ * day, so it is rolled forward — e.g. a 04:00 check-out on a 19:00–04:00 shift.
+ */
+function instantFrom(dateStr: string, hhmmStr: string, shift: Shift): Date {
+  const zone = shift.timeZone || COMPANY_TZ
+  let dt = DateTime.fromISO(`${dateStr}T${hhmmStr}`, { zone })
+  if (isOvernight(shift) && shiftMinutes(hhmmStr) < shiftMinutes(shift.startTime)) {
+    dt = dt.plus({ days: 1 })
+  }
+  return dt.toJSDate()
 }
 
 /**
@@ -731,14 +750,15 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     return
   }
   const dateValue = dbDateFromString(date)
+  const shift = await resolveShift(userId, target.departmentId)
   const existing = await prisma.attendanceDay.findUnique({
     where: { userId_date: { userId, date: dateValue } },
     include: { breaks: true },
   })
 
   const data: { checkInAt?: Date | null; checkOutAt?: Date | null } = {}
-  if (parsed.data.checkIn !== undefined) data.checkInAt = parsed.data.checkIn ? instantFrom(date, parsed.data.checkIn) : null
-  if (parsed.data.checkOut !== undefined) data.checkOutAt = parsed.data.checkOut ? instantFrom(date, parsed.data.checkOut) : null
+  if (parsed.data.checkIn !== undefined) data.checkInAt = parsed.data.checkIn ? instantFrom(date, parsed.data.checkIn, shift) : null
+  if (parsed.data.checkOut !== undefined) data.checkOutAt = parsed.data.checkOut ? instantFrom(date, parsed.data.checkOut, shift) : null
 
   const finalIn = data.checkInAt !== undefined ? data.checkInAt : existing?.checkInAt ?? null
   const finalOut = data.checkOutAt !== undefined ? data.checkOutAt : existing?.checkOutAt ?? null
@@ -767,8 +787,8 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
   res.json({
     day: {
       date,
-      checkIn: day.checkInAt ? hhmm(day.checkInAt) : null,
-      checkOut: day.checkOutAt ? hhmm(day.checkOutAt) : null,
+      checkIn: day.checkInAt ? hhmm(day.checkInAt, shift) : null,
+      checkOut: day.checkOutAt ? hhmm(day.checkOutAt, shift) : null,
     },
   })
 }

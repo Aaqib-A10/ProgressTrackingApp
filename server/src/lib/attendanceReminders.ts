@@ -1,7 +1,8 @@
 import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
-import { COMPANY_TZ, companyToday, dbDateFromString } from './time'
+import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
+import { shiftDayString } from './shiftDay'
 import { sendAttendanceReminderEmail } from './mail'
 
 /**
@@ -80,30 +81,39 @@ const shiftLabel = (s: ReminderShift) => `${s.startTime}–${s.endTime}`
 
 /** One evaluation pass. Returns how many reminders were sent, by kind. */
 export async function runAttendanceReminderTick(now: Date = new Date()): Promise<{ checkIn: number; checkOut: number }> {
-  const todayStr = companyToday(now)
-  const todayValue = dbDateFromString(todayStr)
-
-  const [users, shifts, days, leaves, holiday, sent] = await Promise.all([
+  const [users, shifts] = await Promise.all([
     prisma.user.findMany({ where: { isActive: true, status: 'ACTIVE' }, select: { id: true, name: true, email: true, departmentId: true } }),
     prisma.attendanceShift.findMany({ select: { userId: true, departmentId: true, startTime: true, endTime: true, graceMin: true, workingDays: true, timeZone: true } }),
-    prisma.attendanceDay.findMany({ where: { date: todayValue }, select: { userId: true, checkInAt: true, checkOutAt: true } }),
-    prisma.leaveDay.findMany({ where: { date: todayValue }, select: { userId: true } }),
-    prisma.holiday.findUnique({ where: { date: todayValue } }),
-    prisma.attendanceReminder.findMany({ where: { date: todayValue }, select: { userId: true, kind: true } }),
   ])
 
-  // Company-wide holiday → nobody gets nudged.
-  if (holiday) return { checkIn: 0, checkOut: 0 }
+  // Each employee's records are keyed by the date of their current shift instance
+  // resolved in their own timezone, so a night shift past midnight matches the
+  // evening's day rather than a fresh (empty) calendar date.
+  const shiftByUser = new Map(users.map((u) => [u.id, pickShift(shifts, u.id, u.departmentId)]))
+  const dayStrByUser = new Map(users.map((u) => [u.id, shiftDayString(shiftByUser.get(u.id)!, now)]))
+  const dateValues = [...new Set(dayStrByUser.values())].map(dbDateFromString)
 
-  const dayByUser = new Map(days.map((d) => [d.userId, d]))
-  const onLeave = new Set(leaves.map((l) => l.userId))
-  const sentSet = new Set(sent.map((s) => `${s.userId}:${s.kind}`))
+  const [days, leaves, holidays, sent] = await Promise.all([
+    prisma.attendanceDay.findMany({ where: { date: { in: dateValues } }, select: { userId: true, date: true, checkInAt: true, checkOutAt: true } }),
+    prisma.leaveDay.findMany({ where: { date: { in: dateValues } }, select: { userId: true, date: true } }),
+    prisma.holiday.findMany({ where: { date: { in: dateValues } }, select: { date: true } }),
+    prisma.attendanceReminder.findMany({ where: { date: { in: dateValues } }, select: { userId: true, date: true, kind: true } }),
+  ])
+
+  // Match each record to the user whose shift day it belongs to.
+  const dayByUser = new Map(days.filter((d) => dateStringFromDb(d.date) === dayStrByUser.get(d.userId)).map((d) => [d.userId, d]))
+  const onLeave = new Set(leaves.filter((l) => dateStringFromDb(l.date) === dayStrByUser.get(l.userId)).map((l) => l.userId))
+  const sentSet = new Set(sent.filter((s) => dateStringFromDb(s.date) === dayStrByUser.get(s.userId)).map((s) => `${s.userId}:${s.kind}`))
+  const holidayDates = new Set(holidays.map((h) => dateStringFromDb(h.date)))
 
   let checkIn = 0
   let checkOut = 0
   for (const u of users) {
     if (!u.email || onLeave.has(u.id)) continue
-    const shift = pickShift(shifts, u.id, u.departmentId)
+    const dayStr = dayStrByUser.get(u.id)!
+    // Holiday on this employee's own shift day → no nudge.
+    if (holidayDates.has(dayStr)) continue
+    const shift = shiftByUser.get(u.id)!
     const day = dayByUser.get(u.id)
     const kind = reminderDue(shift, now, {
       checkedIn: !!day?.checkInAt,
@@ -115,7 +125,7 @@ export async function runAttendanceReminderTick(now: Date = new Date()): Promise
 
     // Claim the reminder first (unique constraint prevents double-send across ticks).
     try {
-      await prisma.attendanceReminder.create({ data: { userId: u.id, date: todayValue, kind } })
+      await prisma.attendanceReminder.create({ data: { userId: u.id, date: dbDateFromString(dayStr), kind } })
     } catch {
       continue // already claimed by a concurrent tick
     }
