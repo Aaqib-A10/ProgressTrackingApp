@@ -431,11 +431,22 @@ export async function listTargets(req: AuthedRequest, res: Response): Promise<vo
   }
   const deptId = await scopedDepartmentId(me, req.query.department as DepartmentType)
   const targets = await prisma.target.findMany({
-    where: { scope: 'DEPARTMENT', ...(deptId === undefined ? {} : { departmentId: deptId }) },
-    include: { department: { select: { type: true } } },
+    where: { scope: { in: ['DEPARTMENT', 'BRAND'] }, ...(deptId === undefined ? {} : { departmentId: deptId }) },
+    include: { department: { select: { type: true } }, brand: { select: { id: true, name: true } } },
     orderBy: [{ departmentId: 'asc' }, { metricKey: 'asc' }],
   })
-  res.json({ targets: targets.map((t) => ({ id: t.id, department: t.department?.type ?? null, metricKey: t.metricKey, period: t.period, value: t.value, minValue: t.minValue, maxValue: t.maxValue })) })
+  res.json({
+    targets: targets.map((t) => ({
+      id: t.id,
+      department: t.department?.type ?? null,
+      brand: t.brand ? { id: t.brand.id, name: t.brand.name } : null,
+      metricKey: t.metricKey,
+      period: t.period,
+      value: t.value,
+      minValue: t.minValue,
+      maxValue: t.maxValue,
+    })),
+  })
 }
 
 const targetSchema = z
@@ -445,6 +456,7 @@ const targetSchema = z
     period: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
     minValue: z.number().min(0),
     maxValue: z.number().min(0),
+    brandId: z.string().optional(),
   })
   .refine((d) => d.maxValue >= d.minValue, { message: 'Max value must be greater than or equal to min value' })
 
@@ -468,13 +480,28 @@ export async function upsertTarget(req: AuthedRequest, res: Response): Promise<v
     res.status(403).json({ error: 'Can only set targets for your department' })
     return
   }
+  // Brand-scoped target (Marketing): validate the brand belongs to this department.
+  let brandId: string | null = null
+  if (parsed.data.brandId) {
+    const brand = await prisma.brand.findUnique({ where: { id: parsed.data.brandId } })
+    if (!brand || brand.departmentId !== dept.id) {
+      res.status(400).json({ error: 'Unknown brand for this department' })
+      return
+    }
+    brandId = brand.id
+  }
+  const scope = brandId ? 'BRAND' : 'DEPARTMENT'
   const { minValue, maxValue } = parsed.data
   const fields = { minValue, maxValue, value: maxValue, setById: me.id } // value mirrors the goal (max) for existing references
-  const existing = await prisma.target.findFirst({ where: { scope: 'DEPARTMENT', departmentId: dept.id, metricKey: parsed.data.metricKey, period: parsed.data.period } })
+  const existing = await prisma.target.findFirst({
+    where: { scope, departmentId: dept.id, brandId, metricKey: parsed.data.metricKey, period: parsed.data.period },
+  })
   const target = existing
     ? await prisma.target.update({ where: { id: existing.id }, data: fields })
-    : await prisma.target.create({ data: { scope: 'DEPARTMENT', departmentId: dept.id, metricKey: parsed.data.metricKey, period: parsed.data.period, ...fields } })
-  res.json({ target: { id: target.id, department: parsed.data.department, metricKey: target.metricKey, period: target.period, value: target.value, minValue: target.minValue, maxValue: target.maxValue } })
+    : await prisma.target.create({ data: { scope, departmentId: dept.id, brandId, metricKey: parsed.data.metricKey, period: parsed.data.period, ...fields } })
+  res.json({
+    target: { id: target.id, department: parsed.data.department, brandId, metricKey: target.metricKey, period: target.period, value: target.value, minValue: target.minValue, maxValue: target.maxValue },
+  })
 }
 
 /** DELETE /api/admin/targets/:id — remove a target (TL: own department only). */

@@ -6,10 +6,12 @@ import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import type { Department } from '../../../lib/types'
 import { listTargets, upsertTarget, deleteTarget, type AdminTarget } from '../../../lib/adminApi'
+import { listBrands, type Brand } from '../../../lib/marketingApi'
 
 const DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'ITAD', label: 'ITAD' },
   { value: 'LEAD_GEN', label: 'Lead Generation' },
+  { value: 'MARKETING', label: 'Marketing' },
 ]
 const METRICS: Record<string, { key: string; label: string }[]> = {
   ITAD: [
@@ -20,6 +22,12 @@ const METRICS: Record<string, { key: string; label: string }[]> = {
   LEAD_GEN: [
     { key: 'leadsGenerated', label: 'Leads Generated' },
     { key: 'qualifiedMql', label: 'Qualified (MQL)' },
+  ],
+  MARKETING: [
+    { key: 'social.followers', label: 'Followers (Social)' },
+    { key: 'social.impressions', label: 'Impressions (Social)' },
+    { key: 'social.engagement', label: 'Engagement (Social)' },
+    { key: 'content.blogs', label: 'Blogs / month' },
   ],
 }
 const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
@@ -32,6 +40,8 @@ export default function AdminTargets() {
   const [period, setPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY')
   const [minValue, setMinValue] = useState(80)
   const [maxValue, setMaxValue] = useState(100)
+  const [brands, setBrands] = useState<Brand[]>([])
+  const [brandId, setBrandId] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,6 +49,7 @@ export default function AdminTargets() {
       .then((r) => setTargets(r.targets))
       .catch(() => addToast({ type: 'error', message: 'Could not load targets.' }))
       .finally(() => setLoading(false))
+    listBrands().then((r) => setBrands(r.brands)).catch(() => undefined)
   }, [addToast])
 
   const metricOptions = useMemo(() => METRICS[department] ?? [], [department])
@@ -50,9 +61,12 @@ export default function AdminTargets() {
       return
     }
     try {
-      const { target } = await upsertTarget({ department, metricKey, period, minValue, maxValue })
+      const useBrand = department === 'MARKETING' && brandId
+      const { target } = await upsertTarget({ department, metricKey, period, minValue, maxValue, ...(useBrand ? { brandId } : {}) })
       setTargets((ts) => {
-        const idx = ts.findIndex((t) => t.department === target.department && t.metricKey === target.metricKey && t.period === target.period)
+        const idx = ts.findIndex(
+          (t) => t.department === target.department && t.metricKey === target.metricKey && t.period === target.period && (t.brand?.id ?? null) === (target.brand?.id ?? null),
+        )
         if (idx >= 0) return ts.map((t, i) => (i === idx ? target : t))
         return [...ts, target]
       })
@@ -76,6 +90,7 @@ export default function AdminTargets() {
 
   const columns: Column<AdminTarget>[] = [
     { key: 'department', header: 'Department', render: (t) => (t.department ? t.department.replace('_', ' ') : '—') },
+    { key: 'brand', header: 'Brand', render: (t) => t.brand?.name ?? '—' },
     { key: 'metricKey', header: 'Metric', render: (t) => t.metricKey },
     { key: 'period', header: 'Period', render: (t) => t.period.toLowerCase() },
     { key: 'min', header: 'Min', align: 'right', render: (t) => t.minValue ?? '—' },
@@ -105,10 +120,19 @@ export default function AdminTargets() {
         <form onSubmit={save} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-6">
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
-            <select className={sel} value={department} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setMetricKey((METRICS[d] ?? [])[0]?.key ?? '') }}>
+            <select className={sel} value={department} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setMetricKey((METRICS[d] ?? [])[0]?.key ?? ''); if (d === 'MARKETING') setPeriod('MONTHLY') }}>
               {DEPARTMENTS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
             </select>
           </div>
+          {department === 'MARKETING' && (
+            <div>
+              <label className="mb-1 block text-body-sm font-semibold text-ink">Brand</label>
+              <select className={sel} value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+                <option value="">All (department)</option>
+                {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Metric</label>
             <select className={sel} value={metricKey} onChange={(e) => setMetricKey(e.target.value)}>

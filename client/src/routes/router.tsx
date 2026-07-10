@@ -48,6 +48,11 @@ const SocialActivity = lazy(() => import('../pages/app/marketing/SocialActivity'
 const ContentActivity = lazy(() => import('../pages/app/marketing/ContentActivity'))
 const EditorialCalendar = lazy(() => import('../pages/app/marketing/EditorialCalendar'))
 const MarketingAnalytics = lazy(() => import('../pages/app/marketing/MarketingAnalytics'))
+const MarketingBrands = lazy(() => import('../pages/app/marketing/MarketingBrands'))
+const SocialMonthly = lazy(() => import('../pages/app/marketing/SocialMonthly'))
+const SocialAnalytics = lazy(() => import('../pages/app/marketing/SocialAnalytics'))
+const MarketingBlogs = lazy(() => import('../pages/app/marketing/MarketingBlogs'))
+const MasterPlan = lazy(() => import('../pages/app/marketing/MasterPlan'))
 const MyAttendance = lazy(() => import('../pages/app/attendance/MyAttendance'))
 const TeamAttendance = lazy(() => import('../pages/app/attendance/TeamAttendance'))
 const MyTodo = lazy(() => import('../pages/app/MyTodo'))
@@ -133,8 +138,13 @@ export const router = createBrowserRouter([
       { path: 'marketing/calendar', element: <EditorialCalendar /> },
       { path: 'marketing/seo', element: <SeoActivity /> },
       { path: 'marketing/social', element: <SocialActivity /> },
+      { path: 'marketing/social/monthly', element: <SocialMonthly /> },
+      { path: 'marketing/social/analytics', element: <SocialAnalytics /> },
       { path: 'marketing/content', element: <ContentActivity /> },
+      { path: 'marketing/blogs', element: <MarketingBlogs /> },
+      { path: 'marketing/plan', element: <MasterPlan /> },
       { path: 'marketing/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']}><MarketingAnalytics /></RequireRole> },
+      { path: 'marketing/brands', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><MarketingBrands /></RequireRole> },
 
       // Attendance (all authed users; team view for TL/Admin)
       { path: 'attendance/me', element: <MyAttendance /> },

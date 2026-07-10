@@ -64,6 +64,7 @@ export const listTeamHistory = () => api.get<{ events: TeamEvent[] }>('/admin/te
 export interface AdminTarget {
   id: string
   department: Department | null
+  brand?: { id: string; name: string } | null
   metricKey: string
   period: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   value: number
@@ -71,7 +72,7 @@ export interface AdminTarget {
   maxValue: number | null
 }
 export const listTargets = () => api.get<{ targets: AdminTarget[] }>('/admin/targets')
-export const upsertTarget = (input: { department: Department; metricKey: string; period: 'DAILY' | 'WEEKLY' | 'MONTHLY'; minValue: number; maxValue: number }) =>
+export const upsertTarget = (input: { department: Department; metricKey: string; period: 'DAILY' | 'WEEKLY' | 'MONTHLY'; minValue: number; maxValue: number; brandId?: string }) =>
   api.post<{ target: AdminTarget }>('/admin/targets', input)
 export const deleteTarget = (id: string) => api.del<void>(`/admin/targets/${id}`)
 

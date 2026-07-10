@@ -184,3 +184,201 @@ export interface MarketingAnalyticsData {
 export function getMarketingAnalytics(range: RangeKey, custom?: CustomRange | null) {
   return api.get<MarketingAnalyticsData>(`/marketing/analytics?${rangeQuery(range, custom)}`)
 }
+
+// ---------- Brands / profiles ----------
+export interface Brand {
+  id: string
+  name: string
+  slug: string
+  website: string | null
+  isActive: boolean
+}
+export function listBrands(all = false) {
+  return api.get<{ brands: Brand[] }>(`/marketing/brands${all ? '?all=1' : ''}`)
+}
+export function createBrand(input: { name: string; website?: string }) {
+  return api.post<{ brand: Brand }>('/marketing/brands', input)
+}
+export function updateBrand(id: string, patch: { name?: string; website?: string | null; isActive?: boolean }) {
+  return api.patch<{ brand: Brand }>(`/marketing/brands/${id}`, patch)
+}
+export function deleteBrand(id: string) {
+  return api.del(`/marketing/brands/${id}`)
+}
+
+// ---------- Monthly per-brand social stats ----------
+export const SOCIAL_PLATFORMS = [
+  { key: 'INSTAGRAM', label: 'Instagram' },
+  { key: 'FACEBOOK', label: 'Facebook' },
+  { key: 'LINKEDIN', label: 'LinkedIn' },
+  { key: 'X', label: 'X (Twitter)' },
+  { key: 'TIKTOK', label: 'TikTok' },
+  { key: 'YOUTUBE', label: 'YouTube' },
+  { key: 'GOOGLE_BUSINESS', label: 'Google Business' },
+  { key: 'OTHER', label: 'Other' },
+] as const
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number]['key']
+export const MONTHLY_METRICS = [
+  { key: 'followers', label: 'Followers' },
+  { key: 'impressions', label: 'Impressions' },
+  { key: 'engagement', label: 'Engagement' },
+  { key: 'reach', label: 'Reach' },
+  { key: 'posts', label: 'Posts' },
+] as const
+export type MonthlyMetricKey = (typeof MONTHLY_METRICS)[number]['key']
+
+export interface MonthlyStatRow {
+  platform: SocialPlatform
+  followers: number
+  impressions: number
+  engagement: number
+  reach: number
+  posts: number
+  source: 'MANUAL' | 'API'
+  hasData: boolean
+}
+export interface MonthlyGridResponse {
+  brand: { id: string; name: string }
+  month: string
+  platforms: MonthlyStatRow[]
+}
+export function getMonthlySocial(brandId: string, month: string) {
+  return api.get<MonthlyGridResponse>(`/marketing/social/monthly?brandId=${brandId}&month=${month}`)
+}
+export function upsertMonthlySocial(input: { brandId: string; month: string; rows: Array<{ platform: SocialPlatform } & Record<MonthlyMetricKey, number>> }) {
+  return api.put<MonthlyGridResponse>('/marketing/social/monthly', input)
+}
+
+export interface ComparePlatform {
+  platform: SocialPlatform
+  followers: number
+  followersDelta: number
+  followersGrowth: number
+  impressions: number
+  impressionsDelta: number
+  engagement: number
+  engagementDelta: number
+  hadPrev: boolean
+}
+export interface CompareResponse {
+  brand: { id: string; name: string }
+  month: string
+  prevMonth: string
+  platforms: ComparePlatform[]
+  totals: {
+    followers: number
+    followersDelta: number
+    impressions: number
+    impressionsDelta: number
+    engagement: number
+    engagementDelta: number
+    hadPrev: boolean
+  }
+  trends: { followers: MktTrendPoint[]; engagement: MktTrendPoint[]; impressions: MktTrendPoint[] }
+  targets: {
+    followers: TargetBand | null
+    impressions: TargetBand | null
+    engagement: TargetBand | null
+  }
+}
+export interface TargetBand {
+  min: number
+  max: number
+  band: 'green' | 'amber' | 'red'
+}
+export function compareMonthlySocial(brandId: string, month: string, months = 6) {
+  return api.get<CompareResponse>(`/marketing/social/monthly/compare?brandId=${brandId}&month=${month}&months=${months}`)
+}
+export interface CrossBrandResponse {
+  month: string
+  metric: MonthlyMetricKey
+  brands: { brandId: string; name: string; value: number; delta: number }[]
+}
+export function crossBrandSocial(month: string, metric: MonthlyMetricKey = 'followers') {
+  return api.get<CrossBrandResponse>(`/marketing/social/monthly/cross?month=${month}&metric=${metric}`)
+}
+
+// ---------- Blogs ----------
+export interface BlogPost {
+  id: string
+  title: string
+  url: string | null
+  wordCount: number | null
+  month: string
+  publishedAt: string | null
+  brand: { id: string; name: string }
+  author: { id: string; name: string } | null
+}
+export function listBlogs(params: { brandId?: string; month?: string } = {}) {
+  const q = new URLSearchParams()
+  if (params.brandId) q.set('brandId', params.brandId)
+  if (params.month) q.set('month', params.month)
+  const qs = q.toString()
+  return api.get<{ blogs: BlogPost[] }>(`/marketing/blogs${qs ? `?${qs}` : ''}`)
+}
+export function createBlog(input: { brandId: string; title: string; url?: string; wordCount?: number; publishedAt?: string }) {
+  return api.post<{ blog: BlogPost }>('/marketing/blogs', input)
+}
+export function deleteBlog(id: string) {
+  return api.del(`/marketing/blogs/${id}`)
+}
+export interface BlogCounts {
+  month: string
+  total: number
+  counts: { brandId: string; name: string; count: number; delta: number }[]
+}
+export function getBlogCounts(month: string) {
+  return api.get<BlogCounts>(`/marketing/blogs/counts?month=${month}`)
+}
+
+// ---------- Master Plan ----------
+export type PlanItemStatus = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'PENDING'
+export const PLAN_STATUSES: { key: PlanItemStatus; label: string; tone: 'neutral' | 'primary' | 'success' | 'warning' }[] = [
+  { key: 'PLANNED', label: 'Planned', tone: 'neutral' },
+  { key: 'IN_PROGRESS', label: 'In Progress', tone: 'primary' },
+  { key: 'COMPLETED', label: 'Completed', tone: 'success' },
+  { key: 'PENDING', label: 'Pending', tone: 'warning' },
+]
+export interface PlanItem {
+  id: string
+  title: string
+  taskType: string | null
+  brand: { id: string; name: string } | null
+  owner: { id: string; name: string } | null
+  stakeholder: string | null
+  status: PlanItemStatus
+  plannedDate: string | null
+  completionDate: string | null
+  documentLink: string | null
+  order: number
+}
+export interface PlanResponse {
+  month: string
+  plan: { id: string; month: string; title: string | null } | null
+  items: PlanItem[]
+  progress: { done: number; total: number; pct: number }
+  canEdit: boolean
+}
+export function getPlan(month: string) {
+  return api.get<PlanResponse>(`/marketing/plan?month=${month}`)
+}
+export interface PlanItemInput {
+  month: string
+  title: string
+  taskType?: string | null
+  brandId?: string | null
+  stakeholder?: string | null
+  status?: PlanItemStatus
+  plannedDate?: string | null
+  completionDate?: string | null
+  documentLink?: string | null
+}
+export function addPlanItem(input: PlanItemInput) {
+  return api.post<{ item: PlanItem }>('/marketing/plan/items', input)
+}
+export function updatePlanItem(id: string, patch: Partial<Omit<PlanItemInput, 'month'>>) {
+  return api.patch<{ item: PlanItem }>(`/marketing/plan/items/${id}`, patch)
+}
+export function deletePlanItem(id: string) {
+  return api.del(`/marketing/plan/items/${id}`)
+}

@@ -39,16 +39,18 @@ echo "-- npm install";            npm install --no-audit --no-fund
 echo "-- prisma migrate deploy";  ( cd server && npx prisma migrate deploy )
 echo "-- prisma generate";        ( cd server && npx prisma generate )
 echo "-- build server";           npm run build -w server
+echo "-- seed marketing example";  ( cd server && npx tsx src/scripts/seedMarketingExample.ts ) || echo "   (seed skipped/failed — non-fatal)"
 echo "-- restart API";            pm2 restart "$PM2_APP"
-echo "   >> server fix is now LIVE"
+echo "   >> server is now LIVE"
 echo "-- build client";           npm run build -w client
 echo "-- publish client build";
-if sudo -n true 2>/dev/null; then
-  sudo rsync -a --delete client/dist/ "$WEB_ROOT"/
+if rsync -a --delete client/dist/ "$WEB_ROOT"/ 2>/dev/null; then
   echo "   client published to $WEB_ROOT"
+elif sudo -n rsync -a --delete client/dist/ "$WEB_ROOT"/ 2>/dev/null; then
+  echo "   client published to $WEB_ROOT (via sudo)"
 else
-  echo "   (skipped: needs sudo password — server/API already updated;"
-  echo "    only the client-side WFH badge waits on this)"
+  echo "   !! could not write $WEB_ROOT — run once:  sudo chown -R erp:erp $WEB_ROOT"
+  echo "   (API is updated; the new pages appear once the client is published)"
 fi
 echo "===== DEPLOY DONE ====="
 REMOTE
