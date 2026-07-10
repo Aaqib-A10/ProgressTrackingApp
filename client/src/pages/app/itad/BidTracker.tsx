@@ -100,18 +100,26 @@ export default function BidTracker() {
   }
 
   const columns: Column<Bid>[] = [
-    { key: 'title', header: 'Bid Title', render: (b) => (
+    { key: 'title', header: 'Bid Title', className: 'max-w-[300px]', render: (b) => (
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 font-medium text-ink">
           {b.reminderSet && <Bell size={13} className="shrink-0 text-primary" />}
           <span className="truncate">{b.title}</span>
         </div>
-        <span className="text-body-sm text-ink-muted">#{b.number}{b.submissionType ? ` · ${SUBMISSION_LABEL[b.submissionType]}` : ''}</span>
+        <div className="flex items-center gap-1.5 text-body-sm text-ink-muted">
+          <span className="font-semibold uppercase text-ink-muted">{BID_TYPE_LABEL[b.type]}</span>
+          <span>·</span>
+          <span>#{b.number}</span>
+          {b.submissionType && <><span>·</span><span>{SUBMISSION_LABEL[b.submissionType]}</span></>}
+        </div>
       </div>
     ) },
-    { key: 'company', header: 'Company', render: (b) => b.company },
-    { key: 'type', header: 'Type', render: (b) => <Badge tone="neutral">{BID_TYPE_LABEL[b.type]}</Badge> },
-    { key: 'district', header: 'District', render: (b) => b.district || '—' },
+    { key: 'company', header: 'Company', className: 'max-w-[240px]', render: (b) => (
+      <div className="min-w-0">
+        <div className="truncate text-ink">{b.company}</div>
+        {b.district && <div className="truncate text-body-sm text-ink-muted">{b.district}</div>}
+      </div>
+    ) },
     { key: 'agent', header: 'Agent', render: (b) => b.agentName },
     { key: 'dueDate', header: 'Due Date', render: (b) => {
       const urgent = isUrgent(b)
