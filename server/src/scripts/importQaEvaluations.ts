@@ -48,9 +48,8 @@ async function main() {
   })
   if (!evaluator) throw new Error(`Evaluator matching "${meta.evaluatorName}" (QA role) not found`)
 
-  // Resolve agent accounts by email once.
-  const emails = [...new Set(records.map((r) => r.agentEmail).filter(Boolean))]
-  const users = await prisma.user.findMany({ where: { email: { in: emails } } })
+  // Resolve agent accounts by email (case-insensitive), scoped to the department.
+  const users = await prisma.user.findMany({ where: { departmentId: dept.id } })
   const byEmail = new Map(users.map((u) => [u.email.toLowerCase(), u.id]))
 
   let created = 0,
