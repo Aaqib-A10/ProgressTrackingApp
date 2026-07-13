@@ -583,6 +583,17 @@ export async function updateTag(req: AuthedRequest, res: Response): Promise<void
     res.status(400).json({ error: 'Invalid input' })
     return
   }
+  // Scope to the caller's department: a Team Lead may only edit their own
+  // department's tags (Super Admin may edit any). Mirrors createTag's guard.
+  const existing = await prisma.tag.findUnique({ where: { id: req.params.id } })
+  if (!existing) {
+    res.status(404).json({ error: 'Tag not found' })
+    return
+  }
+  if (me.role === 'TEAM_LEAD' && existing.departmentId !== me.departmentId) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
   const tag = await prisma.tag.update({ where: { id: req.params.id }, data: parsed.data, include: { department: { select: { type: true } } } })
   res.json({ tag: { id: tag.id, name: tag.name, type: tag.type, department: tag.department?.type ?? null, isActive: tag.isActive } })
 }
