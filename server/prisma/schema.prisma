@@ -702,6 +702,14 @@ model BrandSocialMonthly {
   reach       Int @default(0)
   posts       Int @default(0)
 
+  // Extended metrics from LinkedIn Analytics / Meta Business Suite exports.
+  newFollowers   Int   @default(0) // followers gained in the month
+  visitors       Int   @default(0) // unique page visitors
+  engagementRate Float @default(0) // avg engagement rate as a percentage, e.g. 21.4
+  clicks         Int   @default(0)
+  reactions      Int   @default(0) // likes + reactions
+  views          Int   @default(0) // post/video views
+
   source      StatSource @default(MANUAL)
   enteredById String?
   enteredBy   User?      @relation("BrandSocialEnteredBy", fields: [enteredById], references: [id])

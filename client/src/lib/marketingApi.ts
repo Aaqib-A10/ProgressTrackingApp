@@ -234,6 +234,13 @@ export interface MonthlyStatRow {
   engagement: number
   reach: number
   posts: number
+  // Extended metrics (from platform exports).
+  newFollowers: number
+  visitors: number
+  engagementRate: number
+  clicks: number
+  reactions: number
+  views: number
   source: 'MANUAL' | 'API'
   hasData: boolean
 }
