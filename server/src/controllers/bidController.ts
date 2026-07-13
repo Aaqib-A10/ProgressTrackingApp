@@ -43,6 +43,8 @@ function serialize(b: BidRow) {
     submissionType: b.submissionType,
     priceQuoted: b.priceQuoted,
     awardedPrice: b.awardedPrice,
+    bidBond: b.bidBond,
+    bidBondAmount: b.bidBondAmount,
     createdAt: b.createdAt.toISOString(),
   }
 }
@@ -86,7 +88,7 @@ const priceField = z.number().nonnegative().nullable().optional()
 const createSchema = z.object({
   title: z.string().trim().min(1, 'Bid title is required').max(300),
   company: z.string().trim().min(1, 'Company is required').max(200),
-  type: z.enum(['RFQ', 'RFP', 'BID']),
+  type: z.enum(['RFQ', 'RFP', 'BID', 'PO']),
   district: z.string().trim().max(200).nullable().optional(),
   status: z.enum(['ACTIVE', 'SUBMITTED', 'WON', 'LOST']).optional(),
   dueDate: z.string().datetime({ offset: true }).or(z.string().min(1)),
@@ -94,6 +96,8 @@ const createSchema = z.object({
   submissionType: z.enum(['PHYSICAL', 'EMAIL', 'PORTAL']).nullable().optional(),
   priceQuoted: priceField,
   awardedPrice: priceField,
+  bidBond: z.boolean().optional(),
+  bidBondAmount: priceField,
 })
 
 function parseDue(input: string): Date | null {
@@ -139,6 +143,9 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
       priceQuoted: v.priceQuoted ?? null,
       // Awarded price applies to a decided bid — Won (our price) or Lost (winning price).
       awardedPrice: v.status === 'WON' || v.status === 'LOST' ? v.awardedPrice ?? null : null,
+      bidBond: v.bidBond ?? false,
+      // Bond amount only kept when a bid bond applies.
+      bidBondAmount: v.bidBond ? v.bidBondAmount ?? null : null,
     },
     include: { agent: { select: { id: true, name: true } } },
   })
@@ -148,7 +155,7 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(300).optional(),
   company: z.string().trim().min(1).max(200).optional(),
-  type: z.enum(['RFQ', 'RFP', 'BID']).optional(),
+  type: z.enum(['RFQ', 'RFP', 'BID', 'PO']).optional(),
   district: z.string().trim().max(200).nullable().optional(),
   status: z.enum(['ACTIVE', 'SUBMITTED', 'WON', 'LOST']).optional(),
   dueDate: z.string().min(1).optional(),
@@ -156,6 +163,8 @@ const updateSchema = z.object({
   submissionType: z.enum(['PHYSICAL', 'EMAIL', 'PORTAL']).nullable().optional(),
   priceQuoted: priceField,
   awardedPrice: priceField,
+  bidBond: z.boolean().optional(),
+  bidBondAmount: priceField,
 })
 
 /** PATCH /api/itad/bids/:id — edit or change status. Owner, or ITAD lead/admin. */
@@ -209,6 +218,12 @@ export async function updateBid(req: AuthedRequest, res: Response): Promise<void
   // price, Lost = the winning price), cleared while still Active/Submitted.
   if (nextStatus === 'WON' || nextStatus === 'LOST') data.awardedPrice = nextAwarded
   else data.awardedPrice = null
+
+  // Bid bond: the amount is only kept while a bond applies.
+  const nextBidBond = v.bidBond ?? existing.bidBond
+  if (v.bidBond !== undefined) data.bidBond = v.bidBond
+  if (!nextBidBond) data.bidBondAmount = null
+  else if (v.bidBondAmount !== undefined) data.bidBondAmount = v.bidBondAmount
 
   const bid = await prisma.bid.update({
     where: { id: existing.id },

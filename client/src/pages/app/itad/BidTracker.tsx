@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Trash2, Pencil, TriangleAlert, Bell, BellOff, Search } from 'lucide-react'
+import { Plus, Trash2, Pencil, TriangleAlert, Bell, BellOff, Search, ShieldCheck } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -14,7 +14,7 @@ import {
 } from '../../../lib/bidApi'
 
 const STATUSES: BidStatus[] = ['ACTIVE', 'SUBMITTED', 'WON', 'LOST']
-const TYPES: BidType[] = ['RFQ', 'RFP', 'BID']
+const TYPES: BidType[] = ['RFQ', 'RFP', 'BID', 'PO']
 const SUBMISSION_TYPES: BidSubmissionType[] = ['PHYSICAL', 'EMAIL', 'PORTAL']
 
 const STATUS_TONE: Record<BidStatus, BadgeTone> = { ACTIVE: 'primary', SUBMITTED: 'warning', WON: 'success', LOST: 'danger' }
@@ -104,6 +104,11 @@ export default function BidTracker() {
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 font-medium text-ink">
           {b.reminderSet && <Bell size={13} className="shrink-0 text-primary" />}
+          {b.bidBond && (
+            <span className="shrink-0 text-accent" title={b.bidBondAmount != null ? `Bid bond: ${money(b.bidBondAmount)}` : 'Bid bond required'}>
+              <ShieldCheck size={13} />
+            </span>
+          )}
           <span className="truncate">{b.title}</span>
         </div>
         <div className="flex items-center gap-1.5 text-body-sm text-ink-muted">
@@ -252,6 +257,8 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
   const [submissionType, setSubmissionType] = useState<BidSubmissionType | null>(bid?.submissionType ?? null)
   const [priceQuoted, setPriceQuoted] = useState(bid?.priceQuoted != null ? String(bid.priceQuoted) : '')
   const [awardedPrice, setAwardedPrice] = useState(bid?.awardedPrice != null ? String(bid.awardedPrice) : '')
+  const [bidBond, setBidBond] = useState(bid?.bidBond ?? false)
+  const [bidBondAmount, setBidBondAmount] = useState(bid?.bidBondAmount != null ? String(bid.bidBondAmount) : '')
   const [saving, setSaving] = useState(false)
 
   // Price is prominent once the bid is being Submitted (or beyond).
@@ -279,6 +286,8 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
       submissionType,
       priceQuoted: priceQuoted ? Number(priceQuoted) : null,
       awardedPrice: (status === 'WON' || status === 'LOST') && awardedPrice ? Number(awardedPrice) : null,
+      bidBond,
+      bidBondAmount: bidBond && bidBondAmount ? Number(bidBondAmount) : null,
     }
     try {
       if (editing) await updateBid(bid!.id, input)
@@ -356,6 +365,27 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
             <Field label={status === 'LOST' ? 'Awarded price (winning bid)' : 'Awarded price'} required>
               <input type="number" min="0" step="0.01" inputMode="decimal" value={awardedPrice} onChange={(e) => setAwardedPrice(e.target.value)} placeholder="0.00" className={inputCls} />
             </Field>
+          )}
+        </div>
+
+        {/* Bid bond — applies to any type; amount is optional when required. */}
+        <div className="rounded-btn border border-line bg-bg px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-body-sm text-ink">
+              <ShieldCheck size={16} className={bidBond ? 'text-accent' : 'text-ink-muted'} />
+              Bid bond required
+            </div>
+            <button type="button" role="switch" aria-checked={bidBond} onClick={() => setBidBond((v) => !v)}
+              className={'relative h-6 w-11 rounded-full transition-colors ' + (bidBond ? 'bg-accent' : 'bg-slate-300')}>
+              <span className={'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ' + (bidBond ? 'translate-x-5' : 'translate-x-0.5')} />
+            </button>
+          </div>
+          {bidBond && (
+            <div className="mt-3">
+              <Field label="Bid bond amount (optional)">
+                <input type="number" min="0" step="0.01" inputMode="decimal" value={bidBondAmount} onChange={(e) => setBidBondAmount(e.target.value)} placeholder="0.00" className={inputCls} />
+              </Field>
+            </div>
           )}
         </div>
 

@@ -1141,6 +1141,7 @@ enum BidType {
   RFQ
   RFP
   BID
+  PO // Purchase Order
 }
 
 enum BidStatus {
@@ -1175,6 +1176,8 @@ model Bid {
   submissionType BidSubmissionType?
   priceQuoted    Float?
   awardedPrice   Float? // required when status = WON
+  bidBond        Boolean            @default(false) // whether a bid bond applies
+  bidBondAmount  Float? // optional bid bond value (only meaningful when bidBond)
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

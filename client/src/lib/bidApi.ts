@@ -1,6 +1,6 @@
 import { api } from './api'
 
-export type BidType = 'RFQ' | 'RFP' | 'BID'
+export type BidType = 'RFQ' | 'RFP' | 'BID' | 'PO'
 export type BidStatus = 'ACTIVE' | 'SUBMITTED' | 'WON' | 'LOST'
 export type BidSubmissionType = 'PHYSICAL' | 'EMAIL' | 'PORTAL'
 
@@ -11,7 +11,7 @@ export const BID_STATUS_LABEL: Record<BidStatus, string> = {
   LOST: 'Lost',
 }
 
-export const BID_TYPE_LABEL: Record<BidType, string> = { RFQ: 'RFQ', RFP: 'RFP', BID: 'Bid' }
+export const BID_TYPE_LABEL: Record<BidType, string> = { RFQ: 'RFQ', RFP: 'RFP', BID: 'Bid', PO: 'PO' }
 
 export const SUBMISSION_LABEL: Record<BidSubmissionType, string> = {
   PHYSICAL: 'Physical',
@@ -34,6 +34,8 @@ export interface Bid {
   submissionType: BidSubmissionType | null
   priceQuoted: number | null
   awardedPrice: number | null
+  bidBond: boolean
+  bidBondAmount: number | null
   createdAt: string
 }
 
@@ -62,6 +64,8 @@ export interface BidInput {
   submissionType?: BidSubmissionType | null
   priceQuoted?: number | null
   awardedPrice?: number | null
+  bidBond?: boolean
+  bidBondAmount?: number | null
 }
 
 export const listBids = () => api.get<BidListResponse>('/itad/bids')
