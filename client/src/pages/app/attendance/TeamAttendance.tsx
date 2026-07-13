@@ -221,20 +221,21 @@ const WEEKDAYS = [
   { n: 5, label: 'Fr' },
   { n: 6, label: 'Sa' },
 ]
-const TIMEZONES = [
-  'Asia/Karachi',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Manila',
-  'Asia/Singapore',
-  'Europe/London',
-  'Europe/Berlin',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'Australia/Sydney',
-  'UTC',
+// value = IANA zone, label = friendly name (so US Central/Pacific etc. are obvious).
+const TIMEZONES: { value: string; label: string }[] = [
+  { value: 'Asia/Karachi', label: 'Pakistan – Karachi (PKT)' },
+  { value: 'Asia/Dubai', label: 'UAE – Dubai (GST)' },
+  { value: 'Asia/Kolkata', label: 'India – Kolkata (IST)' },
+  { value: 'Asia/Manila', label: 'Philippines – Manila (PHT)' },
+  { value: 'Asia/Singapore', label: 'Singapore (SGT)' },
+  { value: 'Europe/London', label: 'UK – London (GMT/BST)' },
+  { value: 'Europe/Berlin', label: 'Europe – Berlin (CET/CEST)' },
+  { value: 'America/New_York', label: 'US Eastern – New York (ET)' },
+  { value: 'America/Chicago', label: 'US Central – Chicago (CT)' },
+  { value: 'America/Denver', label: 'US Mountain – Denver (MT)' },
+  { value: 'America/Los_Angeles', label: 'US Pacific – Los Angeles (PT)' },
+  { value: 'Australia/Sydney', label: 'Australia – Sydney (AET)' },
+  { value: 'UTC', label: 'UTC' },
 ]
 
 /** Shared start/end/grace/required/working-days/timezone editor used by the shift + per-account modals. */
@@ -283,7 +284,7 @@ function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) =
         <select value={value.timeZone ?? ''} onChange={(e) => set({ timeZone: e.target.value || null })} className={inputCls}>
           <option value="">Company default</option>
           {TIMEZONES.map((tz) => (
-            <option key={tz} value={tz}>{tz.replace('_', ' ')}</option>
+            <option key={tz.value} value={tz.value}>{tz.label}</option>
           ))}
         </select>
       </Field>
