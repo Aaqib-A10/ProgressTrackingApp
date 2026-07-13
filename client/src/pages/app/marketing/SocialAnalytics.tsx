@@ -6,19 +6,24 @@ import { TrendLineChart } from '../../../components/charts/TrendLineChart'
 import { CHART } from '../../../components/charts/chartTheme'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
-import { formatNumber, formatSignedPercent } from '../../../lib/format'
+import { formatNumber } from '../../../lib/format'
 import {
   listBrands,
   compareMonthlySocial,
   crossBrandSocial,
   SOCIAL_PLATFORMS,
-  MONTHLY_METRICS,
+  CROSS_METRICS,
   type Brand,
   type CompareResponse,
   type ComparePlatform,
   type CrossBrandResponse,
-  type MonthlyMetricKey,
+  type CrossMetricKey,
 } from '../../../lib/marketingApi'
+
+/** Engagement rate as "21.4%". */
+const pct1 = (v: number) => `${v.toFixed(1)}%`
+/** Percentage-point delta as "+10.5pp". */
+const ppLabel = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}pp`
 
 const sel =
   'h-10 rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
@@ -36,7 +41,7 @@ export default function SocialAnalytics() {
   const [month, setMonth] = useState(thisMonth())
   const [data, setData] = useState<CompareResponse | null>(null)
   const [cross, setCross] = useState<CrossBrandResponse | null>(null)
-  const [crossMetric, setCrossMetric] = useState<MonthlyMetricKey>('followers')
+  const [crossMetric, setCrossMetric] = useState<CrossMetricKey>('newFollowers')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -73,31 +78,27 @@ export default function SocialAnalytics() {
 
   const platformColumns: Column<ComparePlatform>[] = [
     { key: 'platform', header: 'Platform', render: (r) => <span className="font-medium text-ink">{platformLabel(r.platform)}</span> },
-    { key: 'followers', header: 'Followers', align: 'right', render: (r) => formatNumber(r.followers) },
-    {
-      key: 'growth',
-      header: 'Net growth',
-      align: 'right',
-      render: (r) => (
-        <span className={r.followersGrowth >= 0 ? 'text-success' : 'text-danger'}>
-          {r.followersGrowth >= 0 ? '+' : ''}
-          {formatNumber(r.followersGrowth)}
-        </span>
-      ),
-    },
+    { key: 'newFollowers', header: 'New Followers', align: 'right', render: (r) => formatNumber(r.newFollowers) },
+    { key: 'visitors', header: 'Visitors', align: 'right', render: (r) => formatNumber(r.visitors) },
     { key: 'impressions', header: 'Impressions', align: 'right', render: (r) => formatNumber(r.impressions) },
-    { key: 'engagement', header: 'Engagement', align: 'right', render: (r) => formatNumber(r.engagement) },
     {
-      key: 'trend',
-      header: 'MoM',
+      key: 'engagementRate',
+      header: 'Eng. Rate',
       align: 'right',
       render: (r) =>
-        r.hadPrev ? (
-          <Badge tone={r.followersDelta >= 0 ? 'success' : 'danger'}>{formatSignedPercent(r.followersDelta)}</Badge>
+        r.engagementRate > 0 ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-medium text-ink">{pct1(r.engagementRate)}</span>
+            {r.hadPrev && r.engagementRatePp !== 0 && (
+              <Badge tone={r.engagementRatePp >= 0 ? 'success' : 'danger'}>{ppLabel(r.engagementRatePp)}</Badge>
+            )}
+          </span>
         ) : (
           <span className="text-ink-muted">—</span>
         ),
     },
+    { key: 'reactions', header: 'Reactions', align: 'right', render: (r) => formatNumber(r.reactions) },
+    { key: 'clicks', header: 'Clicks', align: 'right', render: (r) => formatNumber(r.clicks) },
   ]
 
   if (loading) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>
@@ -134,28 +135,28 @@ export default function SocialAnalytics() {
 
           {t && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <StatCard label="Followers" value={formatNumber(t.followers)} delta={delta(t.followersDelta, t.hadPrev)} caption="vs last month" />
-                {data?.targets.followers && <Badge tone={bandTone(data.targets.followers.band)}>{bandLabel(data.targets.followers.band)} · goal {formatNumber(data.targets.followers.max)}</Badge>}
-              </div>
+              <StatCard label="New Followers" value={formatNumber(t.newFollowers)} delta={delta(t.newFollowersDelta, t.hadPrev)} caption="gained vs last month" />
               <div className="space-y-2">
                 <StatCard label="Impressions" value={formatNumber(t.impressions)} delta={delta(t.impressionsDelta, t.hadPrev)} caption="vs last month" />
                 {data?.targets.impressions && <Badge tone={bandTone(data.targets.impressions.band)}>{bandLabel(data.targets.impressions.band)} · goal {formatNumber(data.targets.impressions.max)}</Badge>}
               </div>
-              <div className="space-y-2">
-                <StatCard label="Engagement" value={formatNumber(t.engagement)} delta={delta(t.engagementDelta, t.hadPrev)} caption="vs last month" />
-                {data?.targets.engagement && <Badge tone={bandTone(data.targets.engagement.band)}>{bandLabel(data.targets.engagement.band)} · goal {formatNumber(data.targets.engagement.max)}</Badge>}
-              </div>
+              <StatCard
+                label="Engagement Rate"
+                value={pct1(t.engagementRate)}
+                delta={t.hadPrev ? t.engagementRatePp : undefined}
+                deltaLabel={t.hadPrev ? ppLabel(t.engagementRatePp) : undefined}
+                caption="weighted avg · vs last month"
+              />
             </div>
           )}
 
           {data && (
             <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <Card title="Followers" subtitle="Total, over time">
-                <TrendLineChart data={data.trends.followers} showTargetSeries={!!data.targets.followers} />
+              <Card title="New Followers" subtitle="Gained per month">
+                <TrendLineChart data={data.trends.newFollowers} />
               </Card>
-              <Card title="Engagement" subtitle="Over time">
-                <TrendLineChart data={data.trends.engagement} color={CHART.accent} showTargetSeries={!!data.targets.engagement} />
+              <Card title="Engagement Rate" subtitle="Weighted avg, % per month">
+                <TrendLineChart data={data.trends.engagementRate} color={CHART.accent} />
               </Card>
               <Card title="Impressions" subtitle="Over time">
                 <TrendLineChart data={data.trends.impressions} color={CHART.success} showTargetSeries={!!data.targets.impressions} />
@@ -175,10 +176,10 @@ export default function SocialAnalytics() {
           {cross && cross.brands.length > 0 && (
             <Card
               title="Compare brands"
-              subtitle={`${cross.month} · by ${MONTHLY_METRICS.find((m) => m.key === crossMetric)?.label}`}
+              subtitle={`${cross.month} · by ${CROSS_METRICS.find((m) => m.key === crossMetric)?.label}`}
               action={
-                <select className={sel} value={crossMetric} onChange={(e) => setCrossMetric(e.target.value as MonthlyMetricKey)}>
-                  {MONTHLY_METRICS.map((m) => (
+                <select className={sel} value={crossMetric} onChange={(e) => setCrossMetric(e.target.value as CrossMetricKey)}>
+                  {CROSS_METRICS.map((m) => (
                     <option key={m.key} value={m.key}>
                       {m.label}
                     </option>
@@ -195,7 +196,7 @@ export default function SocialAnalytics() {
                       <div className="h-5 flex-1 overflow-hidden rounded-btn bg-slate-100">
                         <div className="h-full rounded-btn bg-primary/70" style={{ width: `${(b.value / max) * 100}%` }} />
                       </div>
-                      <span className="w-20 text-right text-body-sm font-semibold tabular-nums text-ink">{formatNumber(b.value)}</span>
+                      <span className="w-20 text-right text-body-sm font-semibold tabular-nums text-ink">{crossMetric === 'engagementRate' ? pct1(b.value) : formatNumber(b.value)}</span>
                     </div>
                   )
                 })}

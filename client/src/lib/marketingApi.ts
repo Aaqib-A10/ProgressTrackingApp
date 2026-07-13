@@ -265,6 +265,13 @@ export interface ComparePlatform {
   impressionsDelta: number
   engagement: number
   engagementDelta: number
+  // Extended metrics.
+  newFollowers: number
+  visitors: number
+  engagementRate: number
+  engagementRatePp: number
+  clicks: number
+  reactions: number
   hadPrev: boolean
 }
 export interface CompareResponse {
@@ -279,9 +286,26 @@ export interface CompareResponse {
     impressionsDelta: number
     engagement: number
     engagementDelta: number
+    // Extended metrics.
+    newFollowers: number
+    newFollowersDelta: number
+    visitors: number
+    visitorsDelta: number
+    clicks: number
+    clicksDelta: number
+    reactions: number
+    reactionsDelta: number
+    engagementRate: number
+    engagementRatePp: number
     hadPrev: boolean
   }
-  trends: { followers: MktTrendPoint[]; engagement: MktTrendPoint[]; impressions: MktTrendPoint[] }
+  trends: {
+    followers: MktTrendPoint[]
+    engagement: MktTrendPoint[]
+    impressions: MktTrendPoint[]
+    newFollowers: MktTrendPoint[]
+    engagementRate: MktTrendPoint[]
+  }
   targets: {
     followers: TargetBand | null
     impressions: TargetBand | null
@@ -296,12 +320,25 @@ export interface TargetBand {
 export function compareMonthlySocial(brandId: string, month: string, months = 6) {
   return api.get<CompareResponse>(`/marketing/social/monthly/compare?brandId=${brandId}&month=${month}&months=${months}`)
 }
+// Metrics selectable in the cross-brand comparison (superset of the entry grid).
+export const CROSS_METRICS = [
+  { key: 'followers', label: 'Followers' },
+  { key: 'newFollowers', label: 'New Followers' },
+  { key: 'impressions', label: 'Impressions' },
+  { key: 'engagementRate', label: 'Engagement Rate' },
+  { key: 'reach', label: 'Reach' },
+  { key: 'visitors', label: 'Visitors' },
+  { key: 'clicks', label: 'Clicks' },
+  { key: 'reactions', label: 'Reactions' },
+  { key: 'posts', label: 'Posts' },
+] as const
+export type CrossMetricKey = (typeof CROSS_METRICS)[number]['key']
 export interface CrossBrandResponse {
   month: string
-  metric: MonthlyMetricKey
+  metric: CrossMetricKey
   brands: { brandId: string; name: string; value: number; delta: number }[]
 }
-export function crossBrandSocial(month: string, metric: MonthlyMetricKey = 'followers') {
+export function crossBrandSocial(month: string, metric: CrossMetricKey = 'followers') {
   return api.get<CrossBrandResponse>(`/marketing/social/monthly/cross?month=${month}&metric=${metric}`)
 }
 

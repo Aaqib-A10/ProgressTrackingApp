@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { resolveMarketingActor, type MarketingActor } from '../lib/marketingAuth'
 import { pctDelta } from '../lib/trends'
-import { prevMonth, monthsBack, monthSeries } from '../lib/monthTrends'
+import { prevMonth, monthsBack, monthSeries, monthLabel } from '../lib/monthTrends'
 import { companyToday } from '../lib/time'
 
 export const SOCIAL_PLATFORMS: SocialPlatform[] = [
@@ -18,8 +18,20 @@ export const SOCIAL_PLATFORMS: SocialPlatform[] = [
   'GOOGLE_BUSINESS',
   'OTHER',
 ]
-const METRIC_KEYS = ['followers', 'impressions', 'engagement', 'reach', 'posts'] as const
+const METRIC_KEYS = [
+  'followers', 'newFollowers', 'visitors', 'impressions', 'reach',
+  'engagement', 'engagementRate', 'clicks', 'reactions', 'posts', 'views',
+] as const
 type MetricKey = (typeof METRIC_KEYS)[number]
+
+/** Impressions-weighted average engagement rate (a rate, not a sum); falls back
+ *  to a simple mean of the platforms that reported a rate. */
+function weightedER(rows: BrandSocialMonthly[]): number {
+  const impr = rows.reduce((a, r) => a + r.impressions, 0)
+  if (impr > 0) return Math.round((rows.reduce((a, r) => a + r.impressions * r.engagementRate, 0) / impr) * 10) / 10
+  const er = rows.filter((r) => r.engagementRate > 0)
+  return er.length ? Math.round((er.reduce((a, r) => a + r.engagementRate, 0) / er.length) * 10) / 10 : 0
+}
 
 const MONTH_RE = /^\d{4}-\d{2}$/
 const currentMonth = () => companyToday().slice(0, 7)
@@ -206,11 +218,19 @@ export async function compareMonthly(req: AuthedRequest, res: Response): Promise
       impressionsDelta: pctDelta(c?.impressions ?? 0, q?.impressions ?? 0),
       engagement: c?.engagement ?? 0,
       engagementDelta: pctDelta(c?.engagement ?? 0, q?.engagement ?? 0),
+      // Extended metrics.
+      newFollowers: c?.newFollowers ?? 0,
+      visitors: c?.visitors ?? 0,
+      engagementRate: c?.engagementRate ?? 0,
+      engagementRatePp: Math.round(((c?.engagementRate ?? 0) - (q?.engagementRate ?? 0)) * 10) / 10,
+      clicks: c?.clicks ?? 0,
+      reactions: c?.reactions ?? 0,
       hadPrev: !!q,
     }
   }).filter(Boolean)
 
-  const sum = (rows: BrandSocialMonthly[], k: MetricKey) => rows.reduce((a, r) => a + r[k], 0)
+  const sum = (rows: BrandSocialMonthly[], k: keyof BrandSocialMonthly) => rows.reduce((a, r) => a + (Number(r[k]) || 0), 0)
+  const curER = weightedER(cur)
   const totals = {
     followers: sum(cur, 'followers'),
     followersDelta: pctDelta(sum(cur, 'followers'), sum(pre, 'followers')),
@@ -218,6 +238,17 @@ export async function compareMonthly(req: AuthedRequest, res: Response): Promise
     impressionsDelta: pctDelta(sum(cur, 'impressions'), sum(pre, 'impressions')),
     engagement: sum(cur, 'engagement'),
     engagementDelta: pctDelta(sum(cur, 'engagement'), sum(pre, 'engagement')),
+    // Extended metrics.
+    newFollowers: sum(cur, 'newFollowers'),
+    newFollowersDelta: pctDelta(sum(cur, 'newFollowers'), sum(pre, 'newFollowers')),
+    visitors: sum(cur, 'visitors'),
+    visitorsDelta: pctDelta(sum(cur, 'visitors'), sum(pre, 'visitors')),
+    clicks: sum(cur, 'clicks'),
+    clicksDelta: pctDelta(sum(cur, 'clicks'), sum(pre, 'clicks')),
+    reactions: sum(cur, 'reactions'),
+    reactionsDelta: pctDelta(sum(cur, 'reactions'), sum(pre, 'reactions')),
+    engagementRate: curER,
+    engagementRatePp: Math.round((curER - weightedER(pre)) * 10) / 10, // percentage-point change
     hadPrev: pre.length > 0,
   }
 
@@ -245,6 +276,9 @@ export async function compareMonthly(req: AuthedRequest, res: Response): Promise
     followers: monthSeries(inWindow, months, (r) => r.month, (r) => r.followers, line('followers')),
     engagement: monthSeries(inWindow, months, (r) => r.month, (r) => r.engagement, line('engagement')),
     impressions: monthSeries(inWindow, months, (r) => r.month, (r) => r.impressions, line('impressions')),
+    newFollowers: monthSeries(inWindow, months, (r) => r.month, (r) => r.newFollowers),
+    // Engagement rate is a weighted average per month, not a sum.
+    engagementRate: months.map((m) => ({ label: monthLabel(m), value: weightedER(inWindow.filter((r) => r.month === m)) })),
   }
   res.json({ brand: { id: brand.id, name: brand.name }, month, prevMonth: prev, platforms, totals, trends, targets })
 }
@@ -272,8 +306,12 @@ export async function crossBrand(req: AuthedRequest, res: Response): Promise<voi
   const stats = await prisma.brandSocialMonthly.findMany({
     where: { brandId: { in: brands.map((b) => b.id) }, month: { in: [month, prev] } },
   })
-  const agg = (brandId: string, m: string) =>
-    stats.filter((s) => s.brandId === brandId && s.month === m).reduce((a, s) => a + s[metric], 0)
+  const agg = (brandId: string, m: string) => {
+    const rows = stats.filter((s) => s.brandId === brandId && s.month === m)
+    // A rate averages (weighted); every other metric sums across platforms.
+    if (metric === 'engagementRate') return weightedER(rows)
+    return rows.reduce((a, s) => a + (Number(s[metric]) || 0), 0)
+  }
   res.json({
     month,
     metric,
