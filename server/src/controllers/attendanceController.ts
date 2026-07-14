@@ -198,6 +198,41 @@ async function findToday(userId: string, shift: Shift): Promise<DayWithBreaks | 
   })
 }
 
+/**
+ * Self-healing guard for a shift timezone/hours change. A session recorded under
+ * an old timezone can end up bucketed onto today's date and then wrongly block a
+ * new check-in ("already checked in today"). When the stored check-in actually
+ * belongs to a different shift-day, move that record to the day it belongs to —
+ * merging if that day already exists (a split session) — so today's slot is free.
+ * Returns true when it reconciled a stale record (caller may proceed with the
+ * check-in), false when the record genuinely is today's (block the duplicate).
+ */
+async function reconcileStaleCheckIn(userId: string, existing: DayWithBreaks, shift: Shift, todayStr: string): Promise<boolean> {
+  const properDate = shiftDayString(shift, existing.checkInAt!)
+  if (properDate === todayStr) return false // genuinely checked in today
+  const properValue = dbDateFromString(properDate)
+  const clash = await prisma.attendanceDay.findUnique({ where: { userId_date: { userId, date: properValue } } })
+  if (!clash) {
+    // Clean move — the whole session goes to the day it belongs to; today is freed.
+    await prisma.attendanceDay.update({ where: { id: existing.id }, data: { date: properValue } })
+  } else {
+    // The proper day already has a record (split session): fold this fragment in
+    // (earliest check-in, latest check-out), move its breaks, then vacate today.
+    const ins = [clash.checkInAt, existing.checkInAt].filter((d): d is Date => !!d)
+    const outs = [clash.checkOutAt, existing.checkOutAt].filter((d): d is Date => !!d)
+    await prisma.attendanceDay.update({
+      where: { id: clash.id },
+      data: {
+        checkInAt: ins.reduce((a, b) => (a < b ? a : b)),
+        checkOutAt: outs.length ? outs.reduce((a, b) => (a > b ? a : b)) : null,
+      },
+    })
+    await prisma.breakEntry.updateMany({ where: { dayId: existing.id }, data: { dayId: clash.id } })
+    await prisma.attendanceDay.update({ where: { id: existing.id }, data: { checkInAt: null, checkOutAt: null, checkInIp: null, checkOutIp: null } })
+  }
+  return true
+}
+
 /** POST /api/attendance/check-in */
 /**
  * Office-network gate. Accepts the client IP unless a non-empty active allowlist
@@ -262,8 +297,13 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
   }
   const existing = await findToday(me.id, shift)
   if (existing?.checkInAt) {
-    res.status(409).json({ error: 'Already checked in today.' })
-    return
+    // A timezone/hours change can leave a past session on today's date; if so,
+    // reconcile it away instead of blocking a legitimate check-in.
+    const reconciled = await reconcileStaleCheckIn(me.id, existing, shift, dateStr)
+    if (!reconciled) {
+      res.status(409).json({ error: 'Already checked in today.' })
+      return
+    }
   }
   await prisma.attendanceDay.upsert({
     where: { userId_date: { userId: me.id, date: dateValue } },
