@@ -6,7 +6,12 @@ import type { AuthedRequest } from '../middleware/auth'
 import { resolveMarketingActor } from '../lib/marketingAuth'
 
 function serialize(b: Brand) {
-  return { id: b.id, name: b.name, slug: b.slug, website: b.website, isActive: b.isActive }
+  return {
+    id: b.id, name: b.name, slug: b.slug, website: b.website, isActive: b.isActive,
+    gscSiteUrl: b.gscSiteUrl, ga4PropertyId: b.ga4PropertyId,
+    seoConnected: !!(b.gscSiteUrl || b.ga4PropertyId),
+    seoSyncedAt: b.seoSyncedAt?.toISOString() ?? null,
+  }
 }
 
 function kebab(s: string): string {
@@ -76,6 +81,8 @@ const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   website: z.string().max(300).nullable().optional(),
   isActive: z.boolean().optional(),
+  gscSiteUrl: z.string().max(300).nullable().optional(), // Search Console property
+  ga4PropertyId: z.string().max(100).nullable().optional(), // GA4 property id
 })
 
 /** PATCH /api/marketing/brands/:id — lead/admin only. */
@@ -105,6 +112,8 @@ export async function updateBrand(req: AuthedRequest, res: Response): Promise<vo
       ...(slug ? { slug } : {}),
       ...(data.website !== undefined ? { website: data.website || null } : {}),
       ...(data.isActive != null ? { isActive: data.isActive } : {}),
+      ...(data.gscSiteUrl !== undefined ? { gscSiteUrl: data.gscSiteUrl || null } : {}),
+      ...(data.ga4PropertyId !== undefined ? { ga4PropertyId: data.ga4PropertyId || null } : {}),
     },
   })
   res.json({ brand: serialize(updated) })

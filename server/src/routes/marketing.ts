@@ -4,6 +4,7 @@ import { seoGet, seoUpsert, socialGet, socialUpsert, contentList } from '../cont
 import { calendar, marketingAnalytics } from '../controllers/marketingViewsController'
 import { listBrands, createBrand, updateBrand, deleteBrand } from '../controllers/marketingBrandController'
 import { getMonthly, upsertMonthly, compareMonthly, crossBrand } from '../controllers/marketingSocialMonthlyController'
+import { syncSeo } from '../controllers/marketingSeoController'
 import { listBlogs, createBlog, updateBlog, deleteBlog, blogCounts } from '../controllers/marketingBlogController'
 import { getPlan, addPlanItem, updatePlanItem, deletePlanItem } from '../controllers/marketingPlanController'
 import { requireAuth } from '../middleware/auth'
@@ -37,6 +38,9 @@ marketingRouter.get('/social/monthly', asyncHandler(getMonthly))
 marketingRouter.put('/social/monthly', asyncHandler(upsertMonthly))
 marketingRouter.get('/social/monthly/compare', asyncHandler(compareMonthly))
 marketingRouter.get('/social/monthly/cross', asyncHandler(crossBrand))
+
+// SEO — Google Search Console + GA4 sync (Phase 1)
+marketingRouter.post('/seo/sync', asyncHandler(syncSeo))
 
 // Blogs (content inventory + per-brand counts)
 marketingRouter.get('/blogs', asyncHandler(listBlogs))

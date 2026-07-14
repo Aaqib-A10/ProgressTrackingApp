@@ -192,6 +192,11 @@ export interface Brand {
   slug: string
   website: string | null
   isActive: boolean
+  // SEO (Google Search Console + GA4) connection
+  gscSiteUrl: string | null
+  ga4PropertyId: string | null
+  seoConnected: boolean
+  seoSyncedAt: string | null
 }
 export function listBrands(all = false) {
   return api.get<{ brands: Brand[] }>(`/marketing/brands${all ? '?all=1' : ''}`)
@@ -199,11 +204,20 @@ export function listBrands(all = false) {
 export function createBrand(input: { name: string; website?: string }) {
   return api.post<{ brand: Brand }>('/marketing/brands', input)
 }
-export function updateBrand(id: string, patch: { name?: string; website?: string | null; isActive?: boolean }) {
+export function updateBrand(
+  id: string,
+  patch: { name?: string; website?: string | null; isActive?: boolean; gscSiteUrl?: string | null; ga4PropertyId?: string | null },
+) {
   return api.patch<{ brand: Brand }>(`/marketing/brands/${id}`, patch)
 }
 export function deleteBrand(id: string) {
   return api.del(`/marketing/brands/${id}`)
+}
+
+// ---------- SEO (Google Search Console + GA4) ----------
+export interface SeoSyncResult { brandId: string; name: string; from: string; to: string; days: number; errors: string[] }
+export function syncSeo(input: { brandId?: string; days?: number } = {}) {
+  return api.post<{ from: string; to: string; results: SeoSyncResult[] }>('/marketing/seo/sync', input)
 }
 
 // ---------- Monthly per-brand social stats ----------

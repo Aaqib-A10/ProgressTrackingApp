@@ -657,10 +657,15 @@ model Brand {
   slug         String
   website      String?
   isActive     Boolean    @default(true) // soft-delete; preserves historical stats
+  // SEO integration — a brand is "connected" once both are set.
+  gscSiteUrl    String? // Search Console property, e.g. "sc-domain:example.com" or "https://example.com/"
+  ga4PropertyId String? // GA4 property, e.g. "properties/123456789" (or the bare numeric id)
+  seoSyncedAt   DateTime? // last successful GSC/GA sync
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   socialStats BrandSocialMonthly[]
+  seoDaily    BrandSeoDaily[]
   blogs       BlogPost[]
   tasks       MarketingTask[]
   planItems   MarketingPlanItem[]
@@ -720,6 +725,38 @@ model BrandSocialMonthly {
   @@unique([brandId, platform, month])
   @@index([brandId, month])
   @@index([month])
+}
+
+/// One day of SEO metrics per brand, pulled from Google Search Console (GSC) and
+/// Google Analytics (GA4). Stored daily so day/week/month rollups derive on read.
+/// Upsert key = (brandId, date). CTR and position are averages, not sums —
+/// aggregate them impressions-weighted, never added.
+model BrandSeoDaily {
+  id      String @id @default(cuid())
+  brandId String
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  date    DateTime @db.Date
+
+  // Google Search Console
+  clicks      Int   @default(0)
+  impressions Int   @default(0)
+  ctr         Float @default(0) // click-through rate, 0..1 (as GSC returns it)
+  position    Float @default(0) // average position (lower is better)
+
+  // Google Analytics (GA4)
+  sessions        Int   @default(0)
+  users           Int   @default(0) // activeUsers
+  newUsers        Int   @default(0)
+  engagedSessions Int   @default(0)
+  conversions     Int   @default(0)
+  bounceRate      Float @default(0) // 0..1
+
+  source    StatSource @default(API)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([brandId, date])
+  @@index([brandId, date])
 }
 
 /// A blog/article attributed to a brand, for month-end per-brand counts.
