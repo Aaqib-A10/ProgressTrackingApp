@@ -53,19 +53,22 @@ export interface NavGroup {
 
 const TL_ROLES: Role[] = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
 const ADMIN_ROLES: Role[] = ['TEAM_LEAD', 'SUPER_ADMIN']
+// Member data-entry / per-department operational tabs the Super Admin doesn't use.
+// The admin keeps oversight (dashboards, team views, analytics) + admin/config.
+const HIDE_FROM_SA: Role[] = ['SUPER_ADMIN']
 
 // Full nav. Filtered per user by filterNav() below.
 export const NAV_GROUPS: NavGroup[] = [
   {
     items: [
       { label: 'Dashboard', to: '/app/dashboard', icon: LayoutDashboard },
-      { label: 'My Reports', to: '/app/reports', icon: FileBarChart, hideFor: ['SUPER_ADMIN'] },
-      { label: 'My Analytics', to: '/app/analytics', icon: LineChart, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'My Reports', to: '/app/reports', icon: FileBarChart, hideFor: HIDE_FROM_SA },
+      { label: 'My Analytics', to: '/app/analytics', icon: LineChart, roles: ['MEMBER'], hideFor: HIDE_FROM_SA },
       { label: 'My Tasks', to: '/app/tasks', icon: ListChecks },
       { label: 'My To-Do', to: '/app/todo', icon: ListTodo },
-      { label: 'My Team', to: '/app/team/members', icon: Users, roles: ['TEAM_LEAD'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'My Team', to: '/app/team/members', icon: Users, roles: ['TEAM_LEAD'], hideFor: HIDE_FROM_SA },
       { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart, roles: ['TEAM_LEAD', 'SUPER_ADMIN'], departments: ['ITAD', 'LEAD_GEN'] },
-      { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: HIDE_FROM_SA },
       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
     ],
   },
@@ -88,8 +91,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'ITAD',
     items: [
-      { label: 'Daily Log', to: '/app/itad/log', icon: Phone, departments: ['ITAD'], hideFor: ['SUPER_ADMIN'] },
-      { label: 'Bid Tracker', to: '/app/itad/bids', icon: Briefcase, departments: ['ITAD'] },
+      { label: 'Daily Log', to: '/app/itad/log', icon: Phone, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
+      { label: 'Bid Tracker', to: '/app/itad/bids', icon: Briefcase, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/itad/team', icon: Users, departments: ['ITAD'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Analytics', to: '/app/itad/analytics', icon: LineChart, departments: ['ITAD'], roles: TL_ROLES },
     ],
@@ -97,7 +100,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Lead Generation',
     items: [
-      { label: 'Daily Log', to: '/app/leadgen/log', icon: Phone, departments: ['LEAD_GEN'], hideFor: ['SUPER_ADMIN'] },
+      { label: 'Daily Log', to: '/app/leadgen/log', icon: Phone, departments: ['LEAD_GEN'], hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/leadgen/team', icon: Users, departments: ['LEAD_GEN'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Monthly Breakdown', to: '/app/leadgen/breakdown', icon: Building2, departments: ['LEAD_GEN'], roles: ADMIN_ROLES },
       { label: 'Analytics', to: '/app/leadgen/analytics', icon: LineChart, departments: ['LEAD_GEN'], roles: TL_ROLES },
@@ -106,25 +109,25 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Ecommerce',
     items: [
-      { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, departments: ['ECOMMERCE'] },
-      { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'] },
-      { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, departments: ['ECOMMERCE'] },
+      { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
+      { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
+      { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/ecommerce/team', icon: Users, departments: ['ECOMMERCE'] },
-      { label: 'Meeting Notes', to: '/app/ecommerce/notes', icon: StickyNote, departments: ['ECOMMERCE'] },
+      { label: 'Meeting Notes', to: '/app/ecommerce/notes', icon: StickyNote, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
       { label: 'RDP Records', to: '/app/ecommerce/rdp', icon: Server, departments: ['ECOMMERCE'], roles: ADMIN_ROLES, badge: { text: 'TL', tone: 'accent' } },
     ],
   },
   {
     title: 'Marketing',
     items: [
-      { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'] },
-      { label: 'Calendar', to: '/app/marketing/calendar', icon: CalendarDays, departments: ['MARKETING'] },
-      { label: 'SEO', to: '/app/marketing/seo', icon: Search, departments: ['MARKETING'] },
-      { label: 'Social (Daily)', to: '/app/marketing/social', icon: Share2, departments: ['MARKETING'] },
-      { label: 'Social Reports', to: '/app/marketing/social/monthly', icon: BarChart3, departments: ['MARKETING'] },
-      { label: 'Content', to: '/app/marketing/content', icon: PenTool, departments: ['MARKETING'] },
-      { label: 'Master Plan', to: '/app/marketing/plan', icon: ListChecks, departments: ['MARKETING'] },
-      { label: 'Blogs', to: '/app/marketing/blogs', icon: PenTool, departments: ['MARKETING'] },
+      { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
+      { label: 'Calendar', to: '/app/marketing/calendar', icon: CalendarDays, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
+      { label: 'SEO', to: '/app/marketing/seo', icon: Search, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
+      { label: 'Social (Daily)', to: '/app/marketing/social', icon: Share2, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
+      { label: 'Social Reports', to: '/app/marketing/social/monthly', icon: BarChart3, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
+      { label: 'Content', to: '/app/marketing/content', icon: PenTool, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
+      { label: 'Master Plan', to: '/app/marketing/plan', icon: ListChecks, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
+      { label: 'Blogs', to: '/app/marketing/blogs', icon: PenTool, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
       { label: 'Social Analytics', to: '/app/marketing/social/analytics', icon: LineChart, departments: ['MARKETING'] },
       { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart, departments: ['MARKETING'], roles: TL_ROLES },
       { label: 'Brands', to: '/app/marketing/brands', icon: Building2, departments: ['MARKETING'], roles: ADMIN_ROLES },
