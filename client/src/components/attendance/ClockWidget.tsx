@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight, House } from 'lucide-react'
+import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight, House, TriangleAlert } from 'lucide-react'
 import { useToast } from '../ui/Toast'
 import {
   getAttendanceMe,
@@ -45,6 +45,8 @@ export function ClockWidget() {
   const [me, setMe] = useState<MeResponse | null>(null)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Guard against an accidental check-out: first click asks to confirm.
+  const [confirmOut, setConfirmOut] = useState(false)
   const [, force] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -90,6 +92,11 @@ export function ClockWidget() {
       setBusy(false)
     }
   }
+
+  // Drop the confirm prompt whenever the menu closes.
+  useEffect(() => {
+    if (!open) setConfirmOut(false)
+  }, [open])
 
   if (!me) return null
 
@@ -169,25 +176,51 @@ export function ClockWidget() {
           </div>
 
           <div className="space-y-1 p-2">
-            {today.state === 'NOT_IN' && (
-              <Action icon={<LogIn size={16} />} label="Check in" onClick={() => run(clockCheckIn, 'Checked in.')} disabled={busy} tone="primary" />
-            )}
-            {today.state === 'IN' && (
-              <>
-                <Action icon={<Coffee size={16} />} label="Start break" onClick={() => run(clockStartBreak, 'Break started.')} disabled={busy} />
-                <Action icon={<LogOut size={16} />} label="Check out" onClick={() => run(clockCheckOut, 'Checked out.')} disabled={busy} tone="danger" />
-              </>
-            )}
-            {today.state === 'ON_BREAK' && (
-              <>
-                <Action icon={<Play size={16} />} label="End break" onClick={() => run(clockEndBreak, 'Back to work.')} disabled={busy} tone="primary" />
-                <Action icon={<LogOut size={16} />} label="Check out" onClick={() => run(clockCheckOut, 'Checked out.')} disabled={busy} tone="danger" />
-              </>
-            )}
-            {today.state === 'OUT' && (
-              <div className="flex items-center gap-2 px-3 py-2 text-body-sm text-success">
-                <CheckCircle2 size={16} /> Checked out for the day.
+            {confirmOut ? (
+              <div className="rounded-btn bg-danger/5 p-2">
+                <div className="flex items-start gap-2 px-1 py-1 text-body-sm text-ink">
+                  <TriangleAlert size={16} className="mt-0.5 shrink-0 text-danger" />
+                  <span>Check out for the day? This stops your clock — you can’t undo it yourself.</span>
+                </div>
+                <div className="mt-1 flex gap-2">
+                  <button
+                    onClick={() => { setConfirmOut(false); run(clockCheckOut, 'Checked out.') }}
+                    disabled={busy}
+                    className="flex-1 rounded-btn bg-danger px-3 py-2 text-body-sm font-semibold text-white transition-colors hover:bg-danger/90 disabled:opacity-50"
+                  >
+                    Yes, check out
+                  </button>
+                  <button
+                    onClick={() => setConfirmOut(false)}
+                    className="flex-1 rounded-btn border border-line px-3 py-2 text-body-sm font-medium text-ink hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
+            ) : (
+              <>
+                {today.state === 'NOT_IN' && (
+                  <Action icon={<LogIn size={16} />} label="Check in" onClick={() => run(clockCheckIn, 'Checked in.')} disabled={busy} tone="primary" />
+                )}
+                {today.state === 'IN' && (
+                  <>
+                    <Action icon={<Coffee size={16} />} label="Start break" onClick={() => run(clockStartBreak, 'Break started.')} disabled={busy} />
+                    <Action icon={<LogOut size={16} />} label="Check out" onClick={() => setConfirmOut(true)} disabled={busy} tone="danger" />
+                  </>
+                )}
+                {today.state === 'ON_BREAK' && (
+                  <>
+                    <Action icon={<Play size={16} />} label="End break" onClick={() => run(clockEndBreak, 'Back to work.')} disabled={busy} tone="primary" />
+                    <Action icon={<LogOut size={16} />} label="Check out" onClick={() => setConfirmOut(true)} disabled={busy} tone="danger" />
+                  </>
+                )}
+                {today.state === 'OUT' && (
+                  <div className="flex items-center gap-2 px-3 py-2 text-body-sm text-success">
+                    <CheckCircle2 size={16} /> Checked out for the day.
+                  </div>
+                )}
+              </>
             )}
           </div>
 
