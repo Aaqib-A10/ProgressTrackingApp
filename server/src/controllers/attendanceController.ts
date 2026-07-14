@@ -422,20 +422,24 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   }
 
   const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
-  const range = periodRange(rangeKey, { start: req.query.start as string, end: req.query.end as string })
-  const startValue = dbDateFromString(range.startDate)
-  const endValue = dbDateFromString(range.endDate)
   const now = new Date()
 
   const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { departmentId: true } })
-  const [days, leaves, holidays, shift] = await Promise.all([
+  const shift = await resolveShift(targetId, target.departmentId)
+  // Resolve the period in the member's own shift timezone — attendance is bucketed
+  // per shift-day, so a company-tz window drifts once the two diverge (a US shift
+  // vs Karachi). Keeps history in step with the team view and the live clock.
+  const range = periodRange(rangeKey, { now, zone: shift.timeZone || COMPANY_TZ, start: req.query.start as string, end: req.query.end as string })
+  const startValue = dbDateFromString(range.startDate)
+  const endValue = dbDateFromString(range.endDate)
+
+  const [days, leaves, holidays] = await Promise.all([
     prisma.attendanceDay.findMany({
       where: { userId: targetId, date: { gte: startValue, lte: endValue } },
       include: { breaks: { orderBy: { startAt: 'asc' } } },
     }),
     prisma.leaveDay.findMany({ where: { userId: targetId, date: { gte: startValue, lte: endValue } } }),
     prisma.holiday.findMany({ where: { date: { gte: startValue, lte: endValue } } }),
-    resolveShift(targetId, target.departmentId),
   ])
 
   const dayByDate = new Map(days.map((d) => [dateStringFromDb(d.date), d]))
@@ -519,23 +523,33 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     return
   }
   const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
-  const range = periodRange(rangeKey, { start: req.query.start as string, end: req.query.end as string })
-  const startValue = dbDateFromString(range.startDate)
-  const endValue = dbDateFromString(range.endDate)
+  const start = req.query.start as string
+  const end = req.query.end as string
   const now = new Date()
+  const range = periodRange(rangeKey, { now, start, end }) // company-tz window, for the header label
 
   const members = await scopedMembers(me)
   const memberIds = members.map((m) => m.id)
+  const shifts = await prisma.attendanceShift.findMany()
 
-  const [days, leaves, shifts] = await Promise.all([
+  // Resolve the period in each member's OWN shift timezone. Attendance is bucketed
+  // per shift-day (shiftDayString), so a single company-tz window would miss a
+  // member's records once the two diverge — e.g. a US-shift team after Karachi
+  // midnight, where company "today" is already tomorrow. That mismatch is why the
+  // live board can show someone working while the period columns read zero.
+  const shiftByUser = new Map(members.map((m) => [m.id, pickShiftFor(shifts, m.id, m.departmentId)]))
+  const rangeByUser = new Map(members.map((m) => [m.id, periodRange(rangeKey, { now, zone: shiftByUser.get(m.id)!.timeZone || COMPANY_TZ, start, end })]))
+  const starts = [...rangeByUser.values()].map((r) => r.startDate).sort()
+  const ends = [...rangeByUser.values()].map((r) => r.endDate).sort()
+  const startValue = dbDateFromString(starts[0])
+  const endValue = dbDateFromString(ends[ends.length - 1])
+
+  const [days, leaves] = await Promise.all([
     prisma.attendanceDay.findMany({ where: { userId: { in: memberIds }, date: { gte: startValue, lte: endValue } }, include: { breaks: true } }),
     prisma.leaveDay.findMany({ where: { userId: { in: memberIds }, date: { gte: startValue, lte: endValue } } }),
-    prisma.attendanceShift.findMany(),
   ])
 
-  // "Today" is per-member: a night-shift employee's live day is anchored in their
-  // own shift timezone, so it can differ from the company calendar date.
-  const shiftByUser = new Map(members.map((m) => [m.id, pickShiftFor(shifts, m.id, m.departmentId)]))
+  // Live "today" per member (their shift-day), same anchoring as the board.
   const todayDateByUser = new Map([...shiftByUser].map(([id, sh]) => [id, shiftDayString(sh, now)]))
   const todayValues = [...new Set(todayDateByUser.values())].map(dbDateFromString)
   const todayDays = await prisma.attendanceDay.findMany({
@@ -543,14 +557,21 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     include: { breaks: true },
   })
 
+  // Keep only records inside each member's own shift-tz window.
+  const inRange = (userId: string, date: Date): boolean => {
+    const ds = dateStringFromDb(date)
+    const r = rangeByUser.get(userId)!
+    return ds >= r.startDate && ds <= r.endDate
+  }
   const daysByUser = new Map<string, DayWithBreaks[]>()
   for (const d of days) {
+    if (!inRange(d.userId, d.date)) continue
     const list = daysByUser.get(d.userId) ?? []
     list.push(d)
     daysByUser.set(d.userId, list)
   }
   const leaveCount = new Map<string, number>()
-  for (const l of leaves) leaveCount.set(l.userId, (leaveCount.get(l.userId) ?? 0) + 1)
+  for (const l of leaves) if (inRange(l.userId, l.date)) leaveCount.set(l.userId, (leaveCount.get(l.userId) ?? 0) + 1)
   const todayByUser = new Map<string, DayWithBreaks>()
   for (const d of todayDays) {
     if (dateStringFromDb(d.date) === todayDateByUser.get(d.userId)) todayByUser.set(d.userId, d)
