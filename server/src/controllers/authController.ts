@@ -44,10 +44,15 @@ async function publicUser(userId: string) {
 }
 
 // --- Schemas ---
+// Emails are case-insensitive: always trim + lowercase so login lookups match
+// however the address was originally typed when the account was created.
+const emailField = (message = 'Enter a valid work email') =>
+  z.string().email(message).transform((v) => v.trim().toLowerCase())
+
 // Self-registration is for Team Leads only. Members are invited by their Team Lead.
 const signupSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Enter a valid work email'),
+  email: emailField(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   companyName: z.string().optional(),
   // A real department (ITAD/LEAD_GEN/MARKETING/CSR) or 'QA' to request a QA Team Lead role.
@@ -55,11 +60,11 @@ const signupSchema = z.object({
 })
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: emailField(),
   password: z.string().min(1),
 })
 
-const forgotSchema = z.object({ email: z.string().email() })
+const forgotSchema = z.object({ email: emailField() })
 const resetSchema = z.object({
   token: z.string().min(1),
   password: z.string().min(8, 'Password must be at least 8 characters'),

@@ -42,7 +42,7 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
 
 const createUserSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().email().transform((v) => v.trim().toLowerCase()),
   role: z.nativeEnum(Role),
   department: z.nativeEnum(DepartmentType).nullable().optional(),
   subDepartmentSlug: z.string().nullable().optional(),
@@ -227,7 +227,7 @@ export async function listTeamMembers(req: AuthedRequest, res: Response): Promis
 
 const inviteMemberSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().email().transform((v) => v.trim().toLowerCase()),
   subDepartmentSlug: z.string().nullable().optional(),
 })
 
