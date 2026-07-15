@@ -3,7 +3,8 @@ import { z } from 'zod'
 import type { SeoDailyEntry, Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { companyToday, dbDateFromString, dateStringFromDb } from '../lib/time'
+import { dbDateFromString, dateStringFromDb } from '../lib/time'
+import { userToday } from '../lib/userDay'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -36,7 +37,7 @@ function serializeSeo(e: SeoDailyEntry) {
 export async function seoGet(req: AuthedRequest, res: Response): Promise<void> {
   const me = await marketingUser(req, res)
   if (!me) return
-  const dateStr = (req.query.date as string) || companyToday()
+  const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
   const entry = await prisma.seoDailyEntry.findUnique({ where: { userId_date: { userId: me.id, date: dbDateFromString(dateStr) } } })
   const recent = await prisma.seoDailyEntry.findMany({ where: { userId: me.id, status: 'SUBMITTED' }, orderBy: { date: 'desc' }, take: 14 })
   const avgTraffic = recent.length ? Math.round(recent.reduce((a, e) => a + e.organicTraffic, 0) / recent.length) : 0
@@ -63,7 +64,7 @@ export async function seoUpsert(req: AuthedRequest, res: Response): Promise<void
     return
   }
   const { date, status, notes } = parsed.data
-  const dateStr = date || companyToday()
+  const dateStr = date || (await userToday(me.id, me.departmentId))
   const metrics: Record<string, number> = {}
   for (const k of SEO_KEYS) metrics[k] = status === 'SUBMITTED' ? parsed.data[k] ?? 0 : 0
   const dateValue = dbDateFromString(dateStr)
@@ -99,7 +100,7 @@ export async function socialGet(req: AuthedRequest, res: Response): Promise<void
   const me = await marketingUser(req, res)
   if (!me) return
   const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'MARKETING' } }))
-  const dateStr = (req.query.date as string) || companyToday()
+  const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
   const entry = await prisma.socialDailyEntry.findUnique({
     where: { userId_date: { userId: me.id, date: dbDateFromString(dateStr) } },
     include: { platformCounts: { include: { tag: true } } },
@@ -130,7 +131,7 @@ export async function socialUpsert(req: AuthedRequest, res: Response): Promise<v
     return
   }
   const { date, status, notes, platformCounts } = parsed.data
-  const dateStr = date || companyToday()
+  const dateStr = date || (await userToday(me.id, me.departmentId))
   const metrics: Record<string, number> = {}
   for (const k of SOCIAL_KEYS) metrics[k] = status === 'SUBMITTED' ? parsed.data[k] ?? 0 : 0
   const dateValue = dbDateFromString(dateStr)

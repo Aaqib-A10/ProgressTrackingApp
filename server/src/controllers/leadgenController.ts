@@ -4,7 +4,8 @@ import { DateTime } from 'luxon'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { companyToday, dbDateFromString, dateStringFromDb, periodRange, previousRange, type RangeKey } from '../lib/time'
+import { dbDateFromString, dateStringFromDb, periodRange, previousRange, type RangeKey } from '../lib/time'
+import { userToday, todayByMember } from '../lib/userDay'
 import {
   LEADGEN_METRIC_KEYS,
   sumLeadGen,
@@ -79,7 +80,7 @@ export async function getMyEntry(req: AuthedRequest, res: Response): Promise<voi
     res.status(500).json({ error: 'Lead Gen department missing' })
     return
   }
-  const dateStr = (req.query.date as string) || companyToday()
+  const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
 
   const entry = await prisma.leadGenDailyEntry.findUnique({
     where: { userId_date: { userId: me.id, date: dbDateFromString(dateStr) } },
@@ -142,8 +143,9 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     return
   }
   const { date, status, notes, dataSource, verticalCounts, leadTypeCounts } = parsed.data
-  const dateStr = date || companyToday()
-  if (dateStr > companyToday()) {
+  const today = await userToday(me.id, me.departmentId)
+  const dateStr = date || today
+  if (dateStr > today) {
     res.status(400).json({ error: 'Cannot log a future date' })
     return
   }
@@ -257,7 +259,9 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     orderBy: { name: 'asc' },
   })
   const memberIds = members.map((m) => m.id)
-  const todayStr = companyToday()
+  // Per-member "today" in each member's own shift timezone (see userDay).
+  const todayMap = await todayByMember(members.map((m) => ({ id: m.id, departmentId: dept.id })))
+  const todayValues = [...new Set(todayMap.values())].map(dbDateFromString)
   const verticals = await deptVerticals(dept.id)
 
   const [curEntries, prevEntries, todayEntries] = await Promise.all([
@@ -268,7 +272,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     prisma.leadGenDailyEntry.findMany({
       where: { userId: { in: memberIds }, date: { gte: dbDateFromString(prev.startDate), lte: dbDateFromString(prev.endDate) } },
     }),
-    prisma.leadGenDailyEntry.findMany({ where: { userId: { in: memberIds }, date: dbDateFromString(todayStr) } }),
+    prisma.leadGenDailyEntry.findMany({ where: { userId: { in: memberIds }, date: { in: todayValues } } }),
   ])
 
   const byUser = new Map<string, typeof curEntries>()
@@ -277,7 +281,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     list.push(e)
     byUser.set(e.userId, list)
   }
-  const todayByUser = new Map(todayEntries.map((e) => [e.userId, e]))
+  const todayByUser = new Map(todayEntries.filter((e) => dateStringFromDb(e.date) === todayMap.get(e.userId)).map((e) => [e.userId, e]))
 
   const agents = members.map((m) => {
     const agg = aggregateAgent(byUser.get(m.id) ?? [], dailyLeadTarget)

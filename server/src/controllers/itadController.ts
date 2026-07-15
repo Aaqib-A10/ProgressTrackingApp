@@ -3,7 +3,8 @@ import { z } from 'zod'
 import type { ItadDailyEntry } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { companyToday, dbDateFromString, dateStringFromDb, periodRange, previousRange, type RangeKey } from '../lib/time'
+import { dbDateFromString, dateStringFromDb, periodRange, previousRange, type RangeKey } from '../lib/time'
+import { userToday, todayByMember } from '../lib/userDay'
 import { ITAD_METRIC_KEYS, sumItad, itadKpis, aggregateAgent, emptyTotals } from '../lib/itad'
 import { periodDelta } from '../lib/kpi'
 
@@ -43,7 +44,7 @@ export async function getMyEntry(req: AuthedRequest, res: Response): Promise<voi
     return
   }
   const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'ITAD' } }))
-  const dateStr = (req.query.date as string) || companyToday()
+  const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
 
   const entry = await prisma.itadDailyEntry.findUnique({
     where: { userId_date: { userId: me.id, date: dbDateFromString(dateStr) } },
@@ -93,8 +94,9 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     return
   }
   const { date, status, notes } = parsed.data
-  const dateStr = date || companyToday()
-  if (dateStr > companyToday()) {
+  const today = await userToday(me.id, me.departmentId)
+  const dateStr = date || today
+  if (dateStr > today) {
     res.status(400).json({ error: 'Cannot log a future date' })
     return
   }
@@ -160,7 +162,10 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     orderBy: { name: 'asc' },
   })
   const memberIds = members.map((m) => m.id)
-  const todayStr = companyToday()
+  // Each member's "today" is resolved in their own shift timezone (see userDay),
+  // so an out-of-timezone agent's submission still registers as today's.
+  const todayMap = await todayByMember(members.map((m) => ({ id: m.id, departmentId: dept.id })))
+  const todayValues = [...new Set(todayMap.values())].map(dbDateFromString)
 
   const [curEntries, prevEntries, todayEntries] = await Promise.all([
     prisma.itadDailyEntry.findMany({
@@ -169,7 +174,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     prisma.itadDailyEntry.findMany({
       where: { userId: { in: memberIds }, date: { gte: dbDateFromString(prev.startDate), lte: dbDateFromString(prev.endDate) } },
     }),
-    prisma.itadDailyEntry.findMany({ where: { userId: { in: memberIds }, date: dbDateFromString(todayStr) } }),
+    prisma.itadDailyEntry.findMany({ where: { userId: { in: memberIds }, date: { in: todayValues } } }),
   ])
 
   const byUser = new Map<string, typeof curEntries>()
@@ -178,7 +183,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     list.push(e)
     byUser.set(e.userId, list)
   }
-  const todayByUser = new Map(todayEntries.map((e) => [e.userId, e]))
+  const todayByUser = new Map(todayEntries.filter((e) => dateStringFromDb(e.date) === todayMap.get(e.userId)).map((e) => [e.userId, e]))
 
   const agents = members.map((m) => {
     const agg = aggregateAgent(byUser.get(m.id) ?? [], dailyDialTarget)

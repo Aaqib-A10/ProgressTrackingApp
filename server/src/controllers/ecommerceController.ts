@@ -3,7 +3,8 @@ import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
+import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
+import { userToday, todayByMember } from '../lib/userDay'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -66,7 +67,7 @@ export async function getMyEntry(req: AuthedRequest, res: Response): Promise<voi
     res.status(500).json({ error: 'Ecommerce department missing' })
     return
   }
-  const dateStr = (req.query.date as string) || companyToday()
+  const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
 
   const [entry, taskTypes, marketplaces, recent] = await Promise.all([
     prisma.ecommerceDailyEntry.findUnique({
@@ -127,8 +128,9 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     return
   }
   const { date, status, notes, pricingNotes, lines } = parsed.data
-  const dateStr = date || companyToday()
-  if (dateStr > companyToday()) {
+  const today = await userToday(me.id, me.departmentId)
+  const dateStr = date || today
+  if (dateStr > today) {
     res.status(400).json({ error: 'Cannot log a future date' })
     return
   }
@@ -187,13 +189,14 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
 
   const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
   const range = periodRange(rangeKey, { start: req.query.start as string, end: req.query.end as string })
-  const todayStr = companyToday()
 
   const members = await prisma.user.findMany({
     where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD', 'TEAM_LEAD'] }, isActive: true },
     orderBy: { name: 'asc' },
   })
   const memberIds = members.map((m) => m.id)
+  // Per-member "today" in each member's own shift timezone (see userDay).
+  const todayMap = await todayByMember(members.map((m) => ({ id: m.id, departmentId: dept.id })))
 
   const [entries, openStock, taskRows] = await Promise.all([
     prisma.ecommerceDailyEntry.findMany({
@@ -224,7 +227,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       tt.byMarketplace.set(l.marketplace.name, (tt.byMarketplace.get(l.marketplace.name) ?? 0) + l.listings)
       typeTotals.set(g, tt)
     }
-    const todayEntry = es.find((e) => dateStringFromDb(e.date) === todayStr)
+    const todayEntry = es.find((e) => dateStringFromDb(e.date) === todayMap.get(m.id))
     const onLeaveToday = !!todayEntry && todayEntry.status !== 'SUBMITTED'
     let status: 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
     if (onLeaveToday) status = 'ON_LEAVE'
