@@ -116,8 +116,9 @@ export interface ShiftScopeResponse {
   shift: Shift
 }
 
-export function getAttendanceTeam(range: RangeKey, custom?: CustomRange | null) {
-  return api.get<TeamAttendanceResponse>(`/attendance/team?${rangeQuery(range, custom)}`)
+export function getAttendanceTeam(range: RangeKey, custom?: CustomRange | null, department?: string) {
+  const dep = department && department !== 'ALL' ? `&department=${department}` : ''
+  return api.get<TeamAttendanceResponse>(`/attendance/team?${rangeQuery(range, custom)}${dep}`)
 }
 export const getAttendanceShift = () => api.get<ShiftScopeResponse>('/attendance/shift')
 export const putAttendanceShift = (input: Shift) => api.put<{ shift: Shift }>('/attendance/shift', input)

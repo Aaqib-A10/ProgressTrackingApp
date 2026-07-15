@@ -7,7 +7,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { isOvernight, shiftMinutes, shiftDayString } from '../lib/shiftDay'
 import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
-import type { Role } from '@prisma/client'
+import type { Role, DepartmentType } from '@prisma/client'
 
 type DayWithBreaks = Prisma.AttendanceDayGetPayload<{ include: { breaks: true } }>
 type Shift = {
@@ -488,11 +488,15 @@ function minToHHmm(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 }
 
-/** Active roster in the caller's scope (own department for TL, all for Admin). */
-async function scopedMembers(me: Awaited<ReturnType<typeof loadUser>>) {
+/**
+ * Active roster in the caller's scope. A Team Lead is always confined to their
+ * own department. A Super Admin sees every department by default, or a single
+ * department when `departmentId` is supplied (the /team department filter).
+ */
+async function scopedMembers(me: Awaited<ReturnType<typeof loadUser>>, departmentId?: string) {
   if (me.role === 'SUPER_ADMIN') {
     return prisma.user.findMany({
-      where: { isActive: true, status: 'ACTIVE' },
+      where: { isActive: true, status: 'ACTIVE', ...(departmentId ? { departmentId } : {}) },
       include: { department: true },
       orderBy: [{ name: 'asc' }],
     })
@@ -528,7 +532,16 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const now = new Date()
   const range = periodRange(rangeKey, { now, start, end }) // company-tz window, for the header label
 
-  const members = await scopedMembers(me)
+  // Super Admin may narrow the whole view to one department; TL ignores this and
+  // stays scoped to their own department inside scopedMembers.
+  const deptType = req.query.department as string | undefined
+  let departmentId: string | undefined
+  if (me.role === 'SUPER_ADMIN' && deptType) {
+    const d = await prisma.department.findUnique({ where: { type: deptType as DepartmentType } })
+    departmentId = d?.id
+  }
+
+  const members = await scopedMembers(me, departmentId)
   const memberIds = members.map((m) => m.id)
   const shifts = await prisma.attendanceShift.findMany()
 

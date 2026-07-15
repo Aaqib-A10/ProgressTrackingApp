@@ -21,6 +21,10 @@ export interface DataTableProps<T> {
   totalRow?: { cells: Record<string, ReactNode>; className?: string }
   /** Full-width banner inserted after a row (e.g. an On-Leave notice). */
   renderRowBanner?: (row: T) => ReactNode | null
+  /** Group rows into sections; needs `renderGroupHeader`. Groups appear in the rows' first-seen order. */
+  groupBy?: (row: T) => string
+  /** Full-width section header rendered before each group (e.g. a department name + count). */
+  renderGroupHeader?: (groupKey: string, rows: T[]) => ReactNode
   onRowClick?: (row: T) => void
   emptyMessage?: ReactNode
   className?: string
@@ -42,10 +46,66 @@ export function DataTable<T>({
   getRowId,
   totalRow,
   renderRowBanner,
+  groupBy,
+  renderGroupHeader,
   onRowClick,
   emptyMessage = 'No data to show.',
   className,
 }: DataTableProps<T>) {
+  const grouped = groupBy && renderGroupHeader
+  // Preserve first-seen order of group keys; the caller pre-sorts rows for a stable order.
+  const groups: { key: string; rows: T[] }[] = []
+  if (grouped) {
+    const index = new Map<string, T[]>()
+    for (const row of rows) {
+      const key = groupBy(row)
+      let bucket = index.get(key)
+      if (!bucket) {
+        bucket = []
+        index.set(key, bucket)
+        groups.push({ key, rows: bucket })
+      }
+      bucket.push(row)
+    }
+  }
+
+  const renderRow = (row: T, i: number) => {
+    const banner = renderRowBanner?.(row)
+    return (
+      <Fragment key={getRowId(row)}>
+        <tr
+          onClick={onRowClick ? () => onRowClick(row) : undefined}
+          className={cn(
+            'border-b border-line/70 transition-colors',
+            i % 2 === 1 && 'bg-slate-50/60',
+            onRowClick && 'cursor-pointer hover:bg-slate-100',
+          )}
+        >
+          {columns.map((col) => (
+            <td
+              key={col.key}
+              className={cn(
+                'whitespace-nowrap px-4 py-3 text-ink',
+                col.align === 'right' && 'tabular-nums',
+                alignClass[col.align ?? 'left'],
+                col.className,
+              )}
+            >
+              {col.render ? col.render(row, i) : ((row as Record<string, unknown>)[col.key] as ReactNode)}
+            </td>
+          ))}
+        </tr>
+        {banner && (
+          <tr>
+            <td colSpan={columns.length} className="px-4 py-2">
+              {banner}
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  }
+
   return (
     <div className={cn('overflow-x-auto', className)}>
       <table className="w-full border-collapse text-body-md">
@@ -85,43 +145,19 @@ export function DataTable<T>({
                 {emptyMessage}
               </td>
             </tr>
+          ) : grouped ? (
+            groups.map((g) => (
+              <Fragment key={`group:${g.key}`}>
+                <tr className="bg-slate-100/70">
+                  <td colSpan={columns.length} className="px-4 py-2.5">
+                    {renderGroupHeader(g.key, g.rows)}
+                  </td>
+                </tr>
+                {g.rows.map((row, i) => renderRow(row, i))}
+              </Fragment>
+            ))
           ) : (
-            rows.map((row, i) => {
-              const banner = renderRowBanner?.(row)
-              return (
-                <Fragment key={getRowId(row)}>
-                  <tr
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    className={cn(
-                      'border-b border-line/70 transition-colors',
-                      i % 2 === 1 && 'bg-slate-50/60',
-                      onRowClick && 'cursor-pointer hover:bg-slate-100',
-                    )}
-                  >
-                    {columns.map((col) => (
-                      <td
-                        key={col.key}
-                        className={cn(
-                          'whitespace-nowrap px-4 py-3 text-ink',
-                          col.align === 'right' && 'tabular-nums',
-                          alignClass[col.align ?? 'left'],
-                          col.className,
-                        )}
-                      >
-                        {col.render ? col.render(row, i) : ((row as Record<string, unknown>)[col.key] as ReactNode)}
-                      </td>
-                    ))}
-                  </tr>
-                  {banner && (
-                    <tr>
-                      <td colSpan={columns.length} className="px-4 py-2">
-                        {banner}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              )
-            })
+            rows.map((row, i) => renderRow(row, i))
           )}
         </tbody>
       </table>

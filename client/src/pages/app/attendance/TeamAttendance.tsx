@@ -7,6 +7,9 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
+import { useAuth } from '../../../lib/auth'
+import { DEPARTMENTS, DEPARTMENT_LABEL } from '../../../lib/departments'
+import type { Department } from '../../../lib/types'
 import {
   getAttendanceTeam,
   putAttendanceShift,
@@ -66,14 +69,19 @@ function MiniStat({ icon, label, value, tone }: { icon: React.ReactNode; label: 
 export default function TeamAttendance() {
   const { range, custom } = useRange()
   const { addToast } = useToast()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'SUPER_ADMIN'
   const [data, setData] = useState<TeamAttendanceResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [shiftOpen, setShiftOpen] = useState(false)
   const [selected, setSelected] = useState<TeamAttendanceRow | null>(null)
+  const [dept, setDept] = useState<'ALL' | Department>('ALL')
+  // Only Super Admins pick a department; when they view "All" the roster is grouped per department.
+  const groupByDept = isAdmin && dept === 'ALL'
 
   function reload() {
     setLoading(true)
-    getAttendanceTeam(range, custom)
+    getAttendanceTeam(range, custom, dept)
       .then(setData)
       .catch(() => addToast({ type: 'error', message: 'Could not load team attendance.' }))
       .finally(() => setLoading(false))
@@ -82,14 +90,14 @@ export default function TeamAttendance() {
   useEffect(() => {
     let active = true
     setLoading(true)
-    getAttendanceTeam(range, custom)
+    getAttendanceTeam(range, custom, dept)
       .then((r) => active && setData(r))
       .catch(() => active && addToast({ type: 'error', message: 'Could not load team attendance.' }))
       .finally(() => active && setLoading(false))
     return () => {
       active = false
     }
-  }, [range, custom, addToast])
+  }, [range, custom, dept, addToast])
 
   const columns: Column<TeamAttendanceRow>[] = [
     {
@@ -101,7 +109,7 @@ export default function TeamAttendance() {
             <span className="font-medium text-ink">{r.name}</span>
             {r.hasOverride && <Badge tone="primary">Custom hours</Badge>}
           </div>
-          {data?.scope === 'COMPANY' && <div className="text-body-sm text-ink-muted">{r.department}</div>}
+          {data?.scope === 'COMPANY' && !groupByDept && <div className="text-body-sm text-ink-muted">{r.department}</div>}
         </div>
       ),
     },
@@ -136,20 +144,54 @@ export default function TeamAttendance() {
 
   const s = data?.summary
 
+  // When grouping by department, order rows by the canonical department order then name
+  // so the sections render ITAD → Lead Generation → Marketing → CSR → Ecommerce.
+  const deptOrder = DEPARTMENTS.map((d) => DEPARTMENT_LABEL[d.value])
+  const tableRows = (() => {
+    const rows = data?.rows ?? []
+    if (!groupByDept) return rows
+    return [...rows].sort((a, b) => {
+      const ao = deptOrder.indexOf(a.department)
+      const bo = deptOrder.indexOf(b.department)
+      return (ao === -1 ? 999 : ao) - (bo === -1 ? 999 : bo) || a.name.localeCompare(b.name)
+    })
+  })()
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">Team Attendance</h1>
           <p className="mt-0.5 text-body-md text-ink-muted">
             Who's in now and hours over the period{data ? ` · shift ${data.shift.startTime}–${data.shift.endTime}` : ''}
           </p>
         </div>
-        {data?.canEditShift && (
-          <Button size="sm" variant="secondary" leadingIcon={<Settings2 size={16} />} onClick={() => setShiftOpen(true)}>
-            Shift settings
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <div className="inline-flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setDept('ALL')}
+                className={'rounded-full px-3.5 py-1.5 text-body-sm font-medium transition-colors ' + (dept === 'ALL' ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
+              >
+                All
+              </button>
+              {DEPARTMENTS.map((d) => (
+                <button
+                  key={d.value}
+                  onClick={() => setDept(d.value)}
+                  className={'rounded-full px-3.5 py-1.5 text-body-sm font-medium transition-colors ' + (dept === d.value ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {data?.canEditShift && (
+            <Button size="sm" variant="secondary" leadingIcon={<Settings2 size={16} />} onClick={() => setShiftOpen(true)}>
+              Shift settings
+            </Button>
+          )}
+        </div>
       </div>
 
       {s && (
@@ -187,7 +229,24 @@ export default function TeamAttendance() {
         {loading ? (
           <div className="p-5 text-body-md text-ink-muted">Loading…</div>
         ) : (
-          <DataTable columns={columns} rows={data?.rows ?? []} getRowId={(r) => r.userId} onRowClick={(r) => setSelected(r)} emptyMessage="No members to show." />
+          <DataTable
+            columns={columns}
+            rows={tableRows}
+            getRowId={(r) => r.userId}
+            onRowClick={(r) => setSelected(r)}
+            groupBy={groupByDept ? (r) => r.department : undefined}
+            renderGroupHeader={
+              groupByDept
+                ? (key, rows) => (
+                    <div className="flex items-center gap-2">
+                      <span className="text-label-md font-semibold uppercase text-ink">{key}</span>
+                      <span className="text-body-sm text-ink-muted">· {rows.length}</span>
+                    </div>
+                  )
+                : undefined
+            }
+            emptyMessage="No members to show."
+          />
         )}
       </Card>
 
