@@ -165,11 +165,17 @@ async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
   const shift = await resolveShift(me.id, me.departmentId)
   const dateStr = shiftDayString(shift, now)
   const dateValue = dbDateFromString(dateStr)
-  const [day, leave, holiday] = await Promise.all([
+  const [dayRaw, leave, holiday] = await Promise.all([
     prisma.attendanceDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } }, include: { breaks: { orderBy: { startAt: 'asc' } } } }),
     prisma.leaveDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } }),
     prisma.holiday.findUnique({ where: { date: dateValue } }),
   ])
+  // A row can be left on today's date under an OLD timezone (its own check-in
+  // actually belongs to a different shift-day). Don't surface it as "today" — a
+  // stale checked-out row would show "Done" and hide the check-in button, locking
+  // the person out (the reconcile only runs on check-in, which they can't reach).
+  // The record itself is moved on the next check-in (reconcileStaleCheckIn).
+  const day = dayRaw?.checkInAt && shiftDayString(shift, dayRaw.checkInAt) !== dateStr ? null : dayRaw
   const isWfh = leave?.type === 'WFH'
   const offLabel = leave && !isWfh ? leave.type : holiday ? 'HOLIDAY' : null
   return {
