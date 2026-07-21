@@ -450,6 +450,7 @@ const updateEvalSchema = z.object({
   callReference: z.string().max(120).nullable().optional(),
   customerNumber: z.string().max(120).nullable().optional(),
   callDate: z.string().nullable().optional(),
+  recordingAttachmentId: z.string().nullable().optional(),
   overallComments: z.string().max(4000).nullable().optional(),
   sectionComments: z.array(z.object({ name: z.string(), comment: z.string().max(2000).nullable().optional() })).optional(),
   answers: z.array(z.object({ order: z.number().int(), score: z.number().int().min(0).max(100).nullable(), isNA: z.boolean() })),
@@ -476,6 +477,21 @@ export async function updateEvaluation(req: AuthedRequest, res: Response): Promi
     return
   }
   const v = parsed.data
+
+  // If a (new) call recording is being attached, verify it's a real QA recording
+  // and isn't already bound to a different evaluation (recordingAttachmentId is @unique).
+  if (v.recordingAttachmentId) {
+    const att = await prisma.entryAttachment.findUnique({ where: { id: v.recordingAttachmentId } })
+    if (!att || att.kind !== 'QA_RECORDING') {
+      res.status(400).json({ error: 'Recording not found' })
+      return
+    }
+    const owner = await prisma.qaEvaluation.findUnique({ where: { recordingAttachmentId: v.recordingAttachmentId }, select: { id: true } })
+    if (owner && owner.id !== e.id) {
+      res.status(400).json({ error: 'That recording is already attached to another evaluation' })
+      return
+    }
+  }
 
   // Re-score from the (immutable) answer snapshots + the submitted scores, grouped by category.
   const newByOrder = new Map(v.answers.map((a) => [a.order, a]))
@@ -521,6 +537,7 @@ export async function updateEvaluation(req: AuthedRequest, res: Response): Promi
         callReference: v.callReference !== undefined ? v.callReference : e.callReference,
         customerNumber: v.customerNumber !== undefined ? v.customerNumber : e.customerNumber,
         callDate: v.callDate !== undefined ? (v.callDate ? new Date(v.callDate) : null) : e.callDate,
+        recordingAttachmentId: v.recordingAttachmentId !== undefined ? v.recordingAttachmentId : e.recordingAttachmentId,
         overallComments: v.overallComments !== undefined ? v.overallComments : e.overallComments,
         totalScore: result.totalScore,
         band: result.band,

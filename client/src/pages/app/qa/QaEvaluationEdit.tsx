@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ClipboardCheck, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, ClipboardCheck, AlertTriangle, Upload, X } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { TextField, TextArea } from '../../../components/ui/Input'
 import { Badge } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/Toast'
 import { formatPercent } from '../../../lib/format'
-import { getEvaluation, updateEvaluation, type EvaluationDetail, type ScorecardCategory } from '../../../lib/qaApi'
+import { getEvaluation, updateEvaluation, uploadRecording, recordingUrl, type EvaluationDetail, type ScorecardCategory } from '../../../lib/qaApi'
 import { computeLiveScore, type AnswerState } from '../../../lib/qaScore'
 import { BAND_TONE, ScoreInput } from './QaEvaluate'
 
@@ -24,6 +24,8 @@ export default function QaEvaluationEdit() {
   const [callRef, setCallRef] = useState('')
   const [customerNo, setCustomerNo] = useState('')
   const [overall, setOverall] = useState('')
+  const [recording, setRecording] = useState<{ id: string; name: string } | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export default function QaEvaluationEdit() {
         setCallRef(e.callReference ?? '')
         setCustomerNo(e.customerNumber ?? '')
         setOverall(e.overallComments ?? '')
+        setRecording(e.recording ? { id: e.recording.id, name: e.recording.name } : null)
       })
       .catch((err) => { if (err?.status === 403 || err?.status === 404) setDenied(true); else addToast({ type: 'error', message: 'Could not load evaluation.' }) })
   }, [id, addToast])
@@ -69,6 +72,22 @@ export default function QaEvaluationEdit() {
     [data, categories, answers],
   )
 
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file after a remove
+    if (!file) return
+    setUploading(true)
+    try {
+      const r = await uploadRecording(file)
+      setRecording({ id: r.attachmentId, name: r.name })
+      addToast({ type: 'success', message: 'Recording uploaded — remember to save.' })
+    } catch {
+      addToast({ type: 'error', message: 'Recording upload failed (audio only, ≤50 MB).' })
+    } finally {
+      setUploading(false)
+    }
+  }
+
   async function submit() {
     if (!data || saving) return
     setSaving(true)
@@ -76,6 +95,7 @@ export default function QaEvaluationEdit() {
       const res = await updateEvaluation(id, {
         callReference: callRef.trim() || null,
         customerNumber: customerNo.trim() || null,
+        recordingAttachmentId: recording?.id ?? null,
         overallComments: overall.trim() || null,
         sectionComments: categories.map((c) => ({ name: c.name, comment: (comments[c.name] || '').trim() || null })),
         answers: Object.entries(answers).map(([order, a]) => ({ order: Number(order), score: a.isNA ? null : a.score, isNA: a.isNA })),
@@ -105,6 +125,34 @@ export default function QaEvaluationEdit() {
         <div className="grid gap-3 sm:grid-cols-2">
           <TextField label="Call reference" value={callRef} onChange={(e) => setCallRef(e.target.value)} placeholder="e.g. CR-10293" />
           <TextField label="Customer number" value={customerNo} onChange={(e) => setCustomerNo(e.target.value)} placeholder="e.g. 0345-..." />
+        </div>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-body-sm font-semibold text-ink">Call recording (audio)</label>
+          {recording ? (
+            <div className="space-y-2 rounded-btn border border-line p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="truncate text-body-sm text-ink">{recording.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setRecording(null)}
+                  className="inline-flex items-center gap-1 text-body-sm font-medium text-ink-muted hover:text-danger"
+                >
+                  <X size={14} /> Remove
+                </button>
+              </div>
+              <audio key={recording.id} controls preload="none" className="w-full" src={recordingUrl(recording.id)} />
+              <label className="inline-flex cursor-pointer items-center gap-2 text-body-sm font-medium text-primary hover:underline">
+                <Upload size={14} /> {uploading ? 'Uploading…' : 'Replace audio'}
+                <input type="file" accept="audio/*" className="hidden" onChange={onUpload} disabled={uploading} />
+              </label>
+            </div>
+          ) : (
+            <label className="flex h-10 cursor-pointer items-center gap-2 rounded-btn border border-dashed border-line px-3 text-body-sm text-ink-muted hover:border-primary/40">
+              <Upload size={15} /> {uploading ? 'Uploading…' : 'Upload audio'}
+              <input type="file" accept="audio/*" className="hidden" onChange={onUpload} disabled={uploading} />
+            </label>
+          )}
         </div>
       </Card>
 

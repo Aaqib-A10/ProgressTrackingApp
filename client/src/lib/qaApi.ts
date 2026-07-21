@@ -143,6 +143,7 @@ export interface EvaluationDetail {
 export interface EvaluationUpdateInput {
   callReference?: string | null
   customerNumber?: string | null
+  recordingAttachmentId?: string | null
   overallComments?: string | null
   sectionComments: { name: string; comment: string | null }[]
   answers: { order: number; score: number | null; isNA: boolean }[]
