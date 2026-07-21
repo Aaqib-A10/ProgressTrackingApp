@@ -155,10 +155,11 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const prev = previousRange(range)
   const dailyDialTarget = await itadDailyTarget(dept.id)
 
-  // Include working leads (TEAM_LEAD / SUB_DEPT_LEAD), not just members — a lead
-  // who logs activity should appear in the performance matrix and team totals.
+  // ITAD Team Leads are excluded from the performance matrix and team totals —
+  // the roster tracks agents' calling activity, not leads'. Sub-dept leads (if any)
+  // still count as working agents.
   const members = await prisma.user.findMany({
-    where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD', 'TEAM_LEAD'] }, isActive: true },
+    where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD'] }, isActive: true },
     orderBy: { name: 'asc' },
   })
   const memberIds = members.map((m) => m.id)
