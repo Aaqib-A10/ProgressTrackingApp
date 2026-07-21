@@ -283,15 +283,37 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   }
   const todayByUser = new Map(todayEntries.filter((e) => dateStringFromDb(e.date) === todayMap.get(e.userId)).map((e) => [e.userId, e]))
 
+  // Leave the TL/admin submitted for the period lives in LeaveDay (separate from
+  // the daily entry), so a member on leave often has NO entry at all. Pull those
+  // (excluding WFH, a worked day) so the row reads "On Leave" instead of a bare 0.
+  const leaveRows = await prisma.leaveDay.findMany({
+    where: {
+      userId: { in: memberIds },
+      type: { not: 'WFH' },
+      date: { gte: dbDateFromString(range.startDate), lte: dbDateFromString(range.endDate) },
+    },
+  })
+  const leaveDatesByUser = new Map<string, Map<string, string>>() // userId -> (dateStr -> leave type)
+  const addLeave = (userId: string, dateStr: string, type: string) => {
+    const mp = leaveDatesByUser.get(userId) ?? new Map<string, string>()
+    mp.set(dateStr, type)
+    leaveDatesByUser.set(userId, mp)
+  }
+  for (const l of leaveRows) addLeave(l.userId, dateStringFromDb(l.date), l.type)
+  for (const e of curEntries) if (e.status !== 'SUBMITTED') addLeave(e.userId, dateStringFromDb(e.date), e.status)
+
   const agents = members.map((m) => {
     const agg = aggregateAgent(byUser.get(m.id) ?? [], dailyLeadTarget)
     const todayEntry = todayByUser.get(m.id)
     const onLeaveToday = !!todayEntry && todayEntry.status !== 'SUBMITTED'
+    const leaveMap = leaveDatesByUser.get(m.id)
+    const leaveDays = leaveMap?.size ?? 0
+    const leaveTypes = leaveMap ? [...new Set(leaveMap.values())] : []
+    const leaveStatus = leaveTypes.length === 1 ? leaveTypes[0] : leaveDays > 0 ? 'ON_LEAVE' : null
     let status: 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
-    if (onLeaveToday) status = 'ON_LEAVE'
-    else if (rangeKey === 'today') status = todayEntry ? 'SUBMITTED' : 'PENDING'
-    else status = agg.workingDays > 0 ? 'SUBMITTED' : 'PENDING'
-    return { id: m.id, name: m.name, status, onLeaveToday, flag: agg.flag, totals: agg.totals, kpis: agg.kpis }
+    if (rangeKey === 'today') status = onLeaveToday || leaveDays > 0 ? 'ON_LEAVE' : todayEntry ? 'SUBMITTED' : 'PENDING'
+    else status = agg.workingDays > 0 ? 'SUBMITTED' : leaveDays > 0 ? 'ON_LEAVE' : 'PENDING'
+    return { id: m.id, name: m.name, status, onLeaveToday, leaveDays, leaveStatus, flag: agg.flag, totals: agg.totals, kpis: agg.kpis }
   })
 
   const teamTotals = sumLeadGen(curEntries)
