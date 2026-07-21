@@ -45,6 +45,8 @@ export interface ItadAgentRow {
   name: string
   status: 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
   onLeaveToday: boolean
+  leaveDays: number
+  leaveStatus: 'ON_LEAVE' | 'HOLIDAY' | 'OFF' | null
   flag: PerfFlag
   totals: ItadTotals
   kpis: ItadKpis

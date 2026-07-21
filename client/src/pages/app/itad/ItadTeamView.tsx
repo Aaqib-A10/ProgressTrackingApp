@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, PhoneCall, Heart, CheckCircle2, Trophy, Download, CalendarOff } from 'lucide-react'
+import { Phone, PhoneCall, Heart, CheckCircle2, Trophy, Download, CalendarOff, Plane } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { StatCard } from '../../../components/StatCard'
@@ -30,6 +30,13 @@ function prettyDate(iso: string): string {
 /** Human phrase for a resolved range, e.g. "Jun 20, 2026" or "Jun 20 – Jun 25, 2026". */
 function rangePhrase(r: { startDate: string; endDate: string }): string {
   return r.startDate === r.endDate ? prettyDate(r.startDate) : `${prettyDate(r.startDate)} – ${prettyDate(r.endDate)}`
+}
+
+const LEAVE_LABEL: Record<string, string> = { ON_LEAVE: 'On Leave', HOLIDAY: 'Holiday', OFF: 'Off' }
+/** Tooltip for the leave marker, e.g. "On Leave" or "3 leave days in this period". */
+function leaveTitle(status: string | null, days: number): string {
+  if (days > 1) return `${days} leave days in this period`
+  return LEAVE_LABEL[status ?? 'ON_LEAVE'] ?? 'On Leave'
 }
 
 export default function ItadTeamView() {
@@ -63,7 +70,18 @@ export default function ItadTeamView() {
       header: 'Agent',
       render: (r) => (
         <div className="flex flex-col">
-          <span className="font-medium text-ink">{r.name}</span>
+          <span className="flex items-center gap-1.5 font-medium text-ink">
+            {r.name}
+            {r.leaveDays > 0 && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-label-sm font-medium text-ink-muted"
+                title={leaveTitle(r.leaveStatus, r.leaveDays)}
+              >
+                <Plane size={11} />
+                {r.leaveDays > 1 && <span className="tabular-nums">{r.leaveDays}</span>}
+              </span>
+            )}
+          </span>
           <span className="mt-0.5">
             <PerfFlagBadge flag={r.flag} />
           </span>
@@ -108,7 +126,7 @@ export default function ItadTeamView() {
 
       {loading || !data ? (
         <div className="text-body-md text-ink-muted">Loading…</div>
-      ) : data.entryCount === 0 ? (
+      ) : data.entryCount === 0 && !data.agents.some((a) => a.leaveDays > 0) ? (
         <Card>
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-14 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-ink-muted">
