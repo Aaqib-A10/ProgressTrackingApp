@@ -210,6 +210,9 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   res.json({
     range: { ...range, key: rangeKey },
     target: { dailyDials: dailyDialTarget },
+    // How many entries actually fell in the selected window — lets the client
+    // distinguish "no activity logged" from "everyone dialed zero".
+    entryCount: curEntries.length,
     team: { totals: teamTotals, kpis: teamKpis },
     deltas: {
       callsDialed: periodDelta(teamTotals.callsDialed, prevTotals.callsDialed),

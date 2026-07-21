@@ -53,6 +53,7 @@ export interface ItadAgentRow {
 export interface ItadTeamResponse {
   range: { startDate: string; endDate: string; key: RangeKey }
   target: { dailyDials: number }
+  entryCount: number
   team: { totals: ItadTotals; kpis: ItadKpis }
   deltas: { callsDialed: number; connectRate: number; interested: number; closed: number }
   agents: ItadAgentRow[]

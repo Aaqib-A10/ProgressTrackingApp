@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, PhoneCall, Heart, CheckCircle2, Trophy, Download } from 'lucide-react'
+import { Phone, PhoneCall, Heart, CheckCircle2, Trophy, Download, CalendarOff } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { StatCard } from '../../../components/StatCard'
@@ -18,7 +18,18 @@ const RANGE_LABEL: Record<string, string> = {
   week: 'This Week',
   month: 'This Month',
   rolling3m: 'Last 3 Months',
-  custom: 'This Month',
+  custom: 'Custom Range',
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** 'YYYY-MM-DD' → 'Jun 20, 2026' without Date() timezone drift. */
+function prettyDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${MONTHS[m - 1]} ${d}, ${y}`
+}
+/** Human phrase for a resolved range, e.g. "Jun 20, 2026" or "Jun 20 – Jun 25, 2026". */
+function rangePhrase(r: { startDate: string; endDate: string }): string {
+  return r.startDate === r.endDate ? prettyDate(r.startDate) : `${prettyDate(r.startDate)} – ${prettyDate(r.endDate)}`
 }
 
 export default function ItadTeamView() {
@@ -77,7 +88,7 @@ export default function ItadTeamView() {
         <div>
           <h1 className="text-headline-lg text-ink">ITAD Team View</h1>
           <p className="mt-0.5 text-body-md text-ink-muted">
-            Real-time performance tracking · {RANGE_LABEL[range] ?? 'This Month'}
+            Real-time performance tracking · {range === 'custom' && data ? rangePhrase(data.range) : RANGE_LABEL[range] ?? 'This Month'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -97,6 +108,19 @@ export default function ItadTeamView() {
 
       {loading || !data ? (
         <div className="text-body-md text-ink-muted">Loading…</div>
+      ) : data.entryCount === 0 ? (
+        <Card>
+          <div className="flex flex-col items-center justify-center gap-3 px-4 py-14 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-ink-muted">
+              <CalendarOff size={22} />
+            </div>
+            <h2 className="text-headline-sm text-ink">No activity logged for {rangePhrase(data.range)}</h2>
+            <p className="max-w-md text-body-md text-ink-muted">
+              No ITAD daily entries fall in this period. Try a different date or range — the team's logged
+              activity will appear here.
+            </p>
+          </div>
+        </Card>
       ) : (
         <>
           {/* KPI cards */}
