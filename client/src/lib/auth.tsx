@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { api } from './api'
+import { api, setUnauthorizedHandler } from './api'
 import type { CurrentUser, Department } from './types'
+
+/** Set by the 401 handler so the login screen can explain the bounce. */
+export const SESSION_EXPIRED_KEY = 'pt.sessionExpired'
 
 export interface SignupInput {
   name: string
@@ -50,8 +53,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
+  // When an authenticated request 401s (session expired or revoked server-side),
+  // drop the user so the route guard redirects to /login, and flag why.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setUser((prev) => {
+        if (prev) {
+          try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1') } catch { /* ignore */ }
+        }
+        return null
+      })
+    })
+    return () => setUnauthorizedHandler(null)
+  }, [])
+
   const login = useCallback(async (email: string, password: string) => {
     const { user } = await api.post<{ user: CurrentUser }>('/auth/login', { email, password })
+    try { sessionStorage.removeItem(SESSION_EXPIRED_KEY) } catch { /* ignore */ }
     setUser(user)
   }, [])
 

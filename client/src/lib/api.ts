@@ -14,6 +14,15 @@ export class ApiError extends Error {
   }
 }
 
+// Global handler invoked when an authenticated request comes back 401 — i.e. the
+// session died mid-use (expired, or revoked server-side by a disable/reset). The
+// AuthProvider registers it to clear auth state so the route guard redirects to
+// login. Auth endpoints (/auth/*) manage their own 401s and are exempt.
+let onUnauthorized: (() => void) | null = null
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn
+}
+
 async function request<T>(method: string, path: string, body?: JsonBody): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -23,6 +32,7 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   })
 
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized?.()
     const message = await res.text().catch(() => res.statusText)
     throw new ApiError(message || `Request failed (${res.status})`, res.status)
   }

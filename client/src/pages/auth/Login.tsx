@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
 import { TextField, PasswordField } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
-import { useAuth } from '../../lib/auth'
+import { useAuth, SESSION_EXPIRED_KEY } from '../../lib/auth'
 import { useToast } from '../../components/ui/Toast'
 import { ApiError } from '../../lib/api'
 
@@ -21,6 +21,17 @@ export default function Login() {
   const [emailError, setEmailError] = useState<string>()
   const [formError, setFormError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
+  const [sessionEnded, setSessionEnded] = useState(false)
+
+  // Surface why the user landed here if their session was ended mid-use.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        setSessionEnded(true)
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY)
+      }
+    } catch { /* ignore */ }
+  }, [])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -54,6 +65,12 @@ export default function Login() {
       <p className="mt-1 text-body-md text-ink-muted">
         Log in to your account to continue tracking progress.
       </p>
+
+      {sessionEnded && (
+        <div className="mt-4 rounded-btn border border-warning/30 bg-warning/10 px-3 py-2 text-body-sm text-warning">
+          Your session ended. Please sign in again to continue.
+        </div>
+      )}
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
         <TextField
