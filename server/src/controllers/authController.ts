@@ -199,8 +199,10 @@ export async function changePassword(req: AuthedRequest, res: Response): Promise
     res.status(400).json({ error: 'Current password is incorrect' })
     return
   }
-  // Member set their own secret — clear the TL-visible temp credential.
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(parsed.data.newPassword), tempPassword: null } })
+  // Member set their own secret — clear the TL-visible temp credential and revoke
+  // any other outstanding sessions, then re-issue this one so the user stays logged in.
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(parsed.data.newPassword), tempPassword: null, sessionsValidFrom: new Date() } })
+  setAuthCookie(res, signToken({ sub: user.id, role: user.role }))
   res.json({ ok: true })
 }
 
@@ -219,7 +221,7 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   }
   await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash: await hashPassword(parsed.data.password) },
+    data: { passwordHash: await hashPassword(parsed.data.password), sessionsValidFrom: new Date() },
   })
   res.json({ ok: true })
 }

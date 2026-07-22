@@ -107,6 +107,8 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
   if (v.role !== undefined) data.role = v.role
   if (v.isActive !== undefined) data.isActive = v.isActive
   if (v.status !== undefined) data.status = v.status
+  // Disabling/suspending an account revokes its existing sessions immediately.
+  if (v.isActive === false || (v.status !== undefined && v.status !== 'ACTIVE')) data.sessionsValidFrom = new Date()
   if (v.department !== undefined) {
     const dept = v.department ? await prisma.department.findUnique({ where: { type: v.department } }) : null
     data.departmentId = dept?.id ?? null
@@ -189,7 +191,7 @@ export async function resetUserPassword(req: AuthedRequest, res: Response): Prom
     return
   }
   const tempPassword = parsed.data.password ?? randomBytes(6).toString('base64url')
-  await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(tempPassword), tempPassword } })
+  await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(tempPassword), tempPassword, sessionsValidFrom: new Date() } })
   res.json({ tempPassword })
 }
 
@@ -337,7 +339,7 @@ export async function resetTeamMemberPassword(req: AuthedRequest, res: Response)
   const tempPassword = parsed.data.password ?? randomBytes(6).toString('base64url')
   await prisma.user.update({
     where: { id: target.id },
-    data: { passwordHash: await hashPassword(tempPassword), tempPassword },
+    data: { passwordHash: await hashPassword(tempPassword), tempPassword, sessionsValidFrom: new Date() },
   })
   res.json({ tempPassword })
 }

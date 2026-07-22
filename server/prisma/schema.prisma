@@ -141,6 +141,9 @@ model User {
   role         Role       @default(MEMBER)
   status       UserStatus @default(ACTIVE)
   isActive     Boolean    @default(true)
+  // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
+  // password change, and admin password reset to revoke existing tokens.
+  sessionsValidFrom DateTime?
 
   departmentId    String?
   department      Department?    @relation(fields: [departmentId], references: [id])

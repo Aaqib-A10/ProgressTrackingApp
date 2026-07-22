@@ -18,9 +18,12 @@ export function verifyPassword(plain: string, hash: string): Promise<boolean> {
 export interface JwtPayload {
   sub: string
   role: Role
+  /** issued-at, seconds since epoch — added by jwt.sign, read for session-revocation. */
+  iat?: number
+  exp?: number
 }
 
-export function signToken(payload: JwtPayload): string {
+export function signToken(payload: { sub: string; role: Role }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as SignOptions)
 }
 
