@@ -69,10 +69,11 @@ export function reminderDue(shift: ReminderShift, now: Date, state: ReminderStat
   return null
 }
 
-type ShiftRow = { userId: string | null; departmentId: string | null; startTime: string; endTime: string; graceMin: number; workingDays: number[]; timeZone: string | null }
-const DEFAULT_SHIFT: ReminderShift = { startTime: '09:00', endTime: '18:00', graceMin: 10, workingDays: [1, 2, 3, 4, 5], timeZone: null }
+export type ShiftRow = { userId: string | null; departmentId: string | null; startTime: string; endTime: string; graceMin: number; workingDays: number[]; timeZone: string | null }
+export const DEFAULT_SHIFT: ReminderShift = { startTime: '09:00', endTime: '18:00', graceMin: 10, workingDays: [1, 2, 3, 4, 5], timeZone: null }
 
-function pickShift(rows: ShiftRow[], userId: string, departmentId: string | null): ReminderShift {
+/** Resolve a user's effective shift: personal override → department → company default. */
+export function pickShift(rows: ShiftRow[], userId: string, departmentId: string | null): ReminderShift {
   const row = rows.find((r) => r.userId === userId) ?? (departmentId ? rows.find((r) => r.departmentId === departmentId && r.userId === null) : undefined) ?? rows.find((r) => r.userId === null && r.departmentId === null)
   return row ? { startTime: row.startTime, endTime: row.endTime, graceMin: row.graceMin, workingDays: row.workingDays, timeZone: row.timeZone } : DEFAULT_SHIFT
 }
