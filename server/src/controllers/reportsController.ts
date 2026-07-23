@@ -5,8 +5,8 @@ import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString, periodRange, type RangeKey, type DateRange } from '../lib/time'
 import { aggregateAgent as aggregateItad, itadKpis, sumItad } from '../lib/itad'
 import { aggregateAgent as aggregateLeadGen, leadGenKpis, sumLeadGen } from '../lib/leadgen'
-import { buildMonthlyReport } from '../lib/reports'
-import { renderMonthlyReportEmail } from '../lib/reportEmail'
+import { buildMonthlyReport, buildManagementReport } from '../lib/reports'
+import { renderMonthlyReportEmail, renderManagementReportEmail } from '../lib/reportEmail'
 import { sendMail } from '../lib/mail'
 
 /** Configured management recipients for the scheduled reports (comma-separated env). */
@@ -202,4 +202,45 @@ export async function sendMonthlyReport(req: AuthedRequest, res: Response): Prom
   const { subject, html, text } = renderMonthlyReportEmail(report)
   await sendMail({ to: recipients, subject, html, text })
   res.json({ sent: true, department: departmentType, month, recipients })
+}
+
+// ==================== Consolidated management report (ITAD + Bids + Marketing) ====================
+
+/** Any Team Lead or Super Admin may view/send the consolidated management report. */
+async function assertManager(req: AuthedRequest): Promise<boolean> {
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { role: true } })
+  return me.role === 'SUPER_ADMIN' || me.role === 'TEAM_LEAD'
+}
+
+/** GET /api/reports/management/preview?month= — standalone printable combined report HTML. */
+export async function managementPreview(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await assertManager(req))) {
+    res.status(403).send('Forbidden')
+    return
+  }
+  const month = /^\d{4}-\d{2}$/.test(String(req.query.month)) ? String(req.query.month) : previousMonth()
+  const report = await buildManagementReport(month)
+  const { html } = renderManagementReportEmail(report)
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.send(html)
+}
+
+/** POST /api/reports/management/send — email the combined report now. Body: { month?, to? }. */
+export async function sendManagementReport(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await assertManager(req))) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const body = (req.body ?? {}) as { month?: string; to?: string | string[] }
+  const override = body.to ? (Array.isArray(body.to) ? body.to : [body.to]) : []
+  const recipients = (override.length ? override : reportRecipients()).map((s) => s.trim()).filter(Boolean)
+  if (recipients.length === 0) {
+    res.status(400).json({ error: 'No recipients — set REPORT_RECIPIENTS or pass "to".' })
+    return
+  }
+  const month = /^\d{4}-\d{2}$/.test(String(body.month)) ? String(body.month) : previousMonth()
+  const report = await buildManagementReport(month)
+  const { subject, html, text } = renderManagementReportEmail(report)
+  await sendMail({ to: recipients, subject, html, text })
+  res.json({ sent: true, month, recipients })
 }

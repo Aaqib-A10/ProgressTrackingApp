@@ -81,3 +81,8 @@ export const sendMonthlyReport = (department: 'ITAD' | 'LEAD_GEN', month: string
 /** Standalone printable report HTML (opens in a new tab → print / Save as PDF). Cookie-authed. */
 export const monthlyPreviewUrl = (department: 'ITAD' | 'LEAD_GEN', month: string) =>
   `${BASE_URL}/reports/monthly/preview?department=${department}&month=${month}`
+
+// ---------- Consolidated management report (ITAD + Bid Tracker + Marketing) ----------
+export const managementPreviewUrl = (month: string) => `${BASE_URL}/reports/management/preview?month=${month}`
+export const sendManagementReport = (month: string, to?: string) =>
+  api.post<{ sent: boolean; recipients: string[] }>('/reports/management/send', { month, ...(to ? { to } : {}) })

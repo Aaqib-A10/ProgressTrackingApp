@@ -270,3 +270,187 @@ export type MonthlyReport = ItadReport | LeadGenReport
 export async function buildMonthlyReport(departmentType: 'ITAD' | 'LEAD_GEN', month: string): Promise<MonthlyReport | null> {
   return departmentType === 'ITAD' ? buildItadReport(month) : buildLeadGenReport(month)
 }
+
+// ============================ Bid Tracker (ITAD) ============================
+
+export interface BidTotals {
+  total: number
+  active: number
+  submitted: number
+  won: number
+  lost: number
+  wonValue: number
+  quotedValue: number
+  winRate: number // won ÷ (won + lost), 0..1
+}
+export interface BidReport {
+  month: string
+  monthLabel: string
+  team: BidTotals
+  prev: BidTotals | null
+  deltas: { total: number; won: number; wonValue: number; winRate: number }
+  topAgent: { name: string; won: number; wonValue: number } | null
+}
+
+/** Bids bucketed by dueDate (the bid's key date) within the month, ITAD department. */
+async function bidTotals(deptId: string, month: string) {
+  const { start, end } = monthBounds(month)
+  const bids = await prisma.bid.findMany({
+    where: { departmentId: deptId, dueDate: { gte: start.toJSDate(), lte: end.toJSDate() } },
+    select: { status: true, awardedPrice: true, priceQuoted: true, agent: { select: { id: true, name: true } } },
+  })
+  const count = (s: string) => bids.filter((b) => b.status === s).length
+  const won = count('WON')
+  const lost = count('LOST')
+  const byAgent = new Map<string, { name: string; won: number; wonValue: number }>()
+  for (const b of bids) {
+    if (b.status !== 'WON') continue
+    const cur = byAgent.get(b.agent.id) ?? { name: b.agent.name, won: 0, wonValue: 0 }
+    cur.won++
+    cur.wonValue += b.awardedPrice ?? 0
+    byAgent.set(b.agent.id, cur)
+  }
+  const totals: BidTotals = {
+    total: bids.length,
+    active: count('ACTIVE'),
+    submitted: count('SUBMITTED'),
+    won,
+    lost,
+    wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice ?? 0), 0),
+    quotedValue: bids.reduce((s, b) => s + (b.priceQuoted ?? 0), 0),
+    winRate: rate(won, won + lost),
+  }
+  return { totals, byAgent }
+}
+
+export async function buildBidReport(month: string): Promise<BidReport | null> {
+  const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  if (!dept) return null
+  const { monthLabel } = monthBounds(month)
+  const cur = await bidTotals(dept.id, month)
+  const p = await bidTotals(dept.id, prevMonthStr(month))
+  const top = [...cur.byAgent.values()].sort((a, b) => b.wonValue - a.wonValue)[0] ?? null
+  return {
+    month,
+    monthLabel,
+    team: cur.totals,
+    prev: p.totals.total > 0 ? p.totals : null,
+    deltas: {
+      total: periodDelta(cur.totals.total, p.totals.total),
+      won: periodDelta(cur.totals.won, p.totals.won),
+      wonValue: periodDelta(cur.totals.wonValue, p.totals.wonValue),
+      winRate: periodDelta(cur.totals.winRate, p.totals.winRate),
+    },
+    topAgent: top,
+  }
+}
+
+// ============================ Marketing ============================
+
+export interface MarketingTotals {
+  followers: number
+  newFollowers: number
+  impressions: number
+  engagementRate: number // impressions-weighted %, e.g. 21.4
+  blogs: number
+  contentPublished: number // kanban tasks that reached PUBLISHED this month
+  planDone: number
+  planTotal: number
+}
+export interface MarketingReport {
+  month: string
+  monthLabel: string
+  brands: number
+  team: MarketingTotals
+  prev: Pick<MarketingTotals, 'followers' | 'newFollowers' | 'impressions' | 'engagementRate' | 'blogs' | 'contentPublished'> | null
+  deltas: { followers: number; newFollowers: number; impressions: number; engagementRate: number; blogs: number; contentPublished: number }
+  topBrandByFollowers: { name: string; followers: number } | null
+}
+
+/** Impressions-weighted engagement rate (falls back to a simple mean of non-zero rows). */
+function weightedER(rows: { impressions: number; engagementRate: number }[]): number {
+  const impr = rows.reduce((a, r) => a + r.impressions, 0)
+  if (impr > 0) return round1(rows.reduce((a, r) => a + r.impressions * r.engagementRate, 0) / impr)
+  const nz = rows.filter((r) => r.engagementRate > 0)
+  return nz.length ? round1(nz.reduce((a, r) => a + r.engagementRate, 0) / nz.length) : 0
+}
+
+async function marketingSocialTotals(brandIds: string[], month: string) {
+  if (!brandIds.length) return { followers: 0, newFollowers: 0, impressions: 0, engagementRate: 0 }
+  const rows = await prisma.brandSocialMonthly.findMany({
+    where: { brandId: { in: brandIds }, month },
+    select: { impressions: true, engagementRate: true, followers: true, newFollowers: true },
+  })
+  return {
+    followers: rows.reduce((a, r) => a + r.followers, 0),
+    newFollowers: rows.reduce((a, r) => a + r.newFollowers, 0),
+    impressions: rows.reduce((a, r) => a + r.impressions, 0),
+    engagementRate: weightedER(rows),
+  }
+}
+
+export async function buildMarketingReport(month: string): Promise<MarketingReport | null> {
+  const dept = await prisma.department.findUnique({ where: { type: 'MARKETING' } })
+  if (!dept) return null
+  const { start, end, monthLabel } = monthBounds(month)
+  const prevM = prevMonthStr(month)
+  const prevB = monthBounds(prevM)
+  const brands = await prisma.brand.findMany({ where: { departmentId: dept.id, isActive: true }, select: { id: true, name: true } })
+  const brandIds = brands.map((b) => b.id)
+
+  const [social, socialPrev, blogs, blogsPrev, kanban, kanbanPrev, plans, byBrand] = await Promise.all([
+    marketingSocialTotals(brandIds, month),
+    marketingSocialTotals(brandIds, prevM),
+    prisma.blogPost.count({ where: { brandId: { in: brandIds }, month } }),
+    prisma.blogPost.count({ where: { brandId: { in: brandIds }, month: prevM } }),
+    prisma.marketingTask.count({ where: { completedAt: { gte: start.toJSDate(), lte: end.toJSDate() } } }),
+    prisma.marketingTask.count({ where: { completedAt: { gte: prevB.start.toJSDate(), lte: prevB.end.toJSDate() } } }),
+    prisma.marketingPlan.findMany({ where: { month }, select: { items: { select: { status: true } } } }),
+    brandIds.length
+      ? prisma.brandSocialMonthly.groupBy({ by: ['brandId'], where: { brandId: { in: brandIds }, month }, _sum: { followers: true } })
+      : Promise.resolve([] as { brandId: string; _sum: { followers: number | null } }[]),
+  ])
+  const planItems = plans.flatMap((p) => p.items)
+  const team: MarketingTotals = {
+    ...social,
+    blogs,
+    contentPublished: kanban,
+    planDone: planItems.filter((i) => i.status === 'COMPLETED').length,
+    planTotal: planItems.length,
+  }
+  const topB = byBrand.map((g) => ({ id: g.brandId, followers: g._sum.followers ?? 0 })).sort((a, b) => b.followers - a.followers)[0]
+  const hasPrev = socialPrev.impressions > 0 || socialPrev.followers > 0 || blogsPrev > 0 || kanbanPrev > 0
+  return {
+    month,
+    monthLabel,
+    brands: brands.length,
+    team,
+    prev: hasPrev
+      ? { followers: socialPrev.followers, newFollowers: socialPrev.newFollowers, impressions: socialPrev.impressions, engagementRate: socialPrev.engagementRate, blogs: blogsPrev, contentPublished: kanbanPrev }
+      : null,
+    deltas: {
+      followers: periodDelta(team.followers, socialPrev.followers),
+      newFollowers: periodDelta(team.newFollowers, socialPrev.newFollowers),
+      impressions: periodDelta(team.impressions, socialPrev.impressions),
+      engagementRate: periodDelta(team.engagementRate, socialPrev.engagementRate),
+      blogs: periodDelta(team.blogs, blogsPrev),
+      contentPublished: periodDelta(team.contentPublished, kanbanPrev),
+    },
+    topBrandByFollowers: topB ? { name: brands.find((b) => b.id === topB.id)?.name ?? '—', followers: topB.followers } : null,
+  }
+}
+
+// ============================ Consolidated management report ============================
+
+export interface ManagementReport {
+  month: string
+  monthLabel: string
+  itad: ItadReport | null
+  bids: BidReport | null
+  marketing: MarketingReport | null
+}
+
+export async function buildManagementReport(month: string): Promise<ManagementReport> {
+  const [itad, bids, marketing] = await Promise.all([buildItadReport(month), buildBidReport(month), buildMarketingReport(month)])
+  return { month, monthLabel: monthBounds(month).monthLabel, itad, bids, marketing }
+}

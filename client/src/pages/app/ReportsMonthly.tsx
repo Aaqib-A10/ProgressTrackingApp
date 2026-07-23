@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Trophy, Send, FileDown } from 'lucide-react'
+import { Trophy, Send, FileDown, Layers } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
 import { Button } from '../../components/ui/Button'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
-import { getMonthlyReport, sendMonthlyReport, monthlyPreviewUrl, type MonthlyReport, type ItadReport, type LeadGenReport } from '../../lib/reportsApi'
+import { getMonthlyReport, sendMonthlyReport, monthlyPreviewUrl, managementPreviewUrl, sendManagementReport, type MonthlyReport, type ItadReport, type LeadGenReport } from '../../lib/reportsApi'
 
 type Dept = 'ITAD' | 'LEAD_GEN'
 const DEPT_LABEL: Record<Dept, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation' }
@@ -37,6 +37,20 @@ export default function ReportsMonthly() {
   const [report, setReport] = useState<MonthlyReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [sendingMgmt, setSendingMgmt] = useState(false)
+
+  async function sendMgmt() {
+    if (sendingMgmt) return
+    setSendingMgmt(true)
+    try {
+      const r = await sendManagementReport(month)
+      addToast({ type: 'success', message: `Management report emailed to ${r.recipients.join(', ')}.` })
+    } catch (e) {
+      addToast({ type: 'error', message: (e as { message?: string })?.message || 'Could not send the report.' })
+    } finally {
+      setSendingMgmt(false)
+    }
+  }
 
   async function sendNow() {
     if (sending) return
@@ -89,6 +103,26 @@ export default function ReportsMonthly() {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary"><Layers size={20} /></span>
+            <div>
+              <p className="text-body-md font-semibold text-ink">Management report — ITAD + Bid Tracker + Marketing</p>
+              <p className="mt-0.5 text-body-sm text-ink-muted">One consolidated email that goes to management on the 1st of each month. Preview or send it now.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" leadingIcon={<FileDown size={15} />} onClick={() => window.open(managementPreviewUrl(month), '_blank', 'noopener')}>
+              Preview / PDF
+            </Button>
+            <Button size="sm" leadingIcon={<Send size={15} />} onClick={sendMgmt} disabled={sendingMgmt}>
+              {sendingMgmt ? 'Sending…' : 'Email management report'}
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {loading ? (
         <Card><p className="py-10 text-center text-body-md text-ink-muted">Loading…</p></Card>

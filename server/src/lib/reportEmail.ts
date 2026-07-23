@@ -1,5 +1,5 @@
 // Renders a monthly team report as an email-client-friendly HTML + plain-text pair.
-import type { MonthlyReport, ItadReport, LeadGenReport } from './reports'
+import type { MonthlyReport, ItadReport, LeadGenReport, BidReport, MarketingReport, ManagementReport } from './reports'
 
 const INK = '#0F172A'
 const MUTED = '#64748B'
@@ -11,6 +11,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const pct = (v: number | null) => (v === null ? '—' : `${v}%`)
 const ratePct = (v: number) => `${Math.round(v * 1000) / 10}%` // 0..1 fraction → "13.5%"
 const num = (n: number) => n.toLocaleString('en-US')
+const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`
 
 const GOOD = '#16A34A'
 const BAD = '#DC2626'
@@ -90,7 +91,16 @@ const th = (t: string, align = 'right') =>
 const td = (t: string, align = 'right', color = INK, bold = false) =>
   `<td style="text-align:${align};padding:8px 6px;font-size:13px;color:${color};border-bottom:1px solid ${BORDER};${bold ? 'font-weight:bold' : ''}">${t}</td>`
 
-function renderItad(r: ItadReport): { subject: string; html: string; text: string } {
+/** A bold section divider for the combined management report. */
+function sectionHeader(title: string, sub: string): string {
+  return `<div style="margin:26px 0 12px;padding-bottom:6px;border-bottom:2px solid ${PRIMARY}">
+    <div style="font-size:16px;font-weight:bold;color:${INK}">${esc(title)}</div>
+    <div style="font-size:12px;color:${MUTED};margin-top:1px">${esc(sub)}</div></div>`
+}
+
+/** The ITAD report body (scorecard + top performer + per-agent table), reused by
+ *  both the standalone ITAD email and the combined management report. */
+function itadInner(r: ItadReport): string {
   const weekHeads = Array.from({ length: r.weeks }, (_, i) => th(`Wk ${i + 1}`)).join('')
   const rows = r.agents
     .map((a) => {
@@ -101,8 +111,7 @@ function renderItad(r: ItadReport): { subject: string; html: string; text: strin
   const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
     <tr>${th('Agent', 'left')}${weekHeads}${th('Month QA')}${th('Dials')}${th('Conn.')}${th('Closed')}${th('RFQs')}</tr>
     ${rows}</table>`
-  const showDelta = r.prev !== null
-  const inner =
+  return (
     scorecard(
       [
         { label: 'Team avg QA', value: pct(r.team.qaAvg), delta: r.deltas.qaAvg },
@@ -110,11 +119,83 @@ function renderItad(r: ItadReport): { subject: string; html: string; text: strin
         { label: 'Calls dialed', value: num(r.team.callsDialed), delta: r.deltas.callsDialed },
         { label: 'Closed deals', value: num(r.team.closed), delta: r.deltas.closed },
       ],
-      showDelta,
+      r.prev !== null,
     ) +
     (r.topAgent ? topPerformer(`${r.topAgent.name} · ${r.topAgent.avg}% avg QA`) : '') +
     `<div style="font-size:13px;font-weight:bold;color:${INK};margin-bottom:8px">Per-agent — weekly QA scores & call activity</div>` +
     table
+  )
+}
+
+/** Bid Tracker section (scorecard + status/value line). */
+function bidInner(r: BidReport): string {
+  const t = r.team
+  const detail = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;border:1px solid ${BORDER};border-radius:8px">
+    <tr><td style="padding:12px 16px;font-size:13px;color:${INK}">
+      <b>Active</b> ${num(t.active)} &nbsp;·&nbsp; <b>Submitted</b> ${num(t.submitted)} &nbsp;·&nbsp;
+      <b style="color:${GOOD}">Won</b> ${num(t.won)} &nbsp;·&nbsp; <b style="color:${BAD}">Lost</b> ${num(t.lost)}
+      &nbsp;·&nbsp; Quoted value ${money(t.quotedValue)}
+      ${r.topAgent ? `<div style="margin-top:6px;color:${MUTED}">🏆 Top: <b style="color:${INK}">${esc(r.topAgent.name)}</b> — ${num(r.topAgent.won)} won · ${money(r.topAgent.wonValue)}</div>` : ''}
+    </td></tr></table>`
+  return (
+    scorecard(
+      [
+        { label: 'Bids (due)', value: num(t.total), delta: r.deltas.total },
+        { label: 'Won', value: num(t.won), delta: r.deltas.won },
+        { label: 'Win rate', value: ratePct(t.winRate), delta: r.deltas.winRate },
+        { label: 'Won value', value: money(t.wonValue), delta: r.deltas.wonValue },
+      ],
+      r.prev !== null,
+    ) + detail
+  )
+}
+
+/** Marketing section (social scorecard + blogs/content/plan line). */
+function marketingInner(r: MarketingReport): string {
+  const t = r.team
+  const planPct = t.planTotal ? Math.round((t.planDone / t.planTotal) * 100) : null
+  const detail = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;border:1px solid ${BORDER};border-radius:8px">
+    <tr><td style="padding:12px 16px;font-size:13px;color:${INK}">
+      <b>Blogs published</b> ${num(t.blogs)} &nbsp;·&nbsp; <b>Content shipped</b> ${num(t.contentPublished)} &nbsp;·&nbsp;
+      <b>Master plan</b> ${t.planDone}/${t.planTotal}${planPct !== null ? ` (${planPct}%)` : ''} &nbsp;·&nbsp; <b>Brands</b> ${num(r.brands)}
+      ${r.topBrandByFollowers ? `<div style="margin-top:6px;color:${MUTED}">Top brand: <b style="color:${INK}">${esc(r.topBrandByFollowers.name)}</b> — ${num(r.topBrandByFollowers.followers)} followers</div>` : ''}
+    </td></tr></table>`
+  return (
+    scorecard(
+      [
+        { label: 'Followers', value: num(t.followers), delta: r.deltas.followers },
+        { label: 'New followers', value: num(t.newFollowers), delta: r.deltas.newFollowers },
+        { label: 'Impressions', value: num(t.impressions), delta: r.deltas.impressions },
+        { label: 'Eng. rate', value: `${t.engagementRate}%`, delta: r.deltas.engagementRate },
+      ],
+      r.prev !== null,
+    ) + detail
+  )
+}
+
+/** The consolidated monthly management report — ITAD + Bid Tracker + Marketing in one email. */
+export function renderManagementReportEmail(r: ManagementReport): { subject: string; html: string; text: string } {
+  const sections: string[] = []
+  if (r.itad) sections.push(sectionHeader('ITAD — Outbound Calling', 'Team QA & call activity') + itadInner(r.itad))
+  if (r.bids) sections.push(sectionHeader('Bid Tracker', 'Bids due this month & outcomes') + bidInner(r.bids))
+  if (r.marketing) sections.push(sectionHeader('Marketing', 'Social, content & plan progress') + marketingInner(r.marketing))
+  if (!sections.length) sections.push(`<p style="color:${MUTED};font-size:14px">No data available for this month.</p>`)
+
+  const t: string[] = [`Monthly Management Report — ${r.monthLabel}`, '']
+  if (r.itad) t.push(`ITAD: avg QA ${pct(r.itad.team.qaAvg)} | connect ${ratePct(r.itad.team.connectRate)} | dials ${num(r.itad.team.callsDialed)} | closed ${r.itad.team.closed}`)
+  if (r.bids) t.push(`Bids: ${num(r.bids.team.total)} due | won ${num(r.bids.team.won)} | win rate ${ratePct(r.bids.team.winRate)} | won value ${money(r.bids.team.wonValue)}`)
+  if (r.marketing) t.push(`Marketing: ${num(r.marketing.team.followers)} followers | +${num(r.marketing.team.newFollowers)} new | ${num(r.marketing.team.impressions)} impressions | ER ${r.marketing.team.engagementRate}% | blogs ${num(r.marketing.team.blogs)} | plan ${r.marketing.team.planDone}/${r.marketing.team.planTotal}`)
+
+  return {
+    subject: `Monthly Management Report · ${r.monthLabel}`,
+    html: shell('Management Report', r.monthLabel, sections.join('')),
+    text: t.join('\n'),
+  }
+}
+
+function renderItad(r: ItadReport): { subject: string; html: string; text: string } {
+  const showDelta = r.prev !== null
+  const inner = itadInner(r)
   const mom = (label: string, d: number) => `${label} ${d >= 0 ? '+' : ''}${Math.round(d * 1000) / 10}%`
   const text = [
     `ITAD — Monthly Team Report (${r.monthLabel})`,
