@@ -4,6 +4,7 @@ import { MarketingDiscipline, TaskStatus, ContentType, type MarketingTask, type 
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString, dateStringFromDb } from '../lib/time'
+import { notifyMentions } from '../lib/notify'
 
 const STATUS_ORDER: TaskStatus[] = ['BACKLOG', 'IN_PROGRESS', 'IN_REVIEW', 'SCHEDULED', 'PUBLISHED']
 
@@ -124,7 +125,7 @@ const commentSchema = z.object({
 /** POST /api/marketing/tasks/:id/comments — any Marketing member comments (with @mentions). */
 export async function addComment(req: AuthedRequest, res: Response): Promise<void> {
   if (!(await assertMarketing(req, res))) return
-  const task = await prisma.marketingTask.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  const task = await prisma.marketingTask.findUnique({ where: { id: req.params.id }, select: { id: true, title: true } })
   if (!task) {
     res.status(404).json({ error: 'Task not found' })
     return
@@ -141,6 +142,16 @@ export async function addComment(req: AuthedRequest, res: Response): Promise<voi
   const comment = await prisma.marketingTaskComment.create({
     data: { taskId: task.id, authorId: req.user!.id, body: parsed.data.body, mentions: validMentions },
     include: { author: { select: { id: true, name: true } } },
+  })
+  // Notify mentioned teammates (self-mentions skipped inside the helper).
+  await notifyMentions({
+    mentionIds: validMentions,
+    actorId: comment.author.id,
+    actorName: comment.author.name,
+    taskTitle: task.title,
+    link: `/app/marketing/board?task=${task.id}`,
+    entityType: 'MarketingTask',
+    entityId: task.id,
   })
   res.status(201).json({ comment: serializeComment(comment) })
 }

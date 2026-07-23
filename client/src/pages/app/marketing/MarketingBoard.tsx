@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   DndContext,
   PointerSensor,
@@ -52,7 +53,9 @@ export default function MarketingBoard() {
   const [filter, setFilter] = useState<'ALL' | Discipline>('ALL')
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
-  const [detailId, setDetailId] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  // Deep-link: /app/marketing/board?task=<id> (e.g. from an @mention notification).
+  const [detailId, setDetailId] = useState<string | null>(() => searchParams.get('task'))
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 

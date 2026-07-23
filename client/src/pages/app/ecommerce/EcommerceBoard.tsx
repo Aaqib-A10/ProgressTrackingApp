@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import { Plus, CalendarClock, Trash2, MessageSquare } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
@@ -28,7 +29,9 @@ export default function EcommerceBoard() {
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [newOpen, setNewOpen] = useState(false)
-  const [detailId, setDetailId] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  // Deep-link: /app/ecommerce/board?task=<id> (e.g. from an @mention notification).
+  const [detailId, setDetailId] = useState<string | null>(() => searchParams.get('task'))
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   useEffect(() => {

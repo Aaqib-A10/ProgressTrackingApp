@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { userToday, todayByMember } from '../lib/userDay'
+import { notifyMentions } from '../lib/notify'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -416,7 +417,7 @@ const commentSchema = z.object({
 export async function addComment(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
   if (!isEcommerce(me)) { res.status(403).json({ error: 'Not an Ecommerce member' }); return }
-  const task = await prisma.ecommerceTask.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  const task = await prisma.ecommerceTask.findUnique({ where: { id: req.params.id }, select: { id: true, title: true } })
   if (!task) { res.status(404).json({ error: 'Task not found' }); return }
   const parsed = commentSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }); return }
@@ -428,6 +429,15 @@ export async function addComment(req: AuthedRequest, res: Response): Promise<voi
   const comment = await prisma.ecomTaskComment.create({
     data: { taskId: task.id, authorId: me.id, body: parsed.data.body, mentions: validMentions },
     include: { author: { select: { id: true, name: true } } },
+  })
+  await notifyMentions({
+    mentionIds: validMentions,
+    actorId: me.id,
+    actorName: comment.author.name,
+    taskTitle: task.title,
+    link: `/app/ecommerce/board?task=${task.id}`,
+    entityType: 'EcommerceTask',
+    entityId: task.id,
   })
   res.status(201).json({ comment: serializeComment(comment) })
 }

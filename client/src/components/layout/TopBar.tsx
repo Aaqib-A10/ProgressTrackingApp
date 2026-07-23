@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Bell, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { useAuth } from '../../lib/auth'
-import { getNotifications, type AppNotification } from '../../lib/notificationsApi'
+import { getNotifications, markNotificationRead, type AppNotification } from '../../lib/notificationsApi'
 import { RangeSelector, type RangeKey, type CustomRange } from './RangeSelector'
 import { Avatar } from './Sidebar'
 import { ClockWidget } from '../attendance/ClockWidget'
@@ -148,11 +148,20 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                 </div>
               ) : (
                 <ul className="max-h-80 divide-y divide-line overflow-y-auto">
-                  {notifs.map((n) =>
-                    NOTIF_LINK[n.id] ? (
+                  {notifs.map((n) => {
+                    const target = n.link ?? NOTIF_LINK[n.id]
+                    const open = () => {
+                      setNotifOpen(false)
+                      if (n.persistent) {
+                        setNotifs((ns) => ns.filter((x) => x.id !== n.id)) // clear locally
+                        markNotificationRead(n.id).catch(() => undefined)
+                      }
+                      if (target) navigate(target)
+                    }
+                    return target ? (
                       <li key={n.id}>
                         <button
-                          onClick={() => { setNotifOpen(false); navigate(NOTIF_LINK[n.id]) }}
+                          onClick={open}
                           className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
                         >
                           <span className="mt-0.5 shrink-0">{NOTIF_ICON[n.type]}</span>
@@ -171,8 +180,8 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                           <p className="text-body-sm text-ink-muted">{n.body}</p>
                         </div>
                       </li>
-                    ),
-                  )}
+                    )
+                  })}
                 </ul>
               )}
             </div>

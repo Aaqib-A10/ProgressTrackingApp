@@ -180,6 +180,8 @@ model User {
   ecomTasksCreated  EcommerceTask[]       @relation("EcomTaskCreator")
   ecomTaskComments  EcomTaskComment[]     @relation("EcomCommentAuthor")
   marketingTaskComments MarketingTaskComment[] @relation("MarketingCommentAuthor")
+  notifications      Notification[] @relation("NotificationRecipient")
+  notificationsActed Notification[] @relation("NotificationActor")
   stockAssignedTo   StockRequest[]        @relation("StockAssignee")
   stockAssignedBy   StockRequest[]        @relation("StockAssigner")
 
@@ -648,6 +650,30 @@ model MarketingTask {
   @@index([discipline])
   @@index([scheduledDate])
   @@index([assigneeId])
+}
+
+enum NotificationType {
+  MENTION
+}
+
+/// A delivered, per-recipient notification (e.g. an @mention on a board card).
+/// Read state is per row; the bell shows unread ones and marks them read on click.
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String // recipient
+  user       User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType @default(MENTION)
+  actorId    String? // who triggered it
+  actor      User?            @relation("NotificationActor", fields: [actorId], references: [id])
+  title      String
+  body       String
+  link       String? // client route to open when clicked
+  entityType String? // e.g. "MarketingTask"
+  entityId   String?
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, readAt])
 }
 
 model MarketingTaskComment {

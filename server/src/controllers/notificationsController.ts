@@ -4,7 +4,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString } from '../lib/time'
 import { countUnreadFeedback } from './feedbackController'
 
-type Notif = { id: string; type: 'reminder' | 'alert' | 'info'; title: string; body: string; date: string }
+type Notif = { id: string; type: 'reminder' | 'alert' | 'info'; title: string; body: string; date: string; link?: string; persistent?: boolean }
 
 /** Has the user submitted today for their department/sub-department? */
 async function submittedToday(userId: string, dept?: string | null, sub?: string | null): Promise<boolean> {
@@ -25,6 +25,24 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   const dept = me.department?.type ?? null
   const sub = me.subDepartment?.slug ?? null
   const notifications: Notif[] = []
+
+  // Delivered @mention notifications (unread) — most recent first, at the top.
+  const mentions = await prisma.notification.findMany({
+    where: { userId: me.id, readAt: null },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+  for (const m of mentions) {
+    notifications.push({
+      id: m.id,
+      type: 'info',
+      title: m.title,
+      body: m.body,
+      date: m.createdAt.toISOString().slice(0, 10),
+      link: m.link ?? undefined,
+      persistent: true,
+    })
+  }
 
   // Member reminder: haven't logged today.
   if (me.role === 'MEMBER' && dept) {
@@ -126,4 +144,14 @@ export async function getNotSubmitted(req: AuthedRequest, res: Response): Promis
   const groups = [...byDept.values()].sort((a, b) => a.label.localeCompare(b.label))
   const total = groups.reduce((n, g) => n + g.members.length, 0)
   res.json({ date: today, total, groups })
+}
+
+/** POST /api/notifications/:id/read — mark one of my delivered notifications read. */
+export async function markNotificationRead(req: AuthedRequest, res: Response): Promise<void> {
+  // Scope to the caller so nobody can read/clear another user's notifications.
+  await prisma.notification.updateMany({
+    where: { id: req.params.id, userId: req.user!.id, readAt: null },
+    data: { readAt: new Date() },
+  })
+  res.status(204).end()
 }

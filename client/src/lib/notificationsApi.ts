@@ -6,10 +6,18 @@ export interface AppNotification {
   title: string
   body: string
   date: string
+  /** Explicit client route to open on click (e.g. an @mention deep-link). */
+  link?: string
+  /** True for stored, per-recipient notifications that can be marked read. */
+  persistent?: boolean
 }
 
 export function getNotifications() {
   return api.get<{ notifications: AppNotification[]; unread: number }>('/notifications')
+}
+
+export function markNotificationRead(id: string) {
+  return api.post<void>(`/notifications/${id}/read`)
 }
 
 export interface NotSubmittedMember {
