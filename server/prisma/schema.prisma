@@ -179,6 +179,7 @@ model User {
   ecomTasksAssigned EcommerceTask[]       @relation("EcomTaskAssignee")
   ecomTasksCreated  EcommerceTask[]       @relation("EcomTaskCreator")
   ecomTaskComments  EcomTaskComment[]     @relation("EcomCommentAuthor")
+  marketingTaskComments MarketingTaskComment[] @relation("MarketingCommentAuthor")
   stockAssignedTo   StockRequest[]        @relation("StockAssignee")
   stockAssignedBy   StockRequest[]        @relation("StockAssigner")
 
@@ -641,10 +642,25 @@ model MarketingTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  comments MarketingTaskComment[]
+
   @@index([status])
   @@index([discipline])
   @@index([scheduledDate])
   @@index([assigneeId])
+}
+
+model MarketingTaskComment {
+  id        String        @id @default(cuid())
+  taskId    String
+  task      MarketingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation("MarketingCommentAuthor", fields: [authorId], references: [id])
+  body      String
+  mentions  String[] // user ids @mentioned in the body
+  createdAt DateTime      @default(now())
+
+  @@index([taskId])
 }
 
 // ---------- Marketing brands / profiles + monthly reporting (§6) ----------

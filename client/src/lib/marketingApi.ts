@@ -14,12 +14,14 @@ export interface MarketingTask {
   status: TaskStatus
   order: number
   assignee: { id: string; name: string } | null
+  brand: { id: string; name: string } | null
   contentType: ContentType | null
   wordCount: number | null
   wordTarget: number | null
   dueDate: string | null
   scheduledDate: string | null
   publishedDate: string | null
+  commentCount: number
 }
 
 export interface BoardColumn {
@@ -30,12 +32,15 @@ export interface BoardColumn {
 
 export interface BoardResponse {
   columns: BoardColumn[]
+  members: { id: string; name: string }[]
 }
 
 export interface CreateTaskInput {
   title: string
   discipline: Discipline
   status?: TaskStatus
+  assigneeId?: string | null
+  description?: string
   dueDate?: string | null
   scheduledDate?: string | null
 }
@@ -43,6 +48,7 @@ export interface CreateTaskInput {
 export type UpdateTaskInput = Partial<{
   title: string
   description: string | null
+  discipline: Discipline
   status: TaskStatus
   order: number
   assigneeId: string | null
@@ -51,14 +57,28 @@ export type UpdateTaskInput = Partial<{
   publishedDate: string | null
 }>
 
+export interface TaskComment {
+  id: string
+  body: string
+  mentions: string[]
+  createdAt: string
+  author: { id: string; name: string }
+}
+
 export function getBoard(discipline?: Discipline) {
   return api.get<BoardResponse>(`/marketing/board${discipline ? `?discipline=${discipline}` : ''}`)
 }
 export function createTask(input: CreateTaskInput) {
   return api.post<{ task: MarketingTask }>('/marketing/tasks', input)
 }
+export function getTask(id: string) {
+  return api.get<{ task: MarketingTask; comments: TaskComment[] }>(`/marketing/tasks/${id}`)
+}
 export function updateTask(id: string, patch: UpdateTaskInput) {
   return api.patch<{ task: MarketingTask }>(`/marketing/tasks/${id}`, patch)
+}
+export function addTaskComment(id: string, body: string, mentions: string[]) {
+  return api.post<{ comment: TaskComment }>(`/marketing/tasks/${id}/comments`, { body, mentions })
 }
 export function deleteTask(id: string) {
   return api.del(`/marketing/tasks/${id}`)

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getBoard, createTask, updateTask, deleteTask } from '../controllers/marketingController'
+import { getBoard, createTask, updateTask, deleteTask, getTask, addComment } from '../controllers/marketingController'
 import { seoGet, seoUpsert, socialGet, socialUpsert, contentList } from '../controllers/marketingActivityController'
 import { calendar, marketingAnalytics } from '../controllers/marketingViewsController'
 import { listBrands, createBrand, updateBrand, deleteBrand } from '../controllers/marketingBrandController'
@@ -17,8 +17,10 @@ marketingRouter.use(requireAuth)
 // Kanban board
 marketingRouter.get('/board', asyncHandler(getBoard))
 marketingRouter.post('/tasks', asyncHandler(createTask))
+marketingRouter.get('/tasks/:id', asyncHandler(getTask))
 marketingRouter.patch('/tasks/:id', asyncHandler(updateTask))
 marketingRouter.delete('/tasks/:id', asyncHandler(deleteTask))
+marketingRouter.post('/tasks/:id/comments', asyncHandler(addComment))
 
 // Sub-department activity
 marketingRouter.get('/seo/entries', asyncHandler(seoGet))

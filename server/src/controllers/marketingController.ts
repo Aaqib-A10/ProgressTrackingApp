@@ -15,7 +15,11 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   PUBLISHED: 'Published',
 }
 
-type TaskWithAssignee = MarketingTask & { assignee: { id: string; name: string } | null }
+type TaskWithAssignee = MarketingTask & {
+  assignee: { id: string; name: string } | null
+  brand?: { id: string; name: string } | null
+  _count?: { comments: number }
+}
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -29,6 +33,18 @@ async function assertMarketing(req: AuthedRequest, res: Response): Promise<boole
   return false
 }
 
+/** Active Marketing team members — for assignee pickers and @mentions. */
+async function marketingMembers() {
+  const dept = await prisma.department.findUnique({ where: { type: 'MARKETING' } })
+  if (!dept) return { deptId: null as string | null, members: [] as { id: string; name: string }[] }
+  const members = await prisma.user.findMany({
+    where: { departmentId: dept.id, isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+  return { deptId: dept.id, members }
+}
+
 const dateStr = (d: Date | null) => (d ? dateStringFromDb(d) : null)
 
 function serialize(t: TaskWithAssignee) {
@@ -40,13 +56,19 @@ function serialize(t: TaskWithAssignee) {
     status: t.status,
     order: t.order,
     assignee: t.assignee,
+    brand: t.brand ?? null,
     contentType: t.contentType,
     wordCount: t.wordCount,
     wordTarget: t.wordTarget,
     dueDate: dateStr(t.dueDate),
     scheduledDate: dateStr(t.scheduledDate),
     publishedDate: dateStr(t.publishedDate),
+    commentCount: t._count?.comments ?? 0,
   }
+}
+
+function serializeComment(c: Prisma.MarketingTaskCommentGetPayload<{ include: { author: { select: { id: true; name: true } } } }>) {
+  return { id: c.id, body: c.body, mentions: c.mentions, createdAt: c.createdAt.toISOString(), author: { id: c.author.id, name: c.author.name } }
 }
 
 /** GET /api/marketing/board?discipline= — tasks grouped into columns. */
@@ -54,18 +76,73 @@ export async function getBoard(req: AuthedRequest, res: Response): Promise<void>
   if (!(await assertMarketing(req, res))) return
   const discipline = req.query.discipline as MarketingDiscipline | undefined
 
-  const tasks = await prisma.marketingTask.findMany({
-    where: discipline ? { discipline } : {},
-    include: { assignee: { select: { id: true, name: true } } },
-    orderBy: [{ order: 'asc' }, { updatedAt: 'asc' }],
-  })
+  const [tasks, { members }] = await Promise.all([
+    prisma.marketingTask.findMany({
+      where: discipline ? { discipline } : {},
+      include: {
+        assignee: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+        _count: { select: { comments: true } },
+      },
+      orderBy: [{ order: 'asc' }, { updatedAt: 'asc' }],
+    }),
+    marketingMembers(),
+  ])
 
   const columns = STATUS_ORDER.map((status) => ({
     status,
     label: STATUS_LABEL[status],
     tasks: tasks.filter((t) => t.status === status).map(serialize),
   }))
-  res.json({ columns })
+  res.json({ columns, members })
+}
+
+/** GET /api/marketing/tasks/:id — task detail + comment thread. */
+export async function getTask(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await assertMarketing(req, res))) return
+  const task = await prisma.marketingTask.findUnique({
+    where: { id: req.params.id },
+    include: {
+      assignee: { select: { id: true, name: true } },
+      brand: { select: { id: true, name: true } },
+      _count: { select: { comments: true } },
+      comments: { include: { author: { select: { id: true, name: true } } }, orderBy: { createdAt: 'asc' } },
+    },
+  })
+  if (!task) {
+    res.status(404).json({ error: 'Task not found' })
+    return
+  }
+  res.json({ task: serialize(task), comments: task.comments.map(serializeComment) })
+}
+
+const commentSchema = z.object({
+  body: z.string().trim().min(1).max(4000),
+  mentions: z.array(z.string()).max(50).optional(),
+})
+
+/** POST /api/marketing/tasks/:id/comments — any Marketing member comments (with @mentions). */
+export async function addComment(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await assertMarketing(req, res))) return
+  const task = await prisma.marketingTask.findUnique({ where: { id: req.params.id }, select: { id: true } })
+  if (!task) {
+    res.status(404).json({ error: 'Task not found' })
+    return
+  }
+  const parsed = commentSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  // Keep only mentions that are real active Marketing members.
+  const { members } = await marketingMembers()
+  const memberIds = new Set(members.map((m) => m.id))
+  const validMentions = (parsed.data.mentions ?? []).filter((id) => memberIds.has(id))
+  const comment = await prisma.marketingTaskComment.create({
+    data: { taskId: task.id, authorId: req.user!.id, body: parsed.data.body, mentions: validMentions },
+    include: { author: { select: { id: true, name: true } } },
+  })
+  res.status(201).json({ comment: serializeComment(comment) })
 }
 
 const createSchema = z.object({
@@ -109,6 +186,7 @@ export async function createTask(req: AuthedRequest, res: Response): Promise<voi
 const updateSchema = z.object({
   title: z.string().min(1).max(300).optional(),
   description: z.string().max(2000).nullable().optional(),
+  discipline: z.nativeEnum(MarketingDiscipline).optional(),
   status: z.nativeEnum(TaskStatus).optional(),
   order: z.number().int().optional(),
   assigneeId: z.string().nullable().optional(),
@@ -137,6 +215,7 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
   const data: Prisma.MarketingTaskUpdateInput = {}
   if (v.title !== undefined) data.title = v.title
   if (v.description !== undefined) data.description = v.description
+  if (v.discipline !== undefined) data.discipline = v.discipline
   if (v.status !== undefined) data.status = v.status
   if (v.order !== undefined) data.order = v.order
   if (v.assigneeId !== undefined) data.assignee = v.assigneeId ? { connect: { id: v.assigneeId } } : { disconnect: true }
@@ -164,7 +243,11 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
   const task = await prisma.marketingTask.update({
     where: { id: req.params.id },
     data,
-    include: { assignee: { select: { id: true, name: true } } },
+    include: {
+      assignee: { select: { id: true, name: true } },
+      brand: { select: { id: true, name: true } },
+      _count: { select: { comments: true } },
+    },
   })
   res.json({ task: serialize(task) })
 }

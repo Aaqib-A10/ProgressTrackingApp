@@ -1,26 +1,24 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core'
-import { Plus, CalendarClock, Trash2, MessageSquare, Send } from 'lucide-react'
+import { Plus, CalendarClock, Trash2, MessageSquare } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { Modal } from '../../../components/ui/Modal'
 import { TextField } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { useAuth } from '../../../lib/auth'
+import { MentionBox, highlightMentions, initials, fmtCommentTime as fmtTime, type Member } from '../../../components/MentionBox'
 import {
   getEcommerceBoard, createEcommerceTask, updateEcommerceTask, deleteEcommerceTask, getEcommerceTask, addTaskComment,
   type EcomTask, type EcomTaskStatus, type TaskComment,
 } from '../../../lib/ecommerceApi'
 
-type Member = { id: string; name: string }
 const COLUMNS: { status: EcomTaskStatus; label: string }[] = [
   { status: 'TODO', label: 'To Do' },
   { status: 'IN_PROGRESS', label: 'In Progress' },
   { status: 'DONE', label: 'Done' },
 ]
 const STATUS_LABEL: Record<EcomTaskStatus, string> = { TODO: 'To Do', IN_PROGRESS: 'In Progress', DONE: 'Done' }
-const initials = (n: string) => n.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
-const fmtTime = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export default function EcommerceBoard() {
   const { user } = useAuth()
@@ -290,75 +288,3 @@ function DetailModal({ task, members, isHod, meId, onClose, onSaved, onDelete, o
   )
 }
 
-/** Highlight "@Name" for mentioned members. */
-function highlightMentions(body: string, mentionIds: string[], members: Member[]): ReactNode {
-  const names = mentionIds.map((id) => members.find((m) => m.id === id)?.name).filter((n): n is string => !!n).sort((a, b) => b.length - a.length)
-  if (!names.length) return body
-  const out: ReactNode[] = []
-  let i = 0, buf = ''
-  const flush = () => { if (buf) { out.push(buf); buf = '' } }
-  while (i < body.length) {
-    if (body[i] === '@') {
-      const hit = names.find((n) => body.startsWith('@' + n, i))
-      if (hit) { flush(); out.push(<span key={i} className="rounded bg-primary/10 px-1 font-medium text-primary">@{hit}</span>); i += hit.length + 1; continue }
-    }
-    buf += body[i]; i++
-  }
-  flush()
-  return out
-}
-
-function MentionBox({ members, onSubmit }: { members: Member[]; onSubmit: (body: string, mentions: string[], reset: () => void) => void }) {
-  const [text, setText] = useState('')
-  const [mentionIds, setMentionIds] = useState<string[]>([])
-  const [suggest, setSuggest] = useState<Member[] | null>(null)
-  const [busy, setBusy] = useState(false)
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  function refreshSuggest(v: string, pos: number) {
-    const m = v.slice(0, pos).match(/(?:^|\s)@([\w-]{0,30})$/)
-    if (!m) { setSuggest(null); return }
-    const token = m[1].toLowerCase()
-    setSuggest(members.filter((mm) => mm.name.toLowerCase().includes(token)).slice(0, 6))
-  }
-  function pick(member: Member) {
-    const el = ref.current; if (!el) return
-    const pos = el.selectionStart ?? text.length
-    const before = text.slice(0, pos), after = text.slice(pos)
-    const m = before.match(/(?:^|\s)@([\w-]{0,30})$/); if (!m) return
-    const at = before.length - m[1].length - 1
-    const nb = before.slice(0, at) + '@' + member.name + ' '
-    setText(nb + after); setMentionIds((ids) => (ids.includes(member.id) ? ids : [...ids, member.id])); setSuggest(null)
-    setTimeout(() => { el.focus(); el.setSelectionRange(nb.length, nb.length) }, 0)
-  }
-  async function submit() {
-    const body = text.trim(); if (!body || busy) return
-    const kept = mentionIds.filter((id) => { const mm = members.find((x) => x.id === id); return mm && body.includes('@' + mm.name) })
-    setBusy(true)
-    await onSubmit(body, kept, () => { setText(''); setMentionIds([]) })
-    setBusy(false)
-  }
-  return (
-    <div className="relative mt-3">
-      <textarea
-        ref={ref} value={text}
-        onChange={(e) => { setText(e.target.value); refreshSuggest(e.target.value, e.target.selectionStart ?? e.target.value.length) }}
-        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }}
-        rows={2} placeholder="Write a comment… use @ to mention"
-        className="w-full rounded-btn border border-line bg-bg p-3 text-body-sm text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-      />
-      {suggest && suggest.length > 0 && (
-        <ul className="absolute bottom-full z-10 mb-1 w-56 overflow-hidden rounded-btn border border-line bg-card shadow-overlay">
-          {suggest.map((m) => (
-            <li key={m.id}><button type="button" onClick={() => pick(m)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body-sm hover:bg-slate-50">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">{initials(m.name)}</span>{m.name}
-            </button></li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-2 flex justify-end">
-        <Button size="sm" leadingIcon={<Send size={14} />} onClick={submit} disabled={busy || !text.trim()}>{busy ? 'Posting…' : 'Comment'}</Button>
-      </div>
-    </div>
-  )
-}
