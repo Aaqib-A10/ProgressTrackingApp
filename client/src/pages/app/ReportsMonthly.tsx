@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Trophy, Send } from 'lucide-react'
+import { Trophy, Send, FileDown } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
 import { Button } from '../../components/ui/Button'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
-import { getMonthlyReport, sendMonthlyReport, type MonthlyReport, type ItadReport, type LeadGenReport } from '../../lib/reportsApi'
+import { getMonthlyReport, sendMonthlyReport, monthlyPreviewUrl, type MonthlyReport, type ItadReport, type LeadGenReport } from '../../lib/reportsApi'
 
 type Dept = 'ITAD' | 'LEAD_GEN'
 const DEPT_LABEL: Record<Dept, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation' }
@@ -81,6 +81,9 @@ export default function ReportsMonthly() {
             </div>
           )}
           <input type="month" value={month} max={maxMonth} onChange={(e) => setMonth(e.target.value || prevMonth())} className="h-9 rounded-btn border border-line bg-card px-2.5 text-body-sm text-ink" />
+          <Button size="sm" variant="secondary" leadingIcon={<FileDown size={15} />} onClick={() => window.open(monthlyPreviewUrl(dept, month), '_blank', 'noopener')} disabled={loading || !report}>
+            Save as PDF
+          </Button>
           <Button size="sm" variant="secondary" leadingIcon={<Send size={15} />} onClick={sendNow} disabled={sending || loading || !report}>
             {sending ? 'Sending…' : 'Email to management'}
           </Button>
@@ -105,10 +108,10 @@ function ItadView({ r }: { r: ItadReport }) {
     <div className="space-y-5">
       <p className="text-body-sm font-semibold uppercase tracking-wide text-ink-muted">{DEPT_LABEL.ITAD} · {r.monthLabel}</p>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Team avg QA" value={pctTxt(r.team.qaAvg)} />
-        <StatCard label="Evaluations" value={r.team.qaCount} />
-        <StatCard label="Calls dialed" value={r.team.callsDialed.toLocaleString()} />
-        <StatCard label="Closed / RFQs" value={`${r.team.closed} / ${r.team.rfqs}`} />
+        <StatCard label="Team avg QA" value={pctTxt(r.team.qaAvg)} delta={r.prev ? r.deltas.qaAvg : undefined} caption={r.prev ? 'vs last month' : `${r.team.qaCount} evals`} />
+        <StatCard label="Connect rate" value={`${(r.team.connectRate * 100).toFixed(1)}%`} delta={r.prev ? r.deltas.connectRate : undefined} caption={r.prev ? 'vs last month' : undefined} />
+        <StatCard label="Calls dialed" value={r.team.callsDialed.toLocaleString()} delta={r.prev ? r.deltas.callsDialed : undefined} caption={r.prev ? 'vs last month' : undefined} />
+        <StatCard label="Closed deals" value={r.team.closed} delta={r.prev ? r.deltas.closed : undefined} caption={r.prev ? 'vs last month' : `${r.team.rfqs} RFQs`} />
       </div>
 
       {r.topAgent && (

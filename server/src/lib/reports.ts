@@ -3,11 +3,16 @@
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
 import { dbDateFromString } from './time'
+import { rate, periodDelta } from './kpi'
 
 function monthBounds(month: string) {
   const start = DateTime.fromISO(month + '-01', { zone: 'utc' }).startOf('month')
   const end = start.endOf('month')
   return { start, end, monthLabel: start.toFormat('LLLL yyyy'), weeks: Math.ceil(end.day / 7) }
+}
+/** The 'YYYY-MM' one calendar month before `month`. */
+function prevMonthStr(month: string): string {
+  return DateTime.fromISO(month + '-01', { zone: 'utc' }).minus({ months: 1 }).toFormat('yyyy-MM')
 }
 const round1 = (n: number) => Math.round(n * 10) / 10
 const avg = (xs: number[]) => (xs.length ? round1(xs.reduce((s, x) => s + x, 0) / xs.length) : null)
@@ -30,21 +35,67 @@ export interface ItadAgentRow {
   closed: number
   rfqs: number
 }
+export interface ItadTeamTotals {
+  agents: number
+  qaAvg: number | null
+  qaCount: number
+  callsDialed: number
+  connected: number
+  closed: number
+  rfqs: number
+  connectRate: number // connected ÷ dialed, 0..1
+}
+/** Signed fractional MoM change per KPI (e.g. +0.06 = +6% vs last month). */
+export interface ItadDeltas {
+  qaAvg: number
+  callsDialed: number
+  connected: number
+  closed: number
+  rfqs: number
+  connectRate: number
+}
 export interface ItadReport {
   department: 'ITAD'
   month: string
   monthLabel: string
   weeks: number
-  team: { agents: number; qaAvg: number | null; qaCount: number; callsDialed: number; connected: number; closed: number; rfqs: number }
+  team: ItadTeamTotals
+  prev: Omit<ItadTeamTotals, 'agents'> | null // previous month totals; null if no prior data
+  deltas: ItadDeltas
   topAgent: { name: string; avg: number } | null
   agents: ItadAgentRow[]
+}
+
+/** Month team totals for an ITAD roster — used for the prior-month MoM comparison. */
+async function itadMonthTotals(ids: string[], month: string): Promise<Omit<ItadTeamTotals, 'agents'>> {
+  const { start, end } = monthBounds(month)
+  const [entries, evals] = await Promise.all([
+    prisma.itadDailyEntry.findMany({
+      where: { userId: { in: ids }, status: 'SUBMITTED', date: { gte: dbDateFromString(start.toISODate()!), lte: dbDateFromString(end.toISODate()!) } },
+      select: { callsDialed: true, connected: true, closed: true, rfqs: true },
+    }),
+    prisma.qaEvaluation.findMany({ where: { agentId: { in: ids }, status: 'SUBMITTED', createdAt: { gte: start.toJSDate(), lte: end.toJSDate() } }, select: { totalScore: true } }),
+  ])
+  const callsDialed = entries.reduce((s, e) => s + e.callsDialed, 0)
+  const connected = entries.reduce((s, e) => s + e.connected, 0)
+  return {
+    qaAvg: avg(evals.map((e) => e.totalScore)),
+    qaCount: evals.length,
+    callsDialed,
+    connected,
+    closed: entries.reduce((s, e) => s + e.closed, 0),
+    rfqs: entries.reduce((s, e) => s + e.rfqs, 0),
+    connectRate: rate(connected, callsDialed),
+  }
 }
 
 export async function buildItadReport(month: string): Promise<ItadReport | null> {
   const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
   if (!dept) return null
   const { start, end, monthLabel, weeks } = monthBounds(month)
-  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD', 'TEAM_LEAD'] }, isActive: true }, orderBy: { name: 'asc' } })
+  // Team Leads are excluded from ITAD stats (matches the ITAD team view) — the
+  // report is about the agents' calling + QA performance.
+  const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD'] }, isActive: true }, orderBy: { name: 'asc' } })
   const ids = members.map((m) => m.id)
   const [entries, evals] = await Promise.all([
     prisma.itadDailyEntry.findMany({ where: { userId: { in: ids }, status: 'SUBMITTED', date: { gte: dbDateFromString(start.toISODate()!), lte: dbDateFromString(end.toISODate()!) } } }),
@@ -88,20 +139,40 @@ export async function buildItadReport(month: string): Promise<ItadReport | null>
 
   const scored = agents.filter((a) => a.monthQaAvg !== null)
   const topAgent = scored.length ? scored.reduce((b, a) => (a.monthQaAvg! > b.monthQaAvg! ? a : b)) : null
+
+  const callsDialed = agents.reduce((s, a) => s + a.callsDialed, 0)
+  const connected = agents.reduce((s, a) => s + a.connected, 0)
+  const team: ItadTeamTotals = {
+    agents: agents.length,
+    qaAvg: avg(evals.map((e) => e.totalScore)),
+    qaCount: evals.length,
+    callsDialed,
+    connected,
+    closed: agents.reduce((s, a) => s + a.closed, 0),
+    rfqs: agents.reduce((s, a) => s + a.rfqs, 0),
+    connectRate: rate(connected, callsDialed),
+  }
+
+  // Month-over-month: same roster, prior calendar month.
+  const p = await itadMonthTotals(ids, prevMonthStr(month))
+  const hasPrev = p.callsDialed > 0 || p.qaCount > 0
+  const deltas: ItadDeltas = {
+    qaAvg: periodDelta(team.qaAvg ?? 0, p.qaAvg ?? 0),
+    callsDialed: periodDelta(team.callsDialed, p.callsDialed),
+    connected: periodDelta(team.connected, p.connected),
+    closed: periodDelta(team.closed, p.closed),
+    rfqs: periodDelta(team.rfqs, p.rfqs),
+    connectRate: periodDelta(team.connectRate, p.connectRate),
+  }
+
   return {
     department: 'ITAD',
     month,
     monthLabel,
     weeks,
-    team: {
-      agents: agents.length,
-      qaAvg: avg(evals.map((e) => e.totalScore)),
-      qaCount: evals.length,
-      callsDialed: agents.reduce((s, a) => s + a.callsDialed, 0),
-      connected: agents.reduce((s, a) => s + a.connected, 0),
-      closed: agents.reduce((s, a) => s + a.closed, 0),
-      rfqs: agents.reduce((s, a) => s + a.rfqs, 0),
-    },
+    team,
+    prev: hasPrev ? p : null,
+    deltas,
     topAgent: topAgent ? { name: topAgent.name, avg: topAgent.monthQaAvg! } : null,
     agents,
   }

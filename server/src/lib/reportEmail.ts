@@ -9,7 +9,19 @@ const PRIMARY = '#4F46E5'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const pct = (v: number | null) => (v === null ? '—' : `${v}%`)
+const ratePct = (v: number) => `${Math.round(v * 1000) / 10}%` // 0..1 fraction → "13.5%"
 const num = (n: number) => n.toLocaleString('en-US')
+
+const GOOD = '#16A34A'
+const BAD = '#DC2626'
+/** Inline ▲/▼ month-over-month badge from a signed fraction (higher = better for all our KPIs). */
+function momBadge(delta: number, show: boolean): string {
+  if (!show) return ''
+  const p = Math.round(delta * 1000) / 10
+  if (p === 0) return `<div style="font-size:11px;color:${MUTED};margin-top:3px">— vs last mo</div>`
+  const up = p > 0
+  return `<div style="font-size:11px;color:${up ? GOOD : BAD};margin-top:3px">${up ? '▲' : '▼'} ${Math.abs(p)}% vs last mo</div>`
+}
 
 function qaColor(v: number | null): string {
   if (v === null) return MUTED
@@ -51,6 +63,19 @@ function kpiRow(cells: { label: string; value: string }[]): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px"><tr>${tds}</tr></table>`
 }
 
+/** Exec scorecard: KPI value + a month-over-month ▲/▼ badge under it. */
+function scorecard(cells: { label: string; value: string; delta: number }[], showDelta: boolean): string {
+  const tds = cells
+    .map(
+      (c) => `<td style="padding:12px 8px;text-align:center;border:1px solid ${BORDER};border-radius:8px">
+        <div style="font-size:12px;color:${MUTED};text-transform:uppercase;letter-spacing:.03em">${esc(c.label)}</div>
+        <div style="font-size:20px;font-weight:bold;color:${INK};margin-top:4px">${esc(c.value)}</div>
+        ${momBadge(c.delta, showDelta)}</td>`,
+    )
+    .join('<td style="width:8px"></td>')
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px"><tr>${tds}</tr></table>`
+}
+
 function topPerformer(text: string): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
     <tr><td style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:12px 16px">
@@ -76,19 +101,25 @@ function renderItad(r: ItadReport): { subject: string; html: string; text: strin
   const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
     <tr>${th('Agent', 'left')}${weekHeads}${th('Month QA')}${th('Dials')}${th('Conn.')}${th('Closed')}${th('RFQs')}</tr>
     ${rows}</table>`
+  const showDelta = r.prev !== null
   const inner =
-    kpiRow([
-      { label: 'Team avg QA', value: pct(r.team.qaAvg) },
-      { label: 'Evaluations', value: num(r.team.qaCount) },
-      { label: 'Calls dialed', value: num(r.team.callsDialed) },
-      { label: 'Closed / RFQs', value: `${r.team.closed} / ${r.team.rfqs}` },
-    ]) +
+    scorecard(
+      [
+        { label: 'Team avg QA', value: pct(r.team.qaAvg), delta: r.deltas.qaAvg },
+        { label: 'Connect rate', value: ratePct(r.team.connectRate), delta: r.deltas.connectRate },
+        { label: 'Calls dialed', value: num(r.team.callsDialed), delta: r.deltas.callsDialed },
+        { label: 'Closed deals', value: num(r.team.closed), delta: r.deltas.closed },
+      ],
+      showDelta,
+    ) +
     (r.topAgent ? topPerformer(`${r.topAgent.name} · ${r.topAgent.avg}% avg QA`) : '') +
     `<div style="font-size:13px;font-weight:bold;color:${INK};margin-bottom:8px">Per-agent — weekly QA scores & call activity</div>` +
     table
+  const mom = (label: string, d: number) => `${label} ${d >= 0 ? '+' : ''}${Math.round(d * 1000) / 10}%`
   const text = [
     `ITAD — Monthly Team Report (${r.monthLabel})`,
-    `Team avg QA: ${pct(r.team.qaAvg)} | Evaluations: ${r.team.qaCount} | Calls dialed: ${num(r.team.callsDialed)} | Closed: ${r.team.closed} | RFQs: ${r.team.rfqs}`,
+    `Team avg QA: ${pct(r.team.qaAvg)} | Connect rate: ${ratePct(r.team.connectRate)} | Calls dialed: ${num(r.team.callsDialed)} | Closed: ${r.team.closed} | RFQs: ${r.team.rfqs} | Evaluations: ${r.team.qaCount}`,
+    showDelta ? `MoM: ${[mom('QA', r.deltas.qaAvg), mom('connect', r.deltas.connectRate), mom('dials', r.deltas.callsDialed), mom('closed', r.deltas.closed)].join(' · ')}` : 'MoM: no prior month',
     r.topAgent ? `Top performer: ${r.topAgent.name} (${r.topAgent.avg}%)` : '',
     '',
     ...r.agents.map((a) => `${a.name}: month QA ${pct(a.monthQaAvg)} | weekly ${a.weeklyQa.map((w) => (w.avg === null ? '-' : w.avg + '%')).join('/')} | dials ${num(a.callsDialed)} | closed ${a.closed} | RFQs ${a.rfqs}`),

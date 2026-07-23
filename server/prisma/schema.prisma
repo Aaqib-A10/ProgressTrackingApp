@@ -652,6 +652,17 @@ model MarketingTask {
   @@index([assigneeId])
 }
 
+/// Once-only claim so the scheduled monthly report emails each (month, department)
+/// exactly once, even across restarts or multiple cron ticks on the 1st–2nd.
+model SentMonthlyReport {
+  id         String   @id @default(cuid())
+  month      String // 'YYYY-MM'
+  department String
+  sentAt     DateTime @default(now())
+
+  @@unique([month, department])
+}
+
 enum NotificationType {
   MENTION
 }
