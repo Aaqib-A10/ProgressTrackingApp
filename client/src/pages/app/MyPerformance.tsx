@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Phone, Heart, CheckCircle2, Target, TrendingUp, Users } from 'lucide-react'
+import { Phone, Heart, CheckCircle2, Target, TrendingUp, Users, MessageSquare } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
 import { Badge, SubmissionBadge, PerfFlagBadge } from '../../components/ui/Badge'
@@ -73,6 +73,18 @@ export default function MyPerformance() {
 
 type Summary = NonNullable<MemberProfileResponse['summary']>
 
+/** Full-width note line rendered under a daily-entry row when a note was left. */
+function renderNotesBanner(r: MemberEntryRow) {
+  const note = r.notes?.trim()
+  if (!note) return null
+  return (
+    <div className="flex items-start gap-2 rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">
+      <MessageSquare size={14} className="mt-0.5 shrink-0" />
+      <span className="whitespace-pre-wrap">{note}</span>
+    </div>
+  )
+}
+
 /** Build a chronological trend series for one metric from the daily entries. */
 function trendFor(entries: MemberEntryRow[], metric: string, target?: number): TrendPoint[] {
   return [...entries]
@@ -103,7 +115,7 @@ function ItadView({ data, summary }: { data: MemberProfileResponse; summary: Sum
         <TrendLineChart data={trend} targetLine={dailyTarget} />
       </Card>
       <Card title="Daily Entries" subtitle="Each submitted day in this period" flush>
-        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} emptyMessage="No entries logged in this period." />
+        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} renderRowBanner={renderNotesBanner} emptyMessage="No entries logged in this period." />
       </Card>
     </>
   )
@@ -132,7 +144,7 @@ function LeadGenView({ data, summary }: { data: MemberProfileResponse; summary: 
         <TrendLineChart data={trend} targetLine={dailyTarget} />
       </Card>
       <Card title="Daily Entries" subtitle="Each submitted day in this period" flush>
-        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} emptyMessage="No entries logged in this period." />
+        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} renderRowBanner={renderNotesBanner} emptyMessage="No entries logged in this period." />
       </Card>
     </>
   )

@@ -202,6 +202,18 @@ function MemberFeedback({ memberId, memberName }: { memberId: string; memberName
 
 type Summary = NonNullable<MemberProfileResponse['summary']>
 
+/** Full-width note line rendered under a daily-entry row when the member left a note. */
+function renderNotesBanner(r: MemberEntryRow) {
+  const note = r.notes?.trim()
+  if (!note) return null
+  return (
+    <div className="flex items-start gap-2 rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">
+      <MessageSquare size={14} className="mt-0.5 shrink-0" />
+      <span className="whitespace-pre-wrap">{note}</span>
+    </div>
+  )
+}
+
 function ItadView({ data, summary }: { data: MemberProfileResponse; summary: Summary }) {
   const t = summary.totals
   const k = summary.kpis
@@ -225,7 +237,7 @@ function ItadView({ data, summary }: { data: MemberProfileResponse; summary: Sum
         <StatCard label="Closed Deals" value={formatNumber(t.closed)} delta={d.closed} caption="vs prev period" icon={<CheckCircle2 size={16} />} />
       </div>
       <Card title="Daily Entries" subtitle="Each submitted day in this period" flush>
-        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} emptyMessage="No entries logged in this period." />
+        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} renderRowBanner={renderNotesBanner} emptyMessage="No entries logged in this period." />
       </Card>
     </>
   )
@@ -254,7 +266,7 @@ function LeadGenView({ data, summary }: { data: MemberProfileResponse; summary: 
         <StatCard label="Contacts Found" value={formatNumber(t.contactsFound)} delta={d.contactsFound} caption="vs prev period" icon={<CheckCircle2 size={16} />} />
       </div>
       <Card title="Daily Entries" subtitle="Each submitted day in this period" flush>
-        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} emptyMessage="No entries logged in this period." />
+        <DataTable columns={columns} rows={data.entries} getRowId={(r) => r.date} renderRowBanner={renderNotesBanner} emptyMessage="No entries logged in this period." />
       </Card>
     </>
   )
