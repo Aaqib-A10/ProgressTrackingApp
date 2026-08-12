@@ -14,6 +14,14 @@ export const ROLE_LABEL: Record<Role, string> = {
   SUPER_ADMIN: 'Super Admin',
 }
 
+/** One department a user belongs to, with the role they hold there. */
+export interface Membership {
+  departmentId: string
+  department: Department
+  subDepartment?: string | null
+  role: Role
+}
+
 export interface CurrentUser {
   id: string
   name: string
@@ -21,5 +29,9 @@ export interface CurrentUser {
   role: Role
   department?: Department | null
   subDepartment?: string | null
+  /** Id of the department currently being acted as (matches one membership). */
+  activeDepartmentId?: string | null
+  /** All departments the user belongs to (empty for admins/QA with no dept). */
+  memberships?: Membership[]
   avatarUrl?: string | null
 }

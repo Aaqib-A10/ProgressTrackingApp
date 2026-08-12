@@ -26,6 +26,8 @@ interface AuthContextValue {
   logout: () => Promise<void>
   refresh: () => Promise<void>
   updateProfile: (name: string) => Promise<void>
+  /** Switch which department the user is acting as (updates role + nav). */
+  switchDepartment: (departmentId: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -94,8 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user)
   }, [])
 
+  const switchDepartment = useCallback(async (departmentId: string) => {
+    const { user } = await api.post<{ user: CurrentUser }>('/auth/active-department', { departmentId })
+    setUser(user)
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, refresh, updateProfile }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, refresh, updateProfile, switchDepartment }}>
       {children}
     </AuthContext.Provider>
   )

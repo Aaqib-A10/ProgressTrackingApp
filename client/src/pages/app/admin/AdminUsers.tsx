@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Check, X, Trash2, Eye, EyeOff, Copy, RotateCcw } from 'lucide-react'
+import { Plus, Check, X, Trash2, Eye, EyeOff, Copy, RotateCcw, Building2 } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
@@ -10,7 +10,7 @@ import { ListToolbar } from '../../../components/ListToolbar'
 import { useToast } from '../../../components/ui/Toast'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
 import { DEPARTMENTS } from '../../../lib/departments'
-import { listUsers, createUser, updateUser, deleteUser, resetUserPassword, type AdminUser } from '../../../lib/adminApi'
+import { listUsers, createUser, updateUser, setUserDepartments, deleteUser, resetUserPassword, type AdminUser, type MembershipInput } from '../../../lib/adminApi'
 
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
   ACTIVE: { label: 'Active', tone: 'success' },
@@ -25,12 +25,14 @@ const SUBDEPTS = [
   { value: 'content', label: 'Content Creation' },
 ]
 const sel = 'rounded-btn border border-line bg-card px-2 py-1 text-body-sm text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20'
+const deptLabel = (d: string) => DEPARTMENTS.find((x) => x.value === d)?.label ?? d.replace('_', ' ')
 
 export default function AdminUsers() {
   const { addToast } = useToast()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [deptUser, setDeptUser] = useState<AdminUser | null>(null)
   const [query, setQuery] = useState('')
   const [roleF, setRoleF] = useState('')
   const [deptF, setDeptF] = useState('')
@@ -100,7 +102,24 @@ export default function AdminUsers() {
         </div>
       ),
     },
-    { key: 'department', header: 'Department', render: (u) => (u.department ? u.department.replace('_', ' ') : '—') + (u.subDepartment ? ` / ${u.subDepartment}` : '') },
+    {
+      key: 'department',
+      header: 'Departments',
+      render: (u) => {
+        const ms = u.memberships ?? []
+        if (ms.length === 0) return <span className="text-ink-muted">—</span>
+        return (
+          <div className="flex flex-wrap gap-1">
+            {ms.map((m) => (
+              <Badge key={m.departmentId} tone={m.departmentId === u.activeDepartmentId ? 'primary' : 'neutral'}>
+                {deptLabel(m.department)}
+                {m.subDepartment ? ` / ${m.subDepartment}` : ''}
+              </Badge>
+            ))}
+          </div>
+        )
+      },
+    },
     {
       key: 'role',
       header: 'Role',
@@ -136,6 +155,9 @@ export default function AdminUsers() {
       className: 'sticky right-0 z-10 bg-card shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]',
       render: (u) => (
         <div className="flex items-center justify-end gap-0.5">
+          <button onClick={() => setDeptUser(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label={`Manage departments for ${u.name}`} title="Manage departments">
+            <Building2 size={16} />
+          </button>
           <button onClick={() => resetPw(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label={`Reset password for ${u.name}`} title="Reset password">
             <RotateCcw size={15} />
           </button>
@@ -199,7 +221,107 @@ export default function AdminUsers() {
         )}
       </Card>
       <InviteModal open={open} onClose={() => setOpen(false)} onCreated={(u) => setUsers((us) => [u, ...us])} />
+      <DepartmentsModal user={deptUser} onClose={() => setDeptUser(null)} onSaved={(u) => setUsers((us) => us.map((x) => (x.id === u.id ? u : x)))} />
     </div>
+  )
+}
+
+function DepartmentsModal({ user, onClose, onSaved }: { user: AdminUser | null; onClose: () => void; onSaved: (u: AdminUser) => void }) {
+  const { addToast } = useToast()
+  const [rows, setRows] = useState<MembershipInput[]>([])
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      setRows(
+        (user.memberships ?? []).map((m) => ({
+          department: m.department,
+          role: m.role,
+          subDepartmentSlug: m.subDepartment ?? null,
+        })),
+      )
+    }
+  }, [user])
+
+  const used = new Set(rows.map((r) => r.department))
+  const addRow = () => {
+    const free = DEPARTMENTS.find((d) => !used.has(d.value as Department))
+    if (!free) return
+    setRows((rs) => [...rs, { department: free.value as Department, role: 'MEMBER', subDepartmentSlug: null }])
+  }
+  const setRow = (i: number, patch: Partial<MembershipInput>) => setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  const removeRow = (i: number) => setRows((rs) => rs.filter((_, idx) => idx !== i))
+
+  async function save() {
+    if (!user) return
+    // Guard against duplicate departments (each may appear once).
+    if (new Set(rows.map((r) => r.department)).size !== rows.length) {
+      addToast({ type: 'error', message: 'Each department can only be added once.' })
+      return
+    }
+    setSaving(true)
+    try {
+      const { user: updated } = await setUserDepartments(user.id, rows)
+      onSaved(updated)
+      addToast({ type: 'success', message: 'Departments updated.' })
+      onClose()
+    } catch (e) {
+      addToast({ type: 'error', message: (e as { message?: string })?.message || 'Could not update departments.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={user != null}
+      onClose={onClose}
+      title={user ? `Departments — ${user.name}` : ''}
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button></>}
+    >
+      <div className="space-y-3">
+        <p className="text-body-sm text-ink-muted">
+          Assign this user to one or more departments, each with its own role. They can switch which one they're
+          working in from the top bar. The first (or their current) department stays active.
+        </p>
+        {rows.length === 0 && <p className="rounded-btn bg-slate-50 px-3 py-4 text-center text-body-sm text-ink-muted">No departments. Add one below, or leave empty for a no-department account.</p>}
+        <div className="space-y-2">
+          {rows.map((r, i) => (
+            <div key={i} className="flex flex-wrap items-end gap-2 rounded-btn border border-line p-2.5">
+              <div className="min-w-[130px] flex-1">
+                <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
+                <select className={sel + ' h-9 w-full'} value={r.department} onChange={(e) => setRow(i, { department: e.target.value as Department, subDepartmentSlug: null })}>
+                  {DEPARTMENTS.filter((d) => d.value === r.department || !used.has(d.value as Department)).map((d) => (
+                    <option key={d.value} value={d.value}>{d.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-[120px] flex-1">
+                <label className="mb-1 block text-body-sm font-semibold text-ink">Role</label>
+                <select className={sel + ' h-9 w-full'} value={r.role} onChange={(e) => setRow(i, { role: e.target.value as Role })}>
+                  {ROLES.map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}
+                </select>
+              </div>
+              {r.department === 'MARKETING' && (
+                <div className="min-w-[120px] flex-1">
+                  <label className="mb-1 block text-body-sm font-semibold text-ink">Sub-dept</label>
+                  <select className={sel + ' h-9 w-full'} value={r.subDepartmentSlug ?? ''} onChange={(e) => setRow(i, { subDepartmentSlug: e.target.value || null })}>
+                    <option value="">None</option>
+                    {SUBDEPTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+              )}
+              <button onClick={() => removeRow(i)} className="flex h-9 w-9 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+        {used.size < DEPARTMENTS.length && (
+          <Button variant="secondary" size="sm" leadingIcon={<Plus size={15} />} onClick={addRow}>Add department</Button>
+        )}
+      </div>
+    </Modal>
   )
 }
 

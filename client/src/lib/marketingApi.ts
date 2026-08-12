@@ -16,6 +16,7 @@ export interface MarketingTask {
   assignee: { id: string; name: string } | null
   brand: { id: string; name: string } | null
   contentType: ContentType | null
+  platform: SocialPlatform | null
   wordCount: number | null
   wordTarget: number | null
   dueDate: string | null
@@ -40,6 +41,8 @@ export interface CreateTaskInput {
   discipline: Discipline
   status?: TaskStatus
   assigneeId?: string | null
+  brandId?: string | null
+  platform?: SocialPlatform | null
   description?: string
   dueDate?: string | null
   scheduledDate?: string | null
@@ -52,6 +55,8 @@ export type UpdateTaskInput = Partial<{
   status: TaskStatus
   order: number
   assigneeId: string | null
+  brandId: string | null
+  platform: SocialPlatform | null
   dueDate: string | null
   scheduledDate: string | null
   publishedDate: string | null
@@ -104,6 +109,7 @@ export interface SeoEntry extends Record<SeoMetricKey, number> {
   id: string
   date: string
   status: SeoStatus
+  body: string
   notes: string
 }
 export interface SeoEntryResponse {
@@ -114,8 +120,24 @@ export interface SeoEntryResponse {
 export function getSeoEntry(date?: string) {
   return api.get<SeoEntryResponse>(`/marketing/seo/entries${date ? `?date=${date}` : ''}`)
 }
-export function upsertSeoEntry(input: Partial<Record<SeoMetricKey, number>> & { status: SeoStatus; notes?: string }) {
+// SEO daily is now a free-text log; metrics remain accepted (optional) for back-compat.
+export function upsertSeoEntry(input: { status: SeoStatus; body?: string; notes?: string } & Partial<Record<SeoMetricKey, number>>) {
   return api.put<{ entry: SeoEntry }>('/marketing/seo/entries', input)
+}
+
+// ---------- Content daily log (free text) ----------
+export interface ContentEntry {
+  id: string
+  date: string
+  status: SeoStatus
+  body: string
+  notes: string
+}
+export function getContentEntry(date?: string) {
+  return api.get<{ date: string; entry: ContentEntry | null }>(`/marketing/content/entries${date ? `?date=${date}` : ''}`)
+}
+export function upsertContentEntry(input: { status: SeoStatus; body?: string; notes?: string }) {
+  return api.put<{ entry: ContentEntry }>('/marketing/content/entries', input)
 }
 
 // ---------- Social ----------
@@ -238,6 +260,11 @@ export function deleteBrand(id: string) {
 export interface SeoSyncResult { brandId: string; name: string; from: string; to: string; days: number; errors: string[] }
 export function syncSeo(input: { brandId?: string; days?: number } = {}) {
   return api.post<{ from: string; to: string; results: SeoSyncResult[] }>('/marketing/seo/sync', input)
+}
+export interface SeoUploadResult { brandId: string; rowsImported: number; from: string; to: string }
+/** Upload a Search Console / GA4 CSV export as the manual fallback to auto-sync. */
+export function uploadSeoCsv(brandId: string, file: File) {
+  return api.postRaw<SeoUploadResult>(`/marketing/seo/upload?brandId=${brandId}`, file, 'text/csv')
 }
 
 // ---------- Monthly per-brand social stats ----------
@@ -377,11 +404,18 @@ export function crossBrandSocial(month: string, metric: CrossMetricKey = 'follow
 }
 
 // ---------- Blogs ----------
+export type BlogStatus = 'DRAFT' | 'SCHEDULED' | 'PUBLISHED'
+export const BLOG_STATUSES: { key: BlogStatus; label: string; tone: 'neutral' | 'warning' | 'success' }[] = [
+  { key: 'DRAFT', label: 'Draft', tone: 'neutral' },
+  { key: 'SCHEDULED', label: 'Scheduled', tone: 'warning' },
+  { key: 'PUBLISHED', label: 'Published', tone: 'success' },
+]
 export interface BlogPost {
   id: string
   title: string
   url: string | null
   wordCount: number | null
+  status: BlogStatus
   month: string
   publishedAt: string | null
   brand: { id: string; name: string }
@@ -394,8 +428,11 @@ export function listBlogs(params: { brandId?: string; month?: string } = {}) {
   const qs = q.toString()
   return api.get<{ blogs: BlogPost[] }>(`/marketing/blogs${qs ? `?${qs}` : ''}`)
 }
-export function createBlog(input: { brandId: string; title: string; url?: string; wordCount?: number; publishedAt?: string }) {
+export function createBlog(input: { brandId: string; title: string; url?: string; wordCount?: number; status?: BlogStatus; publishedAt?: string }) {
   return api.post<{ blog: BlogPost }>('/marketing/blogs', input)
+}
+export function updateBlog(id: string, patch: { status?: BlogStatus; title?: string; url?: string | null; wordCount?: number | null; publishedAt?: string }) {
+  return api.patch<{ blog: BlogPost }>(`/marketing/blogs/${id}`, patch)
 }
 export function deleteBlog(id: string) {
   return api.del(`/marketing/blogs/${id}`)
@@ -459,4 +496,137 @@ export function updatePlanItem(id: string, patch: Partial<Omit<PlanItemInput, 'm
 }
 export function deletePlanItem(id: string) {
   return api.del(`/marketing/plan/items/${id}`)
+}
+
+// ---------- Social Planner (per-brand / per-platform scheduled social content) ----------
+export interface PlannerPost {
+  id: string
+  title: string
+  status: TaskStatus
+  platform: SocialPlatform | null
+  scheduledDate: string | null
+  brand: { id: string; name: string } | null
+  assignee: { id: string; name: string } | null
+}
+export interface PlannerResponse {
+  month: string
+  startDate: string
+  endDate: string
+  posts: PlannerPost[]
+}
+export function getSocialPlanner(params: { month?: string; brandId?: string } = {}) {
+  const q = new URLSearchParams()
+  if (params.month) q.set('month', params.month)
+  if (params.brandId) q.set('brandId', params.brandId)
+  const qs = q.toString()
+  return api.get<PlannerResponse>(`/marketing/social/planner${qs ? `?${qs}` : ''}`)
+}
+// Planner posts are SOCIAL MarketingTasks — reuse the task endpoints.
+export function createPlannerPost(input: { title: string; platform: SocialPlatform; brandId?: string | null; scheduledDate: string; status?: TaskStatus }) {
+  return createTask({ ...input, discipline: 'SOCIAL' })
+}
+export function updatePlannerPost(id: string, patch: { title?: string; platform?: SocialPlatform | null; brandId?: string | null; scheduledDate?: string | null; status?: TaskStatus }) {
+  return updateTask(id, patch)
+}
+export function deletePlannerPost(id: string) {
+  return deleteTask(id)
+}
+
+// ---------- ADS Campaign (per-campaign records + computed summary) ----------
+export type AdPlatform = 'GOOGLE' | 'META'
+export const AD_PLATFORMS: { key: AdPlatform; label: string }[] = [
+  { key: 'GOOGLE', label: 'Google Ads' },
+  { key: 'META', label: 'Meta Ads' },
+]
+export type AdCampaignType = 'SEARCH' | 'DISPLAY' | 'VIDEO' | 'SHOPPING' | 'PERFORMANCE_MAX' | 'OTHER'
+export const AD_CAMPAIGN_TYPES: { key: AdCampaignType; label: string }[] = [
+  { key: 'SEARCH', label: 'Search' },
+  { key: 'DISPLAY', label: 'Display' },
+  { key: 'VIDEO', label: 'Video' },
+  { key: 'SHOPPING', label: 'Shopping' },
+  { key: 'PERFORMANCE_MAX', label: 'Performance Max' },
+  { key: 'OTHER', label: 'Other' },
+]
+export type AdCampaignStatus = 'ACTIVE' | 'PAUSED' | 'ENDED'
+export const AD_STATUSES: { key: AdCampaignStatus; label: string; tone: 'success' | 'warning' | 'neutral' }[] = [
+  { key: 'ACTIVE', label: 'Active', tone: 'success' },
+  { key: 'PAUSED', label: 'Paused', tone: 'warning' },
+  { key: 'ENDED', label: 'Ended', tone: 'neutral' },
+]
+export interface AdCampaign {
+  id: string
+  brandId: string
+  brand?: { id: string; name: string }
+  platform: AdPlatform
+  month: string
+  title: string
+  campaignType: AdCampaignType
+  status: AdCampaignStatus
+  leads: number
+  businessLeads: number
+  conversions: number
+  spend: number
+  impressions: number
+  clicks: number
+}
+export interface AdsSummary {
+  month: string
+  activeCampaigns: number
+  totalCampaigns: number
+  bestPerforming: { title: string; leads: number } | null
+  bestConversion: { title: string; conversions: number } | null
+  totalLeads: number
+  totalBusinessLeads: number
+  totalConversions: number
+  totalSpend: number
+}
+export type AdCampaignInput = {
+  brandId: string
+  platform: AdPlatform
+  month?: string
+  title: string
+  campaignType?: AdCampaignType
+  status?: AdCampaignStatus
+  leads?: number
+  businessLeads?: number
+  conversions?: number
+  spend?: number
+  impressions?: number
+  clicks?: number
+}
+export function listAds(params: { brandId?: string; platform?: AdPlatform; month?: string } = {}) {
+  const q = new URLSearchParams()
+  if (params.brandId) q.set('brandId', params.brandId)
+  if (params.platform) q.set('platform', params.platform)
+  if (params.month) q.set('month', params.month)
+  const qs = q.toString()
+  return api.get<{ campaigns: AdCampaign[] }>(`/marketing/ads${qs ? `?${qs}` : ''}`)
+}
+export function getAdsSummary(params: { brandId?: string; platform?: AdPlatform; month?: string } = {}) {
+  const q = new URLSearchParams()
+  if (params.brandId) q.set('brandId', params.brandId)
+  if (params.platform) q.set('platform', params.platform)
+  if (params.month) q.set('month', params.month)
+  const qs = q.toString()
+  return api.get<AdsSummary>(`/marketing/ads/summary${qs ? `?${qs}` : ''}`)
+}
+export function createAd(input: AdCampaignInput) {
+  return api.post<{ campaign: AdCampaign }>('/marketing/ads', input)
+}
+export function updateAd(id: string, patch: Partial<AdCampaignInput>) {
+  return api.patch<{ campaign: AdCampaign }>(`/marketing/ads/${id}`, patch)
+}
+export function deleteAd(id: string) {
+  return api.del(`/marketing/ads/${id}`)
+}
+
+// ---------- Email Marketing (placeholder) ----------
+export interface EmailOverview {
+  brands: { id: string; name: string }[]
+  campaigns: unknown[]
+  stats: null
+  canWrite: boolean
+}
+export function getEmailOverview() {
+  return api.get<EmailOverview>('/marketing/email')
 }

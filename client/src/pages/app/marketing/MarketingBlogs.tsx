@@ -11,11 +11,14 @@ import {
   listBrands,
   listBlogs,
   createBlog,
+  updateBlog,
   deleteBlog,
   getBlogCounts,
+  BLOG_STATUSES,
   type Brand,
   type BlogPost,
   type BlogCounts,
+  type BlogStatus,
 } from '../../../lib/marketingApi'
 
 const sel =
@@ -41,6 +44,7 @@ export default function MarketingBlogs() {
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [words, setWords] = useState('')
+  const [status, setStatus] = useState<BlogStatus>('PUBLISHED')
   const [publishedAt, setPublishedAt] = useState(today())
   const [saving, setSaving] = useState(false)
 
@@ -72,6 +76,7 @@ export default function MarketingBlogs() {
         title: title.trim(),
         url: url.trim() || undefined,
         wordCount: words ? Number(words) : undefined,
+        status,
         publishedAt: publishedAt || undefined,
       })
       setTitle('')
@@ -83,6 +88,16 @@ export default function MarketingBlogs() {
       addToast({ type: 'error', message: 'Could not log blog.' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function changeStatus(b: BlogPost, next: BlogStatus) {
+    setBlogs((bs) => bs.map((x) => (x.id === b.id ? { ...x, status: next } : x)))
+    try {
+      await updateBlog(b.id, { status: next })
+    } catch {
+      setBlogs((bs) => bs.map((x) => (x.id === b.id ? { ...x, status: b.status } : x)))
+      addToast({ type: 'error', message: 'Could not update status.' })
     }
   }
 
@@ -103,6 +118,25 @@ export default function MarketingBlogs() {
     { key: 'brand', header: 'Brand', render: (b) => b.brand.name },
     { key: 'author', header: 'Author', render: (b) => b.author?.name ?? '—' },
     { key: 'words', header: 'Words', align: 'right', render: (b) => (b.wordCount != null ? formatNumber(b.wordCount) : '—') },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (b) => {
+        const meta = BLOG_STATUSES.find((s) => s.key === b.status)
+        return (
+          <select
+            value={b.status}
+            onChange={(e) => changeStatus(b, e.target.value as BlogStatus)}
+            className="cursor-pointer rounded-full border-0 bg-transparent px-1 py-0.5 text-body-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+            title={`Status: ${meta?.label}`}
+          >
+            {BLOG_STATUSES.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+          </select>
+        )
+      },
+    },
     { key: 'published', header: 'Published', render: (b) => b.publishedAt ?? '—' },
     { key: 'actions', header: '', align: 'right', render: (b) => <button onClick={() => remove(b)} className="text-ink-muted hover:text-danger" title="Delete"><Trash2 size={16} /></button> },
   ]
@@ -148,6 +182,14 @@ export default function MarketingBlogs() {
               <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Blog title" />
             </div>
             <TextField label="URL (optional)" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
+            <div>
+              <label className="mb-1 block text-body-sm font-semibold text-ink">Status</label>
+              <select className={`${sel} w-full`} value={status} onChange={(e) => setStatus(e.target.value as BlogStatus)}>
+                {BLOG_STATUSES.map((s) => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="mb-1 block text-body-sm font-semibold text-ink">Published</label>
               <input type="date" className={`${sel} w-full`} value={publishedAt} max={today()} onChange={(e) => setPublishedAt(e.target.value)} />

@@ -14,6 +14,8 @@ export type MarketingActor = {
   canWriteSocial: boolean
   canWriteContent: boolean
   canWriteSeo: boolean
+  canWriteAds: boolean
+  canWriteEmail: boolean
 }
 
 /**
@@ -44,5 +46,7 @@ export async function resolveMarketingActor(req: AuthedRequest, res: Response): 
     canWriteSocial: isLead || subDeptSlug === 'social',
     canWriteContent: isLead || subDeptSlug === 'content',
     canWriteSeo: isLead || subDeptSlug === 'seo',
+    canWriteAds: isLead || subDeptSlug === 'ads',
+    canWriteEmail: isLead || subDeptSlug === 'email',
   }
 }

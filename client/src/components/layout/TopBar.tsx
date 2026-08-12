@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu } from 'lucide-react'
+import { Search, Bell, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
+import { DEPARTMENTS } from '../../lib/departments'
 import { useAuth } from '../../lib/auth'
 import { getNotifications, markNotificationRead, type AppNotification } from '../../lib/notificationsApi'
 import { RangeSelector, type RangeKey, type CustomRange } from './RangeSelector'
@@ -123,6 +124,9 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
       <RangeSelector value={range} onChange={onRangeChange} custom={custom} onApplyCustom={onApplyCustom} />
 
       <div className="ml-auto flex items-center gap-1">
+        {/* Department switcher (only for multi-department users) */}
+        <DepartmentSwitcher user={user} />
+
         {/* Attendance clock */}
         <ClockWidget />
 
@@ -227,6 +231,80 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         </div>
       </div>
     </header>
+  )
+}
+
+const deptLabel = (d: string) => DEPARTMENTS.find((x) => x.value === d)?.label ?? d.replace('_', ' ')
+
+/** Lets a user who belongs to several departments switch which one they're acting as. */
+function DepartmentSwitcher({ user }: { user: CurrentUser }) {
+  const { switchDepartment } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const memberships = user.memberships ?? []
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  // Nothing to switch between → don't render.
+  if (memberships.length < 2) return null
+
+  const active = memberships.find((m) => m.departmentId === user.activeDepartmentId) ?? memberships[0]
+
+  async function choose(departmentId: string) {
+    if (departmentId === user.activeDepartmentId) { setOpen(false); return }
+    setBusy(true)
+    try {
+      await switchDepartment(departmentId)
+      setOpen(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        disabled={busy}
+        className="flex items-center gap-2 rounded-btn border border-line px-2.5 py-1.5 text-body-sm font-medium text-ink hover:bg-slate-100 disabled:opacity-60"
+        title="Switch department"
+      >
+        <Building2 size={16} className="text-primary" />
+        <span className="hidden max-w-[120px] truncate sm:inline">{deptLabel(active.department)}</span>
+        <ChevronDown size={14} className={'text-ink-muted transition-transform ' + (open ? 'rotate-180' : '')} />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-64 animate-scale-in overflow-hidden rounded-card border border-line bg-card shadow-overlay">
+          <div className="border-b border-line px-4 py-2 text-label-md uppercase text-ink-muted">Acting as</div>
+          <ul className="max-h-80 overflow-y-auto p-1">
+            {memberships.map((m) => {
+              const isActive = m.departmentId === user.activeDepartmentId
+              return (
+                <li key={m.departmentId}>
+                  <button
+                    onClick={() => choose(m.departmentId)}
+                    className={'flex w-full items-center gap-2.5 rounded-btn px-3 py-2 text-left transition-colors ' + (isActive ? 'bg-slate-100' : 'hover:bg-slate-50')}
+                  >
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate text-body-md font-medium text-ink">{deptLabel(m.department)}</span>
+                      <span className="block text-body-sm text-ink-muted">{ROLE_LABEL[m.role]}{m.subDepartment ? ` · ${m.subDepartment}` : ''}</span>
+                    </span>
+                    {isActive && <Check size={16} className="shrink-0 text-primary" />}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -22,7 +22,14 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
     return
   }
   const users = await prisma.user.findMany({
-    include: { department: { select: { type: true } }, subDepartment: { select: { slug: true, name: true } } },
+    include: {
+      department: { select: { type: true } },
+      subDepartment: { select: { slug: true, name: true } },
+      memberships: {
+        include: { department: { select: { type: true } }, subDepartment: { select: { slug: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
     orderBy: { name: 'asc' },
   })
   res.json({
@@ -33,6 +40,13 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
       role: u.role,
       department: u.department?.type ?? null,
       subDepartment: u.subDepartment?.slug ?? null,
+      activeDepartmentId: u.departmentId ?? null,
+      memberships: u.memberships.map((m) => ({
+        departmentId: m.departmentId,
+        department: m.department.type,
+        subDepartment: m.subDepartment?.slug ?? null,
+        role: m.role,
+      })),
       status: u.status,
       isActive: u.isActive,
       tempPassword: u.tempPassword ?? null,
@@ -73,7 +87,16 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
   }
   const tempPassword = v.password ?? randomBytes(6).toString('base64url')
   const user = await prisma.user.create({
-    data: { name: v.name, email: v.email, role: v.role, passwordHash: await hashPassword(tempPassword), departmentId: dept?.id ?? null, subDepartmentId },
+    data: {
+      name: v.name,
+      email: v.email,
+      role: v.role,
+      passwordHash: await hashPassword(tempPassword),
+      departmentId: dept?.id ?? null,
+      subDepartmentId,
+      // Seed the active department as the user's first membership.
+      ...(dept ? { memberships: { create: { departmentId: dept.id, subDepartmentId, role: v.role } } } : {}),
+    },
   })
   // Email the invitee a "set password & join" link (best-effort).
   await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword: v.password ? undefined : tempPassword })
@@ -123,7 +146,121 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
     data,
     include: { department: { select: { type: true } }, subDepartment: { select: { slug: true } } },
   })
+  // Keep the active membership in sync with a role/department/sub-dept change so
+  // switching away and back doesn't revert it. Other memberships are untouched.
+  if ((v.role !== undefined || v.department !== undefined) && u.departmentId) {
+    await prisma.userDepartment.upsert({
+      where: { userId_departmentId: { userId: u.id, departmentId: u.departmentId } },
+      update: { role: u.role, subDepartmentId: u.subDepartmentId },
+      create: { userId: u.id, departmentId: u.departmentId, subDepartmentId: u.subDepartmentId, role: u.role },
+    })
+  }
   res.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, department: u.department?.type ?? null, subDepartment: u.subDepartment?.slug ?? null, status: u.status, isActive: u.isActive } })
+}
+
+const membershipsSchema = z.object({
+  memberships: z
+    .array(
+      z.object({
+        department: z.nativeEnum(DepartmentType),
+        role: z.nativeEnum(Role),
+        subDepartmentSlug: z.string().nullable().optional(),
+      }),
+    )
+    .max(10),
+})
+
+/**
+ * PUT /api/admin/users/:id/departments — Super Admin sets a user's full list of
+ * department memberships (replace-all), each with its own role + optional
+ * Marketing sub-department. Reconciles the user's active context: keeps their
+ * current active department if it's still in the list, else falls to the first.
+ */
+export async function setUserDepartments(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const parsed = membershipsSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  const target = await prisma.user.findUnique({ where: { id: req.params.id } })
+  if (!target) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  // Resolve departments (+ Marketing sub-departments), de-duplicating by department.
+  const rows: { departmentId: string; subDepartmentId: string | null; role: Role }[] = []
+  const seen = new Set<string>()
+  for (const m of parsed.data.memberships) {
+    const dept = await prisma.department.findUnique({ where: { type: m.department } })
+    if (!dept) {
+      res.status(400).json({ error: `Unknown department ${m.department}` })
+      return
+    }
+    if (seen.has(dept.id)) continue
+    seen.add(dept.id)
+    let subDepartmentId: string | null = null
+    if (m.department === 'MARKETING' && m.subDepartmentSlug) {
+      const sub = await prisma.subDepartment.findUnique({ where: { departmentId_slug: { departmentId: dept.id, slug: m.subDepartmentSlug } } })
+      subDepartmentId = sub?.id ?? null
+    }
+    rows.push({ departmentId: dept.id, subDepartmentId, role: m.role })
+  }
+
+  // Replace-all, then reconcile the active mirror.
+  const active = rows.find((r) => r.departmentId === target.departmentId) ?? rows[0] ?? null
+  await prisma.$transaction([
+    prisma.userDepartment.deleteMany({ where: { userId: target.id } }),
+    ...rows.map((r) => prisma.userDepartment.create({ data: { userId: target.id, ...r } })),
+    prisma.user.update({
+      where: { id: target.id },
+      data: active
+        ? {
+            departmentId: active.departmentId,
+            subDepartmentId: active.subDepartmentId,
+            // Never demote a Super Admin via a membership assignment.
+            role: target.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : active.role,
+          }
+        : { departmentId: null, subDepartmentId: null },
+    }),
+  ])
+
+  const u = await prisma.user.findUniqueOrThrow({
+    where: { id: target.id },
+    include: {
+      department: { select: { type: true } },
+      subDepartment: { select: { slug: true } },
+      memberships: {
+        include: { department: { select: { type: true } }, subDepartment: { select: { slug: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  })
+  res.json({
+    user: {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      department: u.department?.type ?? null,
+      subDepartment: u.subDepartment?.slug ?? null,
+      activeDepartmentId: u.departmentId ?? null,
+      memberships: u.memberships.map((m) => ({
+        departmentId: m.departmentId,
+        department: m.department.type,
+        subDepartment: m.subDepartment?.slug ?? null,
+        role: m.role,
+      })),
+      status: u.status,
+      isActive: u.isActive,
+      tempPassword: u.tempPassword ?? null,
+    },
+  })
 }
 
 /** DELETE /api/admin/users/:id — Super Admin permanently deletes a user.
@@ -279,6 +416,12 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
         data: { name: v.name, email: v.email, role: 'MEMBER', status: 'ACTIVE', passwordHash, tempPassword, departmentId: me.departmentId, subDepartmentId },
         include: { subDepartment: { select: { slug: true } } },
       })
+  // Record (or refresh) their membership of the lead's department.
+  await prisma.userDepartment.upsert({
+    where: { userId_departmentId: { userId: user.id, departmentId: me.departmentId } },
+    update: { role: 'MEMBER', subDepartmentId },
+    create: { userId: user.id, departmentId: me.departmentId, subDepartmentId, role: 'MEMBER' },
+  })
   await prisma.teamMemberEvent.create({
     data: {
       departmentId: me.departmentId,

@@ -27,6 +27,8 @@ import {
   StickyNote,
   Briefcase,
   Wifi,
+  Megaphone,
+  Mail,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -45,10 +47,18 @@ export interface NavItem {
   badge?: { text: string; tone: BadgeTone }
 }
 
+export interface NavSubGroup {
+  /** Nested section heading (e.g. a Marketing sub-department). */
+  title: string
+  items: NavItem[]
+}
+
 export interface NavGroup {
   /** Optional small section heading. */
   title?: string
   items: NavItem[]
+  /** Nested collapsible sub-sections (e.g. Marketing → Social Media / Content / …). */
+  subgroups?: NavSubGroup[]
 }
 
 const TL_ROLES: Role[] = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
@@ -120,17 +130,48 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Marketing',
     items: [
-      { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'Calendar', to: '/app/marketing/calendar', icon: CalendarDays, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'SEO', to: '/app/marketing/seo', icon: Search, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'Social (Daily)', to: '/app/marketing/social', icon: Share2, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'Social Reports', to: '/app/marketing/social/monthly', icon: BarChart3, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'Content', to: '/app/marketing/content', icon: PenTool, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'Master Plan', to: '/app/marketing/plan', icon: ListChecks, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'Blogs', to: '/app/marketing/blogs', icon: PenTool, departments: ['MARKETING'], hideFor: HIDE_FROM_SA },
-      { label: 'Social Analytics', to: '/app/marketing/social/analytics', icon: LineChart, departments: ['MARKETING'] },
+      { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'] },
       { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart, departments: ['MARKETING'], roles: TL_ROLES },
       { label: 'Brands', to: '/app/marketing/brands', icon: Building2, departments: ['MARKETING'], roles: ADMIN_ROLES },
+    ],
+    subgroups: [
+      {
+        title: 'Social Media',
+        items: [
+          { label: 'Social Planner', to: '/app/marketing/planner', icon: CalendarDays, departments: ['MARKETING'] },
+          { label: 'Daily Log', to: '/app/marketing/social', icon: Share2, departments: ['MARKETING'] },
+          { label: 'Social Reports', to: '/app/marketing/social/monthly', icon: BarChart3, departments: ['MARKETING'] },
+          { label: 'Social Analytics', to: '/app/marketing/social/analytics', icon: LineChart, departments: ['MARKETING'] },
+        ],
+      },
+      {
+        title: 'Content',
+        items: [
+          { label: 'Master Plan', to: '/app/marketing/plan', icon: ListChecks, departments: ['MARKETING'] },
+          { label: 'Daily Log', to: '/app/marketing/content/log', icon: PenTool, departments: ['MARKETING'] },
+          { label: 'Blogs', to: '/app/marketing/blogs', icon: PenTool, departments: ['MARKETING'] },
+          { label: 'Content', to: '/app/marketing/content', icon: KanbanSquare, departments: ['MARKETING'] },
+        ],
+      },
+      {
+        title: 'SEO',
+        items: [
+          { label: 'Daily Log', to: '/app/marketing/seo', icon: Search, departments: ['MARKETING'] },
+          { label: 'Analytics', to: '/app/marketing/seo/analytics', icon: LineChart, departments: ['MARKETING'] },
+        ],
+      },
+      {
+        title: 'ADS Campaign',
+        items: [
+          { label: 'Campaigns', to: '/app/marketing/ads', icon: Megaphone, departments: ['MARKETING'] },
+        ],
+      },
+      {
+        title: 'Email Marketing',
+        items: [
+          { label: 'Email', to: '/app/marketing/email', icon: Mail, departments: ['MARKETING'] },
+        ],
+      },
     ],
   },
   {
@@ -155,10 +196,13 @@ function itemVisible(item: NavItem, role: Role, department?: Department | null):
   return true
 }
 
-/** Returns nav groups filtered for the given user, dropping empty groups. */
+/** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
 export function filterNav(role: Role, department?: Department | null): NavGroup[] {
   return NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((i) => itemVisible(i, role, department)),
-  })).filter((g) => g.items.length > 0)
+    subgroups: g.subgroups
+      ?.map((sg) => ({ ...sg, items: sg.items.filter((i) => itemVisible(i, role, department)) }))
+      .filter((sg) => sg.items.length > 0),
+  })).filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
 }

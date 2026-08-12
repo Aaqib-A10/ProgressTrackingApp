@@ -46,7 +46,11 @@ const MarketingBoard = lazy(() => import('../pages/app/marketing/MarketingBoard'
 const SeoActivity = lazy(() => import('../pages/app/marketing/SeoActivity'))
 const SocialActivity = lazy(() => import('../pages/app/marketing/SocialActivity'))
 const ContentActivity = lazy(() => import('../pages/app/marketing/ContentActivity'))
-const EditorialCalendar = lazy(() => import('../pages/app/marketing/EditorialCalendar'))
+const ContentDailyLog = lazy(() => import('../pages/app/marketing/ContentDailyLog'))
+const SocialPlanner = lazy(() => import('../pages/app/marketing/SocialPlanner'))
+const AdsCampaigns = lazy(() => import('../pages/app/marketing/AdsCampaigns'))
+const SeoAnalytics = lazy(() => import('../pages/app/marketing/SeoAnalytics'))
+const EmailMarketing = lazy(() => import('../pages/app/marketing/EmailMarketing'))
 const MarketingAnalytics = lazy(() => import('../pages/app/marketing/MarketingAnalytics'))
 const MarketingBrands = lazy(() => import('../pages/app/marketing/MarketingBrands'))
 const SocialMonthly = lazy(() => import('../pages/app/marketing/SocialMonthly'))
@@ -135,12 +139,18 @@ export const router = createBrowserRouter([
 
       // Marketing
       { path: 'marketing/board', element: <MarketingBoard /> },
-      { path: 'marketing/calendar', element: <EditorialCalendar /> },
+      // Social Planner replaces the old editorial calendar — keep the link alive.
+      { path: 'marketing/calendar', element: <Navigate to="/app/marketing/planner" replace /> },
+      { path: 'marketing/planner', element: <SocialPlanner /> },
       { path: 'marketing/seo', element: <SeoActivity /> },
+      { path: 'marketing/seo/analytics', element: <SeoAnalytics /> },
       { path: 'marketing/social', element: <SocialActivity /> },
       { path: 'marketing/social/monthly', element: <SocialMonthly /> },
       { path: 'marketing/social/analytics', element: <SocialAnalytics /> },
       { path: 'marketing/content', element: <ContentActivity /> },
+      { path: 'marketing/content/log', element: <ContentDailyLog /> },
+      { path: 'marketing/ads', element: <AdsCampaigns /> },
+      { path: 'marketing/email', element: <EmailMarketing /> },
       { path: 'marketing/blogs', element: <MarketingBlogs /> },
       { path: 'marketing/plan', element: <MasterPlan /> },
       { path: 'marketing/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']}><MarketingAnalytics /></RequireRole> },

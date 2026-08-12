@@ -29,6 +29,8 @@ async function main() {
     ['seo', 'SEO'],
     ['social', 'Social Media'],
     ['content', 'Content Creation'],
+    ['ads', 'Ads Campaign'],
+    ['email', 'Email Marketing'],
   ]) {
     await prisma.subDepartment.upsert({
       where: { departmentId_slug: { departmentId: departments.MARKETING, slug } },

@@ -102,6 +102,7 @@ model Department {
 
   subDepartments  SubDepartment[]
   users           User[]
+  userMemberships UserDepartment[]
   tags            Tag[]
   targets         Target[]
   feedback        Feedback[]
@@ -123,6 +124,7 @@ model SubDepartment {
   createdAt    DateTime   @default(now())
 
   users          User[]
+  userMemberships UserDepartment[]
   targets        Target[]
   marketingPlans MarketingPlan[]
 
@@ -145,10 +147,17 @@ model User {
   // password change, and admin password reset to revoke existing tokens.
   sessionsValidFrom DateTime?
 
+  // Active context: the department/sub-department/role the user is currently
+  // operating as. This mirrors one of their `memberships` rows; the department
+  // switcher swaps it. Kept as scalar fields so every dept-scoped feature keeps
+  // reading a single "current" department without change.
   departmentId    String?
   department      Department?    @relation(fields: [departmentId], references: [id])
   subDepartmentId String?
   subDepartment   SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+
+  // All departments this user belongs to, each with its own role + sub-department.
+  memberships     UserDepartment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -157,6 +166,7 @@ model User {
   leadGenEntries  LeadGenDailyEntry[]
   seoEntries      SeoDailyEntry[]
   socialEntries   SocialDailyEntry[]
+  contentEntries  ContentDailyEntry[]
   marketingTasks  MarketingTask[]
   leaveDays       LeaveDay[]
   attendanceDays  AttendanceDay[]
@@ -194,9 +204,30 @@ model User {
   blogPosts             BlogPost[]           @relation("BlogAuthor")
   marketingPlansCreated MarketingPlan[]      @relation("MarketingPlanCreatedBy")
   planItemsOwned        MarketingPlanItem[]  @relation("PlanItemOwner")
+  adCampaignsCreated    AdCampaign[]         @relation("AdCampaignCreatedBy")
 
   @@index([departmentId])
   @@index([subDepartmentId])
+}
+
+/// A user's membership in a department, with the role (and optional Marketing
+/// sub-department) they hold there. A user can belong to several departments;
+/// their "active" one is mirrored onto User.department/subDepartment/role and
+/// swapped by the department switcher (POST /api/auth/active-department).
+model UserDepartment {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departmentId    String
+  department      Department     @relation(fields: [departmentId], references: [id])
+  subDepartmentId String?
+  subDepartment   SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+  role            Role           @default(MEMBER)
+  createdAt       DateTime       @default(now())
+
+  @@unique([userId, departmentId])
+  @@index([userId])
+  @@index([departmentId])
 }
 
 // ---------- Daily-log file attachments (ITAD / Lead Gen) ----------
@@ -556,6 +587,35 @@ enum ContentType {
   OTHER
 }
 
+/// Ad platforms tracked under the ADS Campaign sub-department.
+enum AdPlatform {
+  GOOGLE
+  META
+}
+
+/// Campaign types (Google-centric, reused for Meta; OTHER is the catch-all).
+enum AdCampaignType {
+  SEARCH
+  DISPLAY
+  VIDEO
+  SHOPPING
+  PERFORMANCE_MAX
+  OTHER
+}
+
+enum AdCampaignStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+/// Publish state of a blog/article (drives the Blogs "published or not" column).
+enum BlogStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
 // ---------- SEO daily activity (§6.1) ----------
 model SeoDailyEntry {
   id     String    @id @default(cuid())
@@ -570,6 +630,24 @@ model SeoDailyEntry {
   technicalFixes  Int @default(0)
   organicTraffic  Int @default(0) // manually entered key figure (GSC/GA4 integration later)
 
+  body      String? // free-text SEO daily log (metric columns retained but no longer surfaced)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+// ---------- Content daily activity (free-text log) ----------
+model ContentDailyEntry {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime  @db.Date
+  status DayStatus @default(SUBMITTED)
+
+  body      String? // free-text daily log
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -635,6 +713,9 @@ model MarketingTask {
   wordCount   Int?
   wordTarget  Int?
 
+  // Social-specific (when discipline = SOCIAL) — drives the Social Planner column
+  platform SocialPlatform?
+
   // Editorial calendar — planned vs actual
   dueDate       DateTime? @db.Date
   scheduledDate DateTime? @db.Date
@@ -649,6 +730,7 @@ model MarketingTask {
   @@index([status])
   @@index([discipline])
   @@index([scheduledDate])
+  @@index([discipline, scheduledDate])
   @@index([assigneeId])
 }
 
@@ -725,6 +807,7 @@ model Brand {
   blogs       BlogPost[]
   tasks       MarketingTask[]
   planItems   MarketingPlanItem[]
+  adCampaigns AdCampaign[]
   targets     Target[]
 
   @@unique([departmentId, slug])
@@ -823,6 +906,7 @@ model BlogPost {
   title       String
   url         String?
   wordCount   Int?
+  status      BlogStatus @default(DRAFT) // publish state (drives the "published or not" column)
   authorId    String?
   author      User?     @relation("BlogAuthor", fields: [authorId], references: [id])
   publishedAt DateTime? @db.Date
@@ -832,6 +916,35 @@ model BlogPost {
   updatedAt   DateTime  @updatedAt
 
   @@index([brandId, month])
+  @@index([month])
+}
+
+/// A single ad campaign record under the ADS Campaign sub-department. Per brand +
+/// platform + month; totals and "best performing/conversion" are computed on read
+/// from these rows (see /marketing/ads/summary).
+model AdCampaign {
+  id           String           @id @default(cuid())
+  brandId      String
+  brand        Brand            @relation(fields: [brandId], references: [id])
+  platform     AdPlatform
+  month        String // "YYYY-MM" (denormalized, like BlogPost.month)
+  title        String
+  campaignType AdCampaignType   @default(OTHER)
+  status       AdCampaignStatus @default(ACTIVE)
+
+  leads         Int @default(0)
+  businessLeads Int @default(0)
+  conversions   Int @default(0)
+  spend         Int @default(0) // whole currency units
+  impressions   Int @default(0)
+  clicks        Int @default(0)
+
+  createdById String?
+  createdBy   User?    @relation("AdCampaignCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brandId, platform, month])
   @@index([month])
 }
 

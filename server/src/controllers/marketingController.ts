@@ -1,6 +1,6 @@
 import type { Response } from 'express'
 import { z } from 'zod'
-import { MarketingDiscipline, TaskStatus, ContentType, type MarketingTask, type Prisma } from '@prisma/client'
+import { MarketingDiscipline, TaskStatus, ContentType, SocialPlatform, type MarketingTask, type Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString, dateStringFromDb } from '../lib/time'
@@ -59,6 +59,7 @@ function serialize(t: TaskWithAssignee) {
     assignee: t.assignee,
     brand: t.brand ?? null,
     contentType: t.contentType,
+    platform: t.platform,
     wordCount: t.wordCount,
     wordTarget: t.wordTarget,
     dueDate: dateStr(t.dueDate),
@@ -163,6 +164,8 @@ const createSchema = z.object({
   status: z.nativeEnum(TaskStatus).optional(),
   assigneeId: z.string().nullable().optional(),
   contentType: z.nativeEnum(ContentType).nullable().optional(),
+  platform: z.nativeEnum(SocialPlatform).nullable().optional(),
+  brandId: z.string().nullable().optional(),
   wordTarget: z.number().int().min(0).nullable().optional(),
   dueDate: z.string().nullable().optional(),
   scheduledDate: z.string().nullable().optional(),
@@ -185,11 +188,13 @@ export async function createTask(req: AuthedRequest, res: Response): Promise<voi
       status: v.status ?? 'BACKLOG',
       assigneeId: v.assigneeId ?? null,
       contentType: v.contentType ?? null,
+      platform: v.platform ?? null,
+      brandId: v.brandId ?? null,
       wordTarget: v.wordTarget ?? null,
       dueDate: v.dueDate ? dbDateFromString(v.dueDate) : null,
       scheduledDate: v.scheduledDate ? dbDateFromString(v.scheduledDate) : null,
     },
-    include: { assignee: { select: { id: true, name: true } } },
+    include: { assignee: { select: { id: true, name: true } }, brand: { select: { id: true, name: true } } },
   })
   res.status(201).json({ task: serialize(task) })
 }
@@ -202,6 +207,8 @@ const updateSchema = z.object({
   order: z.number().int().optional(),
   assigneeId: z.string().nullable().optional(),
   contentType: z.nativeEnum(ContentType).nullable().optional(),
+  platform: z.nativeEnum(SocialPlatform).nullable().optional(),
+  brandId: z.string().nullable().optional(),
   wordCount: z.number().int().min(0).nullable().optional(),
   wordTarget: z.number().int().min(0).nullable().optional(),
   dueDate: z.string().nullable().optional(),
@@ -231,6 +238,8 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
   if (v.order !== undefined) data.order = v.order
   if (v.assigneeId !== undefined) data.assignee = v.assigneeId ? { connect: { id: v.assigneeId } } : { disconnect: true }
   if (v.contentType !== undefined) data.contentType = v.contentType
+  if (v.platform !== undefined) data.platform = v.platform
+  if (v.brandId !== undefined) data.brand = v.brandId ? { connect: { id: v.brandId } } : { disconnect: true }
   if (v.wordCount !== undefined) data.wordCount = v.wordCount
   if (v.wordTarget !== undefined) data.wordTarget = v.wordTarget
   if (v.dueDate !== undefined) data.dueDate = v.dueDate ? dbDateFromString(v.dueDate) : null

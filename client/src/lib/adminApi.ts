@@ -1,5 +1,5 @@
 import { api } from './api'
-import type { Role, Department, UserStatus } from './types'
+import type { Role, Department, UserStatus, Membership } from './types'
 
 // ---------- Users ----------
 export interface AdminUser {
@@ -9,9 +9,16 @@ export interface AdminUser {
   role: Role
   department: Department | null
   subDepartment: string | null
+  activeDepartmentId?: string | null
+  memberships?: Membership[]
   status: UserStatus
   isActive: boolean
   tempPassword: string | null
+}
+export interface MembershipInput {
+  department: Department
+  role: Role
+  subDepartmentSlug?: string | null
 }
 export interface CreateUserInput {
   name: string
@@ -25,6 +32,9 @@ export const listUsers = () => api.get<{ users: AdminUser[] }>('/admin/users')
 export const createUser = (input: CreateUserInput) => api.post<{ user: AdminUser; tempPassword?: string }>('/admin/users', input)
 export const updateUser = (id: string, patch: Partial<{ role: Role; department: Department | null; subDepartmentSlug: string | null; status: UserStatus; isActive: boolean }>) =>
   api.patch<{ user: AdminUser }>(`/admin/users/${id}`, patch)
+/** Replace a user's full set of department memberships (each with its own role). */
+export const setUserDepartments = (id: string, memberships: MembershipInput[]) =>
+  api.put<{ user: AdminUser }>(`/admin/users/${id}/departments`, { memberships })
 export const deleteUser = (id: string) => api.del<void>(`/admin/users/${id}`)
 export const resetUserPassword = (id: string, password?: string) =>
   api.post<{ tempPassword: string }>(`/admin/users/${id}/reset-password`, password ? { password } : {})

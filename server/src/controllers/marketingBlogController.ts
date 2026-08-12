@@ -1,6 +1,6 @@
 import type { Response } from 'express'
 import { z } from 'zod'
-import type { Prisma } from '@prisma/client'
+import { BlogStatus, type Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { resolveMarketingActor, type MarketingActor } from '../lib/marketingAuth'
@@ -18,6 +18,7 @@ function serialize(b: BlogWithRefs) {
     title: b.title,
     url: b.url,
     wordCount: b.wordCount,
+    status: b.status,
     month: b.month,
     publishedAt: b.publishedAt ? dateStringFromDb(b.publishedAt) : null,
     brand: { id: b.brandId, name: b.brand.name },
@@ -50,6 +51,7 @@ const createSchema = z.object({
   title: z.string().min(1).max(300),
   url: z.string().max(600).optional(),
   wordCount: z.number().int().min(0).max(1_000_000).optional(),
+  status: z.nativeEnum(BlogStatus).optional(),
   publishedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 })
 
@@ -79,6 +81,7 @@ export async function createBlog(req: AuthedRequest, res: Response): Promise<voi
       title: parsed.data.title,
       url: parsed.data.url || null,
       wordCount: parsed.data.wordCount ?? null,
+      status: parsed.data.status ?? (parsed.data.publishedAt ? 'PUBLISHED' : 'DRAFT'),
       authorId: actor.me.id,
       publishedAt: dbDateFromString(publishedStr),
       month,
@@ -92,6 +95,7 @@ const updateSchema = z.object({
   title: z.string().min(1).max(300).optional(),
   url: z.string().max(600).nullable().optional(),
   wordCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  status: z.nativeEnum(BlogStatus).optional(),
   brandId: z.string().optional(),
   publishedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 })
@@ -125,6 +129,7 @@ export async function updateBlog(req: AuthedRequest, res: Response): Promise<voi
       ...(d.title != null ? { title: d.title } : {}),
       ...(d.url !== undefined ? { url: d.url || null } : {}),
       ...(d.wordCount !== undefined ? { wordCount: d.wordCount } : {}),
+      ...(d.status ? { status: d.status } : {}),
       ...(d.brandId ? { brandId: d.brandId } : {}),
       ...(d.publishedAt ? { publishedAt: dbDateFromString(d.publishedAt), month: d.publishedAt.slice(0, 7) } : {}),
     },

@@ -9,8 +9,12 @@ import { getQaUnreadCount } from '../../lib/qaApi'
 import { filterNav, type NavGroup } from './navConfig'
 
 const NAV_STORE = 'pt-nav-expanded'
+const matches = (to: string, path: string) => path === to || path.startsWith(to + '/')
 const pathInGroup = (group: NavGroup, path: string) =>
-  group.items.some((i) => path === i.to || path.startsWith(i.to + '/'))
+  group.items.some((i) => matches(i.to, path)) ||
+  (group.subgroups?.some((sg) => sg.items.some((i) => matches(i.to, path))) ?? false)
+// Stable collapse key for a nested subgroup.
+const subKey = (groupTitle: string, subTitle: string) => `${groupTitle} › ${subTitle}`
 
 function initials(name: string): string {
   return name
@@ -33,7 +37,13 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
     let saved: Record<string, boolean> = {}
     try { saved = JSON.parse(localStorage.getItem(NAV_STORE) || '{}') } catch { /* ignore */ }
     const init: Record<string, boolean> = {}
-    for (const g of groups) if (g.title) init[g.title] = g.title in saved ? saved[g.title] : pathInGroup(g, location.pathname)
+    for (const g of groups) {
+      if (g.title) init[g.title] = g.title in saved ? saved[g.title] : pathInGroup(g, location.pathname)
+      for (const sg of g.subgroups ?? []) {
+        const key = subKey(g.title ?? '', sg.title)
+        init[key] = key in saved ? saved[key] : sg.items.some((i) => matches(i.to, location.pathname))
+      }
+    }
     return init
   })
   function toggleGroup(title: string) {
@@ -64,6 +74,51 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
       clearInterval(timer)
     }
   }, [location.pathname])
+
+  const renderItems = (items: typeof groups[number]['items'], nested = false) => (
+    <ul className={cn('space-y-0.5', nested && 'ml-3 border-l border-line/60 pl-2')}>
+      {items.map((item) => {
+        const Icon = item.icon
+        return (
+          <li key={item.to}>
+            <NavLink
+              to={item.to}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                cn(
+                  'group relative flex items-center gap-3 rounded-btn px-3 py-2 text-body-md font-medium transition-colors',
+                  isActive ? 'bg-slate-100 text-primary' : 'text-ink-muted hover:bg-slate-50 hover:text-ink',
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />}
+                  <Icon size={18} className="shrink-0" />
+                  <span className="flex-1">{item.label}</span>
+                  {item.to === '/app/feedback' && unreadFeedback > 0 && (
+                    <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
+                      {unreadFeedback > 9 ? '9+' : unreadFeedback}
+                    </span>
+                  )}
+                  {item.to === '/app/qa/my' && unreadQa > 0 && (
+                    <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
+                      {unreadQa > 9 ? '9+' : unreadQa}
+                    </span>
+                  )}
+                  {item.badge && (
+                    <Badge tone={item.badge.tone} className="px-1.5 py-0 text-[10px]">
+                      {item.badge.text}
+                    </Badge>
+                  )}
+                </>
+              )}
+            </NavLink>
+          </li>
+        )
+      })}
+    </ul>
+  )
 
   return (
     <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-line bg-card">
@@ -106,52 +161,27 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
               </button>
             )}
             {isOpen && (
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = item.icon
-                return (
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      onClick={onNavigate}
-                      className={({ isActive }) =>
-                        cn(
-                          'group relative flex items-center gap-3 rounded-btn px-3 py-2 text-body-md font-medium transition-colors',
-                          isActive
-                            ? 'bg-slate-100 text-primary'
-                            : 'text-ink-muted hover:bg-slate-50 hover:text-ink',
-                        )
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && (
-                            <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-                          )}
-                          <Icon size={18} className="shrink-0" />
-                          <span className="flex-1">{item.label}</span>
-                          {item.to === '/app/feedback' && unreadFeedback > 0 && (
-                            <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
-                              {unreadFeedback > 9 ? '9+' : unreadFeedback}
-                            </span>
-                          )}
-                          {item.to === '/app/qa/my' && unreadQa > 0 && (
-                            <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
-                              {unreadQa > 9 ? '9+' : unreadQa}
-                            </span>
-                          )}
-                          {item.badge && (
-                            <Badge tone={item.badge.tone} className="px-1.5 py-0 text-[10px]">
-                              {item.badge.text}
-                            </Badge>
-                          )}
-                        </>
-                      )}
-                    </NavLink>
-                  </li>
-                )
-              })}
-            </ul>
+              <>
+                {group.items.length > 0 && renderItems(group.items)}
+                {group.subgroups?.map((sg) => {
+                  const key = subKey(group.title ?? '', sg.title)
+                  const subOpen = expanded[key]
+                  return (
+                    <div key={key} className="mt-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(key)}
+                        className="flex w-full items-center justify-between rounded-btn px-3 pb-1 pt-1.5 text-label-md font-semibold uppercase tracking-wide text-ink-muted transition-colors hover:text-ink"
+                        aria-expanded={subOpen}
+                      >
+                        <span>{sg.title}</span>
+                        {subOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                      </button>
+                      {subOpen && renderItems(sg.items, true)}
+                    </div>
+                  )
+                })}
+              </>
             )}
           </div>
           )

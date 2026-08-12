@@ -31,15 +31,26 @@ async function publicUser(userId: string) {
     include: {
       department: { select: { type: true, name: true } },
       subDepartment: { select: { slug: true, name: true } },
+      memberships: {
+        include: { department: { select: { type: true } }, subDepartment: { select: { slug: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   })
   return {
     id: user.id,
     name: user.name,
     email: user.email,
-    role: user.role,
+    role: user.role, // the ACTIVE membership's role (mirrored onto User)
     department: user.department?.type ?? null,
     subDepartment: user.subDepartment?.slug ?? null,
+    activeDepartmentId: user.departmentId ?? null,
+    memberships: user.memberships.map((m) => ({
+      departmentId: m.departmentId,
+      department: m.department.type,
+      subDepartment: m.subDepartment?.slug ?? null,
+      role: m.role,
+    })),
   }
 }
 
@@ -106,6 +117,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
   }
 
   // Department Team Lead self-registration: activated immediately and signed in.
+  // The active department is also recorded as their first membership.
   const user = await prisma.user.create({
     data: {
       name,
@@ -114,6 +126,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
       role: 'TEAM_LEAD',
       status: 'ACTIVE',
       departmentId: dept.id,
+      memberships: { create: { departmentId: dept.id, role: 'TEAM_LEAD' } },
     },
   })
 
@@ -152,6 +165,43 @@ export async function login(req: Request, res: Response): Promise<void> {
 }
 
 export async function me(req: AuthedRequest, res: Response): Promise<void> {
+  res.json({ user: await publicUser(req.user!.id) })
+}
+
+const activeDeptSchema = z.object({ departmentId: z.string().min(1) })
+
+/**
+ * POST /api/auth/active-department — switch which department the user is currently
+ * acting as. Mirrors the chosen membership's department/sub-department/role onto
+ * the User row; since requireAuth reads role fresh from the DB each request, the
+ * new role takes effect immediately with no token change.
+ */
+export async function setActiveDepartment(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = activeDeptSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+  const [membership, current] = await Promise.all([
+    prisma.userDepartment.findUnique({
+      where: { userId_departmentId: { userId: req.user!.id, departmentId: parsed.data.departmentId } },
+    }),
+    prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { role: true } }),
+  ])
+  if (!membership) {
+    res.status(400).json({ error: 'You are not a member of that department' })
+    return
+  }
+  await prisma.user.update({
+    where: { id: req.user!.id },
+    data: {
+      departmentId: membership.departmentId,
+      subDepartmentId: membership.subDepartmentId,
+      // A Super Admin keeps global access when switching context; everyone else
+      // takes on that department's role.
+      role: current.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : membership.role,
+    },
+  })
   res.json({ user: await publicUser(req.user!.id) })
 }
 

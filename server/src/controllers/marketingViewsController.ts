@@ -44,6 +44,41 @@ export async function calendar(req: AuthedRequest, res: Response): Promise<void>
   res.json({ month: monthParam, startDate: range.startDate, endDate: range.endDate, events })
 }
 
+/**
+ * GET /api/marketing/social/planner?month=YYYY-MM&brandId=
+ * Scheduled SOCIAL cards for the month, grouped by brand → platform. Powers the
+ * Social Planner (replaces the editorial calendar for social content).
+ */
+export async function socialPlanner(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await marketingUser(req, res))) return
+  const monthParam = (req.query.month as string) || companyToday().slice(0, 7)
+  const start = DateTime.fromISO(`${monthParam}-01`, { zone: 'utc' }).startOf('month')
+  const end = start.endOf('month')
+  const range: DateRange = { startDate: start.toISODate()!, endDate: end.toISODate()! }
+
+  const tasks = await prisma.marketingTask.findMany({
+    where: {
+      discipline: 'SOCIAL',
+      scheduledDate: inRange(range),
+      ...(req.query.brandId ? { brandId: String(req.query.brandId) } : {}),
+    },
+    include: { brand: { select: { id: true, name: true } }, assignee: { select: { id: true, name: true } } },
+    orderBy: { scheduledDate: 'asc' },
+  })
+
+  const posts = tasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    platform: t.platform,
+    scheduledDate: t.scheduledDate ? dateStringFromDb(t.scheduledDate) : null,
+    brand: t.brand,
+    assignee: t.assignee,
+  }))
+
+  res.json({ month: monthParam, startDate: range.startDate, endDate: range.endDate, posts })
+}
+
 const sum = <T>(rows: T[], pick: (r: T) => number, ok: (r: T) => boolean) =>
   rows.reduce((a, r) => (ok(r) ? a + pick(r) : a), 0)
 

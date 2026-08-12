@@ -40,10 +40,28 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
 }
 
+// Raw (non-JSON) POST — e.g. a file/CSV body the server reads with express.raw().
+// Sends the body verbatim with the given content-type (default octet-stream).
+async function requestRaw<T>(path: string, body: BodyInit, contentType = 'application/octet-stream'): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    credentials: 'include',
+    body,
+  })
+  if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized?.()
+    const message = await res.text().catch(() => res.statusText)
+    throw new ApiError(message || `Request failed (${res.status})`, res.status)
+  }
+  return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
+}
+
 export const api = {
   get: <T = unknown>(path: string) => request<T>('GET', path),
   post: <T = unknown>(path: string, body?: JsonBody) => request<T>('POST', path, body),
   put: <T = unknown>(path: string, body?: JsonBody) => request<T>('PUT', path, body),
   patch: <T = unknown>(path: string, body?: JsonBody) => request<T>('PATCH', path, body),
   del: <T = unknown>(path: string) => request<T>('DELETE', path),
+  postRaw: <T = unknown>(path: string, body: BodyInit, contentType?: string) => requestRaw<T>(path, body, contentType),
 }
