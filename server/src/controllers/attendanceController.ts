@@ -494,6 +494,127 @@ function minToHHmm(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 }
 
+/** RFC-4180-ish CSV: quote any field containing comma/quote/newline. */
+function toCsv(rows: (string | number)[][]): string {
+  return rows
+    .map((row) => row.map((cell) => {
+      const s = String(cell)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }).join(','))
+    .join('\r\n')
+}
+
+/** Duration in minutes → "7h 42m" (or "" when null, e.g. a non-present day). */
+function hm(min: number | null): string {
+  if (min == null) return ''
+  return `${Math.floor(min / 60)}h ${min % 60}m`
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  PRESENT: 'Present',
+  ON_LEAVE: 'On Leave',
+  OFF: 'Off',
+  HOLIDAY: 'Holiday',
+  ABSENT: 'Absent',
+}
+
+/**
+ * GET /api/attendance/team.csv?range=&start=&end=&department=
+ * Per-day attendance timesheet (one row per member per recorded day) for the
+ * selected range. TL is scoped to their department; Super Admin sees all or one
+ * department. Mirrors teamView's per-member shift-timezone windowing so
+ * cross-timezone (e.g. US-shift) members aren't dropped after Karachi midnight.
+ */
+export async function exportTeamAttendanceCsv(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
+  const start = req.query.start as string
+  const end = req.query.end as string
+  const now = new Date()
+
+  // Super Admin may narrow to one department; TL stays scoped to their own.
+  const deptType = req.query.department as string | undefined
+  let departmentId: string | undefined
+  let scopeLabel = me.role === 'SUPER_ADMIN' ? 'company' : (me.department?.type ?? 'team')
+  if (me.role === 'SUPER_ADMIN' && deptType) {
+    const d = await prisma.department.findUnique({ where: { type: deptType as DepartmentType } })
+    departmentId = d?.id
+    scopeLabel = deptType
+  }
+
+  const members = await scopedMembers(me, departmentId)
+  const memberIds = members.map((m) => m.id)
+  const shifts = await prisma.attendanceShift.findMany()
+
+  // Resolve the period per member in their own shift timezone, then query the
+  // widest union window and filter each record back into its member's window.
+  const shiftByUser = new Map(members.map((m) => [m.id, pickShiftFor(shifts, m.id, m.departmentId)]))
+  const rangeByUser = new Map(members.map((m) => [m.id, periodRange(rangeKey, { now, zone: shiftByUser.get(m.id)!.timeZone || COMPANY_TZ, start, end })]))
+  const allStarts = [...rangeByUser.values()].map((r) => r.startDate).sort()
+  const allEnds = [...rangeByUser.values()].map((r) => r.endDate).sort()
+  const companyRange = periodRange(rangeKey, { now, start, end }) // for the filename label
+  const startValue = dbDateFromString(allStarts[0] ?? companyRange.startDate)
+  const endValue = dbDateFromString(allEnds[allEnds.length - 1] ?? companyRange.endDate)
+
+  const [days, leaves, holidays] = await Promise.all([
+    prisma.attendanceDay.findMany({ where: { userId: { in: memberIds }, date: { gte: startValue, lte: endValue } }, include: { breaks: { orderBy: { startAt: 'asc' } } } }),
+    prisma.leaveDay.findMany({ where: { userId: { in: memberIds }, date: { gte: startValue, lte: endValue } } }),
+    prisma.holiday.findMany({ where: { date: { gte: startValue, lte: endValue } } }),
+  ])
+
+  const daysByUser = new Map<string, DayWithBreaks[]>()
+  for (const d of days) daysByUser.set(d.userId, [...(daysByUser.get(d.userId) ?? []), d])
+  const leavesByUser = new Map<string, Map<string, string>>()
+  for (const l of leaves) {
+    const m = leavesByUser.get(l.userId) ?? new Map<string, string>()
+    m.set(dateStringFromDb(l.date), l.type as string)
+    leavesByUser.set(l.userId, m)
+  }
+  const holidayByDate = new Map(holidays.map((h) => [dateStringFromDb(h.date), h.name]))
+
+  const rows: (string | number)[][] = [['Date', 'Member', 'Department', 'Status', 'Check-in', 'Check-out', 'Worked', 'Break', 'Late']]
+
+  for (const member of members) {
+    const shift = shiftByUser.get(member.id)!
+    const r = rangeByUser.get(member.id)!
+    const inWindow = (ds: string) => ds >= r.startDate && ds <= r.endDate
+    const dayByDate = new Map((daysByUser.get(member.id) ?? []).map((d) => [dateStringFromDb(d.date), d]))
+    const leaveByDate = leavesByUser.get(member.id) ?? new Map<string, string>()
+
+    // Union of recorded dates within the member's own window — no fabricated absents.
+    const dates = new Set<string>()
+    for (const ds of dayByDate.keys()) if (inWindow(ds)) dates.add(ds)
+    for (const ds of leaveByDate.keys()) if (inWindow(ds)) dates.add(ds)
+    for (const ds of holidayByDate.keys()) if (inWindow(ds)) dates.add(ds)
+
+    for (const ds of [...dates].sort()) {
+      const day = dayByDate.get(ds)
+      const offLabel = leaveByDate.get(ds) ?? (holidayByDate.has(ds) ? 'HOLIDAY' : null)
+      const row = historyRow(ds, day, offLabel, holidayByDate.get(ds) ?? null, shift, now)
+      rows.push([
+        ds,
+        member.name,
+        member.department?.name ?? '—',
+        STATUS_LABEL[row.label] ?? row.label,
+        day?.checkInAt ? clockLabel(day.checkInAt, shift) : '',
+        day?.checkOutAt ? clockLabel(day.checkOutAt, shift) : '',
+        hm(row.workedMin),
+        row.label === 'PRESENT' ? hm(row.breakMin) : '',
+        row.label === 'PRESENT' ? (row.late ? 'Yes' : 'No') : '',
+      ])
+    }
+  }
+
+  const filename = `attendance-${scopeLabel}-${companyRange.startDate}_to_${companyRange.endDate}.csv`
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  res.send(toCsv(rows))
+}
+
 /**
  * Active roster in the caller's scope. A Team Lead is always confined to their
  * own department. A Super Admin sees every department by default, or a single

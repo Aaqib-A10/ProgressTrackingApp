@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMe, checkIn, checkOut, startBreak, endBreak, history, teamView, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, removeLeave, ipCheck } from '../controllers/attendanceController'
+import { getMe, checkIn, checkOut, startBreak, endBreak, history, teamView, exportTeamAttendanceCsv, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, removeLeave, ipCheck } from '../controllers/attendanceController'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
@@ -20,6 +20,8 @@ attendanceRouter.get('/history', asyncHandler(history))
 
 // Team board + shift config + corrections (TL / Super Admin).
 attendanceRouter.get('/team', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(teamView))
+// Literal must precede the `/:userId/...` param routes below.
+attendanceRouter.get('/team.csv', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(exportTeamAttendanceCsv))
 attendanceRouter.get('/shift', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(getShift))
 attendanceRouter.put('/shift', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(putShift))
 attendanceRouter.get('/shift/user/:userId', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(getUserShift))

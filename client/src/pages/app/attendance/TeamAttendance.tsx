@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2 } from 'lucide-react'
+import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2, Download } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -8,6 +8,7 @@ import { DataTable, type Column } from '../../../components/DataTable'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
 import { useAuth } from '../../../lib/auth'
+import { downloadAttendanceCsv } from '../../../lib/reports'
 import { DEPARTMENTS, DEPARTMENT_LABEL } from '../../../lib/departments'
 import type { Department } from '../../../lib/types'
 import {
@@ -186,6 +187,18 @@ export default function TeamAttendance() {
               ))}
             </div>
           )}
+          <Button
+            size="sm"
+            variant="secondary"
+            leadingIcon={<Download size={16} />}
+            onClick={() =>
+              downloadAttendanceCsv(range, custom, isAdmin && dept !== 'ALL' ? dept : undefined).catch(() =>
+                addToast({ type: 'error', message: 'Export failed.' }),
+              )
+            }
+          >
+            Export CSV
+          </Button>
           {data?.canEditShift && (
             <Button size="sm" variant="secondary" leadingIcon={<Settings2 size={16} />} onClick={() => setShiftOpen(true)}>
               Shift settings
