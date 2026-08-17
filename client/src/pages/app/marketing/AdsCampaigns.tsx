@@ -282,7 +282,22 @@ export default function AdsCampaigns() {
           <StatCard label="Business Leads" value={formatNumber(summary.totalBusinessLeads)} />
           <StatCard label="Total Spend" value={formatMoney(summary.totalSpend)} />
           <StatCard label="Avg. Cost/Lead" value={summary.avgCostPerLead != null ? formatMoney(summary.avgCostPerLead) : '—'} caption="spend ÷ leads" />
-          <StatCard label="Best Performing" value={summary.bestPerforming ? summary.bestPerforming.title : '—'} caption={summary.bestPerforming ? `${formatNumber(summary.bestPerforming.leads)} leads` : 'no data'} />
+          <StatCard
+            label="Best Performing"
+            value={
+              summary.bestPerforming ? (
+                <span
+                  className="line-clamp-2 text-headline-md font-semibold leading-snug"
+                  title={summary.bestPerforming.title}
+                >
+                  {summary.bestPerforming.title}
+                </span>
+              ) : (
+                '—'
+              )
+            }
+            caption={summary.bestPerforming ? `${formatNumber(summary.bestPerforming.leads)} leads` : 'no data'}
+          />
         </div>
       )}
 
