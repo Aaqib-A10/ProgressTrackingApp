@@ -277,19 +277,17 @@ export default function AdsCampaigns() {
 
       {summary && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          <StatCard label="Active" value={formatNumber(summary.activeCampaigns)} caption={`of ${summary.totalCampaigns} campaigns`} />
-          <StatCard label="Total Leads" value={formatNumber(summary.totalLeads)} />
-          <StatCard label="Business Leads" value={formatNumber(summary.totalBusinessLeads)} />
-          <StatCard label="Total Spend" value={formatMoney(summary.totalSpend)} />
-          <StatCard label="Avg. Cost/Lead" value={summary.avgCostPerLead != null ? formatMoney(summary.avgCostPerLead) : '—'} caption="spend ÷ leads" />
+          <StatCard label="Active" value={formatNumber(summary.activeCampaigns)} valueClassName="text-headline-lg" caption={`of ${summary.totalCampaigns} campaigns`} />
+          <StatCard label="Total Leads" value={formatNumber(summary.totalLeads)} valueClassName="text-headline-lg" />
+          <StatCard label="Business Leads" value={formatNumber(summary.totalBusinessLeads)} valueClassName="text-headline-lg" />
+          <StatCard label="Total Spend" value={formatMoney(summary.totalSpend)} valueClassName="text-headline-lg" />
+          <StatCard label="Avg. Cost/Lead" value={summary.avgCostPerLead != null ? formatMoney(summary.avgCostPerLead) : '—'} valueClassName="text-headline-lg" caption="spend ÷ leads" />
           <StatCard
             label="Best Performing"
+            valueClassName="text-headline-md"
             value={
               summary.bestPerforming ? (
-                <span
-                  className="line-clamp-2 text-headline-md font-semibold leading-snug"
-                  title={summary.bestPerforming.title}
-                >
+                <span className="line-clamp-2 leading-snug" title={summary.bestPerforming.title}>
                   {summary.bestPerforming.title}
                 </span>
               ) : (

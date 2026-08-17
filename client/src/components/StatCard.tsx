@@ -20,10 +20,12 @@ export interface StatCardProps {
   /** When set, the card becomes a link that drills into more detail. */
   to?: string
   className?: string
+  /** Override the value's text size (default text-metric-lg). Use a smaller token on dense/narrow rows. */
+  valueClassName?: string
 }
 
 /** KPI card: small label, big tabular metric, ▲/▼ % delta (CLAUDE.md). */
-export function StatCard({ label, value, delta, deltaLabel, caption, icon, children, to, className }: StatCardProps) {
+export function StatCard({ label, value, delta, deltaLabel, caption, icon, children, to, className, valueClassName }: StatCardProps) {
   const hasDelta = delta !== undefined || deltaLabel !== undefined
   const positive = (delta ?? 0) >= 0
   const inner = (
@@ -37,8 +39,8 @@ export function StatCard({ label, value, delta, deltaLabel, caption, icon, child
         )}
       </div>
 
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <span className="text-metric-lg tabular-nums text-ink">{value}</span>
+      <div className="mt-3 flex min-w-0 items-end justify-between gap-3">
+        <span className={cn('min-w-0 tabular-nums text-ink', valueClassName ?? 'text-metric-lg')}>{value}</span>
         {hasDelta && (
           <span
             className={cn(
