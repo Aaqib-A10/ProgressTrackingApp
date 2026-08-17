@@ -9,7 +9,7 @@ import { PillFilter } from '../../../components/ui/PillFilter'
 import { Modal } from '../../../components/ui/Modal'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
-import { formatNumber } from '../../../lib/format'
+import { formatNumber, formatMoney } from '../../../lib/format'
 import {
   listBrands,
   listAds,
@@ -35,21 +35,31 @@ function thisMonth() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
+function today() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const statusTone = (s: AdCampaignStatus) => AD_STATUSES.find((x) => x.key === s)?.tone ?? 'neutral'
 const typeLabel = (t: AdCampaignType) => AD_CAMPAIGN_TYPES.find((x) => x.key === t)?.label ?? t
 
 type Draft = {
   title: string
+  date: string
   campaignType: AdCampaignType
   status: AdCampaignStatus
   leads: string
   businessLeads: string
-  conversions: string
   spend: string
 }
-const emptyDraft = (): Draft => ({ title: '', campaignType: 'SEARCH', status: 'ACTIVE', leads: '', businessLeads: '', conversions: '', spend: '' })
+const emptyDraft = (): Draft => ({ title: '', date: today(), campaignType: 'SEARCH', status: 'ACTIVE', leads: '', businessLeads: '', spend: '' })
 const numOf = (s: string) => (s ? Number(s) : 0)
+/** Keep digits + a single decimal point (for money inputs like Spend). */
+const sanitizeMoney = (s: string) => {
+  const cleaned = s.replace(/[^\d.]/g, '')
+  const i = cleaned.indexOf('.')
+  return i === -1 ? cleaned : cleaned.slice(0, i + 1) + cleaned.slice(i + 1).replace(/\./g, '')
+}
 
 export default function AdsCampaigns() {
   const { addToast } = useToast()
@@ -57,6 +67,8 @@ export default function AdsCampaigns() {
   const [brandId, setBrandId] = useState('')
   const [platform, setPlatform] = useState<AdPlatform>('GOOGLE')
   const [month, setMonth] = useState(thisMonth())
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([])
   const [summary, setSummary] = useState<AdsSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -76,11 +88,13 @@ export default function AdsCampaigns() {
       .finally(() => setLoading(false))
   }, [addToast])
 
+  const rangeActive = Boolean(from || to)
   const refresh = useCallback(() => {
     if (!brandId) return
-    listAds({ brandId, platform, month }).then((r) => setCampaigns(r.campaigns)).catch(() => undefined)
-    getAdsSummary({ brandId, platform, month }).then(setSummary).catch(() => undefined)
-  }, [brandId, platform, month])
+    const params = { brandId, platform, month, from: from || undefined, to: to || undefined }
+    listAds(params).then((r) => setCampaigns(r.campaigns)).catch(() => undefined)
+    getAdsSummary(params).then(setSummary).catch(() => undefined)
+  }, [brandId, platform, month, from, to])
   useEffect(() => {
     refresh()
   }, [refresh])
@@ -93,13 +107,12 @@ export default function AdsCampaigns() {
       await createAd({
         brandId,
         platform,
-        month,
+        date: draft.date || today(),
         title: draft.title.trim(),
         campaignType: draft.campaignType,
         status: draft.status,
         leads: numOf(draft.leads),
         businessLeads: numOf(draft.businessLeads),
-        conversions: numOf(draft.conversions),
         spend: numOf(draft.spend),
       })
       setDraft(emptyDraft())
@@ -116,11 +129,11 @@ export default function AdsCampaigns() {
     setEditing(c)
     setEditDraft({
       title: c.title,
+      date: c.date,
       campaignType: c.campaignType,
       status: c.status,
       leads: String(c.leads),
       businessLeads: String(c.businessLeads),
-      conversions: String(c.conversions),
       spend: String(c.spend),
     })
   }
@@ -131,11 +144,11 @@ export default function AdsCampaigns() {
     try {
       await updateAd(editing.id, {
         title: editDraft.title.trim(),
+        date: editDraft.date || undefined,
         campaignType: editDraft.campaignType,
         status: editDraft.status,
         leads: numOf(editDraft.leads),
         businessLeads: numOf(editDraft.businessLeads),
-        conversions: numOf(editDraft.conversions),
         spend: numOf(editDraft.spend),
       })
       setEditing(null)
@@ -162,11 +175,13 @@ export default function AdsCampaigns() {
 
   const columns: Column<AdCampaign>[] = [
     { key: 'title', header: 'Campaign', render: (c) => <span className="font-medium text-ink">{c.title}</span> },
+    { key: 'date', header: 'Date', render: (c) => c.date },
     { key: 'type', header: 'Type', render: (c) => typeLabel(c.campaignType) },
     { key: 'status', header: 'Status', render: (c) => <Badge tone={statusTone(c.status)}>{AD_STATUSES.find((s) => s.key === c.status)?.label}</Badge> },
     { key: 'leads', header: 'Leads', align: 'right', render: (c) => formatNumber(c.leads) },
     { key: 'businessLeads', header: 'Business Leads', align: 'right', render: (c) => formatNumber(c.businessLeads) },
-    { key: 'conversions', header: 'Conversions', align: 'right', render: (c) => formatNumber(c.conversions) },
+    { key: 'spend', header: 'Spend', align: 'right', render: (c) => formatMoney(c.spend) },
+    { key: 'avgCostPerLead', header: 'Avg. Cost/Lead', align: 'right', render: (c) => (c.avgCostPerLead != null ? formatMoney(c.avgCostPerLead) : '—') },
     {
       key: 'actions',
       header: '',
@@ -186,7 +201,8 @@ export default function AdsCampaigns() {
           title: 'Totals',
           leads: formatNumber(summary.totalLeads),
           businessLeads: formatNumber(summary.totalBusinessLeads),
-          conversions: formatNumber(summary.totalConversions),
+          spend: formatMoney(summary.totalSpend),
+          avgCostPerLead: summary.avgCostPerLead != null ? formatMoney(summary.avgCostPerLead) : '—',
         } as Record<string, React.ReactNode>,
       }
     : undefined
@@ -195,6 +211,10 @@ export default function AdsCampaigns() {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <TextField label="Campaign title" value={d.title} onChange={(e) => set({ ...d, title: e.target.value })} placeholder="e.g. Q3 Brand Search" />
+      </div>
+      <div>
+        <label className="mb-1 block text-body-sm font-semibold text-ink">Date</label>
+        <input type="date" className={`${sel} w-full`} value={d.date} max={today()} onChange={(e) => set({ ...d, date: e.target.value })} />
       </div>
       <div>
         <label className="mb-1 block text-body-sm font-semibold text-ink">Type</label>
@@ -210,8 +230,10 @@ export default function AdsCampaigns() {
       </div>
       <TextField label="Leads" value={d.leads} onChange={(e) => set({ ...d, leads: e.target.value.replace(/\D/g, '') })} placeholder="0" />
       <TextField label="Business leads" value={d.businessLeads} onChange={(e) => set({ ...d, businessLeads: e.target.value.replace(/\D/g, '') })} placeholder="0" />
-      <TextField label="Conversions" value={d.conversions} onChange={(e) => set({ ...d, conversions: e.target.value.replace(/\D/g, '') })} placeholder="0" />
-      <TextField label="Spend" value={d.spend} onChange={(e) => set({ ...d, spend: e.target.value.replace(/\D/g, '') })} placeholder="0" />
+      <TextField label="Spend" value={d.spend} onChange={(e) => set({ ...d, spend: sanitizeMoney(e.target.value) })} placeholder="0.00" inputMode="decimal" />
+      <div className="flex items-end pb-1 text-body-sm text-ink-muted">
+        Avg. cost/lead: <span className="ml-1 font-semibold text-ink">{numOf(d.leads) > 0 ? formatMoney(numOf(d.spend) / numOf(d.leads)) : '—'}</span>
+      </div>
     </div>
   )
 
@@ -235,8 +257,19 @@ export default function AdsCampaigns() {
           )}
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Month</label>
-            <input type="month" className={sel} value={month} max={thisMonth()} onChange={(e) => setMonth(e.target.value)} />
+            <input type="month" className={sel} value={month} max={thisMonth()} disabled={rangeActive} onChange={(e) => setMonth(e.target.value)} />
           </div>
+          <div>
+            <label className="mb-1 block text-body-sm font-semibold text-ink">From</label>
+            <input type="date" className={sel} value={from} max={to || today()} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-body-sm font-semibold text-ink">To</label>
+            <input type="date" className={sel} value={to} min={from || undefined} max={today()} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          {rangeActive && (
+            <Button variant="ghost" size="sm" onClick={() => { setFrom(''); setTo('') }}>Clear dates</Button>
+          )}
         </div>
       </div>
 
@@ -247,9 +280,9 @@ export default function AdsCampaigns() {
           <StatCard label="Active" value={formatNumber(summary.activeCampaigns)} caption={`of ${summary.totalCampaigns} campaigns`} />
           <StatCard label="Total Leads" value={formatNumber(summary.totalLeads)} />
           <StatCard label="Business Leads" value={formatNumber(summary.totalBusinessLeads)} />
-          <StatCard label="Conversions" value={formatNumber(summary.totalConversions)} />
+          <StatCard label="Total Spend" value={formatMoney(summary.totalSpend)} />
+          <StatCard label="Avg. Cost/Lead" value={summary.avgCostPerLead != null ? formatMoney(summary.avgCostPerLead) : '—'} caption="spend ÷ leads" />
           <StatCard label="Best Performing" value={summary.bestPerforming ? summary.bestPerforming.title : '—'} caption={summary.bestPerforming ? `${formatNumber(summary.bestPerforming.leads)} leads` : 'no data'} />
-          <StatCard label="Best Conversion" value={summary.bestConversion ? summary.bestConversion.title : '—'} caption={summary.bestConversion ? `${formatNumber(summary.bestConversion.conversions)} conv.` : 'no data'} />
         </div>
       )}
 
@@ -262,7 +295,7 @@ export default function AdsCampaigns() {
         </Card>
       )}
 
-      <Card title={`Campaigns — ${month}`} flush>
+      <Card title={`Campaigns — ${rangeActive ? `${from || '…'} to ${to || '…'}` : month}`} flush>
         <DataTable columns={columns} rows={campaigns} getRowId={(c) => c.id} totalRow={campaigns.length ? totalRow : undefined} emptyMessage="No campaigns logged for this brand / platform / month yet." />
       </Card>
 

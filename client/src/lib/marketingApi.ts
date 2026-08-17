@@ -559,55 +559,58 @@ export interface AdCampaign {
   brand?: { id: string; name: string }
   platform: AdPlatform
   month: string
+  date: string
   title: string
   campaignType: AdCampaignType
   status: AdCampaignStatus
   leads: number
   businessLeads: number
-  conversions: number
   spend: number
+  avgCostPerLead: number | null
   impressions: number
   clicks: number
 }
 export interface AdsSummary {
-  month: string
+  month: string | null
   activeCampaigns: number
   totalCampaigns: number
   bestPerforming: { title: string; leads: number } | null
-  bestConversion: { title: string; conversions: number } | null
+  bestCpl: { title: string; cpl: number } | null
   totalLeads: number
   totalBusinessLeads: number
-  totalConversions: number
   totalSpend: number
+  avgCostPerLead: number | null
 }
 export type AdCampaignInput = {
   brandId: string
   platform: AdPlatform
   month?: string
+  date?: string
   title: string
   campaignType?: AdCampaignType
   status?: AdCampaignStatus
   leads?: number
   businessLeads?: number
-  conversions?: number
   spend?: number
   impressions?: number
   clicks?: number
 }
-export function listAds(params: { brandId?: string; platform?: AdPlatform; month?: string } = {}) {
+export type AdsFilter = { brandId?: string; platform?: AdPlatform; month?: string; from?: string; to?: string }
+function adsQuery(params: AdsFilter) {
   const q = new URLSearchParams()
   if (params.brandId) q.set('brandId', params.brandId)
   if (params.platform) q.set('platform', params.platform)
-  if (params.month) q.set('month', params.month)
-  const qs = q.toString()
+  if (params.from) q.set('from', params.from)
+  if (params.to) q.set('to', params.to)
+  if (params.month && !params.from && !params.to) q.set('month', params.month)
+  return q.toString()
+}
+export function listAds(params: AdsFilter = {}) {
+  const qs = adsQuery(params)
   return api.get<{ campaigns: AdCampaign[] }>(`/marketing/ads${qs ? `?${qs}` : ''}`)
 }
-export function getAdsSummary(params: { brandId?: string; platform?: AdPlatform; month?: string } = {}) {
-  const q = new URLSearchParams()
-  if (params.brandId) q.set('brandId', params.brandId)
-  if (params.platform) q.set('platform', params.platform)
-  if (params.month) q.set('month', params.month)
-  const qs = q.toString()
+export function getAdsSummary(params: AdsFilter = {}) {
+  const qs = adsQuery(params)
   return api.get<AdsSummary>(`/marketing/ads/summary${qs ? `?${qs}` : ''}`)
 }
 export function createAd(input: AdCampaignInput) {

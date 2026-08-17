@@ -927,17 +927,18 @@ model AdCampaign {
   brandId      String
   brand        Brand            @relation(fields: [brandId], references: [id])
   platform     AdPlatform
-  month        String // "YYYY-MM" (denormalized, like BlogPost.month)
+  month        String // "YYYY-MM" rollup bucket (derived from date)
+  date         DateTime? @db.Date // the campaign's day; nullable for legacy rows (backfilled to month-01)
   title        String
   campaignType AdCampaignType   @default(OTHER)
   status       AdCampaignStatus @default(ACTIVE)
 
-  leads         Int @default(0)
-  businessLeads Int @default(0)
-  conversions   Int @default(0)
-  spend         Int @default(0) // whole currency units
-  impressions   Int @default(0)
-  clicks        Int @default(0)
+  leads         Int     @default(0)
+  businessLeads Int     @default(0)
+  conversions   Int     @default(0) // legacy; replaced in the UI by computed Avg. Cost Per Lead (spend/leads)
+  spend         Decimal @default(0) @db.Decimal(12, 2) // currency units, 2dp
+  impressions   Int     @default(0)
+  clicks        Int     @default(0)
 
   createdById String?
   createdBy   User?    @relation("AdCampaignCreatedBy", fields: [createdById], references: [id])
@@ -946,6 +947,7 @@ model AdCampaign {
 
   @@index([brandId, platform, month])
   @@index([month])
+  @@index([brandId, date])
 }
 
 /// The content lead's monthly Master Plan — a month-scoped container of items.

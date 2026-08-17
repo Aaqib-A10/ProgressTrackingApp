@@ -4,6 +4,11 @@ export function formatNumber(n: number): string {
   return n.toLocaleString('en-US')
 }
 
+/** 1234.5 -> "$1,234.50" (2 decimals, en-US grouping). */
+export function formatMoney(n: number): string {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
 /** 0.246 -> "24.6%" */
 export function formatPercent(fraction: number, decimals = 1): string {
   return `${(fraction * 100).toFixed(decimals)}%`
