@@ -383,13 +383,37 @@ export async function endBreak(req: AuthedRequest, res: Response): Promise<void>
   res.json(await buildMePayload(me))
 }
 
-/** A merged per-day history row (attendance + leave/holiday). */
+/** 0=Sun … 6=Sat for a bare YYYY-MM-DD (weekday is timezone-independent for a plain date). */
+function weekdayOfDate(dateStr: string): number {
+  return DateTime.fromISO(dateStr).weekday % 7 // luxon Mon=1…Sun=7 → Sun=0…Sat=6
+}
+
+/** Is this calendar date a scheduled working day for the shift (vs a weekly off day)? */
+function isWorkingDate(dateStr: string, shift: Shift): boolean {
+  return shift.workingDays.includes(weekdayOfDate(dateStr))
+}
+
+/** Inclusive list of YYYY-MM-DD strings from start to end. */
+function eachDateStr(startStr: string, endStr: string): string[] {
+  const out: string[] = []
+  let d = DateTime.fromISO(startStr)
+  const end = DateTime.fromISO(endStr)
+  while (d <= end) {
+    out.push(d.toFormat('yyyy-MM-dd'))
+    d = d.plus({ days: 1 })
+  }
+  return out
+}
+
+/** A merged per-day history row (attendance + leave/holiday + weekly off). */
 function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: string | null, offName: string | null, shift: Shift, now: Date) {
-  const label = day?.checkInAt ? 'PRESENT' : offLabel ?? 'ABSENT'
+  // No check-in and no explicit off/holiday: a scheduled working day is ABSENT,
+  // a non-working weekday is the person's recurring WEEKLY_OFF.
+  const label = day?.checkInAt ? 'PRESENT' : offLabel ?? (isWorkingDate(dateStr, shift) ? 'ABSENT' : 'WEEKLY_OFF')
   const worked = day ? workedMinutes(day, now) : null
   return {
     date: dateStr,
-    label, // PRESENT | ON_LEAVE | OFF | HOLIDAY | ABSENT
+    label, // PRESENT | ON_LEAVE | OFF | HOLIDAY | WEEKLY_OFF | ABSENT
     offName,
     checkIn: day?.checkInAt ? hhmm(day.checkInAt, shift) : null,
     checkOut: day?.checkOutAt ? hhmm(day.checkOutAt, shift) : null,
@@ -452,8 +476,10 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   const leaveByDate = new Map(leaves.map((l) => [dateStringFromDb(l.date), l.type as string]))
   const holidayByDate = new Map(holidays.map((h) => [dateStringFromDb(h.date), h.name]))
 
-  // Union of dates that have any record — we don't fabricate absent weekdays.
+  // Union of dates that have any record, plus the member's weekly off days across
+  // the range — so a full week shows (we still don't fabricate absent working days).
   const dates = new Set<string>([...dayByDate.keys(), ...leaveByDate.keys(), ...holidayByDate.keys()])
+  for (const ds of eachDateStr(range.startDate, range.endDate)) if (!isWorkingDate(ds, shift)) dates.add(ds)
   const rows = [...dates]
     .sort((a, b) => (a < b ? 1 : -1))
     .map((d) =>
@@ -481,6 +507,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
     summary: {
       presentDays: worked.length,
       leaveDays: rows.filter((r) => r.label === 'ON_LEAVE' || r.label === 'OFF').length,
+      weeklyOffDays: rows.filter((r) => r.label === 'WEEKLY_OFF').length,
       holidayDays: rows.filter((r) => r.label === 'HOLIDAY').length,
       lateDays: worked.filter((r) => r.late).length,
       completedShifts: worked.filter((r) => r.completed).length,
@@ -514,7 +541,9 @@ const STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present',
   ON_LEAVE: 'On Leave',
   OFF: 'Off',
+  WFH: 'Work From Home',
   HOLIDAY: 'Holiday',
+  WEEKLY_OFF: 'Weekly Off',
   ABSENT: 'Absent',
 }
 
@@ -585,11 +614,13 @@ export async function exportTeamAttendanceCsv(req: AuthedRequest, res: Response)
     const dayByDate = new Map((daysByUser.get(member.id) ?? []).map((d) => [dateStringFromDb(d.date), d]))
     const leaveByDate = leavesByUser.get(member.id) ?? new Map<string, string>()
 
-    // Union of recorded dates within the member's own window — no fabricated absents.
+    // Recorded dates within the member's own window, plus their weekly off days —
+    // no fabricated absents for missed working days.
     const dates = new Set<string>()
     for (const ds of dayByDate.keys()) if (inWindow(ds)) dates.add(ds)
     for (const ds of leaveByDate.keys()) if (inWindow(ds)) dates.add(ds)
     for (const ds of holidayByDate.keys()) if (inWindow(ds)) dates.add(ds)
+    for (const ds of eachDateStr(r.startDate, r.endDate)) if (!isWorkingDate(ds, shift)) dates.add(ds)
 
     for (const ds of [...dates].sort()) {
       const day = dayByDate.get(ds)

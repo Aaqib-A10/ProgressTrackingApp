@@ -40,7 +40,7 @@ export interface MeResponse {
   workMode: 'WFH' | null
 }
 
-export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'WFH' | 'ABSENT'
+export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'WFH' | 'WEEKLY_OFF' | 'ABSENT'
 
 export interface AttendanceDayRow {
   date: string
@@ -60,6 +60,7 @@ export interface AttendanceDayRow {
 export interface AttendanceSummary {
   presentDays: number
   leaveDays: number
+  weeklyOffDays: number
   holidayDays: number
   lateDays: number
   completedShifts: number

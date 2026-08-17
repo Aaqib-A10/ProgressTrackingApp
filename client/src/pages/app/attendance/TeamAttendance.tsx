@@ -593,7 +593,7 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
             <div key={r.date} className="rounded-card border border-line">
               <div className="flex items-center gap-3 px-3 py-2.5">
                 <div className="w-28 shrink-0 text-body-sm font-medium text-ink">{fmtDate(r.date)}</div>
-                <Badge tone={r.label === 'PRESENT' ? 'success' : r.label === 'ABSENT' ? 'danger' : 'neutral'}>{r.label === 'PRESENT' ? 'Present' : r.label === 'ABSENT' ? 'Absent' : r.label === 'HOLIDAY' ? 'Holiday' : r.label === 'ON_LEAVE' ? 'Leave' : r.label === 'WFH' ? 'WFH' : 'Off'}</Badge>
+                <Badge tone={r.label === 'PRESENT' ? 'success' : r.label === 'ABSENT' ? 'danger' : 'neutral'}>{r.label === 'PRESENT' ? 'Present' : r.label === 'ABSENT' ? 'Absent' : r.label === 'HOLIDAY' ? 'Holiday' : r.label === 'ON_LEAVE' ? 'Leave' : r.label === 'WFH' ? 'WFH' : r.label === 'WEEKLY_OFF' ? 'Weekly Off' : 'Off'}</Badge>
                 <div className="flex-1 text-body-sm tabular-nums text-ink-muted">
                   {r.checkIn ?? '—'} → {r.checkOut ?? '—'} · {formatMinutes(r.workedMin)}
                   {r.late && <span className="ml-2 text-warning">Late</span>}

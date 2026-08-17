@@ -14,6 +14,7 @@ const LABEL_META: Record<HistoryLabel, { tone: BadgeTone; text: string }> = {
   OFF: { tone: 'neutral', text: 'Off' },
   HOLIDAY: { tone: 'accent', text: 'Holiday' },
   WFH: { tone: 'accent', text: 'Work From Home' },
+  WEEKLY_OFF: { tone: 'neutral', text: 'Weekly Off' },
   ABSENT: { tone: 'danger', text: 'Absent' },
 }
 
@@ -78,7 +79,7 @@ export default function MyAttendance() {
           <StatCard label="Shifts completed" value={`${s.completedShifts}/${s.presentDays}`} caption={data ? `Full shift = ${formatMinutes(data.shift.requiredMinutes)}` : ''} icon={<CheckCircle2 size={16} />} />
           <StatCard label="Avg check-in" value={s.avgCheckIn ?? '—'} caption={data ? `Shift starts ${data.shift.startTime}` : ''} icon={<LogIn size={16} />} />
           <StatCard label="Late days" value={s.lateDays} caption={`of ${s.presentDays} present`} icon={<AlertTriangle size={16} />} />
-          <StatCard label="Days present" value={s.presentDays} caption={`${s.leaveDays} leave · ${s.holidayDays} holiday`} icon={<CalendarCheck size={16} />} />
+          <StatCard label="Days present" value={s.presentDays} caption={`${s.leaveDays} leave · ${s.weeklyOffDays} off · ${s.holidayDays} holiday`} icon={<CalendarCheck size={16} />} />
         </div>
       )}
 
