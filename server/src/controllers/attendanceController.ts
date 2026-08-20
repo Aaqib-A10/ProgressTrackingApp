@@ -297,6 +297,7 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
   if (!isWfh) {
     const blocked = await officeNetworkBlock(ip, me.role)
     if (blocked) {
+      console.log(`[office-net] BLOCKED check-in — ${me.name} <${me.email}> resolvedIp=${ip}`)
       res.status(403).json({ error: blocked })
       return
     }
@@ -327,6 +328,7 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
   const ip = getClientIp(req)
   const blocked = await officeNetworkBlock(ip, me.role)
   if (blocked) {
+    console.log(`[office-net] BLOCKED check-out — ${me.name} <${me.email}> resolvedIp=${ip}`)
     res.status(403).json({ error: blocked })
     return
   }
