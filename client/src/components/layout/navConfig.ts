@@ -187,10 +187,11 @@ export const NAV_GROUPS: NavGroup[] = [
 ]
 
 function itemVisible(item: NavItem, role: Role, department?: Department | null): boolean {
-  // Explicit per-item opt-out, applies even to Super Admin.
-  if (item.hideFor?.includes(role)) return false
-  // Super Admin sees everything regardless of department.
+  // Super Admin sees every screen (needed for management demos / full oversight),
+  // regardless of department or per-item hideFor opt-outs.
   if (role === 'SUPER_ADMIN') return true
+  // Explicit per-item opt-out for non-admin roles.
+  if (item.hideFor?.includes(role)) return false
   if (item.roles && !item.roles.includes(role)) return false
   if (item.departments && (!department || !item.departments.includes(department))) return false
   return true
