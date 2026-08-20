@@ -47,6 +47,10 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
         .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
     : groups
 
+  // Top-level (department) section titles — the accordion group. At most one of
+  // these is open at a time. Subgroup keys (containing ' › ') are exempt.
+  const groupTitles = groups.filter((g) => g.title).map((g) => g.title!)
+
   // Collapsible department sections. Default: only the section for the current
   // route is open; choices persist in localStorage.
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
@@ -60,19 +64,43 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
         init[key] = key in saved ? saved[key] : sg.items.some((i) => matches(i.to, location.pathname))
       }
     }
+    // Accordion invariant: keep at most one top-level section open on first paint
+    // (a previously-saved multi-open state would otherwise violate it).
+    const openTitles = groupTitles.filter((t) => init[t])
+    if (openTitles.length > 1) {
+      const keep = groups.find((g) => g.title && pathInGroup(g, location.pathname))?.title ?? openTitles[0]
+      for (const t of groupTitles) init[t] = t === keep
+    }
     return init
   })
   function toggleGroup(title: string) {
     setExpanded((prev) => {
-      const next = { ...prev, [title]: !prev[title] }
+      let next: Record<string, boolean>
+      if (groupTitles.includes(title)) {
+        // Top-level section: open this one and close all other sections.
+        const willOpen = !prev[title]
+        next = { ...prev }
+        for (const t of groupTitles) next[t] = willOpen && t === title
+      } else {
+        // Subgroup: independent single-key toggle.
+        next = { ...prev, [title]: !prev[title] }
+      }
       try { localStorage.setItem(NAV_STORE, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }
-  // Keep the section for the current route open as you navigate.
+  // Keep the current route's section open (and, per the accordion rule, close the
+  // others) as you navigate.
   useEffect(() => {
     const active = groups.find((g) => g.title && pathInGroup(g, location.pathname))
-    if (active?.title) setExpanded((prev) => (prev[active.title!] ? prev : { ...prev, [active.title!]: true }))
+    if (!active?.title) return
+    setExpanded((prev) => {
+      if (prev[active.title!] && groupTitles.every((t) => (t === active.title) === !!prev[t])) return prev
+      const next = { ...prev }
+      for (const t of groupTitles) next[t] = t === active.title
+      try { localStorage.setItem(NAV_STORE, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
 
