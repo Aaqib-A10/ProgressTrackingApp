@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Activity, Settings, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { Activity, Settings, ChevronRight, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
@@ -86,8 +86,10 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
               onClick={onNavigate}
               className={({ isActive }) =>
                 cn(
-                  'group relative flex items-center gap-3 rounded-btn px-3 py-2 text-body-md font-medium transition-colors',
-                  isActive ? 'bg-slate-100 text-primary' : 'text-ink-muted hover:bg-slate-50 hover:text-ink',
+                  'group relative flex items-center gap-3 rounded-btn px-3 py-2 text-body-md transition-colors',
+                  isActive
+                    ? 'bg-primary/10 font-semibold text-primary'
+                    : 'font-medium text-ink-muted hover:bg-slate-50 hover:text-ink',
                 )
               }
             >
@@ -147,17 +149,23 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
         {groups.map((group, gi) => {
           const collapsible = !!group.title
           const isOpen = !collapsible || expanded[group.title!]
+          // Hairline before the first titled section, separating personal items from departments.
+          const showDivider = collapsible && !groups[gi - 1]?.title
           return (
-          <div key={group.title ?? gi} className="mb-3">
+          <div key={group.title ?? gi} className={cn(collapsible ? 'mb-1.5' : 'mb-2')}>
+            {showDivider && <div className="mx-3 my-2 border-t border-line/70" />}
             {group.title && (
               <button
                 type="button"
                 onClick={() => toggleGroup(group.title!)}
-                className="flex w-full items-center justify-between rounded-btn px-3 pb-1 pt-2 text-label-md font-bold uppercase tracking-wide text-ink transition-colors hover:text-black"
+                className="group/hd flex w-full items-center justify-between rounded-btn px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink"
                 aria-expanded={isOpen}
               >
                 <span>{group.title}</span>
-                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <ChevronRight
+                  size={14}
+                  className={cn('shrink-0 text-ink-muted/50 transition-transform duration-200 group-hover/hd:text-ink-muted', isOpen && 'rotate-90')}
+                />
               </button>
             )}
             {isOpen && (
@@ -167,15 +175,18 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                   const key = subKey(group.title ?? '', sg.title)
                   const subOpen = expanded[key]
                   return (
-                    <div key={key} className="mt-1">
+                    <div key={key} className="mt-0.5">
                       <button
                         type="button"
                         onClick={() => toggleGroup(key)}
-                        className="flex w-full items-center justify-between rounded-btn px-3 pb-1 pt-1.5 text-label-md font-semibold uppercase tracking-wide text-ink-muted transition-colors hover:text-ink"
+                        className="group/sub flex w-full items-center justify-between rounded-btn px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted/80 transition-colors hover:bg-slate-50 hover:text-ink"
                         aria-expanded={subOpen}
                       >
                         <span>{sg.title}</span>
-                        {subOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        <ChevronRight
+                          size={13}
+                          className={cn('shrink-0 text-ink-muted/40 transition-transform duration-200 group-hover/sub:text-ink-muted', subOpen && 'rotate-90')}
+                        />
                       </button>
                       {subOpen && renderItems(sg.items, true)}
                     </div>
