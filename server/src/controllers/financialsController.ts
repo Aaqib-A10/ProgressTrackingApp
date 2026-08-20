@@ -52,10 +52,17 @@ export async function exportFinancialCsv(req: AuthedRequest, res: Response): Pro
     ...report.teams.map((t) => [t.teamName, t.staff, money(t.cost), money(t.revenue), money(t.netReturn), pct(t.roi)]),
     ['TOTAL', report.totals.staff, money(report.totals.cost), money(report.totals.revenue), money(report.totals.netReturn), pct(report.totals.roi)],
     [],
-    ['Name', 'Team', 'Monthly cost', 'Start', 'End', 'Active months', 'Cost in range'],
+    ['Active employees', 'Team', 'Monthly cost', 'Start', 'End', 'Active months', 'Cost in range'],
     ...report.teams.flatMap((t) =>
       t.people.map((p) => [p.name, t.teamName, money(p.monthlyCost), p.startDate, p.endDate ?? '', p.activeMonths, money(p.costInRange)]),
     ),
+    ...(report.former.length
+      ? [
+          [],
+          ['Former employees (no profile)', 'Team', 'Monthly cost', 'Start', 'End', 'Active months', 'Cost in range'],
+          ...report.former.map((p) => [p.name, p.teamName, money(p.monthlyCost), p.startDate, p.endDate ?? '', p.activeMonths, money(p.costInRange)]),
+        ]
+      : []),
   ]
   sendCsv(res, `financial-report-${from}_to_${to}.csv`, rows)
 }
@@ -82,6 +89,7 @@ function serialize(s: {
   id: string; name: string; userId: string | null; monthlyCost: unknown
   startDate: Date; endDate: Date | null; note: string | null
   department: { type: DepartmentType }
+  user?: { isActive: boolean; status: string } | null
 }) {
   return {
     id: s.id,
@@ -92,13 +100,15 @@ function serialize(s: {
     startDate: s.startDate.toISOString().slice(0, 10),
     endDate: s.endDate ? s.endDate.toISOString().slice(0, 10) : null,
     note: s.note,
+    // Active = linked to a live PulseTrack profile.
+    active: !!(s.user && s.user.isActive && s.user.status === 'ACTIVE'),
   }
 }
 
 /** GET /api/financials/salaries */
 export async function listSalaries(_req: AuthedRequest, res: Response): Promise<void> {
   const rows = await prisma.salaryRecord.findMany({
-    include: { department: { select: { type: true } } },
+    include: { department: { select: { type: true } }, user: { select: { isActive: true, status: true } } },
     orderBy: [{ departmentId: 'asc' }, { name: 'asc' }],
   })
   res.json({ salaries: rows.map(serialize) })
@@ -127,7 +137,7 @@ export async function createSalary(req: AuthedRequest, res: Response): Promise<v
       note: parsed.data.note || null,
       setById: req.user!.id,
     },
-    include: { department: { select: { type: true } } },
+    include: { department: { select: { type: true } }, user: { select: { isActive: true, status: true } } },
   })
   res.status(201).json({ salary: serialize(created) })
 }
@@ -166,7 +176,7 @@ export async function updateSalary(req: AuthedRequest, res: Response): Promise<v
       ...(parsed.data.endDate !== undefined ? { endDate: parsed.data.endDate ? toDate(parsed.data.endDate) : null } : {}),
       ...(parsed.data.note !== undefined ? { note: parsed.data.note || null } : {}),
     },
-    include: { department: { select: { type: true } } },
+    include: { department: { select: { type: true } }, user: { select: { isActive: true, status: true } } },
   })
   res.json({ salary: serialize(updated) })
 }

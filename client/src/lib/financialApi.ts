@@ -7,6 +7,7 @@ export interface PersonCost {
   id: string
   name: string
   team: Department
+  teamName: string
   monthlyCost: number
   startDate: string
   endDate: string | null
@@ -28,6 +29,8 @@ export interface FinancialReport {
   to: string
   teams: TeamFinancials[]
   totals: { staff: number; cost: number; revenue: number; netReturn: number; roi: number | null }
+  former: PersonCost[]
+  formerCost: number
 }
 export interface SalaryRecord {
   id: string
@@ -38,6 +41,7 @@ export interface SalaryRecord {
   startDate: string
   endDate: string | null
   note: string | null
+  active: boolean
 }
 export interface SalaryInput {
   name: string

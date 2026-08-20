@@ -24,6 +24,7 @@ export interface PersonCost {
   id: string
   name: string
   team: DepartmentType
+  teamName: string
   monthlyCost: number
   startDate: string // YYYY-MM-DD
   endDate: string | null
@@ -45,6 +46,9 @@ export interface FinancialReport {
   to: string // YYYY-MM
   teams: TeamFinancials[]
   totals: { staff: number; cost: number; revenue: number; netReturn: number; roi: number | null }
+  /** Former employees (no active PulseTrack profile), excluded from team totals. */
+  former: PersonCost[]
+  formerCost: number
 }
 
 /** Parse a 'YYYY-MM' month into its [firstDay, lastDay] UTC bounds. */
@@ -87,7 +91,10 @@ export async function buildFinancialReport({ from, to }: { from: string; to: str
   const { end: rangeEnd } = monthBounds(to)
 
   const [salaries, wonDeals] = await Promise.all([
-    prisma.salaryRecord.findMany({ include: { department: true }, orderBy: { name: 'asc' } }),
+    prisma.salaryRecord.findMany({
+      include: { department: true, user: { select: { isActive: true, status: true } } },
+      orderBy: { name: 'asc' },
+    }),
     prisma.bid.findMany({
       where: { status: 'WON', closedDate: { gte: rangeStart, lte: rangeEnd } },
       select: { awardedPrice: true },
@@ -95,30 +102,41 @@ export async function buildFinancialReport({ from, to }: { from: string; to: str
   ])
 
   const itadRevenue = wonDeals.reduce((s, b) => s + (b.awardedPrice ?? 0), 0)
+  const nameFor = (t: DepartmentType) => FINANCIAL_TEAMS.find((x) => x.key === t)?.name ?? t
+  // "Active" = linked to a live PulseTrack profile. No profile / disabled = former.
+  const isActive = (s: { user: { isActive: boolean; status: string } | null }) =>
+    !!(s.user && s.user.isActive && s.user.status === 'ACTIVE')
+  const toPerson = (s: (typeof salaries)[number]): PersonCost => {
+    const monthlyCost = Number(s.monthlyCost)
+    const months = activeMonths(s.startDate, s.endDate, from, to)
+    return {
+      id: s.id,
+      name: s.name,
+      team: s.department.type,
+      teamName: nameFor(s.department.type),
+      monthlyCost,
+      startDate: iso(s.startDate),
+      endDate: s.endDate ? iso(s.endDate) : null,
+      activeMonths: months,
+      costInRange: Math.round(monthlyCost * months * 100) / 100,
+    }
+  }
 
+  const activeSalaries = salaries.filter(isActive)
   const teams: TeamFinancials[] = FINANCIAL_TEAMS.map(({ key, name }) => {
-    const people: PersonCost[] = salaries
-      .filter((s) => s.department.type === key)
-      .map((s) => {
-        const monthlyCost = Number(s.monthlyCost)
-        const months = activeMonths(s.startDate, s.endDate, from, to)
-        return {
-          id: s.id,
-          name: s.name,
-          team: key,
-          monthlyCost,
-          startDate: iso(s.startDate),
-          endDate: s.endDate ? iso(s.endDate) : null,
-          activeMonths: months,
-          costInRange: Math.round(monthlyCost * months * 100) / 100,
-        }
-      })
+    const people = activeSalaries.filter((s) => s.department.type === key).map(toPerson)
     const cost = Math.round(people.reduce((sum, p) => sum + p.costInRange, 0) * 100) / 100
     const revenue = REVENUE_TEAMS.includes(key) ? (key === 'ITAD' ? Math.round(itadRevenue * 100) / 100 : 0) : null
     const netReturn = revenue == null ? null : Math.round((revenue - cost) * 100) / 100
     const roi = revenue == null ? null : roiKpi(revenue, cost)
     return { team: key, teamName: name, staff: people.length, cost, revenue, netReturn, roi, people }
   })
+
+  // Former employees: no active profile, on any tracked team. Excluded from totals.
+  const former = salaries
+    .filter((s) => !isActive(s) && FINANCIAL_TEAMS.some((t) => t.key === s.department.type))
+    .map(toPerson)
+  const formerCost = Math.round(former.reduce((s, p) => s + p.costInRange, 0) * 100) / 100
 
   const totalCost = Math.round(teams.reduce((s, t) => s + t.cost, 0) * 100) / 100
   const totalRevenue = Math.round(teams.reduce((s, t) => s + (t.revenue ?? 0), 0) * 100) / 100
@@ -130,5 +148,5 @@ export async function buildFinancialReport({ from, to }: { from: string; to: str
     roi: roiKpi(totalRevenue, totalCost),
   }
 
-  return { from, to, teams, totals }
+  return { from, to, teams, totals, former, formerCost }
 }

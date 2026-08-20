@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { Plus, Trash2, Pencil, Download } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
+import { Badge } from '../../../components/ui/Badge'
 import { StatCard } from '../../../components/StatCard'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import { formatMoney, formatNumber, formatPercent } from '../../../lib/format'
 import type { Department } from '../../../lib/types'
+import { listUsers, type AdminUser } from '../../../lib/adminApi'
 import {
   getFinancialReport, listSalaries, createSalary, updateSalary, deleteSalary, downloadFinancialCsv,
   type FinancialReport, type TeamFinancials, type SalaryRecord, type PersonCost,
@@ -32,8 +34,8 @@ const money = (n: number | null) => (n == null ? '—' : formatMoney(n))
 const pct = (f: number | null) => (f == null ? '—' : formatPercent(f))
 const teamLabel = (t: Department) => TEAMS.find((x) => x.value === t)?.label ?? t
 
-interface Draft { id: string | null; name: string; department: Department; monthlyCost: string; startDate: string; endDate: string }
-const emptyDraft = (): Draft => ({ id: null, name: '', department: 'ITAD', monthlyCost: '', startDate: monthsBefore(thisMonth(), 5), endDate: '' })
+interface Draft { id: string | null; userId: string; name: string; department: Department; monthlyCost: string; startDate: string; endDate: string }
+const emptyDraft = (): Draft => ({ id: null, userId: '', name: '', department: 'ITAD', monthlyCost: '', startDate: monthsBefore(thisMonth(), 5), endDate: '' })
 
 export default function FinancialReports() {
   const { addToast } = useToast()
@@ -41,6 +43,7 @@ export default function FinancialReports() {
   const [from, setFrom] = useState(monthsBefore(thisMonth(), 5))
   const [report, setReport] = useState<FinancialReport | null>(null)
   const [salaries, setSalaries] = useState<SalaryRecord[]>([])
+  const [users, setUsers] = useState<AdminUser[]>([])
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -53,6 +56,18 @@ export default function FinancialReports() {
   }, [])
   useEffect(() => { loadReport() }, [loadReport])
   useEffect(() => { loadSalaries() }, [loadSalaries])
+  useEffect(() => { listUsers().then((r) => setUsers(r.users.filter((u) => u.isActive))).catch(() => undefined) }, [])
+
+  // Only PulseTrack profiles in the three tracked teams, for the link dropdown.
+  const linkableUsers = useMemo(
+    () => users.filter((u) => u.department === 'ITAD' || u.department === 'LEAD_GEN' || u.department === 'MARKETING'),
+    [users],
+  )
+  function pickUser(userId: string) {
+    const u = linkableUsers.find((x) => x.id === userId)
+    if (!u) { setDraft((d) => ({ ...d, userId: '' })); return }
+    setDraft((d) => ({ ...d, userId, name: u.name, department: (u.department as Department) ?? d.department }))
+  }
 
   async function saveSalary(e: FormEvent) {
     e.preventDefault()
@@ -63,6 +78,7 @@ export default function FinancialReports() {
     try {
       const payload = {
         name: draft.name.trim(),
+        userId: draft.userId || null,
         department: draft.department,
         monthlyCost: cost,
         startDate: draft.startDate,
@@ -82,7 +98,7 @@ export default function FinancialReports() {
   }
 
   function editSalary(s: SalaryRecord) {
-    setDraft({ id: s.id, name: s.name, department: s.department, monthlyCost: String(s.monthlyCost), startDate: s.startDate.slice(0, 7), endDate: s.endDate ? s.endDate.slice(0, 7) : '' })
+    setDraft({ id: s.id, userId: s.userId ?? '', name: s.name, department: s.department, monthlyCost: String(s.monthlyCost), startDate: s.startDate.slice(0, 7), endDate: s.endDate ? s.endDate.slice(0, 7) : '' })
   }
   async function removeSalary(s: SalaryRecord) {
     const prev = salaries
@@ -136,6 +152,7 @@ export default function FinancialReports() {
 
   const salaryColumns: Column<SalaryRecord>[] = [
     { key: 'name', header: 'Name', render: (s) => <span className="font-medium text-ink">{s.name}</span> },
+    { key: 'status', header: 'Status', render: (s) => <Badge tone={s.active ? 'success' : 'neutral'}>{s.active ? 'Active' : 'Former'}</Badge> },
     { key: 'department', header: 'Team', render: (s) => teamLabel(s.department) },
     { key: 'monthlyCost', header: 'Monthly', align: 'right', render: (s) => money(s.monthlyCost) },
     { key: 'startDate', header: 'Start', render: (s) => s.startDate.slice(0, 7) },
@@ -182,7 +199,7 @@ export default function FinancialReports() {
           ? <DataTable columns={teamColumns} rows={report.teams} getRowId={(t) => t.team} totalRow={totalRow || undefined} emptyMessage="No teams." />
           : <div className="p-5 text-body-md text-ink-muted">Loading…</div>}
       </Card>
-      <p className="-mt-3 px-1 text-body-sm text-ink-muted">Lead Gen &amp; Marketing show cost only — revenue tracking for those teams isn't set up yet.</p>
+      <p className="-mt-3 px-1 text-body-sm text-ink-muted">Totals count active employees only (former employees are listed separately below). Lead Gen &amp; Marketing show cost only — revenue tracking for those teams isn't set up yet.</p>
 
       <Card title="Cost by person" flush>
         {report
@@ -202,8 +219,32 @@ export default function FinancialReports() {
           : <div className="p-5 text-body-md text-ink-muted">Loading…</div>}
       </Card>
 
+      {report && report.former.length > 0 && (
+        <Card title={`Former employees (${report.former.length})`} subtitle="No active PulseTrack profile — excluded from the totals and ROI above." flush>
+          <DataTable
+            columns={[
+              { key: 'name', header: 'Name', render: (p: PersonCost) => <span className="font-medium text-ink">{p.name}</span> },
+              { key: 'teamName', header: 'Team', render: (p: PersonCost) => p.teamName },
+              { key: 'monthlyCost', header: 'Monthly', align: 'right', render: (p: PersonCost) => money(p.monthlyCost) },
+              { key: 'startDate', header: 'Start', render: (p: PersonCost) => p.startDate.slice(0, 7) },
+              { key: 'endDate', header: 'End', render: (p: PersonCost) => (p.endDate ? p.endDate.slice(0, 7) : '—') },
+              { key: 'costInRange', header: 'Cost in range', align: 'right', render: (p: PersonCost) => money(p.costInRange) },
+            ]}
+            rows={report.former}
+            getRowId={(p) => p.id}
+          />
+        </Card>
+      )}
+
       <Card title={draft.id ? 'Edit salary' : 'Add salary'}>
         <form onSubmit={saveSalary} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-6">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-body-sm font-semibold text-ink">PulseTrack profile <span className="font-normal text-ink-muted">(sets Active)</span></label>
+            <select className={sel} value={draft.userId} onChange={(e) => pickUser(e.target.value)}>
+              <option value="">— none (former / no profile) —</option>
+              {linkableUsers.map((u) => <option key={u.id} value={u.id}>{u.name} · {teamLabel(u.department as Department)}</option>)}
+            </select>
+          </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-body-sm font-semibold text-ink">Name</label>
             <input className={sel} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Employee name" />
