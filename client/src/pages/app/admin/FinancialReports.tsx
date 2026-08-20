@@ -4,6 +4,7 @@ import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { StatCard } from '../../../components/StatCard'
+import { PillFilter } from '../../../components/ui/PillFilter'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import { formatMoney, formatNumber, formatPercent } from '../../../lib/format'
@@ -41,6 +42,7 @@ export default function FinancialReports() {
   const { addToast } = useToast()
   const [to, setTo] = useState(thisMonth())
   const [from, setFrom] = useState(monthsBefore(thisMonth(), 5))
+  const [dept, setDept] = useState<'ALL' | Department>('ALL')
   const [report, setReport] = useState<FinancialReport | null>(null)
   const [salaries, setSalaries] = useState<SalaryRecord[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -57,6 +59,8 @@ export default function FinancialReports() {
   useEffect(() => { loadReport() }, [loadReport])
   useEffect(() => { loadSalaries() }, [loadSalaries])
   useEffect(() => { listUsers().then((r) => setUsers(r.users.filter((u) => u.isActive))).catch(() => undefined) }, [])
+  // When filtering to a team, default the Add-salary form to it (unless mid-edit).
+  useEffect(() => { if (dept !== 'ALL') setDraft((d) => (d.id ? d : { ...d, department: dept })) }, [dept])
 
   // Only PulseTrack profiles in the three tracked teams, for the link dropdown.
   const linkableUsers = useMemo(
@@ -139,8 +143,24 @@ export default function FinancialReports() {
     } as Record<string, ReactNode>,
   }
 
-  // Per-person table (grouped by team)
-  const people = useMemo(() => (report ? report.teams.flatMap((t) => t.people) : []), [report])
+  // Department filter drives every box + table on the page.
+  const isAll = dept === 'ALL'
+  const selectedTeam = report && !isAll ? report.teams.find((t) => t.team === dept) : null
+  // Dynamic summary boxes: overall totals, or the selected team's figures.
+  const box = !report
+    ? null
+    : isAll
+      ? { staff: report.totals.staff, cost: report.totals.cost, revenue: report.totals.revenue as number | null, netReturn: report.totals.netReturn as number | null, roi: report.totals.roi }
+      : { staff: selectedTeam?.staff ?? 0, cost: selectedTeam?.cost ?? 0, revenue: selectedTeam?.revenue ?? null, netReturn: selectedTeam?.netReturn ?? null, roi: selectedTeam?.roi ?? null }
+  const shownTeams = report ? (isAll ? report.teams : report.teams.filter((t) => t.team === dept)) : []
+  const shownFormer = report ? (isAll ? report.former : report.former.filter((p) => p.team === dept)) : []
+  const shownSalaries = isAll ? salaries : salaries.filter((s) => s.department === dept)
+
+  // Per-person table (grouped by team), scoped to the selected department.
+  const people = useMemo(
+    () => (report ? (isAll ? report.teams.flatMap((t) => t.people) : (report.teams.find((t) => t.team === dept)?.people ?? [])) : []),
+    [report, dept, isAll],
+  )
   const personColumns: Column<PersonCost>[] = [
     { key: 'name', header: 'Name', render: (p) => <span className="font-medium text-ink">{p.name}</span> },
     { key: 'monthlyCost', header: 'Monthly', align: 'right', render: (p) => money(p.monthlyCost) },
@@ -185,18 +205,24 @@ export default function FinancialReports() {
         </div>
       </div>
 
-      {report && (
+      <PillFilter
+        options={[{ value: 'ALL', label: 'All teams' }, ...TEAMS.map((t) => ({ value: t.value, label: t.label }))]}
+        value={dept}
+        onChange={(v) => setDept(v as 'ALL' | Department)}
+      />
+
+      {box && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Total Cost" value={formatMoney(report.totals.cost)} caption={`${report.totals.staff} staff`} />
-          <StatCard label="Total Revenue" value={formatMoney(report.totals.revenue)} caption="won deals in range" />
-          <StatCard label="Net Return" value={formatMoney(report.totals.netReturn)} valueClassName={report.totals.netReturn >= 0 ? 'text-metric-lg text-success' : 'text-metric-lg text-danger'} caption="revenue − cost" />
-          <StatCard label="Overall ROI" value={pct(report.totals.roi)} caption="(revenue − cost) ÷ cost" />
+          <StatCard label={isAll ? 'Total Cost' : `${teamLabel(dept as Department)} Cost`} value={money(box.cost)} caption={`${box.staff} active staff`} />
+          <StatCard label="Revenue" value={money(box.revenue)} caption={box.revenue == null ? 'no deal tracking yet' : 'won deals in range'} />
+          <StatCard label="Net Return" value={money(box.netReturn)} valueClassName={`text-metric-lg ${(box.netReturn ?? 0) >= 0 ? 'text-success' : 'text-danger'}`} caption="revenue − cost" />
+          <StatCard label="ROI" value={pct(box.roi)} caption="(revenue − cost) ÷ cost" />
         </div>
       )}
 
       <Card title="By team" flush>
         {report
-          ? <DataTable columns={teamColumns} rows={report.teams} getRowId={(t) => t.team} totalRow={totalRow || undefined} emptyMessage="No teams." />
+          ? <DataTable columns={teamColumns} rows={shownTeams} getRowId={(t) => t.team} totalRow={isAll ? (totalRow || undefined) : undefined} emptyMessage="No teams." />
           : <div className="p-5 text-body-md text-ink-muted">Loading…</div>}
       </Card>
       <p className="-mt-3 px-1 text-body-sm text-ink-muted">Totals count active employees only (former employees are listed separately below). Lead Gen &amp; Marketing show cost only — revenue tracking for those teams isn't set up yet.</p>
@@ -219,8 +245,8 @@ export default function FinancialReports() {
           : <div className="p-5 text-body-md text-ink-muted">Loading…</div>}
       </Card>
 
-      {report && report.former.length > 0 && (
-        <Card title={`Former employees (${report.former.length})`} subtitle="No active PulseTrack profile — excluded from the totals and ROI above." flush>
+      {report && shownFormer.length > 0 && (
+        <Card title={`Former employees (${shownFormer.length})`} subtitle="No active PulseTrack profile — excluded from the totals and ROI above." flush>
           <DataTable
             columns={[
               { key: 'name', header: 'Name', render: (p: PersonCost) => <span className="font-medium text-ink">{p.name}</span> },
@@ -230,7 +256,7 @@ export default function FinancialReports() {
               { key: 'endDate', header: 'End', render: (p: PersonCost) => (p.endDate ? p.endDate.slice(0, 7) : '—') },
               { key: 'costInRange', header: 'Cost in range', align: 'right', render: (p: PersonCost) => money(p.costInRange) },
             ]}
-            rows={report.former}
+            rows={shownFormer}
             getRowId={(p) => p.id}
           />
         </Card>
@@ -274,8 +300,8 @@ export default function FinancialReports() {
         </form>
       </Card>
 
-      <Card title="All salaries" flush>
-        <DataTable columns={salaryColumns} rows={salaries} getRowId={(s) => s.id} emptyMessage="No salaries entered yet." />
+      <Card title={isAll ? 'All salaries' : `${teamLabel(dept as Department)} salaries`} flush>
+        <DataTable columns={salaryColumns} rows={shownSalaries} getRowId={(s) => s.id} emptyMessage="No salaries entered yet." />
       </Card>
     </div>
   )
