@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Activity, Settings, ChevronRight, X } from 'lucide-react'
+import { Activity, Settings, ChevronRight, Search, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
@@ -30,6 +30,22 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
   const [unreadQa, setUnreadQa] = useState(0)
+  const [query, setQuery] = useState('')
+
+  // "Jump to…" filter: narrows nav to items whose label matches. When active,
+  // every group/subgroup is force-expanded and non-matching ones are hidden.
+  const q = query.trim().toLowerCase()
+  const visibleGroups: NavGroup[] = q
+    ? groups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => i.label.toLowerCase().includes(q)),
+          subgroups: g.subgroups
+            ?.map((sg) => ({ ...sg, items: sg.items.filter((i) => i.label.toLowerCase().includes(q)) }))
+            .filter((sg) => sg.items.length > 0),
+        }))
+        .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
+    : groups
 
   // Collapsible department sections. Default: only the section for the current
   // route is open; choices persist in localStorage.
@@ -83,7 +99,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
           <li key={item.to}>
             <NavLink
               to={item.to}
-              onClick={onNavigate}
+              onClick={() => { setQuery(''); onNavigate?.() }}
               className={({ isActive }) =>
                 cn(
                   'group relative flex items-center gap-3 rounded-btn px-3 py-2 text-body-md transition-colors',
@@ -144,13 +160,42 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
         </button>
       </div>
 
+      {/* Jump-to filter */}
+      <div className="px-3 pb-1 pt-2">
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            placeholder="Jump to…"
+            aria-label="Filter navigation"
+            className="w-full rounded-btn border border-line bg-slate-50 py-1.5 pl-8 pr-7 text-body-sm text-ink transition-colors placeholder:text-ink-muted focus:border-primary focus:bg-card focus:outline-none focus:ring-4 focus:ring-primary/10"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-btn p-0.5 text-ink-muted hover:bg-slate-100 hover:text-ink"
+              aria-label="Clear filter"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
-        {groups.map((group, gi) => {
+        {q && visibleGroups.length === 0 && (
+          <p className="px-3 py-6 text-center text-body-sm text-ink-muted">No screens match “{query.trim()}”.</p>
+        )}
+        {visibleGroups.map((group, gi) => {
           const collapsible = !!group.title
-          const isOpen = !collapsible || expanded[group.title!]
+          const isOpen = !collapsible || !!q || expanded[group.title!]
+          const GroupIcon = group.icon
           // Hairline before the first titled section, separating personal items from departments.
-          const showDivider = collapsible && !groups[gi - 1]?.title
+          const showDivider = !q && collapsible && !visibleGroups[gi - 1]?.title
           return (
           <div key={group.title ?? gi} className={cn(collapsible ? 'mb-1.5' : 'mb-2')}>
             {showDivider && <div className="mx-3 my-2 border-t border-line/70" />}
@@ -161,7 +206,17 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                 className="group/hd flex w-full items-center justify-between rounded-btn px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink"
                 aria-expanded={isOpen}
               >
-                <span>{group.title}</span>
+                <span className="flex items-center gap-2.5">
+                  {GroupIcon && (
+                    <span
+                      className="flex h-5 w-5 items-center justify-center rounded-[6px]"
+                      style={group.color ? { color: group.color, backgroundColor: `${group.color}1A` } : undefined}
+                    >
+                      <GroupIcon size={13} />
+                    </span>
+                  )}
+                  <span>{group.title}</span>
+                </span>
                 <ChevronRight
                   size={14}
                   className={cn('shrink-0 text-ink-muted/50 transition-transform duration-200 group-hover/hd:text-ink-muted', isOpen && 'rotate-90')}
@@ -173,7 +228,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                 {group.items.length > 0 && renderItems(group.items)}
                 {group.subgroups?.map((sg) => {
                   const key = subKey(group.title ?? '', sg.title)
-                  const subOpen = expanded[key]
+                  const subOpen = !!q || expanded[key]
                   return (
                     <div key={key} className="mt-0.5">
                       <button

@@ -29,6 +29,7 @@ import {
   Wifi,
   Megaphone,
   Mail,
+  Shield,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -59,6 +60,10 @@ export interface NavGroup {
   items: NavItem[]
   /** Nested collapsible sub-sections (e.g. Marketing → Social Media / Content / …). */
   subgroups?: NavSubGroup[]
+  /** Section-header icon (shown in a tinted square). */
+  icon?: LucideIcon
+  /** Accent hex color for the section-header icon + tint. */
+  color?: string
 }
 
 const TL_ROLES: Role[] = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
@@ -84,6 +89,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Attendance',
+    icon: Clock,
+    color: '#0EA5E9',
     items: [
       { label: 'My Attendance', to: '/app/attendance/me', icon: Clock },
       { label: 'Team Attendance', to: '/app/attendance/team', icon: Users, roles: ADMIN_ROLES, badge: { text: 'TL', tone: 'accent' } },
@@ -91,6 +98,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Quality Assurance',
+    icon: ClipboardCheck,
+    color: '#22C55E',
     items: [
       { label: 'Evaluate', to: '/app/qa/evaluate', icon: ClipboardCheck, roles: ['QA', 'QA_LEAD'] },
       { label: 'Scorecards', to: '/app/qa/scorecards', icon: ClipboardList, roles: ['QA', 'QA_LEAD'] },
@@ -100,6 +109,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'ITAD',
+    icon: Phone,
+    color: '#4F46E5',
     items: [
       { label: 'Daily Log', to: '/app/itad/log', icon: Phone, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
       { label: 'Bid Tracker', to: '/app/itad/bids', icon: Briefcase, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
@@ -109,6 +120,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Lead Generation',
+    icon: TargetIcon,
+    color: '#14B8A6',
     items: [
       { label: 'Daily Log', to: '/app/leadgen/log', icon: Phone, departments: ['LEAD_GEN'], hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/leadgen/team', icon: Users, departments: ['LEAD_GEN'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
@@ -118,6 +131,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Ecommerce',
+    icon: ShoppingCart,
+    color: '#F59E0B',
     items: [
       { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
       { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
@@ -129,6 +144,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Marketing',
+    icon: Megaphone,
+    color: '#8B5CF6',
     items: [
       { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'] },
       { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart, departments: ['MARKETING'], roles: TL_ROLES },
@@ -176,6 +193,8 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Admin',
+    icon: Shield,
+    color: '#EF4444',
     items: [
       { label: 'Users', to: '/app/admin/users', icon: UserCog, roles: ['SUPER_ADMIN'], badge: { text: 'ADMIN', tone: 'danger' } },
       { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon, roles: ADMIN_ROLES },
