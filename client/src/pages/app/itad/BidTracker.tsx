@@ -29,6 +29,8 @@ const STATUS_SELECT_CLS: Record<BidStatus, string> = {
 
 const inputCls =
   'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
+const filterCls =
+  'h-9 rounded-btn border border-line bg-bg px-2 text-body-sm text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20'
 
 function errMsg(e: unknown, fallback: string): string {
   const m = (e as { message?: string })?.message
@@ -39,6 +41,9 @@ const money = (v: number | null | undefined): string =>
   v == null ? '—' : v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 function fmtDue(iso: string): string {
   return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 /** Due within 48h and still an open opportunity. */
 function isUrgent(b: Bid): boolean {
@@ -54,6 +59,10 @@ export default function BidTracker() {
   const [summary, setSummary] = useState<BidSummary | null>(null)
   const [filter, setFilter] = useState<BidStatus | null>(null)
   const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<BidType | ''>('')
+  const [agentFilter, setAgentFilter] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [editFor, setEditFor] = useState<Bid | null>(null)
   // A bid mid-way through a decision that needs extra input (Won/Lost).
@@ -66,14 +75,30 @@ export default function BidTracker() {
   }
   useEffect(reload, [])
 
+  // Agents present in the current data, for the Agent filter dropdown.
+  const agents = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const b of bids ?? []) m.set(b.agentId, b.agentName)
+    return [...m.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [bids])
+
+  // Effective date for the range filter: when the deal was closed, else its due date.
+  const dateOf = (b: Bid) => (b.closedDate ?? b.dueDate).slice(0, 10)
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (bids ?? []).filter((b) => {
       if (filter && b.status !== filter) return false
+      if (typeFilter && b.type !== typeFilter) return false
+      if (agentFilter && b.agentId !== agentFilter) return false
+      if (from && dateOf(b) < from) return false
+      if (to && dateOf(b) > to) return false
       if (!q) return true
       return [b.title, b.company, b.district, b.agentName, `#${b.number}`].some((f) => f?.toLowerCase().includes(q))
     })
-  }, [bids, filter, query])
+  }, [bids, filter, query, typeFilter, agentFilter, from, to])
+
+  const extraFilters = Boolean(typeFilter || agentFilter || from || to)
 
   /** Inline status change from the table. Won/Lost open a prompt for extra input first. */
   async function changeStatus(bid: Bid, status: BidStatus) {
@@ -139,6 +164,9 @@ export default function BidTracker() {
       const tone = b.awardedPrice == null ? 'text-ink-muted' : b.status === 'LOST' ? 'font-semibold text-danger' : 'font-semibold text-success'
       return <span className={'tabular-nums ' + tone}>{money(b.awardedPrice)}</span>
     } },
+    { key: 'closedDate', header: 'Closed', render: (b) => (
+      <span className="whitespace-nowrap text-body-sm text-ink-muted">{b.closedDate ? fmtDate(b.closedDate) : '—'}</span>
+    ) },
     { key: 'status', header: 'Status', render: (b) => (
       <select
         value={b.status}
@@ -165,10 +193,10 @@ export default function BidTracker() {
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-headline-lg text-ink">Bid Tracker</h1>
-          <p className="mt-0.5 text-body-md text-ink-muted">Track ITAD asset-disposal opportunities from lead to award.</p>
+          <h1 className="text-headline-lg text-ink">Deal Tracker</h1>
+          <p className="mt-0.5 text-body-md text-ink-muted">Track ITAD deals from opportunity to close. Won deals feed the financial report.</p>
         </div>
-        <Button leadingIcon={<Plus size={16} />} onClick={() => setAddOpen(true)}>New bid</Button>
+        <Button leadingIcon={<Plus size={16} />} onClick={() => setAddOpen(true)}>New deal</Button>
       </div>
 
       {/* Interactive status filter cards */}
@@ -187,21 +215,39 @@ export default function BidTracker() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search bids by title, company, district or agent…"
+              placeholder="Search deals by title, company, district or agent…"
               className="h-9 w-full rounded-btn border border-line bg-bg pl-9 pr-3 text-body-sm text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
-          {filter && (
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as BidType | '')} className={filterCls} aria-label="Filter by type">
+            <option value="">All types</option>
+            {TYPES.map((t) => <option key={t} value={t}>{BID_TYPE_LABEL[t]}</option>)}
+          </select>
+          <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className={filterCls} aria-label="Filter by agent">
+            <option value="">All agents</option>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <div className="flex items-center gap-1.5 text-body-sm text-ink-muted">
+            <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className={filterCls} aria-label="Closed from" title="Closed / due from" />
+            <span>–</span>
+            <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={filterCls} aria-label="Closed to" title="Closed / due to" />
+          </div>
+          {(filter || extraFilters) && (
             <span className="flex items-center gap-2 text-body-sm text-ink-muted">
-              <Badge tone={STATUS_TONE[filter]}>{BID_STATUS_LABEL[filter]}</Badge>
-              <button onClick={() => setFilter(null)} className="font-semibold text-primary hover:underline">Clear</button>
+              {filter && <Badge tone={STATUS_TONE[filter]}>{BID_STATUS_LABEL[filter]}</Badge>}
+              <button
+                onClick={() => { setFilter(null); setTypeFilter(''); setAgentFilter(''); setFrom(''); setTo('') }}
+                className="font-semibold text-primary hover:underline"
+              >
+                Clear filters
+              </button>
             </span>
           )}
         </div>
         {!bids ? (
           <p className="px-4 py-8 text-center text-body-md text-ink-muted">Loading…</p>
         ) : (
-          <DataTable columns={columns} rows={filtered} getRowId={(b) => b.id} emptyMessage={filter ? `No ${BID_STATUS_LABEL[filter]} bids.` : 'No bids yet. Add your first opportunity.'} />
+          <DataTable columns={columns} rows={filtered} getRowId={(b) => b.id} emptyMessage={filter || extraFilters ? 'No deals match these filters.' : 'No deals yet. Add your first opportunity.'} />
         )}
       </Card>
 
@@ -259,6 +305,7 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
   const [awardedPrice, setAwardedPrice] = useState(bid?.awardedPrice != null ? String(bid.awardedPrice) : '')
   const [bidBond, setBidBond] = useState(bid?.bidBond ?? false)
   const [bidBondAmount, setBidBondAmount] = useState(bid?.bidBondAmount != null ? String(bid.bidBondAmount) : '')
+  const [closedDate, setClosedDate] = useState(bid?.closedDate ? bid.closedDate.slice(0, 10) : '')
   const [saving, setSaving] = useState(false)
 
   // Price is prominent once the bid is being Submitted (or beyond).
@@ -288,6 +335,8 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
       awardedPrice: (status === 'WON' || status === 'LOST') && awardedPrice ? Number(awardedPrice) : null,
       bidBond,
       bidBondAmount: bidBond && bidBondAmount ? Number(bidBondAmount) : null,
+      // Only send a closed date for decided deals; empty lets the server default it to now.
+      closedDate: (status === 'WON' || status === 'LOST') && closedDate ? new Date(closedDate).toISOString() : undefined,
     }
     try {
       if (editing) await updateBid(bid!.id, input)
@@ -305,7 +354,7 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
     <Modal
       open
       onClose={onClose}
-      title={editing ? `Edit bid #${bid!.number}` : 'New bid'}
+      title={editing ? `Edit deal #${bid!.number}` : 'New deal'}
       size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={submit} disabled={saving}>{editing ? 'Save changes' : 'Add bid'}</Button></>}
     >
@@ -364,6 +413,12 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
           {(status === 'WON' || status === 'LOST') && (
             <Field label={status === 'LOST' ? 'Awarded price (winning bid)' : 'Awarded price'} required>
               <input type="number" min="0" step="0.01" inputMode="decimal" value={awardedPrice} onChange={(e) => setAwardedPrice(e.target.value)} placeholder="0.00" className={inputCls} />
+            </Field>
+          )}
+          {(status === 'WON' || status === 'LOST') && (
+            <Field label="Closed date">
+              <input type="date" value={closedDate} onChange={(e) => setClosedDate(e.target.value)} className={inputCls} />
+              <span className="mt-1 block text-body-sm text-ink-muted">Defaults to today. Drives the financial report period.</span>
             </Field>
           )}
         </div>

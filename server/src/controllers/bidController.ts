@@ -45,6 +45,7 @@ function serialize(b: BidRow) {
     awardedPrice: b.awardedPrice,
     bidBond: b.bidBond,
     bidBondAmount: b.bidBondAmount,
+    closedDate: b.closedDate ? b.closedDate.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
   }
 }
@@ -98,11 +99,23 @@ const createSchema = z.object({
   awardedPrice: priceField,
   bidBond: z.boolean().optional(),
   bidBondAmount: priceField,
+  closedDate: z.string().nullable().optional(),
 })
 
 function parseDue(input: string): Date | null {
   const d = new Date(input)
   return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * The date a deal was decided. Kept only for Won/Lost bids: uses the supplied
+ * date, else defaults to `now` (or the existing value on update). Cleared while
+ * the bid is still Active/Submitted. Drives financial revenue + the date filter.
+ */
+function resolveClosedDate(status: string, supplied: string | null | undefined, existing: Date | null): Date | null {
+  if (status !== 'WON' && status !== 'LOST') return null
+  if (supplied) return parseDue(supplied) ?? existing ?? new Date()
+  return existing ?? new Date()
 }
 
 /** POST /api/itad/bids — create a bid; agent is always the caller. */
@@ -143,6 +156,7 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
       priceQuoted: v.priceQuoted ?? null,
       // Awarded price applies to a decided bid — Won (our price) or Lost (winning price).
       awardedPrice: v.status === 'WON' || v.status === 'LOST' ? v.awardedPrice ?? null : null,
+      closedDate: resolveClosedDate(v.status ?? 'ACTIVE', v.closedDate, null),
       bidBond: v.bidBond ?? false,
       // Bond amount only kept when a bid bond applies.
       bidBondAmount: v.bidBond ? v.bidBondAmount ?? null : null,
@@ -165,6 +179,7 @@ const updateSchema = z.object({
   awardedPrice: priceField,
   bidBond: z.boolean().optional(),
   bidBondAmount: priceField,
+  closedDate: z.string().nullable().optional(),
 })
 
 /** PATCH /api/itad/bids/:id — edit or change status. Owner, or ITAD lead/admin. */
@@ -218,6 +233,8 @@ export async function updateBid(req: AuthedRequest, res: Response): Promise<void
   // price, Lost = the winning price), cleared while still Active/Submitted.
   if (nextStatus === 'WON' || nextStatus === 'LOST') data.awardedPrice = nextAwarded
   else data.awardedPrice = null
+  // closedDate tracks status the same way (set on decide, cleared on re-open).
+  data.closedDate = resolveClosedDate(nextStatus, v.closedDate, existing.closedDate)
 
   // Bid bond: the amount is only kept while a bond applies.
   const nextBidBond = v.bidBond ?? existing.bidBond

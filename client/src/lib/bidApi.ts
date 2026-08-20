@@ -36,6 +36,7 @@ export interface Bid {
   awardedPrice: number | null
   bidBond: boolean
   bidBondAmount: number | null
+  closedDate: string | null // ISO date the deal was decided (Won/Lost)
   createdAt: string
 }
 
@@ -66,6 +67,7 @@ export interface BidInput {
   awardedPrice?: number | null
   bidBond?: boolean
   bidBondAmount?: number | null
+  closedDate?: string | null
 }
 
 export const listBids = () => api.get<BidListResponse>('/itad/bids')

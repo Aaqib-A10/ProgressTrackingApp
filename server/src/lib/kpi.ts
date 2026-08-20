@@ -37,3 +37,13 @@ export function periodDelta(current: number, previous: number): number {
   if (!previous) return 0
   return (current - previous) / previous
 }
+
+/**
+ * Return on investment as a signed fraction: (revenue − cost) / cost.
+ * e.g. revenue 35392, cost 12867 -> 1.75 (= "175%"). Null when cost is 0
+ * (no investment to measure against).
+ */
+export function roi(revenue: number, cost: number): number | null {
+  if (!cost) return null
+  return (revenue - cost) / cost
+}

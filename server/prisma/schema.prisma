@@ -113,6 +113,7 @@ model Department {
   bids            Bid[]
   brands          Brand[]
   marketingPlans  MarketingPlan[]
+  salaryRecords   SalaryRecord[]
 }
 
 model SubDepartment {
@@ -173,6 +174,8 @@ model User {
   attendanceShift AttendanceShift?    @relation("UserShift")
   targets         Target[]            @relation("UserTargets")
   setTargets      Target[]            @relation("TargetSetBy")
+  salaries        SalaryRecord[]      @relation("UserSalaries")
+  setSalaries     SalaryRecord[]      @relation("SalarySetBy")
   auditLogs       AuditLog[]
 
   feedbackAuthored Feedback[]      @relation("FeedbackAuthored")
@@ -389,6 +392,32 @@ model Target {
   @@index([departmentId, metricKey])
   @@index([userId, metricKey])
   @@index([brandId, metricKey])
+}
+
+// ---------- Financials (Super Admin only): per-person cost vs revenue/ROI ----------
+
+/// A person's monthly salary/cost, scoped to a team (department). Drives the
+/// Financial Reports ROI: cost over a range = monthlyCost × active months.
+/// `userId` optionally links to an app account; `name` is the display label.
+model SalaryRecord {
+  id           String     @id @default(cuid())
+  name         String
+  userId       String?
+  user         User?      @relation("UserSalaries", fields: [userId], references: [id])
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  monthlyCost  Decimal    @db.Decimal(12, 2)
+  startDate    DateTime   @db.Date
+  endDate      DateTime?  @db.Date // null = still active
+  note         String?
+
+  setById   String?
+  setBy     User?    @relation("SalarySetBy", fields: [setById], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([departmentId])
+  @@index([userId])
 }
 
 // ---------- Leave / holidays (§3, leave-aware rule) ----------
@@ -1394,10 +1423,12 @@ model Bid {
   awardedPrice   Float? // required when status = WON
   bidBond        Boolean            @default(false) // whether a bid bond applies
   bidBondAmount  Float? // optional bid bond value (only meaningful when bidBond)
+  closedDate     DateTime? // date the deal was decided (WON/LOST) — drives financial revenue period + Deal Tracker date filter
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
   @@index([departmentId, status])
   @@index([agentId])
   @@index([dueDate])
+  @@index([status, closedDate])
 }

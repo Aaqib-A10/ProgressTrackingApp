@@ -19,6 +19,7 @@ import { qaRouter } from './routes/qa'
 import { attachmentsRouter } from './routes/attachments'
 import { todosRouter } from './routes/todos'
 import { tasksRouter } from './routes/tasks'
+import { financialsRouter } from './routes/financials'
 
 /**
  * Builds the Express app. Kept separate from index.ts so tests can import
@@ -69,6 +70,7 @@ export function createApp(): Express {
   app.use('/api/attachments', attachmentsRouter)
   app.use('/api/todos', todosRouter)
   app.use('/api/tasks', tasksRouter)
+  app.use('/api/financials', financialsRouter)
 
   // Fallback 404 for unknown API paths.
   app.use((_req, res) => {

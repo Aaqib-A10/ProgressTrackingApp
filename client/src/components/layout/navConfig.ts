@@ -30,6 +30,7 @@ import {
   Megaphone,
   Mail,
   Shield,
+  DollarSign,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -113,7 +114,7 @@ export const NAV_GROUPS: NavGroup[] = [
     color: '#4F46E5',
     items: [
       { label: 'Daily Log', to: '/app/itad/log', icon: Phone, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
-      { label: 'Bid Tracker', to: '/app/itad/bids', icon: Briefcase, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
+      { label: 'Deal Tracker', to: '/app/itad/bids', icon: Briefcase, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/itad/team', icon: Users, departments: ['ITAD'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Analytics', to: '/app/itad/analytics', icon: LineChart, departments: ['ITAD'], roles: TL_ROLES },
     ],
@@ -196,6 +197,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Shield,
     color: '#EF4444',
     items: [
+      { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, roles: ['SUPER_ADMIN'] },
       { label: 'Users', to: '/app/admin/users', icon: UserCog, roles: ['SUPER_ADMIN'], badge: { text: 'ADMIN', tone: 'danger' } },
       { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon, roles: ADMIN_ROLES },
       { label: 'Tags', to: '/app/admin/tags', icon: Tags, roles: ADMIN_ROLES },

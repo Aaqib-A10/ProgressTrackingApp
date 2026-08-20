@@ -6,6 +6,7 @@ import {
   interestRate,
   mqlToSql,
   periodDelta,
+  roi,
 } from './kpi'
 
 describe('rate', () => {
@@ -45,5 +46,17 @@ describe('periodDelta', () => {
 describe('asPercent', () => {
   it('formats fractions', () => {
     expect(asPercent(0.075)).toBe('7.5%')
+  })
+})
+
+describe('roi', () => {
+  it('matches the ITAD H1 example: 175%', () => {
+    expect(roi(35392, 12867)).toBeCloseTo(1.75, 2)
+  })
+  it('is negative when cost exceeds revenue', () => {
+    expect(roi(500, 1000)).toBeCloseTo(-0.5)
+  })
+  it('returns null when cost is 0', () => {
+    expect(roi(1000, 0)).toBeNull()
   })
 })
