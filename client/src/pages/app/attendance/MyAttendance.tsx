@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Clock, LogIn, AlertTriangle, CalendarCheck, CheckCircle2 } from 'lucide-react'
+import { Clock, LogIn, AlertTriangle, CalendarCheck, CheckCircle2, MessageSquare } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { StatCard } from '../../../components/StatCard'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
@@ -87,7 +87,20 @@ export default function MyAttendance() {
         {loading ? (
           <div className="p-5 text-body-md text-ink-muted">Loading…</div>
         ) : (
-          <DataTable columns={columns} rows={data?.rows ?? []} getRowId={(r) => r.date} emptyMessage="No attendance records in this period yet." />
+          <DataTable
+            columns={columns}
+            rows={data?.rows ?? []}
+            getRowId={(r) => r.date}
+            emptyMessage="No attendance records in this period yet."
+            renderRowBanner={(r) =>
+              r.note ? (
+                <div className="flex items-start gap-1.5 rounded-btn bg-primary/5 px-3 py-1.5 text-body-sm">
+                  <MessageSquare size={13} className="mt-0.5 shrink-0 text-primary" />
+                  <span className="text-ink"><span className="font-medium text-ink-muted">Team Lead: </span>{r.note}</span>
+                </div>
+              ) : null
+            }
+          />
         )}
       </Card>
     </div>

@@ -55,6 +55,7 @@ export interface AttendanceDayRow {
   requiredMin: number
   completed: boolean
   shortMin: number | null
+  note: string | null
 }
 
 export interface AttendanceSummary {
@@ -140,7 +141,7 @@ export type LeaveMarkType = 'ON_LEAVE' | 'OFF' | 'WFH'
 export const markLeave = (userId: string, date: string, input: { type: LeaveMarkType; note?: string }) =>
   api.put<{ leave: { date: string; type: LeaveMarkType; note: string } }>(`/attendance/${userId}/leave/${date}`, input)
 export const removeLeave = (userId: string, date: string) => api.del<void>(`/attendance/${userId}/leave/${date}`)
-export const correctAttendanceDay = (userId: string, date: string, input: { checkIn?: string | null; checkOut?: string | null }) =>
+export const correctAttendanceDay = (userId: string, date: string, input: { checkIn?: string | null; checkOut?: string | null; note?: string | null }) =>
   api.patch<{ day: { date: string; checkIn: string | null; checkOut: string | null } }>(`/attendance/${userId}/${date}`, input)
 
 export const getAttendanceMe = () => api.get<MeResponse>('/attendance/me')

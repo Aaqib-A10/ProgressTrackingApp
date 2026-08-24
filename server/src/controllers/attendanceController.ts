@@ -427,6 +427,7 @@ function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: s
     requiredMin: shift.requiredMinutes,
     completed: worked != null && worked >= shift.requiredMinutes,
     shortMin: worked == null ? null : Math.max(0, shift.requiredMinutes - worked),
+    note: day?.note ?? null, // TL/Admin per-day comment (feedback)
   }
 }
 
@@ -942,7 +943,7 @@ export async function deleteUserShift(req: AuthedRequest, res: Response): Promis
 }
 
 const timeOrNull = z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.literal(''), z.null()]).optional()
-const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull })
+const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull, note: z.string().max(1000).nullable().optional() })
 
 /**
  * Combine a "YYYY-MM-DD" (the attendance day) + "HH:mm" into a UTC instant,
@@ -991,9 +992,10 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     include: { breaks: true },
   })
 
-  const data: { checkInAt?: Date | null; checkOutAt?: Date | null } = {}
+  const data: { checkInAt?: Date | null; checkOutAt?: Date | null; note?: string | null } = {}
   if (parsed.data.checkIn !== undefined) data.checkInAt = parsed.data.checkIn ? instantFrom(date, parsed.data.checkIn, shift) : null
   if (parsed.data.checkOut !== undefined) data.checkOutAt = parsed.data.checkOut ? instantFrom(date, parsed.data.checkOut, shift) : null
+  if (parsed.data.note !== undefined) data.note = parsed.data.note?.trim() || null
 
   const finalIn = data.checkInAt !== undefined ? data.checkInAt : existing?.checkInAt ?? null
   const finalOut = data.checkOutAt !== undefined ? data.checkOutAt : existing?.checkOutAt ?? null
@@ -1005,7 +1007,7 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
   const day = await prisma.attendanceDay.upsert({
     where: { userId_date: { userId, date: dateValue } },
     update: data,
-    create: { userId, date: dateValue, checkInAt: data.checkInAt ?? null, checkOutAt: data.checkOutAt ?? null },
+    create: { userId, date: dateValue, checkInAt: data.checkInAt ?? null, checkOutAt: data.checkOutAt ?? null, note: data.note ?? null },
   })
 
   await prisma.auditLog.create({
@@ -1024,6 +1026,7 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
       date,
       checkIn: day.checkInAt ? hhmm(day.checkInAt, shift) : null,
       checkOut: day.checkOutAt ? hhmm(day.checkOutAt, shift) : null,
+      note: day.note ?? null,
     },
   })
 }

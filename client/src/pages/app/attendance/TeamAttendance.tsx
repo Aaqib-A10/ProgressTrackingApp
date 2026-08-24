@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2, Download } from 'lucide-react'
+import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2, Download, MessageSquare } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -535,6 +535,7 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
   const [editDate, setEditDate] = useState<string | null>(null)
   const [checkIn, setCheckIn] = useState('')
   const [checkOut, setCheckOut] = useState('')
+  const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
 
   function loadRows() {
@@ -548,14 +549,15 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
     setEditDate(r.date)
     setCheckIn(r.checkIn ?? '')
     setCheckOut(r.checkOut ?? '')
+    setNote(r.note ?? '')
   }
 
   async function save() {
     if (!editDate) return
     setSaving(true)
     try {
-      await correctAttendanceDay(member.userId, editDate, { checkIn: checkIn || null, checkOut: checkOut || null })
-      addToast({ type: 'success', message: 'Times updated.' })
+      await correctAttendanceDay(member.userId, editDate, { checkIn: checkIn || null, checkOut: checkOut || null, note: note.trim() || null })
+      addToast({ type: 'success', message: 'Day updated.' })
       const r = await getAttendanceHistory(range, custom, member.userId)
       setRows(r.rows)
       setEditDate(null)
@@ -605,20 +607,37 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
                     <Trash2 size={14} />
                   </button>
                 ) : r.label === 'HOLIDAY' ? null : (
-                  <button onClick={() => startEdit(r)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Edit times">
+                  <button onClick={() => startEdit(r)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Edit times / comment">
                     <Pencil size={14} />
                   </button>
                 )}
               </div>
+              {r.note && editDate !== r.date && (
+                <div className="flex items-start gap-1.5 border-t border-line/70 bg-bg px-3 py-2 text-body-sm text-ink-muted">
+                  <MessageSquare size={13} className="mt-0.5 shrink-0 text-primary" />
+                  <span className="text-ink">{r.note}</span>
+                </div>
+              )}
               {editDate === r.date && (
                 <div className="flex flex-wrap items-end gap-3 border-t border-line bg-bg px-3 py-3">
                   <Field label="Check in"><input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className={inputCls} /></Field>
                   <Field label="Check out"><input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className={inputCls} /></Field>
+                  <div className="w-full">
+                    <Field label="Comment / feedback">
+                      <textarea
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        rows={2}
+                        placeholder="Feedback for this day — visible to the member"
+                        className="w-full rounded-btn border border-line bg-card p-2.5 text-body-sm text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+                      />
+                    </Field>
+                  </div>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={save} disabled={saving}>Save</Button>
                     <Button size="sm" variant="secondary" onClick={() => setEditDate(null)}>Cancel</Button>
                   </div>
-                  <p className="w-full text-[11px] text-ink-muted">Leave a field empty to clear it. Times are in company time.</p>
+                  <p className="w-full text-[11px] text-ink-muted">Leave a time empty to clear it. Times are in company time. The comment is visible to the member.</p>
                 </div>
               )}
             </div>
