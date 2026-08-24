@@ -13,6 +13,7 @@ export interface AdminUser {
   memberships?: Membership[]
   status: UserStatus
   isActive: boolean
+  attendanceRemote?: boolean
   tempPassword: string | null
 }
 export interface MembershipInput {
@@ -30,7 +31,7 @@ export interface CreateUserInput {
 }
 export const listUsers = () => api.get<{ users: AdminUser[] }>('/admin/users')
 export const createUser = (input: CreateUserInput) => api.post<{ user: AdminUser; tempPassword?: string }>('/admin/users', input)
-export const updateUser = (id: string, patch: Partial<{ role: Role; department: Department | null; subDepartmentSlug: string | null; status: UserStatus; isActive: boolean }>) =>
+export const updateUser = (id: string, patch: Partial<{ role: Role; department: Department | null; subDepartmentSlug: string | null; status: UserStatus; isActive: boolean; attendanceRemote: boolean }>) =>
   api.patch<{ user: AdminUser }>(`/admin/users/${id}`, patch)
 /** Replace a user's full set of department memberships (each with its own role). */
 export const setUserDepartments = (id: string, memberships: MembershipInput[]) =>

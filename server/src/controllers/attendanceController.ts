@@ -245,8 +245,9 @@ async function reconcileStaleCheckIn(userId: string, existing: DayWithBreaks, sh
  * exists and the IP is outside it. Super Admins and loopback always pass.
  * Returns null when allowed, or an error message when blocked.
  */
-async function officeNetworkBlock(ip: string, role: Role): Promise<string | null> {
-  if (role === 'SUPER_ADMIN' || isLoopback(ip)) return null
+async function officeNetworkBlock(ip: string, role: Role, isRemote: boolean): Promise<string | null> {
+  // Super Admins, loopback, and permanently-remote users always pass.
+  if (role === 'SUPER_ADMIN' || isLoopback(ip) || isRemote) return null
   const nets = await prisma.officeNetwork.findMany({ where: { isActive: true }, select: { cidr: true } })
   if (nets.length === 0) return null // allowlist not configured — allow everyone
   if (ipAllowed(ip, nets.map((n) => n.cidr))) return null
@@ -295,7 +296,7 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
 
   // Office-network gate — skipped on WFH days, where the person works off-site by design.
   if (!isWfh) {
-    const blocked = await officeNetworkBlock(ip, me.role)
+    const blocked = await officeNetworkBlock(ip, me.role, me.attendanceRemote)
     if (blocked) {
       console.log(`[office-net] BLOCKED check-in — ${me.name} <${me.email}> resolvedIp=${ip}`)
       res.status(403).json({ error: blocked })
@@ -326,7 +327,7 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
   const now = new Date()
 
   const ip = getClientIp(req)
-  const blocked = await officeNetworkBlock(ip, me.role)
+  const blocked = await officeNetworkBlock(ip, me.role, me.attendanceRemote)
   if (blocked) {
     console.log(`[office-net] BLOCKED check-out — ${me.name} <${me.email}> resolvedIp=${ip}`)
     res.status(403).json({ error: blocked })

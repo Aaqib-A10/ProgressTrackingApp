@@ -49,6 +49,7 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
       })),
       status: u.status,
       isActive: u.isActive,
+      attendanceRemote: u.attendanceRemote,
       tempPassword: u.tempPassword ?? null,
     })),
   })
@@ -112,6 +113,7 @@ const updateUserSchema = z.object({
   subDepartmentSlug: z.string().nullable().optional(),
   status: z.nativeEnum(UserStatus).optional(),
   isActive: z.boolean().optional(),
+  attendanceRemote: z.boolean().optional(),
 })
 
 export async function updateUser(req: AuthedRequest, res: Response): Promise<void> {
@@ -129,6 +131,7 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
   const data: Record<string, unknown> = {}
   if (v.role !== undefined) data.role = v.role
   if (v.isActive !== undefined) data.isActive = v.isActive
+  if (v.attendanceRemote !== undefined) data.attendanceRemote = v.attendanceRemote
   if (v.status !== undefined) data.status = v.status
   // Disabling/suspending an account revokes its existing sessions immediately.
   if (v.isActive === false || (v.status !== undefined && v.status !== 'ACTIVE')) data.sessionsValidFrom = new Date()
@@ -155,7 +158,7 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
       create: { userId: u.id, departmentId: u.departmentId, subDepartmentId: u.subDepartmentId, role: u.role },
     })
   }
-  res.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, department: u.department?.type ?? null, subDepartment: u.subDepartment?.slug ?? null, status: u.status, isActive: u.isActive } })
+  res.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, department: u.department?.type ?? null, subDepartment: u.subDepartment?.slug ?? null, status: u.status, isActive: u.isActive, attendanceRemote: u.attendanceRemote } })
 }
 
 const membershipsSchema = z.object({

@@ -143,6 +143,15 @@ export default function AdminUsers() {
       ),
     },
     {
+      key: 'remote',
+      header: 'Remote',
+      render: (u) => (
+        <button onClick={() => patch(u.id, { attendanceRemote: !u.attendanceRemote })} title="Toggle remote — exempt from the office-network IP check-in restriction">
+          <Badge tone={u.attendanceRemote ? 'accent' : 'neutral'} dot>{u.attendanceRemote ? 'Remote' : 'On-site'}</Badge>
+        </button>
+      ),
+    },
+    {
       key: 'password',
       header: 'Temp password',
       render: (u) => <PasswordCell u={u} />,

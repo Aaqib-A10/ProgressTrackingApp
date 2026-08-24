@@ -146,6 +146,8 @@ model User {
   role         Role       @default(MEMBER)
   status       UserStatus @default(ACTIVE)
   isActive     Boolean    @default(true)
+  // Permanently remote: exempt from the office-network IP check-in restriction.
+  attendanceRemote Boolean @default(false)
   // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
   // password change, and admin password reset to revoke existing tokens.
   sessionsValidFrom DateTime?
