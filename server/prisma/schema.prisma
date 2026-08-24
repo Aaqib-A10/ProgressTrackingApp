@@ -44,6 +44,7 @@ enum DepartmentType {
   MARKETING
   CSR
   ECOMMERCE
+  TALKLOOP
 }
 
 /// Status of a daily entry. A non-SUBMITTED day carries no metrics and is
@@ -63,6 +64,7 @@ enum TagType {
   DATA_SOURCE
   MARKETPLACE // Ecommerce marketplaces (Amazon, eBay, Walmart, Newegg)
   TASK_TYPE // Ecommerce listing task types (BTO, Kits, Pricing, ...)
+  COUNTRY // Talkloop target countries (calls/demos per country)
 }
 
 enum TargetPeriod {
@@ -165,6 +167,7 @@ model User {
 
   itadEntries     ItadDailyEntry[]
   leadGenEntries  LeadGenDailyEntry[]
+  talkloopEntries TalkloopDailyEntry[]
   seoEntries      SeoDailyEntry[]
   socialEntries   SocialDailyEntry[]
   contentEntries  ContentDailyEntry[]
@@ -325,6 +328,43 @@ model LeadGenVerticalCount {
   @@unique([entryId, tagId])
 }
 
+// ---------- Talkloop daily entries (outbound calls + demos, per-country) ----------
+
+model TalkloopDailyEntry {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime  @db.Date
+  status DayStatus @default(SUBMITTED)
+
+  callsMade      Int @default(0)
+  connects       Int @default(0)
+  demosScheduled Int @default(0)
+  demosConducted Int @default(0)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  countryCounts TalkloopCountryCount[]
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+/// Per-country calls + demos breakdown for a Talkloop entry.
+model TalkloopCountryCount {
+  id      String             @id @default(cuid())
+  entryId String
+  entry   TalkloopDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tagId   String
+  tag     Tag                @relation(fields: [tagId], references: [id])
+  calls   Int                @default(0)
+  demos   Int                @default(0)
+
+  @@unique([entryId, tagId])
+}
+
 // ---------- Team roster history (Team Lead invites / removals) ----------
 
 /// An append-only log of team membership changes, scoped to a department.
@@ -357,6 +397,7 @@ model Tag {
 
   verticalCounts LeadGenVerticalCount[]
   socialCounts   SocialPlatformCount[]
+  talkloopCountryCounts TalkloopCountryCount[]
 
   ecomTaskLines        EcommerceListingLine[] @relation("LineTaskType")
   ecomMarketplaceLines EcommerceListingLine[] @relation("LineMarketplace")

@@ -31,6 +31,7 @@ import {
   Mail,
   Shield,
   DollarSign,
+  PhoneCall,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -128,6 +129,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Team View', to: '/app/leadgen/team', icon: Users, departments: ['LEAD_GEN'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Monthly Breakdown', to: '/app/leadgen/breakdown', icon: Building2, departments: ['LEAD_GEN'], roles: ADMIN_ROLES },
       { label: 'Analytics', to: '/app/leadgen/analytics', icon: LineChart, departments: ['LEAD_GEN'], roles: TL_ROLES },
+    ],
+  },
+  {
+    title: 'Talkloop',
+    icon: PhoneCall,
+    color: '#0EA5E9',
+    items: [
+      { label: 'Daily Log', to: '/app/talkloop/log', icon: PhoneCall, departments: ['TALKLOOP'], hideFor: HIDE_FROM_SA },
+      { label: 'Team View', to: '/app/talkloop/team', icon: Users, departments: ['TALKLOOP'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
     ],
   },
   {

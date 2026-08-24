@@ -41,7 +41,7 @@ export function getTeamDashboard(range: RangeKey, custom?: CustomRange | null) {
 
 // --- Executive (Super Admin) ---
 export interface ExecDeptCard {
-  type: 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE'
+  type: 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE' | 'TALKLOOP'
   name: string
   members: number
   subtitle: string

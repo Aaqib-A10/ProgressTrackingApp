@@ -20,6 +20,8 @@ function logPath(user: CurrentUser): string | null {
       return '/app/itad/log'
     case 'LEAD_GEN':
       return '/app/leadgen/log'
+    case 'TALKLOOP':
+      return '/app/talkloop/log'
     case 'MARKETING':
       if (user.subDepartment === 'seo') return '/app/marketing/seo'
       if (user.subDepartment === 'social') return '/app/marketing/social'
@@ -36,6 +38,8 @@ function teamPath(user: CurrentUser): string | null {
       return '/app/itad/team'
     case 'LEAD_GEN':
       return '/app/leadgen/team'
+    case 'TALKLOOP':
+      return '/app/talkloop/team'
     case 'MARKETING':
       return '/app/marketing/analytics'
     default:
