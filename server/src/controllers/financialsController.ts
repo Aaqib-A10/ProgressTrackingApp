@@ -100,7 +100,7 @@ function serialize(s: {
     startDate: s.startDate.toISOString().slice(0, 10),
     endDate: s.endDate ? s.endDate.toISOString().slice(0, 10) : null,
     note: s.note,
-    // Active = linked to a live PulseTrack profile.
+    // Active = linked to a live Metriq profile.
     active: !!(s.user && s.user.isActive && s.user.status === 'ACTIVE'),
   }
 }

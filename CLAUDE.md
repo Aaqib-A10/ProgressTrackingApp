@@ -1,10 +1,10 @@
-# CLAUDE.md — PulseTrack Progress Tracking App
+# CLAUDE.md — Metriq Progress Tracking App
 
 This file gives Claude Code the context to build this project. Read it fully before starting work.
 
 ## What we're building
 
-**PulseTrack** is an internal B2B web app that replaces manual daily/weekly/monthly progress reports. Employees submit structured daily progress; Team Leads see their whole team live; each department has analytics dashboards that show whether the team is improving over time (rolling 3-month comparison).
+**Metriq** is an internal B2B web app that replaces manual daily/weekly/monthly progress reports. Employees submit structured daily progress; Team Leads see their whole team live; each department has analytics dashboards that show whether the team is improving over time (rolling 3-month comparison).
 
 Three departments, each with different data:
 - **ITAD** — outbound calling (dials, connects, voicemail, emails, interested, working on, closed, RFQs)

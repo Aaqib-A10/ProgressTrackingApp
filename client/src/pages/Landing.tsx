@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Activity, Zap, Users, TrendingUp, KanbanSquare, LayoutDashboard, CalendarDays,
+  Zap, Users, TrendingUp, KanbanSquare, LayoutDashboard, CalendarDays,
   FileBarChart, Target, Clock, Smartphone, Star, ArrowRight, ChevronDown,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import metriqLogo from '../assets/metriq-logo.svg'
 
 const img = (name: string) => `/assets/images/${name}`
 
@@ -72,7 +73,7 @@ const VERSATILE: { icon: ReactNode; title: string; img: string }[] = [
 ]
 
 const FAQS = [
-  { q: 'What is PulseTrack?', a: 'An internal progress-tracking app that replaces manual daily, weekly and monthly reports with structured updates, live team dashboards and trend analytics — one source of truth for every department.' },
+  { q: 'What is Metriq?', a: 'An internal progress-tracking app that replaces manual daily, weekly and monthly reports with structured updates, live team dashboards and trend analytics — one source of truth for every department.' },
   { q: 'Is it really free to start?', a: 'Yes. Create an account, add your team and start logging — no credit card required and no per-seat limit to get going.' },
   { q: 'How long does setup take?', a: 'Minutes. Pick your department, set a couple of targets, invite your team, and your dashboards start populating from the first submission.' },
   { q: 'Can each department track different metrics?', a: 'Absolutely. ITAD tracks calling KPIs, Lead Gen tracks the MQL→SQL funnel by vertical, and Marketing runs SEO/Social/Content with a Kanban board and editorial calendar.' },
@@ -114,7 +115,7 @@ function Versatile() {
         <div>
           <SectionLabel text="It's versatile" avatar="s-versatile.jpg" />
           <p className="mt-4 max-w-md text-body-lg text-ink">
-            PulseTrack is far more than a checklist — it's a complete toolkit for productive teams, including:
+            Metriq is far more than a checklist — it's a complete toolkit for productive teams, including:
           </p>
           <ul className="mt-4 space-y-0.5">
             {VERSATILE.map((f, i) => (
@@ -146,11 +147,8 @@ export default function Landing() {
       <div className="relative overflow-hidden bg-gradient-to-b from-[#eef3fb] to-[#f4f7fc] pb-16">
         {/* logo header — always in front */}
         <header className="relative z-50 mx-auto max-w-7xl px-6 pt-7 sm:px-12 lg:px-16">
-          <Link to="/" className="inline-flex items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-700 text-white shadow-md">
-              <Activity size={22} strokeWidth={2.4} />
-            </span>
-            <span className="text-2xl font-bold tracking-tight text-ink">Pulse<span className="text-primary">Track</span></span>
+          <Link to="/" className="inline-flex items-center">
+            <img src={metriqLogo} alt="Metriq" className="h-10 w-auto" />
           </Link>
         </header>
 
@@ -161,7 +159,7 @@ export default function Landing() {
               Track every team's progress — <span className="text-primary">automatically.</span>
             </h1>
             <p className="mt-5 max-w-md text-body-lg text-ink-muted">
-              Organize and manage your team's work with PulseTrack — a free progress manager that replaces manual daily, weekly and monthly reports.
+              Organize and manage your team's work with Metriq — a free progress manager that replaces manual daily, weekly and monthly reports.
             </p>
             <Link to="/signup" className="mt-7 inline-block">
               <Button size="lg" className="px-8" trailingIcon={<ArrowRight size={18} />}>Get Started</Button>
@@ -173,9 +171,9 @@ export default function Landing() {
             <div className="relative w-[94%] max-w-xl">
               <div className="absolute left-1/2 top-[-11rem] h-[38rem] w-[112%] -translate-x-1/2 rounded-b-[50%] bg-gradient-to-b from-[#a9c9ff] via-[#c9dcff] to-[#eef3ff]" />
               <img
-                src={img('hero-mockup.png')}
-                alt="PulseTrack product preview"
-                className="relative z-10 w-full drop-shadow-2xl"
+                src={img('hero-product.jpg')}
+                alt="Metriq product preview"
+                className="relative z-10 w-full rounded-2xl object-cover shadow-2xl ring-1 ring-black/5"
               />
             </div>
           </div>
@@ -185,12 +183,12 @@ export default function Landing() {
       {/* Why — white panel with large rounded top corners curving up over the hero */}
       <div className="relative z-20 -mt-12 rounded-[2.5rem] bg-card shadow-[0_0_40px_rgba(15,23,42,0.06)] sm:rounded-[3rem]">
       <section id="why" className="mx-auto max-w-7xl px-6 pb-20 pt-16 sm:px-10 lg:px-16">
-        <h2 className="text-center text-3xl font-bold tracking-tight text-primary sm:text-4xl">Why PulseTrack?</h2>
+        <h2 className="text-center text-3xl font-bold tracking-tight text-primary sm:text-4xl">Why Metriq?</h2>
         <div className="mt-12 grid items-center gap-12 lg:grid-cols-2">
           {/* girl with laptop on a blue ellipse */}
           <div className="relative mx-auto flex h-80 w-full max-w-md items-center justify-center">
             <div className="absolute h-64 w-[22rem] rounded-[50%] bg-gradient-to-b from-primary/40 via-primary/20 to-primary/5" />
-            <img src={img('why-girl.jpg')} alt="Team member using PulseTrack" className="relative h-72 w-72 rounded-full object-cover shadow-card" />
+            <img src={img('why-girl.jpg')} alt="Team member using Metriq" className="relative h-72 w-72 rounded-full object-cover shadow-card" />
           </div>
           {/* three-point list */}
           <div>
@@ -201,7 +199,7 @@ export default function Landing() {
               <li><a href="#features" className="font-semibold text-primary hover:underline">Versatile</a></li>
             </ul>
             <p className="mt-6 max-w-lg text-body-lg text-ink-muted">
-              PulseTrack delivers all three — a free progress tracker your team can run in minutes, with department-specific dashboards, trends and one-click reports built in.
+              Metriq delivers all three — a free progress tracker your team can run in minutes, with department-specific dashboards, trends and one-click reports built in.
             </p>
             <Link to="/signup" className="mt-8 inline-block"><Button size="lg" className="px-8">Get Started</Button></Link>
           </div>
@@ -230,12 +228,12 @@ export default function Landing() {
       <section id="free" className="py-16">
         <div className="grid items-center gap-10 lg:grid-cols-2">
           <div className="overflow-hidden rounded-card border border-line shadow-card">
-            <img src={img('registration.png')} alt="Create your PulseTrack account" className="w-full object-cover" />
+            <img src={img('s-free.jpg')} alt="Create your Metriq account" className="w-full object-cover" />
           </div>
           <div>
             <SectionLabel text="It's free" avatar="s-free.jpg" />
             <p className="mt-4 text-body-lg text-ink">
-              Getting started with PulseTrack takes one step — sign up with your work email and you're in. The core plan is free, with everything your team needs to start tracking from day one.
+              Getting started with Metriq takes one step — sign up with your work email and you're in. The core plan is free, with everything your team needs to start tracking from day one.
             </p>
             <ul className="mt-5 list-disc space-y-2 pl-5 text-body-lg text-ink-muted marker:text-primary">
               <li>No credit card required</li>
@@ -253,7 +251,7 @@ export default function Landing() {
           <div className="lg:order-1">
             <SectionLabel text="It's easy to use" avatar="s-easy.jpg" />
             <p className="mt-4 text-body-lg text-ink">
-              PulseTrack is as easy as it gets — invite your team, pick a department, set a couple of targets, and start logging.
+              Metriq is as easy as it gets — invite your team, pick a department, set a couple of targets, and start logging.
             </p>
             <ul className="mt-5 list-disc space-y-2 pl-5 text-body-lg text-ink-muted marker:text-primary">
               <li>Set up your team in under five minutes</li>
@@ -263,7 +261,7 @@ export default function Landing() {
             <OutlineCta />
           </div>
           <div className="overflow-hidden rounded-card border border-line shadow-card lg:order-2">
-            <img src={img('invitation.png')} alt="Invite your team to PulseTrack" className="w-full object-cover" />
+            <img src={img('f-team.jpg')} alt="Invite your team to Metriq" className="w-full object-cover" />
           </div>
         </div>
       </section>
@@ -277,7 +275,7 @@ export default function Landing() {
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 lg:grid-cols-2">
           <div>
             <h2 className="text-headline-lg">Built for high-performance B2B teams</h2>
-            <p className="mt-3 text-body-lg text-white/70">From outbound calling floors to lead-gen research desks and marketing studios — PulseTrack keeps every department comparable, accountable and improving.</p>
+            <p className="mt-3 text-body-lg text-white/70">From outbound calling floors to lead-gen research desks and marketing studios — Metriq keeps every department comparable, accountable and improving.</p>
           </div>
           <div className="overflow-hidden rounded-card shadow-overlay ring-1 ring-white/10">
             <img src={img('trusted-team.jpg')} alt="" className="aspect-[16/10] w-full object-cover" />
@@ -288,7 +286,7 @@ export default function Landing() {
       {/* FAQ */}
       <section id="faq" className="mx-auto max-w-3xl px-6 py-20">
         <div className="text-center">
-          <h2 className="text-4xl font-light tracking-wide text-primary md:text-5xl">PulseTrack FAQs</h2>
+          <h2 className="text-4xl font-light tracking-wide text-primary md:text-5xl">Metriq FAQs</h2>
         </div>
         <div className="mt-10 space-y-4">
           {FAQS.map((f) => (
@@ -317,17 +315,14 @@ export default function Landing() {
       <footer className="border-t border-line bg-card">
         <div className="mx-auto flex max-w-7xl flex-col gap-10 px-8 py-12 sm:px-12 lg:flex-row lg:items-start lg:gap-x-20 lg:px-20">
           <div className="max-w-xs">
-            <div className="inline-flex items-center gap-2.5">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-700 text-white shadow-md">
-                <Activity size={22} strokeWidth={2.4} />
-              </span>
-              <span className="text-2xl font-bold tracking-tight text-ink">Pulse<span className="text-primary">Track</span></span>
+            <div className="inline-flex items-center">
+              <img src={metriqLogo} alt="Metriq" className="h-10 w-auto" />
             </div>
             <p className="mt-3 text-body-sm text-ink-muted">The single source of truth for every team's progress.</p>
           </div>
           <div className="flex flex-wrap gap-x-12 gap-y-8 sm:gap-x-16">
             {[
-              { h: 'Product', items: ['Features', 'Why PulseTrack', 'FAQ'] },
+              { h: 'Product', items: ['Features', 'Why Metriq', 'FAQ'] },
               { h: 'Company', items: ['About', 'Careers', 'Contact'] },
               { h: 'Resources', items: ['Docs', 'Support', 'Privacy'] },
             ].map((col) => (

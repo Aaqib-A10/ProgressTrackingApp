@@ -1,4 +1,4 @@
-// Thin typed fetch wrapper around the PulseTrack API.
+// Thin typed fetch wrapper around the Metriq API.
 // Base URL comes from VITE_API_URL; in dev, Vite also proxies /api to the server.
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 

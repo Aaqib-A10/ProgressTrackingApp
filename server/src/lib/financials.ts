@@ -46,7 +46,7 @@ export interface FinancialReport {
   to: string // YYYY-MM
   teams: TeamFinancials[]
   totals: { staff: number; cost: number; revenue: number; netReturn: number; roi: number | null }
-  /** Former employees (no active PulseTrack profile), excluded from team totals. */
+  /** Former employees (no active Metriq profile), excluded from team totals. */
   former: PersonCost[]
   formerCost: number
 }
@@ -103,7 +103,7 @@ export async function buildFinancialReport({ from, to }: { from: string; to: str
 
   const itadRevenue = wonDeals.reduce((s, b) => s + (b.awardedPrice ?? 0), 0)
   const nameFor = (t: DepartmentType) => FINANCIAL_TEAMS.find((x) => x.key === t)?.name ?? t
-  // "Active" = linked to a live PulseTrack profile. No profile / disabled = former.
+  // "Active" = linked to a live Metriq profile. No profile / disabled = former.
   const isActive = (s: { user: { isActive: boolean; status: string } | null }) =>
     !!(s.user && s.user.isActive && s.user.status === 'ACTIVE')
   const toPerson = (s: (typeof salaries)[number]): PersonCost => {

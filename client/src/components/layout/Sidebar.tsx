@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Activity, Settings, ChevronRight, Search, X } from 'lucide-react'
+import { Settings, ChevronRight, Search, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import metriqLogo from '../../assets/metriq-logo.svg'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
@@ -168,20 +169,17 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
 
   return (
     <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-line bg-card">
-      {/* Brand — normalized to PulseTrack everywhere */}
-      <div className="flex items-center gap-3 px-5 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-btn bg-primary text-white">
-          <Activity size={20} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-headline-md leading-tight text-ink">PulseTrack</div>
-          <div className="text-body-sm text-ink-muted">Performance Suite</div>
+      {/* Brand */}
+      <div className="flex items-center justify-between gap-2 px-5 py-4">
+        <div className="min-w-0">
+          <img src={metriqLogo} alt="Metriq" className="h-8 w-auto" />
+          <div className="mt-1 text-body-sm text-ink-muted">Performance Suite</div>
         </div>
         {/* Close (mobile drawer only) */}
         <button
           type="button"
           onClick={onNavigate}
-          className="-mr-1 rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink lg:hidden"
+          className="-mr-1 shrink-0 rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink lg:hidden"
           aria-label="Close menu"
         >
           <X size={20} />

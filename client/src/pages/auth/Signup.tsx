@@ -56,7 +56,7 @@ export default function Signup() {
       <AuthLayout
         headline="One platform for every team's progress."
         testimonial={{
-          quote: 'PulseTrack transformed how we manage our outbound teams. High visibility, zero friction.',
+          quote: 'Metriq transformed how we manage our outbound teams. High visibility, zero friction.',
           name: 'Alex Rivera',
           role: 'TechGen',
         }}
@@ -82,7 +82,7 @@ export default function Signup() {
     <AuthLayout
       headline="One platform for every team's progress."
       testimonial={{
-        quote: 'PulseTrack transformed how we manage our outbound teams. High visibility, zero friction.',
+        quote: 'Metriq transformed how we manage our outbound teams. High visibility, zero friction.',
         name: 'Alex Rivera',
         role: 'TechGen',
       }}

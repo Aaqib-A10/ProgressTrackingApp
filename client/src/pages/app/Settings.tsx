@@ -9,7 +9,7 @@ import { useAuth } from '../../lib/auth'
 import { api, ApiError } from '../../lib/api'
 import { ROLE_LABEL } from '../../lib/types'
 
-const NOTIF_KEY = 'pulsetrack.notifications'
+const NOTIF_KEY = 'metriq.notifications'
 const NOTIFS = [
   { key: 'reminders', label: 'Daily submission reminders', desc: 'Remind me if I haven’t logged by end of day.' },
   { key: 'weekly', label: 'Weekly report email', desc: 'Email me the weekly team report.' },

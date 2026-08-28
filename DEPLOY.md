@@ -1,6 +1,6 @@
-# PulseTrack — Production Deployment (VPS)
+# Metriq — Production Deployment (VPS)
 
-How to run PulseTrack on your own Linux server (Ubuntu/Debian) with **Nginx + HTTPS
+How to run Metriq on your own Linux server (Ubuntu/Debian) with **Nginx + HTTPS
 + PM2**. This setup is the right fit because the app needs an **always-on Node
 process** (the attendance-reminder cron) and correct **client-IP reading** (the
 office-network check).
@@ -63,7 +63,7 @@ TRUST_PROXY=1
 
 # Email (Resend) — required for attendance reminders + invites. Empty = skipped.
 RESEND_API_KEY=""
-MAIL_FROM="PulseTrack <noreply@yourdomain.com>"
+MAIL_FROM="Metriq <noreply@yourdomain.com>"
 MAIL_REPLY_TO="noreply@yourdomain.com"
 ```
 

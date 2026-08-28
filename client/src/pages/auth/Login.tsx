@@ -56,7 +56,7 @@ export default function Login() {
     <AuthLayout
       headline="The single source of truth for every team."
       testimonial={{
-        quote: 'PulseTrack has completely eliminated our manual reporting friction.',
+        quote: 'Metriq has completely eliminated our manual reporting friction.',
         name: 'Head of Lead Gen',
         role: 'Verlex Inc.',
       }}

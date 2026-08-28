@@ -11,7 +11,7 @@ const app = createApp()
 
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
-  console.log(`[server] PulseTrack API listening on http://localhost:${PORT}`)
+  console.log(`[server] Metriq API listening on http://localhost:${PORT}`)
   startAttendanceReminders()
   startAttendanceViolations()
   startAutoCheckout()

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PulseTrack one-command deploy.
+# Metriq one-command deploy.
 # Commits + pushes local changes to GitHub, then updates the live VPS
 # (pull -> migrate -> build -> restart). Just run:  deploy
 set -uo pipefail

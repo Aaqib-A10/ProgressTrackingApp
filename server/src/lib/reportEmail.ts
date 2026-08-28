@@ -45,7 +45,7 @@ function shell(title: string, period: string, inner: string): string {
         </td></tr>
         <tr><td style="padding:24px">${inner}</td></tr>
         <tr><td style="padding:16px 24px;border-top:1px solid ${BORDER};color:${MUTED};font-size:12px">
-          Generated automatically by PulseTrack. Figures cover the period above and exclude leave/off days.
+          Generated automatically by Metriq. Figures cover the period above and exclude leave/off days.
         </td></tr>
       </table>
     </td></tr>

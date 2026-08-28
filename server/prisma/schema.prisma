@@ -1,4 +1,4 @@
-// PulseTrack — Prisma schema (Phase 1 core).
+// Metriq — Prisma schema (Phase 1 core).
 // Source of truth for the data model: Progress_Tracking_App_Plan.md (§2–§5, §9)
 // and CLAUDE.md "Domain rules". Marketing models (SEO/Social/Content/Kanban/
 // editorial calendar) are added in Phase 3.

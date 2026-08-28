@@ -1,4 +1,4 @@
-# PulseTrack — Local Setup (new machine)
+# Metriq — Local Setup (new machine)
 
 Steps to get the app running on a fresh laptop, including restoring the database.
 

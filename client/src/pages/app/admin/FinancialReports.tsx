@@ -62,7 +62,7 @@ export default function FinancialReports() {
   // When filtering to a team, default the Add-salary form to it (unless mid-edit).
   useEffect(() => { if (dept !== 'ALL') setDraft((d) => (d.id ? d : { ...d, department: dept })) }, [dept])
 
-  // Only PulseTrack profiles in the three tracked teams, for the link dropdown.
+  // Only Metriq profiles in the three tracked teams, for the link dropdown.
   const linkableUsers = useMemo(
     () => users.filter((u) => u.department === 'ITAD' || u.department === 'LEAD_GEN' || u.department === 'MARKETING'),
     [users],
@@ -246,7 +246,7 @@ export default function FinancialReports() {
       </Card>
 
       {report && shownFormer.length > 0 && (
-        <Card title={`Former employees (${shownFormer.length})`} subtitle="No active PulseTrack profile — excluded from the totals and ROI above." flush>
+        <Card title={`Former employees (${shownFormer.length})`} subtitle="No active Metriq profile — excluded from the totals and ROI above." flush>
           <DataTable
             columns={[
               { key: 'name', header: 'Name', render: (p: PersonCost) => <span className="font-medium text-ink">{p.name}</span> },
@@ -265,7 +265,7 @@ export default function FinancialReports() {
       <Card title={draft.id ? 'Edit salary' : 'Add salary'}>
         <form onSubmit={saveSalary} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-6">
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-body-sm font-semibold text-ink">PulseTrack profile <span className="font-normal text-ink-muted">(sets Active)</span></label>
+            <label className="mb-1 block text-body-sm font-semibold text-ink">Metriq profile <span className="font-normal text-ink-muted">(sets Active)</span></label>
             <select className={sel} value={draft.userId} onChange={(e) => pickUser(e.target.value)}>
               <option value="">— none (former / no profile) —</option>
               {linkableUsers.map((u) => <option key={u.id} value={u.id}>{u.name} · {teamLabel(u.department as Department)}</option>)}

@@ -2,7 +2,7 @@
 // if RESEND_API_KEY is unset or the send fails, we log and continue.
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const FROM = process.env.MAIL_FROM || 'PulseTrack <noreply@pulsetrack.online>'
+const FROM = process.env.MAIL_FROM || 'Metriq <noreply@pulsetrack.online>'
 const REPLY_TO = process.env.MAIL_REPLY_TO || 'noreply@pulsetrack.online'
 const APP_URL = process.env.APP_URL || 'http://localhost:5173'
 
@@ -43,7 +43,7 @@ const shell = (title: string, body: string) => `
   <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;color:#0F172A">
     <div style="display:flex;align-items:center;gap:8px;padding:16px 0">
       <span style="display:inline-block;width:28px;height:28px;border-radius:8px;background:#4F46E5"></span>
-      <strong style="font-size:18px">PulseTrack</strong>
+      <strong style="font-size:18px">Metriq</strong>
     </div>
     <h1 style="font-size:20px;margin:8px 0">${title}</h1>
     ${body}
@@ -56,7 +56,7 @@ const button = (href: string, label: string) =>
 /** Invite an employee/lead to set their password and join. */
 export function sendInviteEmail(opts: { to: string; name: string; token: string; inviterName?: string; tempPassword?: string }): Promise<void> {
   const link = `${APP_URL}/reset-password?token=${encodeURIComponent(opts.token)}`
-  const intro = opts.inviterName ? `${opts.inviterName} has added you to PulseTrack.` : 'You have been added to PulseTrack.'
+  const intro = opts.inviterName ? `${opts.inviterName} has added you to Metriq.` : 'You have been added to Metriq.'
   const tempLine = opts.tempPassword
     ? `<p style="color:#64748B;font-size:13px">Or log in with a temporary password: <code style="background:#F1F5F9;padding:2px 6px;border-radius:4px">${opts.tempPassword}</code></p>`
     : ''
@@ -73,7 +73,7 @@ export function sendInviteEmail(opts: { to: string; name: string; token: string;
     '',
     'This link is valid for 7 days. If you didn\'t expect this email, you can ignore it.',
   ].filter((l) => l !== '').join('\n')
-  return sendMail({ to: opts.to, subject: 'You are invited to PulseTrack', html, text })
+  return sendMail({ to: opts.to, subject: 'You are invited to Metriq', html, text })
 }
 
 /** Remind an employee to check in or check out. Best-effort (no-ops without a key). */

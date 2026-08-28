@@ -24,7 +24,7 @@ export default function App() {
       <div className="w-full max-w-md rounded-card bg-card p-8 shadow-card ring-1 ring-line">
         <div className="mb-1 flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />
-          <h1 className="text-xl font-semibold tracking-tight">PulseTrack</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Metriq</h1>
         </div>
         <p className="mb-6 text-sm text-ink-muted">Scaffold is up. Verifying client → API wiring.</p>
 

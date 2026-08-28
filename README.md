@@ -1,4 +1,4 @@
-# PulseTrack
+# Metriq
 
 Internal progress-tracking app (PERN — PostgreSQL · Express · React · Node, TypeScript end to end).
 See [CLAUDE.md](CLAUDE.md) for build context and [Progress_Tracking_App_Plan.md](Progress_Tracking_App_Plan.md) for the functional spec.

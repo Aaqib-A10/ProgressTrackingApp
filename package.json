@@ -1,8 +1,8 @@
 {
-  "name": "pulsetrack",
+  "name": "metriq",
   "version": "0.1.0",
   "private": true,
-  "description": "PulseTrack — internal progress tracking app (PERN, TypeScript)",
+  "description": "Metriq — internal progress tracking app (PERN, TypeScript)",
   "workspaces": [
     "client",
     "server"

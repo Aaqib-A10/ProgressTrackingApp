@@ -23,7 +23,7 @@ export function AuthLayout({ children, headline, testimonial }: AuthLayoutProps)
 
       <div className="relative hidden flex-col overflow-hidden bg-gradient-to-br from-primary to-accent p-10 text-white lg:flex">
         <div className="flex items-center gap-2 text-headline-md font-semibold">
-          <Activity size={22} /> PulseTrack
+          <Activity size={22} /> Metriq
         </div>
 
         <h2 className="mt-14 max-w-md text-[2rem] font-bold leading-tight tracking-tight">{headline}</h2>

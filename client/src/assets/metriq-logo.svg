@@ -1,0 +1,14 @@
+<svg width="220" height="52" viewBox="0 0 220 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mmg" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#4338CA"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(2,2)">
+    <rect x="2" y="2" width="44" height="44" rx="13" fill="url(#mmg)"/>
+    <path d="M12 35 V15 L24 27 L36 15 V35" stroke="#FFFFFF" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="36" cy="35" r="2.6" fill="#22D3EE"/>
+  </g>
+  <text x="60" y="37" font-family="Inter, Helvetica Neue, Arial, sans-serif" font-size="32" font-weight="700" letter-spacing="-1" fill="#0F172A">Metri<tspan fill="#06B6D4">q</tspan></text>
+</svg>

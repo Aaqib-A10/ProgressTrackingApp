@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // PulseTrack design tokens (see CLAUDE.md "Design system")
+        // Metriq design tokens (see CLAUDE.md "Design system")
         primary: {
           DEFAULT: '#4F46E5', // indigo — main CTAs, active/focus states
           50: '#EEF2FF',
