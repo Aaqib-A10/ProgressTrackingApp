@@ -17,6 +17,20 @@ export function shiftMinutes(time: string): number {
   return h * 60 + m
 }
 
+/** Per-weekday start/end overrides (0=Sun..6=Sat → times); weekdays absent inherit the base. */
+export type DayTimes = Record<string, { startTime: string; endTime: string }> | null | undefined
+
+/** 0=Sun..6=Sat weekday of a bare "YYYY-MM-DD" (timezone-independent). */
+export function weekdayOfDate(dateStr: string): number {
+  return DateTime.fromISO(dateStr).weekday % 7
+}
+
+/** The start/end times worked on `weekday` — the per-day override if set, else the base pair. */
+export function timesForWeekday(base: { startTime: string; endTime: string }, dayTimes: DayTimes, weekday: number): { startTime: string; endTime: string } {
+  const o = dayTimes?.[String(weekday)]
+  return o && o.startTime && o.endTime ? { startTime: o.startTime, endTime: o.endTime } : { startTime: base.startTime, endTime: base.endTime }
+}
+
 /** A shift is overnight when its end time is at or before its start (crosses midnight). */
 export function isOvernight(shift: ShiftWindow): boolean {
   return shiftMinutes(shift.endTime) <= shiftMinutes(shift.startTime)

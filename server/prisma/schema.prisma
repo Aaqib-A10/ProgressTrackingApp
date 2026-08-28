@@ -583,6 +583,9 @@ model AttendanceShift {
   user            User?       @relation("UserShift", fields: [userId], references: [id], onDelete: Cascade)
   startTime       String // "HH:mm" in the shift's timezone, e.g. "09:00"
   endTime         String // "HH:mm", e.g. "18:00". If <= startTime the shift crosses midnight (overnight).
+  // Optional per-weekday start/end overrides: { "1": { startTime, endTime }, ... }
+  // (0=Sun..6=Sat). Weekdays absent here use the base startTime/endTime above.
+  dayTimes        Json?
   graceMin        Int         @default(10)
   requiredMinutes Int         @default(480) // full-shift target; worked >= this = shift completed
   brbAllowanceMin Int         @default(20) // total BRB minutes allowed per day

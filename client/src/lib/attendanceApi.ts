@@ -8,6 +8,8 @@ export type OffLabel = 'ON_LEAVE' | 'OFF' | 'HOLIDAY'
 export interface Shift {
   startTime: string
   endTime: string
+  /** Optional per-weekday start/end overrides ("0".."6" → times); absent days use start/end above. */
+  dayTimes?: Record<string, { startTime: string; endTime: string }> | null
   graceMin: number
   requiredMinutes: number
   brbAllowanceMin: number

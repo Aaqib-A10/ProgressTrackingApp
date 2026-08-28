@@ -69,7 +69,7 @@ export default function MyAttendance() {
       <div>
         <h1 className="text-headline-lg text-ink">My Attendance</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">
-          Your check-in history and hours{data ? ` · shift ${data.shift.startTime}–${data.shift.endTime}` : ''}
+          Your check-in history and hours{data ? ` · shift ${data.shift.startTime}–${data.shift.endTime}${data.shift.dayTimes && Object.keys(data.shift.dayTimes).length > 0 ? ' (varies by day)' : ''}` : ''}
         </p>
       </div>
 

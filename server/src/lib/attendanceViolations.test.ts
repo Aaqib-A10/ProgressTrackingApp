@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { breakMinutesByType, brbOverrunDue, breakOverrunDue, lateSigninDue, type ViolationShift } from './attendanceViolations'
+import { timesForWeekday } from './shiftDay'
 
 const shift: ViolationShift = { startTime: '09:00', endTime: '18:00', graceMin: 10, brbAllowanceMin: 20, breakAllowanceMin: 65, workingDays: [1, 2, 3, 4, 5], timeZone: 'UTC' }
 // A Wednesday in UTC.
@@ -46,5 +47,32 @@ describe('lateSigninDue', () => {
   })
   it('not evaluated after shift end', () => {
     expect(lateSigninDue(shift, at('18:30'), null)).toBe(false)
+  })
+})
+
+describe('per-weekday custom times', () => {
+  const base = { startTime: '09:00', endTime: '18:00' }
+  const dayTimes = { '2': { startTime: '12:00', endTime: '21:00' } } // Tuesday only
+
+  it('timesForWeekday returns override for Tue, base otherwise', () => {
+    expect(timesForWeekday(base, dayTimes, 2)).toEqual({ startTime: '12:00', endTime: '21:00' })
+    expect(timesForWeekday(base, dayTimes, 1)).toEqual(base) // Monday inherits base
+    expect(timesForWeekday(base, null, 2)).toEqual(base)
+  })
+
+  const perDay: ViolationShift = { ...shift, dayTimes }
+  const tueAt = (hhmm: string) => new Date(`2026-08-25T${hhmm}:00.000Z`) // a Tuesday
+  const monAt = (hhmm: string) => new Date(`2026-08-24T${hhmm}:00.000Z`) // a Monday
+
+  it('Tuesday uses the 12:00 start: 12:05 not late, 12:30 late', () => {
+    expect(lateSigninDue(perDay, tueAt('12:05'), null)).toBe(false)
+    expect(lateSigninDue(perDay, tueAt('12:30'), null)).toBe(true)
+  })
+  it('Monday still uses the 09:00 base: 09:05 not late, 09:30 late', () => {
+    expect(lateSigninDue(perDay, monAt('09:05'), null)).toBe(false)
+    expect(lateSigninDue(perDay, monAt('09:30'), null)).toBe(true)
+  })
+  it('Tuesday before its (later) start is not yet evaluated', () => {
+    expect(lateSigninDue(perDay, tueAt('09:30'), null)).toBe(false) // base would flag, per-day 12:00 does not
   })
 })

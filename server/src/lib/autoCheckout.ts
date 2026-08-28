@@ -2,7 +2,7 @@ import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
 import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
-import { shiftDayString, isOvernight, type ShiftWindow } from './shiftDay'
+import { shiftDayString, isOvernight, timesForWeekday, weekdayOfDate, type ShiftWindow, type DayTimes } from './shiftDay'
 import { pickShift, type ReminderShift } from './attendanceReminders'
 
 /**
@@ -28,11 +28,12 @@ export const AUTO_CHECKOUT_NOTE = 'Auto-checked out at shift end (no manual chec
 
 /** The instant a shift ends for an attendance day whose stored date is `dateStr`
  *  (the date the shift STARTED — an overnight shift ends on the next calendar day). */
-export function shiftEndForDate(shift: ShiftWindow, dateStr: string): Date {
+export function shiftEndForDate(shift: ShiftWindow & { dayTimes?: DayTimes }, dateStr: string): Date {
   const zone = shift.timeZone || COMPANY_TZ
-  const [h, m] = shift.endTime.split(':').map(Number)
+  const t = timesForWeekday(shift, shift.dayTimes, weekdayOfDate(dateStr)) // per-day end
+  const [h, m] = t.endTime.split(':').map(Number)
   let end = DateTime.fromISO(dateStr, { zone }).set({ hour: h, minute: m, second: 0, millisecond: 0 })
-  if (isOvernight(shift)) end = end.plus({ days: 1 })
+  if (isOvernight({ startTime: t.startTime, endTime: t.endTime, timeZone: shift.timeZone })) end = end.plus({ days: 1 })
   return end.toJSDate()
 }
 
@@ -67,7 +68,7 @@ export async function runAutoCheckoutTick(
   const now = opts.now ?? new Date()
   const [users, shifts] = await Promise.all([
     prisma.user.findMany({ where: { isActive: true, status: 'ACTIVE' }, select: { id: true, departmentId: true } }),
-    prisma.attendanceShift.findMany({ select: { userId: true, departmentId: true, startTime: true, endTime: true, graceMin: true, workingDays: true, timeZone: true } }),
+    prisma.attendanceShift.findMany({ select: { userId: true, departmentId: true, startTime: true, endTime: true, dayTimes: true, graceMin: true, workingDays: true, timeZone: true } }),
   ])
   const shiftByUser = new Map<string, ReminderShift>(users.map((u) => [u.id, pickShift(shifts, u.id, u.departmentId)]))
 

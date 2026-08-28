@@ -4,6 +4,7 @@ import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
+import { Toggle } from '../../../components/ui/Toggle'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
@@ -324,12 +325,50 @@ function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) =
   const workingDays = value.workingDays ?? []
   const toggleDay = (n: number) =>
     set({ workingDays: workingDays.includes(n) ? workingDays.filter((d) => d !== n) : [...workingDays, n].sort((a, b) => a - b) })
+
+  const [perDay, setPerDay] = useState(!!value.dayTimes && Object.keys(value.dayTimes).length > 0)
+  function enablePerDay(on: boolean) {
+    setPerDay(on)
+    if (!on) { set({ dayTimes: null }); return }
+    const dt: Record<string, { startTime: string; endTime: string }> = {}
+    for (const n of workingDays) dt[String(n)] = value.dayTimes?.[String(n)] ?? { startTime: value.startTime, endTime: value.endTime }
+    set({ dayTimes: dt })
+  }
+  const dayTimeFor = (n: number) => value.dayTimes?.[String(n)] ?? { startTime: value.startTime, endTime: value.endTime }
+  function setDayTime(n: number, patch: Partial<{ startTime: string; endTime: string }>) {
+    set({ dayTimes: { ...(value.dayTimes ?? {}), [String(n)]: { ...dayTimeFor(n), ...patch } } })
+  }
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Start time"><input type="time" value={value.startTime} onChange={(e) => set({ startTime: e.target.value })} className={inputCls} /></Field>
-        <Field label="End time"><input type="time" value={value.endTime} onChange={(e) => set({ endTime: e.target.value })} className={inputCls} /></Field>
-      </div>
+      <label className="flex items-center justify-between rounded-btn border border-line bg-bg px-3 py-2">
+        <span className="text-body-sm font-medium text-ink">Custom hours per day <span className="font-normal text-ink-muted">(different start/end each weekday)</span></span>
+        <Toggle checked={perDay} onChange={enablePerDay} label="Custom hours per day" />
+      </label>
+
+      {!perDay ? (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Start time"><input type="time" value={value.startTime} onChange={(e) => set({ startTime: e.target.value })} className={inputCls} /></Field>
+          <Field label="End time"><input type="time" value={value.endTime} onChange={(e) => set({ endTime: e.target.value })} className={inputCls} /></Field>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-body-sm font-medium text-ink">Hours per working day</p>
+          {workingDays.length === 0 ? (
+            <p className="text-body-sm text-ink-muted">Select working days below first.</p>
+          ) : (
+            [...workingDays].sort((a, b) => a - b).map((n) => (
+              <div key={n} className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-body-sm font-semibold text-ink">{WEEKDAYS.find((d) => d.n === n)?.label}</span>
+                <input type="time" value={dayTimeFor(n).startTime} onChange={(e) => setDayTime(n, { startTime: e.target.value })} className={inputCls} />
+                <span className="text-ink-muted">–</span>
+                <input type="time" value={dayTimeFor(n).endTime} onChange={(e) => setDayTime(n, { endTime: e.target.value })} className={inputCls} />
+              </div>
+            ))
+          )}
+          <p className="text-[11px] text-ink-muted">The base Start/End above is used for any day without a custom time.</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Grace (minutes)">
           <input type="number" min={0} max={120} value={value.graceMin} onChange={(e) => set({ graceMin: Number(e.target.value) })} className={inputCls} />
@@ -466,7 +505,7 @@ function WorkingHoursCard({ userId, onChanged }: { userId: string; onChanged: ()
             <Badge tone={info.override ? 'primary' : 'neutral'}>{info.override ? 'Personal' : 'Department/company'}</Badge>
           </div>
           <p className="mt-0.5 text-body-sm text-ink-muted">
-            {eff.startTime}–{eff.endTime} · required {formatMinutes(eff.requiredMinutes)} · {eff.graceMin}m grace · BRB {eff.brbAllowanceMin}m · break {eff.breakAllowanceMin}m
+            {eff.startTime}–{eff.endTime}{eff.dayTimes && Object.keys(eff.dayTimes).length > 0 ? ' (varies by day)' : ''} · required {formatMinutes(eff.requiredMinutes)} · {eff.graceMin}m grace · BRB {eff.brbAllowanceMin}m · break {eff.breakAllowanceMin}m
           </p>
         </div>
         {!editing && (

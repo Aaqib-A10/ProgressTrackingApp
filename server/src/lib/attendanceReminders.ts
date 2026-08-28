@@ -2,7 +2,7 @@ import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
 import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
-import { shiftDayString } from './shiftDay'
+import { shiftDayString, timesForWeekday, type DayTimes } from './shiftDay'
 import { sendAttendanceReminderEmail } from './mail'
 
 /**
@@ -21,6 +21,7 @@ export type ReminderKind = 'CHECK_IN' | 'CHECK_OUT'
 export interface ReminderShift {
   startTime: string // "HH:mm"
   endTime: string
+  dayTimes?: DayTimes // per-weekday start/end overrides
   graceMin: number
   workingDays: number[] // 0=Sun … 6=Sat
   timeZone: string | null
@@ -51,8 +52,9 @@ export function reminderDue(shift: ReminderShift, now: Date, state: ReminderStat
   const weekday = zoned.weekday % 7
   if (!shift.workingDays.includes(weekday)) return null
 
-  const start = toMin(shift.startTime)
-  const end = toMin(shift.endTime)
+  const t = timesForWeekday(shift, shift.dayTimes, weekday) // per-day start/end
+  const start = toMin(t.startTime)
+  const end = toMin(t.endTime)
   const overnight = end <= start
   const endAxis = overnight ? end + 1440 : end
   let nowMin = zoned.hour * 60 + zoned.minute
@@ -69,13 +71,13 @@ export function reminderDue(shift: ReminderShift, now: Date, state: ReminderStat
   return null
 }
 
-export type ShiftRow = { userId: string | null; departmentId: string | null; startTime: string; endTime: string; graceMin: number; workingDays: number[]; timeZone: string | null }
+export type ShiftRow = { userId: string | null; departmentId: string | null; startTime: string; endTime: string; dayTimes?: unknown; graceMin: number; workingDays: number[]; timeZone: string | null }
 export const DEFAULT_SHIFT: ReminderShift = { startTime: '09:00', endTime: '18:00', graceMin: 10, workingDays: [1, 2, 3, 4, 5], timeZone: null }
 
 /** Resolve a user's effective shift: personal override → department → company default. */
 export function pickShift(rows: ShiftRow[], userId: string, departmentId: string | null): ReminderShift {
   const row = rows.find((r) => r.userId === userId) ?? (departmentId ? rows.find((r) => r.departmentId === departmentId && r.userId === null) : undefined) ?? rows.find((r) => r.userId === null && r.departmentId === null)
-  return row ? { startTime: row.startTime, endTime: row.endTime, graceMin: row.graceMin, workingDays: row.workingDays, timeZone: row.timeZone } : DEFAULT_SHIFT
+  return row ? { startTime: row.startTime, endTime: row.endTime, dayTimes: (row.dayTimes as DayTimes) ?? null, graceMin: row.graceMin, workingDays: row.workingDays, timeZone: row.timeZone } : DEFAULT_SHIFT
 }
 
 const shiftLabel = (s: ReminderShift) => `${s.startTime}–${s.endTime}`
@@ -84,7 +86,7 @@ const shiftLabel = (s: ReminderShift) => `${s.startTime}–${s.endTime}`
 export async function runAttendanceReminderTick(now: Date = new Date()): Promise<{ checkIn: number; checkOut: number }> {
   const [users, shifts] = await Promise.all([
     prisma.user.findMany({ where: { isActive: true, status: 'ACTIVE' }, select: { id: true, name: true, email: true, departmentId: true } }),
-    prisma.attendanceShift.findMany({ select: { userId: true, departmentId: true, startTime: true, endTime: true, graceMin: true, workingDays: true, timeZone: true } }),
+    prisma.attendanceShift.findMany({ select: { userId: true, departmentId: true, startTime: true, endTime: true, dayTimes: true, graceMin: true, workingDays: true, timeZone: true } }),
   ])
 
   // Each employee's records are keyed by the date of their current shift instance

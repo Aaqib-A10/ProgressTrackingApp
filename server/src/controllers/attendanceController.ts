@@ -1,11 +1,11 @@
 import type { Response } from 'express'
 import { z } from 'zod'
 import { DateTime } from 'luxon'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
-import { isOvernight, shiftMinutes, shiftDayString } from '../lib/shiftDay'
+import { isOvernight, shiftMinutes, shiftDayString, timesForWeekday, type DayTimes } from '../lib/shiftDay'
 import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
 import type { Role, DepartmentType } from '@prisma/client'
 
@@ -13,6 +13,7 @@ type DayWithBreaks = Prisma.AttendanceDayGetPayload<{ include: { breaks: true } 
 type Shift = {
   startTime: string
   endTime: string
+  dayTimes: DayTimes // per-weekday start/end overrides (null = same hours every day)
   graceMin: number
   requiredMinutes: number
   brbAllowanceMin: number
@@ -25,6 +26,7 @@ type ShiftRow = {
   departmentId: string | null
   startTime: string
   endTime: string
+  dayTimes: unknown
   graceMin: number
   requiredMinutes: number
   brbAllowanceMin: number
@@ -33,7 +35,22 @@ type ShiftRow = {
   timeZone: string | null
 }
 
-const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', graceMin: 10, requiredMinutes: 480, brbAllowanceMin: 20, breakAllowanceMin: 65, workingDays: [1, 2, 3, 4, 5], timeZone: null }
+const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', dayTimes: null, graceMin: 10, requiredMinutes: 480, brbAllowanceMin: 20, breakAllowanceMin: 65, workingDays: [1, 2, 3, 4, 5], timeZone: null }
+
+/** Coerce a Prisma Json value into the DayTimes map (or null). */
+function asDayTimes(v: unknown): DayTimes {
+  return v && typeof v === 'object' ? (v as Record<string, { startTime: string; endTime: string }>) : null
+}
+
+/** The base shift with startTime/endTime swapped to the given date's per-day override. */
+function shiftForDate(shift: Shift, dateStr: string): Shift {
+  const t = timesForWeekday(shift, shift.dayTimes, weekdayOfDate(dateStr))
+  return t.startTime === shift.startTime && t.endTime === shift.endTime ? shift : { ...shift, startTime: t.startTime, endTime: t.endTime }
+}
+/** Resolve the shift for the attendance day an instant belongs to (per-day aware). */
+function shiftForInstant(shift: Shift, instant: Date): Shift {
+  return shift.dayTimes ? shiftForDate(shift, shiftDayString(shift, instant)) : shift
+}
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -41,7 +58,7 @@ function loadUser(id: string) {
 
 const toShift = (s: ShiftRow | undefined): Shift =>
   s
-    ? { startTime: s.startTime, endTime: s.endTime, graceMin: s.graceMin, requiredMinutes: s.requiredMinutes, brbAllowanceMin: s.brbAllowanceMin, breakAllowanceMin: s.breakAllowanceMin, workingDays: s.workingDays, timeZone: s.timeZone }
+    ? { startTime: s.startTime, endTime: s.endTime, dayTimes: asDayTimes(s.dayTimes), graceMin: s.graceMin, requiredMinutes: s.requiredMinutes, brbAllowanceMin: s.brbAllowanceMin, breakAllowanceMin: s.breakAllowanceMin, workingDays: s.workingDays, timeZone: s.timeZone }
     : DEFAULT_SHIFT
 
 /** Pick the effective shift for an employee: user override → department → company. */
@@ -92,11 +109,13 @@ function shiftAxisMinutes(d: Date, shift: Shift): number {
 }
 
 function isLate(checkInAt: Date, shift: Shift): boolean {
-  return shiftAxisMinutes(checkInAt, shift) > shiftMinutes(shift.startTime) + shift.graceMin
+  const eff = shiftForInstant(shift, checkInAt) // per-day start/end for the day this check-in belongs to
+  return shiftAxisMinutes(checkInAt, eff) > shiftMinutes(eff.startTime) + eff.graceMin
 }
 
 function isEarlyLeave(checkOutAt: Date, shift: Shift): boolean {
-  return shiftAxisMinutes(checkOutAt, shift) < shiftEndMinutes(shift)
+  const eff = shiftForInstant(shift, checkOutAt)
+  return shiftAxisMinutes(checkOutAt, eff) < shiftEndMinutes(eff)
 }
 
 /** Total break minutes; an open break is counted up to `now`. */
@@ -864,9 +883,11 @@ export async function getShift(req: AuthedRequest, res: Response): Promise<void>
   })
 }
 
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm')
 const shiftSchema = z.object({
-  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
-  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
+  startTime: HHMM,
+  endTime: HHMM,
+  dayTimes: z.record(z.string().regex(/^[0-6]$/), z.object({ startTime: HHMM, endTime: HHMM })).nullable().optional(),
   graceMin: z.number().int().min(0).max(120),
   requiredMinutes: z.number().int().min(0).max(1440),
   brbAllowanceMin: z.number().int().min(0).max(120),
@@ -879,9 +900,16 @@ const shiftSchema = z.object({
     .optional(),
 })
 
+/** Prisma write data from validated shift input — an empty/absent dayTimes stores SQL NULL. */
+function shiftWriteData(d: z.infer<typeof shiftSchema>) {
+  const hasDays = d.dayTimes && Object.keys(d.dayTimes).length > 0
+  return { ...d, dayTimes: hasDays ? (d.dayTimes as Prisma.InputJsonValue) : Prisma.DbNull }
+}
+
 const outShift = (s: ShiftRow): Shift => ({
   startTime: s.startTime,
   endTime: s.endTime,
+  dayTimes: asDayTimes(s.dayTimes),
   graceMin: s.graceMin,
   requiredMinutes: s.requiredMinutes,
   brbAllowanceMin: s.brbAllowanceMin,
@@ -905,9 +933,10 @@ export async function putShift(req: AuthedRequest, res: Response): Promise<void>
   const { departmentId } = await editableShiftScope(me)
   // Null-department can't use upsert on a unique-nullable key — find-then-write.
   const existing = await prisma.attendanceShift.findFirst({ where: { departmentId, userId: null } })
+  const data = shiftWriteData(parsed.data)
   const shift = existing
-    ? await prisma.attendanceShift.update({ where: { id: existing.id }, data: parsed.data })
-    : await prisma.attendanceShift.create({ data: { departmentId, ...parsed.data } })
+    ? await prisma.attendanceShift.update({ where: { id: existing.id }, data })
+    : await prisma.attendanceShift.create({ data: { departmentId, ...data } })
   res.json({ shift: outShift(shift) })
 }
 
@@ -961,8 +990,8 @@ export async function putUserShift(req: AuthedRequest, res: Response): Promise<v
   }
   const existing = await prisma.attendanceShift.findFirst({ where: { userId } })
   const shift = existing
-    ? await prisma.attendanceShift.update({ where: { id: existing.id }, data: parsed.data })
-    : await prisma.attendanceShift.create({ data: { userId, ...parsed.data } })
+    ? await prisma.attendanceShift.update({ where: { id: existing.id }, data: shiftWriteData(parsed.data) })
+    : await prisma.attendanceShift.create({ data: { userId, ...shiftWriteData(parsed.data) } })
   res.json({ override: outShift(shift) })
 }
 
@@ -996,7 +1025,8 @@ const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull, n
  * post-midnight portion (before the shift start) belongs to the NEXT calendar
  * day, so it is rolled forward — e.g. a 04:00 check-out on a 19:00–04:00 shift.
  */
-function instantFrom(dateStr: string, hhmmStr: string, shift: Shift): Date {
+function instantFrom(dateStr: string, hhmmStr: string, baseShift: Shift): Date {
+  const shift = baseShift.dayTimes ? shiftForDate(baseShift, dateStr) : baseShift
   const zone = shift.timeZone || COMPANY_TZ
   let dt = DateTime.fromISO(`${dateStr}T${hhmmStr}`, { zone })
   if (isOvernight(shift) && shiftMinutes(hhmmStr) < shiftMinutes(shift.startTime)) {

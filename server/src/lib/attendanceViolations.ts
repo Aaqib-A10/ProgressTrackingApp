@@ -2,7 +2,7 @@ import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
 import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
-import { shiftDayString } from './shiftDay'
+import { shiftDayString, timesForWeekday, type DayTimes } from './shiftDay'
 import { notifyAttendance } from './notify'
 
 /**
@@ -21,6 +21,7 @@ import { notifyAttendance } from './notify'
 export interface ViolationShift {
   startTime: string
   endTime: string
+  dayTimes?: DayTimes // per-weekday start/end overrides
   graceMin: number
   brbAllowanceMin: number
   breakAllowanceMin: number
@@ -57,8 +58,9 @@ export function lateSigninDue(shift: ViolationShift, now: Date, checkInAt: Date 
   const zoned = DateTime.fromJSDate(now).setZone(tz)
   const weekday = zoned.weekday % 7 // Luxon 1=Mon..7=Sun → 0=Sun..6=Sat
   if (!shift.workingDays.includes(weekday)) return false
-  const start = toMin(shift.startTime)
-  const end = toMin(shift.endTime)
+  const t = timesForWeekday(shift, shift.dayTimes, weekday) // per-day start/end
+  const start = toMin(t.startTime)
+  const end = toMin(t.endTime)
   const overnight = end <= start
   const endAxis = overnight ? end + 1440 : end
   let nowMin = zoned.hour * 60 + zoned.minute
@@ -81,6 +83,7 @@ type ShiftRow = {
   departmentId: string | null
   startTime: string
   endTime: string
+  dayTimes?: unknown
   graceMin: number
   brbAllowanceMin: number
   breakAllowanceMin: number
@@ -95,7 +98,7 @@ function pickShift(rows: ShiftRow[], userId: string, departmentId: string | null
     (departmentId ? rows.find((r) => r.departmentId === departmentId && r.userId === null) : undefined) ??
     rows.find((r) => r.userId === null && r.departmentId === null)
   return row
-    ? { startTime: row.startTime, endTime: row.endTime, graceMin: row.graceMin, brbAllowanceMin: row.brbAllowanceMin, breakAllowanceMin: row.breakAllowanceMin, workingDays: row.workingDays, timeZone: row.timeZone }
+    ? { startTime: row.startTime, endTime: row.endTime, dayTimes: (row.dayTimes as DayTimes) ?? null, graceMin: row.graceMin, brbAllowanceMin: row.brbAllowanceMin, breakAllowanceMin: row.breakAllowanceMin, workingDays: row.workingDays, timeZone: row.timeZone }
     : DEFAULT_SHIFT
 }
 
@@ -105,7 +108,7 @@ const fmt = (m: number) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, 
 export async function runAttendanceViolationTick(now: Date = new Date()): Promise<{ brb: number; break: number; late: number; limit: number }> {
   const [users, shifts, tls] = await Promise.all([
     prisma.user.findMany({ where: { isActive: true, status: 'ACTIVE' }, select: { id: true, name: true, departmentId: true } }),
-    prisma.attendanceShift.findMany({ select: { userId: true, departmentId: true, startTime: true, endTime: true, graceMin: true, brbAllowanceMin: true, breakAllowanceMin: true, workingDays: true, timeZone: true } }),
+    prisma.attendanceShift.findMany({ select: { userId: true, departmentId: true, startTime: true, endTime: true, dayTimes: true, graceMin: true, brbAllowanceMin: true, breakAllowanceMin: true, workingDays: true, timeZone: true } }),
     prisma.user.findMany({ where: { role: 'TEAM_LEAD', isActive: true, status: 'ACTIVE' }, select: { id: true, departmentId: true } }),
   ])
   const tlByDept = new Map<string, string[]>()
