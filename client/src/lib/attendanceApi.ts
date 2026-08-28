@@ -10,9 +10,13 @@ export interface Shift {
   endTime: string
   graceMin: number
   requiredMinutes: number
+  brbAllowanceMin: number
+  breakAllowanceMin: number
   workingDays: number[] // 0=Sun … 6=Sat
   timeZone: string | null // IANA zone; null = company timezone
 }
+
+export type BreakType = 'BREAK' | 'BRB'
 
 export interface TodayState {
   state: ClockState
@@ -21,8 +25,13 @@ export interface TodayState {
   checkOutAt: string | null
   checkOutLabel: string | null
   openBreakStartAt: string | null
+  openBreakType: BreakType | null
   workedMin: number | null
   breakMin: number
+  brbMin: number
+  regularBreakMin: number
+  brbAllowanceMin: number
+  breakAllowanceMin: number
   late: boolean
   earlyLeave: boolean
   requiredMin: number
@@ -92,6 +101,14 @@ export interface TeamAttendanceRow {
   hasOverride: boolean
   todayState: ClockState
   todayCheckIn: string | null
+  brbMinToday: number
+  regBreakToday: number
+  brbAllowanceMin: number
+  breakAllowanceMin: number
+  brbOverToday: boolean
+  breakOverToday: boolean
+  lateThisMonth: number
+  graceLimitExceeded: boolean
 }
 
 export interface TeamBoardEntry {
@@ -147,7 +164,7 @@ export const correctAttendanceDay = (userId: string, date: string, input: { chec
 export const getAttendanceMe = () => api.get<MeResponse>('/attendance/me')
 export const clockCheckIn = () => api.post<MeResponse>('/attendance/check-in')
 export const clockCheckOut = () => api.post<MeResponse>('/attendance/check-out')
-export const clockStartBreak = () => api.post<MeResponse>('/attendance/break/start')
+export const clockStartBreak = (type: BreakType = 'BREAK') => api.post<MeResponse>('/attendance/break/start', { type })
 export const clockEndBreak = () => api.post<MeResponse>('/attendance/break/end')
 
 export function getAttendanceHistory(range: RangeKey, custom?: CustomRange | null, userId?: string) {

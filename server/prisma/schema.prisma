@@ -207,6 +207,7 @@ model User {
   meetingNotes        MeetingNote[]        @relation("MeetingNoteAuthor")
   bids                Bid[]                @relation("BidAgent")
   attendanceReminders AttendanceReminder[]
+  attendanceViolations AttendanceViolation[]
 
   brandSocialEntries    BrandSocialMonthly[] @relation("BrandSocialEnteredBy")
   blogPosts             BlogPost[]           @relation("BlogAuthor")
@@ -541,11 +542,28 @@ model AttendanceReminder {
   @@index([date])
 }
 
+/// One row per (user, day, kind) violation — the dedupe ledger for break/grace
+/// notifications AND the occurrence store used to count late sign-ins per month.
+/// LATE_LIMIT rows use date = first-of-month (fire once per month).
+model AttendanceViolation {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime      @db.Date
+  kind      ViolationKind
+  minutes   Int? // the offending duration (break/BRB minutes), or the count for LATE_LIMIT
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, date, kind])
+  @@index([userId, date])
+}
+
 /// A single break within an attendance day. `endAt` null = break still open.
 model BreakEntry {
   id        String        @id @default(cuid())
   dayId     String
   day       AttendanceDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  type      BreakType     @default(BREAK)
   startAt   DateTime
   endAt     DateTime?
   createdAt DateTime      @default(now())
@@ -567,6 +585,8 @@ model AttendanceShift {
   endTime         String // "HH:mm", e.g. "18:00". If <= startTime the shift crosses midnight (overnight).
   graceMin        Int         @default(10)
   requiredMinutes Int         @default(480) // full-shift target; worked >= this = shift completed
+  brbAllowanceMin Int         @default(20) // total BRB minutes allowed per day
+  breakAllowanceMin Int       @default(65) // total regular break minutes allowed per day (1h05m)
   workingDays     Int[]       @default([1, 2, 3, 4, 5]) // 0=Sun … 6=Sat; which weekdays are worked
   timeZone        String? // IANA tz (e.g. "America/New_York"); null = company timezone
   updatedAt       DateTime    @updatedAt
@@ -819,6 +839,22 @@ model SentMonthlyReport {
 
 enum NotificationType {
   MENTION
+  GRACE_EXCEEDED
+  BREAK_OVERRUN
+  BRB_OVERRUN
+  GRACE_LIMIT
+}
+
+enum BreakType {
+  BREAK // regular break / lunch (configurable allowance, default 65m)
+  BRB // Be Right Back — short breaks (configurable allowance, default 20m)
+}
+
+enum ViolationKind {
+  LATE_SIGNIN // exceeded sign-in grace on a working day
+  BREAK_OVERRUN // regular break over its allowance
+  BRB_OVERRUN // BRB total over its allowance
+  LATE_LIMIT // >3 late sign-ins in a calendar month (date = first-of-month)
 }
 
 /// A delivered, per-recipient notification (e.g. an @mention on a board card).

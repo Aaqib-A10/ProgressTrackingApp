@@ -15,6 +15,8 @@ type Shift = {
   endTime: string
   graceMin: number
   requiredMinutes: number
+  brbAllowanceMin: number
+  breakAllowanceMin: number
   workingDays: number[] // 0=Sun … 6=Sat
   timeZone: string | null // IANA zone; null = company timezone
 }
@@ -25,11 +27,13 @@ type ShiftRow = {
   endTime: string
   graceMin: number
   requiredMinutes: number
+  brbAllowanceMin: number
+  breakAllowanceMin: number
   workingDays: number[]
   timeZone: string | null
 }
 
-const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', graceMin: 10, requiredMinutes: 480, workingDays: [1, 2, 3, 4, 5], timeZone: null }
+const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', graceMin: 10, requiredMinutes: 480, brbAllowanceMin: 20, breakAllowanceMin: 65, workingDays: [1, 2, 3, 4, 5], timeZone: null }
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -37,7 +41,7 @@ function loadUser(id: string) {
 
 const toShift = (s: ShiftRow | undefined): Shift =>
   s
-    ? { startTime: s.startTime, endTime: s.endTime, graceMin: s.graceMin, requiredMinutes: s.requiredMinutes, workingDays: s.workingDays, timeZone: s.timeZone }
+    ? { startTime: s.startTime, endTime: s.endTime, graceMin: s.graceMin, requiredMinutes: s.requiredMinutes, brbAllowanceMin: s.brbAllowanceMin, breakAllowanceMin: s.breakAllowanceMin, workingDays: s.workingDays, timeZone: s.timeZone }
     : DEFAULT_SHIFT
 
 /** Pick the effective shift for an employee: user override → department → company. */
@@ -105,6 +109,17 @@ function breakMinutes(day: DayWithBreaks, now: Date): number {
   return Math.max(0, Math.round(ms / 60000))
 }
 
+/** Break minutes for a single break type (BREAK or BRB); open break counted to `now`. */
+function breakMinutesOfType(day: DayWithBreaks, type: 'BREAK' | 'BRB', now: Date): number {
+  let ms = 0
+  for (const b of day.breaks) {
+    if (b.type !== type) continue
+    const end = b.endAt ?? now
+    ms += end.getTime() - b.startAt.getTime()
+  }
+  return Math.max(0, Math.round(ms / 60000))
+}
+
 /** Longest an open (not-checked-out) day can still count live, in hours. Beyond
  *  this we treat it as a forgotten check-out. Wide enough to cover an overnight
  *  shift plus breaks, but well short of a full extra day. */
@@ -148,8 +163,13 @@ function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
     checkOutAt: day?.checkOutAt?.toISOString() ?? null,
     checkOutLabel: day?.checkOutAt ? clockLabel(day.checkOutAt, shift) : null,
     openBreakStartAt: openBreak?.startAt.toISOString() ?? null,
+    openBreakType: openBreak?.type ?? null,
     workedMin: worked,
     breakMin: day ? breakMinutes(day, now) : 0,
+    brbMin: day ? breakMinutesOfType(day, 'BRB', now) : 0,
+    regularBreakMin: day ? breakMinutesOfType(day, 'BREAK', now) : 0,
+    brbAllowanceMin: shift.brbAllowanceMin,
+    breakAllowanceMin: shift.breakAllowanceMin,
     late: day?.checkInAt ? isLate(day.checkInAt, shift) : false,
     earlyLeave: day?.checkOutAt ? isEarlyLeave(day.checkOutAt, shift) : false,
     requiredMin: shift.requiredMinutes,
@@ -367,7 +387,8 @@ export async function startBreak(req: AuthedRequest, res: Response): Promise<voi
     res.status(409).json({ error: 'A break is already running.' })
     return
   }
-  await prisma.breakEntry.create({ data: { dayId: existing.id, startAt: now } })
+  const type = req.body?.type === 'BRB' ? 'BRB' : 'BREAK'
+  await prisma.breakEntry.create({ data: { dayId: existing.id, startAt: now, type } })
   res.json(await buildMePayload(me))
 }
 
@@ -752,6 +773,15 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     if (dateStringFromDb(d.date) === todayDateByUser.get(d.userId)) todayByUser.set(d.userId, d)
   }
 
+  // Late sign-ins this calendar month (company tz) for the 3-per-month limit flag.
+  const monthStartStr = DateTime.fromJSDate(now).setZone(COMPANY_TZ).startOf('month').toISODate()!
+  const lateRows = await prisma.attendanceViolation.findMany({
+    where: { userId: { in: memberIds }, kind: 'LATE_SIGNIN', date: { gte: dbDateFromString(monthStartStr) } },
+    select: { userId: true },
+  })
+  const lateCountByUser = new Map<string, number>()
+  for (const v of lateRows) lateCountByUser.set(v.userId, (lateCountByUser.get(v.userId) ?? 0) + 1)
+
   const rows = members.map((m) => {
     const shift = shiftByUser.get(m.id)!
     const md = daysByUser.get(m.id) ?? []
@@ -763,6 +793,9 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     const inMins = present.filter((d) => d.checkInAt).map((d) => localMinutes(d.checkInAt!, shift))
     const avgCheckIn = inMins.length ? minToHHmm(Math.round(inMins.reduce((s, v) => s + v, 0) / inMins.length)) : null
     const today = todayByUser.get(m.id) ?? null
+    const brbMinToday = today ? breakMinutesOfType(today, 'BRB', now) : 0
+    const regBreakToday = today ? breakMinutesOfType(today, 'BREAK', now) : 0
+    const lateThisMonth = lateCountByUser.get(m.id) ?? 0
     return {
       userId: m.id,
       name: m.name,
@@ -778,6 +811,14 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       hasOverride: shifts.some((s) => s.userId === m.id),
       todayState: liveState(today),
       todayCheckIn: today?.checkInAt ? clockLabel(today.checkInAt, shift) : null,
+      brbMinToday,
+      regBreakToday,
+      brbAllowanceMin: shift.brbAllowanceMin,
+      breakAllowanceMin: shift.breakAllowanceMin,
+      brbOverToday: brbMinToday > shift.brbAllowanceMin,
+      breakOverToday: regBreakToday > shift.breakAllowanceMin,
+      lateThisMonth,
+      graceLimitExceeded: lateThisMonth > 3,
     }
   })
 
@@ -828,6 +869,8 @@ const shiftSchema = z.object({
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
   graceMin: z.number().int().min(0).max(120),
   requiredMinutes: z.number().int().min(0).max(1440),
+  brbAllowanceMin: z.number().int().min(0).max(120),
+  breakAllowanceMin: z.number().int().min(0).max(600),
   workingDays: z.array(z.number().int().min(0).max(6)).min(1, 'Pick at least one working day').max(7),
   timeZone: z
     .string()
@@ -841,6 +884,8 @@ const outShift = (s: ShiftRow): Shift => ({
   endTime: s.endTime,
   graceMin: s.graceMin,
   requiredMinutes: s.requiredMinutes,
+  brbAllowanceMin: s.brbAllowanceMin,
+  breakAllowanceMin: s.breakAllowanceMin,
   workingDays: s.workingDays,
   timeZone: s.timeZone,
 })

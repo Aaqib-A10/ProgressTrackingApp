@@ -106,9 +106,16 @@ export default function TeamAttendance() {
       header: 'Member',
       render: (r) => (
         <div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium text-ink">{r.name}</span>
             {r.hasOverride && <Badge tone="primary">Custom hours</Badge>}
+            {r.graceLimitExceeded ? (
+              <Badge tone="danger">Grace limit · {r.lateThisMonth}</Badge>
+            ) : r.lateThisMonth > 0 ? (
+              <Badge tone="warning">{r.lateThisMonth} late (mo)</Badge>
+            ) : null}
+            {r.breakOverToday && <Badge tone="danger">Break over</Badge>}
+            {r.brbOverToday && <Badge tone="danger">BRB over</Badge>}
           </div>
           {data?.scope === 'COMPANY' && !groupByDept && <div className="text-body-sm text-ink-muted">{r.department}</div>}
         </div>
@@ -331,6 +338,14 @@ function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) =
           <input type="number" min={0} max={24} step={0.5} value={minToHours(value.requiredMinutes)} onChange={(e) => set({ requiredMinutes: hoursToMin(e.target.value) })} className={inputCls} />
         </Field>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="BRB allowance (minutes/day)">
+          <input type="number" min={0} max={120} value={value.brbAllowanceMin} onChange={(e) => set({ brbAllowanceMin: Number(e.target.value) })} className={inputCls} />
+        </Field>
+        <Field label="Break allowance (minutes/day)">
+          <input type="number" min={0} max={600} value={value.breakAllowanceMin} onChange={(e) => set({ breakAllowanceMin: Number(e.target.value) })} className={inputCls} />
+        </Field>
+      </div>
       <Field label="Working days">
         <div className="flex flex-wrap gap-1.5">
           {WEEKDAYS.map((d) => {
@@ -451,7 +466,7 @@ function WorkingHoursCard({ userId, onChanged }: { userId: string; onChanged: ()
             <Badge tone={info.override ? 'primary' : 'neutral'}>{info.override ? 'Personal' : 'Department/company'}</Badge>
           </div>
           <p className="mt-0.5 text-body-sm text-ink-muted">
-            {eff.startTime}–{eff.endTime} · required {formatMinutes(eff.requiredMinutes)} · {eff.graceMin}m grace
+            {eff.startTime}–{eff.endTime} · required {formatMinutes(eff.requiredMinutes)} · {eff.graceMin}m grace · BRB {eff.brbAllowanceMin}m · break {eff.breakAllowanceMin}m
           </p>
         </div>
         {!editing && (

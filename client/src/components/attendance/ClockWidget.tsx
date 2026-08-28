@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight, House, TriangleAlert } from 'lucide-react'
+import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight, House, TriangleAlert, Timer } from 'lucide-react'
 import { useToast } from '../ui/Toast'
 import {
   getAttendanceMe,
@@ -156,6 +156,16 @@ export function ClockWidget() {
               <Stat label="In at" value={today.checkInLabel ?? '—'} />
             </div>
             {today.state !== 'NOT_IN' && (
+              <div className="mt-1.5 flex justify-center gap-3 text-[11px]">
+                <span className={today.brbMin > today.brbAllowanceMin ? 'font-semibold text-danger' : 'text-ink-muted'}>
+                  BRB {today.brbMin}/{today.brbAllowanceMin}m
+                </span>
+                <span className={today.regularBreakMin > today.breakAllowanceMin ? 'font-semibold text-danger' : 'text-ink-muted'}>
+                  Break {today.regularBreakMin}/{today.breakAllowanceMin}m
+                </span>
+              </div>
+            )}
+            {today.state !== 'NOT_IN' && (
               <div className="mt-2 space-y-1">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                   <div
@@ -205,13 +215,14 @@ export function ClockWidget() {
                 )}
                 {today.state === 'IN' && (
                   <>
-                    <Action icon={<Coffee size={16} />} label="Start break" onClick={() => run(clockStartBreak, 'Break started.')} disabled={busy} />
+                    <Action icon={<Coffee size={16} />} label="Start break" onClick={() => run(() => clockStartBreak('BREAK'), 'Break started.')} disabled={busy} />
+                    <Action icon={<Timer size={16} />} label="BRB" onClick={() => run(() => clockStartBreak('BRB'), 'BRB started.')} disabled={busy} />
                     <Action icon={<LogOut size={16} />} label="Check out" onClick={() => setConfirmOut(true)} disabled={busy} tone="danger" />
                   </>
                 )}
                 {today.state === 'ON_BREAK' && (
                   <>
-                    <Action icon={<Play size={16} />} label="End break" onClick={() => run(clockEndBreak, 'Back to work.')} disabled={busy} tone="primary" />
+                    <Action icon={<Play size={16} />} label={today.openBreakType === 'BRB' ? 'End BRB' : 'End break'} onClick={() => run(clockEndBreak, 'Back to work.')} disabled={busy} tone="primary" />
                     <Action icon={<LogOut size={16} />} label="Check out" onClick={() => setConfirmOut(true)} disabled={busy} tone="danger" />
                   </>
                 )}
