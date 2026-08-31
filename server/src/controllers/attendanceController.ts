@@ -7,6 +7,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { isOvernight, shiftMinutes, shiftDayString, timesForWeekday, type DayTimes } from '../lib/shiftDay'
 import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
+import { parseUserAgent } from '../lib/userAgent'
 import type { Role, DepartmentType } from '@prisma/client'
 
 type DayWithBreaks = Prisma.AttendanceDayGetPayload<{ include: { breaks: true } }>
@@ -294,6 +295,39 @@ async function officeNetworkBlock(ip: string, role: Role, isRemote: boolean): Pr
 }
 
 /**
+ * Laptop-only gate. Blocks phones + tablets; Super Admins and unparseable UAs pass.
+ * Returns null when allowed, or an error message when blocked.
+ */
+function attendanceDeviceBlock(req: AuthedRequest, role: Role): string | null {
+  if (role === 'SUPER_ADMIN') return null
+  const { device } = parseUserAgent(req.headers['user-agent'] as string | undefined)
+  // Unknown device (null) is allowed on purpose so a desktop browser we fail to
+  // parse is never wrongly blocked; only explicit Mobile/Tablet are refused.
+  if (device === 'Mobile' || device === 'Tablet') {
+    return 'Attendance can only be recorded from a laptop or desktop — not a phone or tablet.'
+  }
+  return null
+}
+
+/**
+ * Combined attendance gate: laptop-only device check (always) + office-network IP
+ * check (skipped on WFH days and for Super Admin / permanently-remote users).
+ * Returns null when allowed, or an error message when blocked.
+ */
+async function attendanceGuard(req: AuthedRequest, me: Awaited<ReturnType<typeof loadUser>>, isWfh: boolean): Promise<string | null> {
+  const dev = attendanceDeviceBlock(req, me.role)
+  if (dev) return dev
+  if (!isWfh) return officeNetworkBlock(getClientIp(req), me.role, me.attendanceRemote)
+  return null
+}
+
+/** Is the given user on a work-from-home day for the given (shift) date? */
+async function isWfhToday(userId: string, dateValue: Date): Promise<boolean> {
+  const leave = await prisma.leaveDay.findUnique({ where: { userId_date: { userId, date: dateValue } } })
+  return leave?.type === 'WFH'
+}
+
+/**
  * GET /api/attendance/ip-check — self-diagnostic for the office-network feature.
  * Any signed-in user can open this to see the IP the server resolves for them and
  * whether it would pass the current allowlist. Used to confirm the real office IP
@@ -304,6 +338,7 @@ export async function ipCheck(req: AuthedRequest, res: Response): Promise<void> 
   const nets = await prisma.officeNetwork.findMany({ where: { isActive: true }, select: { cidr: true } })
   const enforcementActive = nets.length > 0
   const wouldBeAllowed = !enforcementActive || isLoopback(ip) || ipAllowed(ip, nets.map((n) => n.cidr))
+  const { device } = parseUserAgent(req.headers['user-agent'] as string | undefined)
   res.json({
     resolvedIp: ip,
     cfConnectingIp: (req.headers['cf-connecting-ip'] as string) ?? null,
@@ -311,6 +346,9 @@ export async function ipCheck(req: AuthedRequest, res: Response): Promise<void> 
     remoteAddr: req.socket.remoteAddress ?? null,
     enforcementActive,
     wouldBeAllowed,
+    // Laptop-only device gate — phones + tablets are refused.
+    device,
+    deviceAllowed: device !== 'Mobile' && device !== 'Tablet',
   })
 }
 
@@ -333,14 +371,13 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
     return
   }
 
-  // Office-network gate — skipped on WFH days, where the person works off-site by design.
-  if (!isWfh) {
-    const blocked = await officeNetworkBlock(ip, me.role, me.attendanceRemote)
-    if (blocked) {
-      console.log(`[office-net] BLOCKED check-in — ${me.name} <${me.email}> resolvedIp=${ip}`)
-      res.status(403).json({ error: blocked })
-      return
-    }
+  // Device (laptop-only) + office-network gate. IP part skipped on WFH days,
+  // where the person works off-site by design.
+  const blocked = await attendanceGuard(req, me, isWfh)
+  if (blocked) {
+    console.log(`[attendance-gate] BLOCKED check-in — ${me.name} <${me.email}> resolvedIp=${ip} ua="${req.headers['user-agent'] ?? ''}"`)
+    res.status(403).json({ error: blocked })
+    return
   }
   const existing = await findToday(me.id, shift)
   if (existing?.checkInAt) {
@@ -364,16 +401,18 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
 export async function checkOut(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
   const now = new Date()
+  const shift = await resolveShift(me.id, me.departmentId)
 
-  const ip = getClientIp(req)
-  const blocked = await officeNetworkBlock(ip, me.role, me.attendanceRemote)
+  const dateValue = dbDateFromString(shiftDayString(shift, now))
+  const isWfh = await isWfhToday(me.id, dateValue)
+  const blocked = await attendanceGuard(req, me, isWfh)
   if (blocked) {
-    console.log(`[office-net] BLOCKED check-out — ${me.name} <${me.email}> resolvedIp=${ip}`)
+    console.log(`[attendance-gate] BLOCKED check-out — ${me.name} <${me.email}> resolvedIp=${getClientIp(req)} ua="${req.headers['user-agent'] ?? ''}"`)
     res.status(403).json({ error: blocked })
     return
   }
+  const ip = getClientIp(req)
 
-  const shift = await resolveShift(me.id, me.departmentId)
   const existing = await findToday(me.id, shift)
   if (!existing?.checkInAt) {
     res.status(409).json({ error: 'You are not checked in.' })
@@ -393,6 +432,15 @@ export async function startBreak(req: AuthedRequest, res: Response): Promise<voi
   const me = await loadUser(req.user!.id)
   const now = new Date()
   const shift = await resolveShift(me.id, me.departmentId)
+
+  const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
+  const blocked = await attendanceGuard(req, me, isWfh)
+  if (blocked) {
+    console.log(`[attendance-gate] BLOCKED break-start — ${me.name} <${me.email}> resolvedIp=${getClientIp(req)} ua="${req.headers['user-agent'] ?? ''}"`)
+    res.status(403).json({ error: blocked })
+    return
+  }
+
   const existing = await findToday(me.id, shift)
   if (!existing?.checkInAt) {
     res.status(409).json({ error: 'Check in before taking a break.' })
@@ -416,6 +464,15 @@ export async function endBreak(req: AuthedRequest, res: Response): Promise<void>
   const me = await loadUser(req.user!.id)
   const now = new Date()
   const shift = await resolveShift(me.id, me.departmentId)
+
+  const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
+  const blocked = await attendanceGuard(req, me, isWfh)
+  if (blocked) {
+    console.log(`[attendance-gate] BLOCKED break-end — ${me.name} <${me.email}> resolvedIp=${getClientIp(req)} ua="${req.headers['user-agent'] ?? ''}"`)
+    res.status(403).json({ error: blocked })
+    return
+  }
+
   const existing = await findToday(me.id, shift)
   const open = existing?.breaks.find((b) => !b.endAt)
   if (!open) {

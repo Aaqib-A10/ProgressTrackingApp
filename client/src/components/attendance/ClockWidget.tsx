@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight, House, TriangleAlert, Timer } from 'lucide-react'
+import { Clock, LogIn, LogOut, Coffee, Play, CheckCircle2, CalendarOff, ChevronRight, House, TriangleAlert, Timer, Laptop } from 'lucide-react'
 import { useToast } from '../ui/Toast'
+import { useAuth } from '../../lib/auth'
+import { isMobileOrTablet } from '../../lib/device'
 import {
   getAttendanceMe,
   clockCheckIn,
@@ -42,6 +44,9 @@ const STATE_META: Record<ClockState, { label: string; dot: string }> = {
 
 export function ClockWidget() {
   const { addToast } = useToast()
+  const { user } = useAuth()
+  // Laptop-only rule: phones/tablets can't record attendance (Super Admin exempt).
+  const deviceBlocked = isMobileOrTablet() && user?.role !== 'SUPER_ADMIN'
   const [me, setMe] = useState<MeResponse | null>(null)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -186,7 +191,12 @@ export function ClockWidget() {
           </div>
 
           <div className="space-y-1 p-2">
-            {confirmOut ? (
+            {deviceBlocked && today.state !== 'OUT' ? (
+              <div className="flex items-start gap-2 rounded-btn bg-warning/5 px-3 py-2.5 text-body-sm text-ink">
+                <Laptop size={16} className="mt-0.5 shrink-0 text-warning" />
+                <span>Attendance can only be recorded on a laptop or desktop — not a phone or tablet.</span>
+              </div>
+            ) : confirmOut ? (
               <div className="rounded-btn bg-danger/5 p-2">
                 <div className="flex items-start gap-2 px-1 py-1 text-body-sm text-ink">
                   <TriangleAlert size={16} className="mt-0.5 shrink-0 text-danger" />
