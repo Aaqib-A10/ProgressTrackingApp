@@ -41,10 +41,11 @@ function serialize(b: BidRow) {
     dueDate: b.dueDate.toISOString(),
     reminderSet: b.reminderSet,
     submissionType: b.submissionType,
-    priceQuoted: b.priceQuoted,
-    awardedPrice: b.awardedPrice,
+    // Decimal columns → plain numbers for the JSON API (Prisma.Decimal serializes as a string).
+    priceQuoted: b.priceQuoted?.toNumber() ?? null,
+    awardedPrice: b.awardedPrice?.toNumber() ?? null,
     bidBond: b.bidBond,
-    bidBondAmount: b.bidBondAmount,
+    bidBondAmount: b.bidBondAmount?.toNumber() ?? null,
     closedDate: b.closedDate ? b.closedDate.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
   }
@@ -79,7 +80,7 @@ export async function listBids(req: AuthedRequest, res: Response): Promise<void>
     submitted: bids.filter((b) => b.status === 'SUBMITTED').length,
     won: bids.filter((b) => b.status === 'WON').length,
     lost: bids.filter((b) => b.status === 'LOST').length,
-    wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice ?? 0), 0),
+    wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice?.toNumber() ?? 0), 0),
   }
   res.json({ bids: bids.map(serialize), summary, canManageTeam: isLead(me) })
 }
@@ -206,7 +207,7 @@ export async function updateBid(req: AuthedRequest, res: Response): Promise<void
   const v = parsed.data
   const nextStatus = v.status ?? existing.status
   // Awarded price is mandatory whenever the bid ends up Won.
-  const nextAwarded = v.awardedPrice !== undefined ? v.awardedPrice : existing.awardedPrice
+  const nextAwarded = v.awardedPrice !== undefined ? v.awardedPrice : (existing.awardedPrice?.toNumber() ?? null)
   if (nextStatus === 'WON' && (nextAwarded == null || nextAwarded <= 0)) {
     res.status(400).json({ error: 'Awarded price is required to mark a bid as Won' })
     return

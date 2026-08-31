@@ -140,7 +140,6 @@ model User {
   id           String     @id @default(cuid())
   email        String     @unique
   passwordHash String? // null for SSO-only accounts
-  tempPassword String? // last issued temp credential, visible to the Team Lead until the member changes their own password
   googleId     String?    @unique
   name         String
   role         Role       @default(MEMBER)
@@ -655,6 +654,10 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([entityType, entityId])
+  // The Activity Log viewer filters by createdAt (range) + optional userId and
+  // orders by createdAt desc; AuditLog is append-only and the largest table.
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 /// A sign-in event — who logged in, when, from where (IP) and on which device.
@@ -1519,10 +1522,10 @@ model Bid {
   dueDate        DateTime // date & time
   reminderSet    Boolean            @default(false)
   submissionType BidSubmissionType?
-  priceQuoted    Float?
-  awardedPrice   Float? // required when status = WON
+  priceQuoted    Decimal?           @db.Decimal(12, 2)
+  awardedPrice   Decimal?           @db.Decimal(12, 2) // required when status = WON
   bidBond        Boolean            @default(false) // whether a bid bond applies
-  bidBondAmount  Float? // optional bid bond value (only meaningful when bidBond)
+  bidBondAmount  Decimal?           @db.Decimal(12, 2) // optional bid bond value (only meaningful when bidBond)
   closedDate     DateTime? // date the deal was decided (WON/LOST) — drives financial revenue period + Deal Tracker date filter
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt

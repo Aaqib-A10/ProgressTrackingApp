@@ -101,7 +101,7 @@ export async function buildFinancialReport({ from, to }: { from: string; to: str
     }),
   ])
 
-  const itadRevenue = wonDeals.reduce((s, b) => s + (b.awardedPrice ?? 0), 0)
+  const itadRevenue = wonDeals.reduce((s, b) => s + (b.awardedPrice?.toNumber() ?? 0), 0)
   const nameFor = (t: DepartmentType) => FINANCIAL_TEAMS.find((x) => x.key === t)?.name ?? t
   // "Active" = linked to a live Metriq profile. No profile / disabled = former.
   const isActive = (s: { user: { isActive: boolean; status: string } | null }) =>

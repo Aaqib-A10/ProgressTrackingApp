@@ -50,7 +50,6 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
       status: u.status,
       isActive: u.isActive,
       attendanceRemote: u.attendanceRemote,
-      tempPassword: u.tempPassword ?? null,
     })),
   })
 }
@@ -261,7 +260,6 @@ export async function setUserDepartments(req: AuthedRequest, res: Response): Pro
       })),
       status: u.status,
       isActive: u.isActive,
-      tempPassword: u.tempPassword ?? null,
     },
   })
 }
@@ -331,7 +329,8 @@ export async function resetUserPassword(req: AuthedRequest, res: Response): Prom
     return
   }
   const tempPassword = parsed.data.password ?? randomBytes(6).toString('base64url')
-  await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(tempPassword), tempPassword, sessionsValidFrom: new Date() } })
+  // Show-once: the temp password is returned in this response only, never persisted.
+  await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(tempPassword), sessionsValidFrom: new Date() } })
   res.json({ tempPassword })
 }
 
@@ -362,7 +361,6 @@ export async function listTeamMembers(req: AuthedRequest, res: Response): Promis
       subDepartment: u.subDepartment?.slug ?? null,
       status: u.status,
       isActive: u.isActive,
-      tempPassword: u.tempPassword,
     })),
   })
 }
@@ -412,11 +410,11 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
   const user = existing
     ? await prisma.user.update({
         where: { id: existing.id },
-        data: { name: v.name, role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash, tempPassword, departmentId: me.departmentId, subDepartmentId },
+        data: { name: v.name, role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash, departmentId: me.departmentId, subDepartmentId },
         include: { subDepartment: { select: { slug: true } } },
       })
     : await prisma.user.create({
-        data: { name: v.name, email: v.email, role: 'MEMBER', status: 'ACTIVE', passwordHash, tempPassword, departmentId: me.departmentId, subDepartmentId },
+        data: { name: v.name, email: v.email, role: 'MEMBER', status: 'ACTIVE', passwordHash, departmentId: me.departmentId, subDepartmentId },
         include: { subDepartment: { select: { slug: true } } },
       })
   // Record (or refresh) their membership of the lead's department.
@@ -447,7 +445,6 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
       subDepartment: user.subDepartment?.slug ?? null,
       status: user.status,
       isActive: user.isActive,
-      tempPassword: user.tempPassword,
     },
     tempPassword,
   })
@@ -485,7 +482,7 @@ export async function resetTeamMemberPassword(req: AuthedRequest, res: Response)
   const tempPassword = parsed.data.password ?? randomBytes(6).toString('base64url')
   await prisma.user.update({
     where: { id: target.id },
-    data: { passwordHash: await hashPassword(tempPassword), tempPassword, sessionsValidFrom: new Date() },
+    data: { passwordHash: await hashPassword(tempPassword), sessionsValidFrom: new Date() },
   })
   res.json({ tempPassword })
 }

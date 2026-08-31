@@ -307,7 +307,7 @@ async function bidTotals(deptId: string, month: string) {
     if (b.status !== 'WON') continue
     const cur = byAgent.get(b.agent.id) ?? { name: b.agent.name, won: 0, wonValue: 0 }
     cur.won++
-    cur.wonValue += b.awardedPrice ?? 0
+    cur.wonValue += b.awardedPrice?.toNumber() ?? 0
     byAgent.set(b.agent.id, cur)
   }
   const totals: BidTotals = {
@@ -316,8 +316,8 @@ async function bidTotals(deptId: string, month: string) {
     submitted: count('SUBMITTED'),
     won,
     lost,
-    wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice ?? 0), 0),
-    quotedValue: bids.reduce((s, b) => s + (b.priceQuoted ?? 0), 0),
+    wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice?.toNumber() ?? 0), 0),
+    quotedValue: bids.reduce((s, b) => s + (b.priceQuoted?.toNumber() ?? 0), 0),
     winRate: rate(won, won + lost),
   }
   return { totals, byAgent }
