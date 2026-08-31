@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { hashPassword, signInviteToken } from '../lib/auth'
 import { sendInviteEmail } from '../lib/mail'
-import { dbDateFromString, dateStringFromDb } from '../lib/time'
+import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { isValidCidr } from '../lib/ip'
 
 function loadUser(id: string) {
@@ -852,6 +852,65 @@ async function requireSuperAdmin(req: AuthedRequest, res: Response): Promise<boo
     return false
   }
   return true
+}
+
+/** Resolve a createdAt timestamp window [gte, lte] from range query params (Activity Log). */
+function activityWindow(q: AuthedRequest['query']): { gte: Date; lte: Date } {
+  let rangeKey = (typeof q.range === 'string' ? q.range : 'month') as RangeKey
+  const start = q.start as string | undefined
+  const end = q.end as string | undefined
+  if (rangeKey === 'custom' && (!start || !end)) rangeKey = 'month'
+  const r = periodRange(rangeKey, { start, end })
+  return { gte: dbDateFromString(r.startDate), lte: new Date(dbDateFromString(r.endDate).getTime() + 86_400_000 - 1) }
+}
+
+/** GET /api/admin/login-events — sign-in history (Super Admin). */
+export async function listLoginEvents(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  const { gte, lte } = activityWindow(req.query)
+  const userId = typeof req.query.userId === 'string' && req.query.userId ? (req.query.userId as string) : undefined
+  const events = await prisma.loginEvent.findMany({
+    where: { createdAt: { gte, lte }, ...(userId ? { userId } : {}) },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+    include: { user: { select: { name: true } } },
+  })
+  res.json({
+    events: events.map((e) => ({
+      id: e.id,
+      userName: e.user?.name ?? '—',
+      kind: e.kind,
+      ip: e.ip,
+      browser: e.browser,
+      os: e.os,
+      device: e.device,
+      createdAt: e.createdAt.toISOString(),
+    })),
+  })
+}
+
+/** GET /api/admin/audit-log — data-change activity (Super Admin). First reader of AuditLog. */
+export async function listAuditLog(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  const { gte, lte } = activityWindow(req.query)
+  const userId = typeof req.query.userId === 'string' && req.query.userId ? (req.query.userId as string) : undefined
+  const entityType = typeof req.query.entityType === 'string' && req.query.entityType ? (req.query.entityType as string) : undefined
+  const entries = await prisma.auditLog.findMany({
+    where: { createdAt: { gte, lte }, ...(userId ? { userId } : {}), ...(entityType ? { entityType } : {}) },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+    include: { user: { select: { name: true } } },
+  })
+  res.json({
+    entries: entries.map((a) => ({
+      id: a.id,
+      userName: a.user?.name ?? 'system',
+      action: a.action,
+      entityType: a.entityType,
+      entityId: a.entityId,
+      createdAt: a.createdAt.toISOString(),
+    })),
+  })
 }
 
 export async function listOfficeNetworks(req: AuthedRequest, res: Response): Promise<void> {

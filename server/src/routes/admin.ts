@@ -7,6 +7,7 @@ import {
   listHolidays, createHoliday, deleteHoliday,
   listLeave, listLeaveMembers, createLeave, deleteLeave,
   listOfficeNetworks, createOfficeNetwork, updateOfficeNetwork, deleteOfficeNetwork,
+  listLoginEvents, listAuditLog,
 } from '../controllers/adminController'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
@@ -48,6 +49,10 @@ adminRouter.get('/leave', asyncHandler(listLeave))
 adminRouter.get('/leave/members', asyncHandler(listLeaveMembers))
 adminRouter.post('/leave', asyncHandler(createLeave))
 adminRouter.delete('/leave/:id', asyncHandler(deleteLeave))
+
+// Activity log — sign-ins + data-change audit (Super Admin)
+adminRouter.get('/login-events', asyncHandler(listLoginEvents))
+adminRouter.get('/audit-log', asyncHandler(listAuditLog))
 
 // Office networks — IP allowlist for attendance (Super Admin)
 adminRouter.get('/office-networks', asyncHandler(listOfficeNetworks))

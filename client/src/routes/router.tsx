@@ -70,6 +70,7 @@ const AdminTags = lazy(() => import('../pages/app/admin/AdminTags'))
 const AdminLeave = lazy(() => import('../pages/app/admin/AdminLeave'))
 const AdminNetworks = lazy(() => import('../pages/app/admin/AdminNetworks'))
 const FinancialReports = lazy(() => import('../pages/app/admin/FinancialReports'))
+const AdminActivity = lazy(() => import('../pages/app/admin/AdminActivity'))
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
 export const router = createBrowserRouter([
@@ -174,6 +175,7 @@ export const router = createBrowserRouter([
       { path: 'admin/leave', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminLeave /></RequireRole> },
       { path: 'admin/networks', element: <RequireRole roles={['SUPER_ADMIN']}><AdminNetworks /></RequireRole> },
       { path: 'admin/financials', element: <RequireRole roles={['SUPER_ADMIN']}><FinancialReports /></RequireRole> },
+      { path: 'admin/activity', element: <RequireRole roles={['SUPER_ADMIN']}><AdminActivity /></RequireRole> },
     ],
   },
 

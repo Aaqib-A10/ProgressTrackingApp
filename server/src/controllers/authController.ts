@@ -10,6 +10,19 @@ import {
   verifyResetToken,
 } from '../lib/auth'
 import type { AuthedRequest } from '../middleware/auth'
+import { getClientIp } from '../lib/ip'
+import { parseUserAgent } from '../lib/userAgent'
+
+/** Record a sign-in for the Activity Log. Best-effort — never blocks auth. */
+async function logSignIn(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP'): Promise<void> {
+  try {
+    const ua = (req.headers['user-agent'] || '').slice(0, 400) || null
+    const { browser, os, device } = parseUserAgent(ua)
+    await prisma.loginEvent.create({ data: { userId, kind, ip: getClientIp(req), userAgent: ua, browser, os, device } })
+  } catch {
+    /* logging must never break sign-in */
+  }
+}
 
 const COOKIE = 'token'
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
@@ -131,6 +144,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
   })
 
   setAuthCookie(res, signToken({ sub: user.id, role: user.role }))
+  await logSignIn(req, user.id, 'SIGNUP')
   res.status(201).json({ user: await publicUser(user.id) })
 }
 
@@ -161,6 +175,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   setAuthCookie(res, signToken({ sub: user.id, role: user.role }))
+  await logSignIn(req, user.id, 'LOGIN')
   res.json({ user: await publicUser(user.id) })
 }
 

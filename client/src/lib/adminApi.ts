@@ -1,5 +1,7 @@
 import { api } from './api'
 import type { Role, Department, UserStatus, Membership } from './types'
+import type { RangeKey, CustomRange } from '../components/layout/RangeSelector'
+import { rangeQuery } from './range'
 
 // ---------- Users ----------
 export interface AdminUser {
@@ -135,3 +137,31 @@ export const createOfficeNetwork = (input: { label: string; cidr: string }) =>
 export const setOfficeNetworkActive = (id: string, isActive: boolean) =>
   api.patch<{ network: OfficeNetwork }>(`/admin/office-networks/${id}`, { isActive })
 export const deleteOfficeNetwork = (id: string) => api.del(`/admin/office-networks/${id}`)
+
+// ---------- Activity Log (Super Admin) ----------
+export interface LoginEvent {
+  id: string
+  userName: string
+  kind: string // "LOGIN" | "SIGNUP"
+  ip: string | null
+  browser: string | null
+  os: string | null
+  device: string | null
+  createdAt: string
+}
+export interface AuditEntry {
+  id: string
+  userName: string
+  action: string // "CREATE" | "UPDATE" | "DELETE"
+  entityType: string
+  entityId: string
+  createdAt: string
+}
+
+export const listLoginEvents = (range: RangeKey, custom?: CustomRange | null, userId?: string) =>
+  api.get<{ events: LoginEvent[] }>(`/admin/login-events?${rangeQuery(range, custom)}${userId ? `&userId=${userId}` : ''}`)
+
+export const listAuditLog = (range: RangeKey, custom?: CustomRange | null, userId?: string, entityType?: string) =>
+  api.get<{ entries: AuditEntry[] }>(
+    `/admin/audit-log?${rangeQuery(range, custom)}${userId ? `&userId=${userId}` : ''}${entityType ? `&entityType=${entityType}` : ''}`,
+  )

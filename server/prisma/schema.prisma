@@ -182,6 +182,7 @@ model User {
   salaries        SalaryRecord[]      @relation("UserSalaries")
   setSalaries     SalaryRecord[]      @relation("SalarySetBy")
   auditLogs       AuditLog[]
+  loginEvents     LoginEvent[]
 
   feedbackAuthored Feedback[]      @relation("FeedbackAuthored")
   feedbackReceived Feedback[]      @relation("FeedbackReceived")
@@ -654,6 +655,23 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([entityType, entityId])
+}
+
+/// A sign-in event — who logged in, when, from where (IP) and on which device.
+model LoginEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String   @default("LOGIN") // "LOGIN" | "SIGNUP"
+  ip        String?
+  userAgent String?
+  browser   String? // e.g. "Chrome"
+  os        String? // e.g. "Windows"
+  device    String? // "Desktop" | "Mobile" | "Tablet"
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 // ========== Marketing (Phase 3) — §6 ==========
