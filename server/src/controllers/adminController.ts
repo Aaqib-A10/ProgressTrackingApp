@@ -913,6 +913,42 @@ export async function listAuditLog(req: AuthedRequest, res: Response): Promise<v
   })
 }
 
+/**
+ * GET /api/admin/attendance-activity — check-in / break / check-out timeline (Super Admin).
+ * Reconstructed from AttendanceDay + BreakEntry so it covers history, not just going-forward.
+ */
+export async function listAttendanceActivity(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  const { gte, lte } = activityWindow(req.query)
+  const userId = typeof req.query.userId === 'string' && req.query.userId ? (req.query.userId as string) : undefined
+  const days = await prisma.attendanceDay.findMany({
+    // `date` is the shift day; the window bounds (midnight → end-of-day) select whole days.
+    where: { date: { gte, lte }, ...(userId ? { userId } : {}) },
+    include: { user: { select: { name: true } }, breaks: true },
+  })
+  type Ev = { userName: string; kind: 'CHECK_IN' | 'CHECK_OUT' | 'BREAK_START' | 'BREAK_END'; breakType?: string; at: Date }
+  const events: Ev[] = []
+  for (const d of days) {
+    const userName = d.user?.name ?? '—'
+    if (d.checkInAt) events.push({ userName, kind: 'CHECK_IN', at: d.checkInAt })
+    for (const b of d.breaks) {
+      events.push({ userName, kind: 'BREAK_START', breakType: b.type, at: b.startAt })
+      if (b.endAt) events.push({ userName, kind: 'BREAK_END', breakType: b.type, at: b.endAt })
+    }
+    if (d.checkOutAt) events.push({ userName, kind: 'CHECK_OUT', at: d.checkOutAt })
+  }
+  events.sort((a, b) => b.at.getTime() - a.at.getTime())
+  res.json({
+    events: events.slice(0, 500).map((e, i) => ({
+      id: `${e.at.getTime()}-${e.kind}-${i}`,
+      userName: e.userName,
+      kind: e.kind,
+      breakType: e.breakType ?? null,
+      createdAt: e.at.toISOString(),
+    })),
+  })
+}
+
 export async function listOfficeNetworks(req: AuthedRequest, res: Response): Promise<void> {
   if (!(await requireSuperAdmin(req, res))) return
   const networks = await prisma.officeNetwork.findMany({ orderBy: { createdAt: 'asc' } })

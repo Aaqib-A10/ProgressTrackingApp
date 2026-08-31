@@ -158,8 +158,19 @@ export interface AuditEntry {
   createdAt: string
 }
 
+export interface AttendanceEvent {
+  id: string
+  userName: string
+  kind: 'CHECK_IN' | 'CHECK_OUT' | 'BREAK_START' | 'BREAK_END'
+  breakType: string | null // "BREAK" | "BRB"
+  createdAt: string
+}
+
 export const listLoginEvents = (range: RangeKey, custom?: CustomRange | null, userId?: string) =>
   api.get<{ events: LoginEvent[] }>(`/admin/login-events?${rangeQuery(range, custom)}${userId ? `&userId=${userId}` : ''}`)
+
+export const listAttendanceActivity = (range: RangeKey, custom?: CustomRange | null, userId?: string) =>
+  api.get<{ events: AttendanceEvent[] }>(`/admin/attendance-activity?${rangeQuery(range, custom)}${userId ? `&userId=${userId}` : ''}`)
 
 export const listAuditLog = (range: RangeKey, custom?: CustomRange | null, userId?: string, entityType?: string) =>
   api.get<{ entries: AuditEntry[] }>(
