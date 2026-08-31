@@ -31,7 +31,14 @@ export interface AppShellProps {
 /** 260px sidebar + 64px topbar shell that wraps every /app/* screen.
  *  The sidebar is static from lg up and a slide-in drawer below it. */
 export function AppShell({ user, children }: AppShellProps) {
-  const [range, setRange] = useState<RangeKey>('today')
+  // The Executive Overview (Super Admin landing at /app/dashboard) opens on the
+  // rolling 3-month "are we improving" window so it always shows data — a Today
+  // default is empty at the start of each day/month. Every other screen defaults
+  // to Today. After this initial default the range is user-controlled and shared.
+  const [range, setRange] = useState<RangeKey>(() => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : ''
+    return user.role === 'SUPER_ADMIN' && /\/app\/dashboard\/?$/.test(path) ? 'rolling3m' : 'today'
+  })
   const [custom, setCustomState] = useState<CustomRange | null>(null)
   const [navOpen, setNavOpen] = useState(false)
   // Desktop-only: collapse the sidebar to reclaim horizontal space (persisted).
