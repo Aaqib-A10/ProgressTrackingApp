@@ -129,23 +129,25 @@ export async function signup(req: Request, res: Response): Promise<void> {
     return
   }
 
-  // Department Team Lead self-registration: activated immediately and signed in.
-  // The active department is also recorded as their first membership.
-  const user = await prisma.user.create({
+  // Department Team Lead self-registration: created PENDING, awaiting Super Admin
+  // approval — NOT signed in. Self-signup must never mint an active, privileged
+  // account (that would let anyone become a department Team Lead with access to
+  // member PII, revenue, and roster management). The requested department + role
+  // are recorded so the admin sees the request and Approve activates it directly;
+  // requireAuth rejects any PENDING account, so this credential can't be used yet.
+  await prisma.user.create({
     data: {
       name,
       email,
       passwordHash: await hashPassword(password),
       role: 'TEAM_LEAD',
-      status: 'ACTIVE',
+      status: 'PENDING',
       departmentId: dept.id,
       memberships: { create: { departmentId: dept.id, role: 'TEAM_LEAD' } },
     },
   })
 
-  setAuthCookie(res, signToken({ sub: user.id, role: user.role }))
-  await logSignIn(req, user.id, 'SIGNUP')
-  res.status(201).json({ user: await publicUser(user.id) })
+  res.status(201).json({ pending: true, message: 'Your Team Lead request has been sent to the admin for approval.' })
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
