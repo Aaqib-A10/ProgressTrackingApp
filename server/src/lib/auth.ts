@@ -2,7 +2,17 @@ import bcrypt from 'bcryptjs'
 import jwt, { type SignOptions } from 'jsonwebtoken'
 import type { Role } from '@prisma/client'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me'
+// Fail CLOSED in production: a missing JWT_SECRET must never fall back to a
+// public default (that would let anyone forge a Super-Admin token). The dev
+// fallback is kept only for local/test convenience.
+const JWT_SECRET = (() => {
+  const s = process.env.JWT_SECRET
+  if (s) return s
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production')
+  }
+  return 'dev-secret-change-me'
+})()
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
 const RESET_EXPIRES_IN = '30m'
 
