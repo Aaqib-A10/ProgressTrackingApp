@@ -90,6 +90,17 @@ export function createApp(): Express {
   // Centralized error handler — unexpected throws become 500s.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    // body-parser errors carry a type — surface them as proper 4xx (not 500), with
+    // generic messages so nothing internal leaks.
+    const e = err as { type?: string }
+    if (e?.type === 'entity.too.large') {
+      res.status(413).json({ error: 'Request body too large' })
+      return
+    }
+    if (e?.type === 'entity.parse.failed') {
+      res.status(400).json({ error: 'Invalid JSON body' })
+      return
+    }
     // eslint-disable-next-line no-console
     console.error('[server] Unhandled error:', err)
     res.status(500).json({ error: 'Internal server error' })

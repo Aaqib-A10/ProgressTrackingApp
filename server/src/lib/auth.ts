@@ -24,6 +24,11 @@ export function verifyPassword(plain: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plain, hash)
 }
 
+// Fixed bcrypt hash (of a throwaway string, not a secret) used to equalize login
+// timing when the email doesn't exist — always run a real compare so response
+// time can't reveal whether an account exists (user enumeration).
+export const DUMMY_PASSWORD_HASH = bcrypt.hashSync('metriq-login-timing-guard', 10)
+
 // --- Session JWT ---
 export interface JwtPayload {
   sub: string

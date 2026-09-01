@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import {
   hashPassword,
   verifyPassword,
+  DUMMY_PASSWORD_HASH,
   signToken,
   signResetToken,
   verifyResetToken,
@@ -159,7 +160,10 @@ export async function login(req: Request, res: Response): Promise<void> {
   const { email, password } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { email } })
-  if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
+  // Always run a bcrypt compare — against a dummy hash when the account/hash is
+  // absent — so login response time doesn't reveal whether the email exists.
+  const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH)
+  if (!user || !user.passwordHash || !passwordOk) {
     res.status(401).json({ error: 'Invalid email or password' })
     return
   }

@@ -387,7 +387,7 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
   // where the person works off-site by design.
   const blocked = await attendanceGuard(req, me, isWfh)
   if (blocked) {
-    console.log(`[attendance-gate] BLOCKED check-in — ${me.name} <${me.email}> resolvedIp=${ip} ua="${req.headers['user-agent'] ?? ''}"`)
+    console.log(`[attendance-gate] BLOCKED check-in — userId=${me.id}`)
     res.status(403).json({ error: blocked })
     return
   }
@@ -420,7 +420,7 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
   const isWfh = await isWfhToday(me.id, dateValue)
   const blocked = await attendanceGuard(req, me, isWfh)
   if (blocked) {
-    console.log(`[attendance-gate] BLOCKED check-out — ${me.name} <${me.email}> resolvedIp=${getClientIp(req)} ua="${req.headers['user-agent'] ?? ''}"`)
+    console.log(`[attendance-gate] BLOCKED check-out — userId=${me.id}`)
     res.status(403).json({ error: blocked })
     return
   }
@@ -450,7 +450,7 @@ export async function startBreak(req: AuthedRequest, res: Response): Promise<voi
   const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
   const blocked = await attendanceGuard(req, me, isWfh)
   if (blocked) {
-    console.log(`[attendance-gate] BLOCKED break-start — ${me.name} <${me.email}> resolvedIp=${getClientIp(req)} ua="${req.headers['user-agent'] ?? ''}"`)
+    console.log(`[attendance-gate] BLOCKED break-start — userId=${me.id}`)
     res.status(403).json({ error: blocked })
     return
   }
@@ -483,7 +483,7 @@ export async function endBreak(req: AuthedRequest, res: Response): Promise<void>
   const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
   const blocked = await attendanceGuard(req, me, isWfh)
   if (blocked) {
-    console.log(`[attendance-gate] BLOCKED break-end — ${me.name} <${me.email}> resolvedIp=${getClientIp(req)} ua="${req.headers['user-agent'] ?? ''}"`)
+    console.log(`[attendance-gate] BLOCKED break-end — userId=${me.id}`)
     res.status(403).json({ error: blocked })
     return
   }

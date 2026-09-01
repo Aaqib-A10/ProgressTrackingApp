@@ -31,6 +31,19 @@ describe('authentication', () => {
   })
 })
 
+describe('login', () => {
+  it('valid credentials → 200 + session cookie', async () => {
+    const res = await request(app).post('/api/auth/login').send({ email: 'itad.member@test.local', password: 'Password123!' }).expect(200)
+    expect(String(res.headers['set-cookie'])).toMatch(/token=/)
+  })
+  it('wrong password → 401', async () => {
+    await request(app).post('/api/auth/login').send({ email: 'itad.member@test.local', password: 'wrong-password' }).expect(401)
+  })
+  it('unknown email → 401 (dummy compare keeps timing uniform)', async () => {
+    await request(app).post('/api/auth/login').send({ email: 'nobody@test.local', password: 'whatever' }).expect(401)
+  })
+})
+
 describe('admin surface is Super-Admin only', () => {
   it('MEMBER cannot list users (403)', async () => {
     await request(app).get('/api/admin/users').set(...auth(w.itadMember)).expect(403)
