@@ -114,6 +114,7 @@ export function DataTable<T>({
             {columns.map((col) => (
               <th
                 key={col.key}
+                scope="col"
                 className={cn(
                   'whitespace-nowrap border-b border-line px-4 py-3 text-label-md uppercase text-ink-muted',
                   alignClass[col.align ?? 'left'],
