@@ -502,6 +502,11 @@ model AttendanceDay {
   checkOutAt DateTime?
   checkInIp  String? // client IP recorded at check-in (audit / office-network enforcement)
   checkOutIp String?
+  // Device audit (like LoginEvent): raw UA + the spoof-resistant client-mobile flag.
+  checkInUa      String?
+  checkInMobile  Boolean?
+  checkOutUa     String?
+  checkOutMobile Boolean?
   note       String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -566,6 +571,11 @@ model BreakEntry {
   type      BreakType     @default(BREAK)
   startAt   DateTime
   endAt     DateTime?
+  // Device audit — captured on break start and (separately) on break end.
+  startUa     String?
+  startMobile Boolean?
+  endUa       String?
+  endMobile   Boolean?
   createdAt DateTime      @default(now())
 
   @@index([dayId])

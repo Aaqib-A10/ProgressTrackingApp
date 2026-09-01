@@ -8,6 +8,7 @@ import { hashPassword, signInviteToken } from '../lib/auth'
 import { sendInviteEmail } from '../lib/mail'
 import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { isValidCidr } from '../lib/ip'
+import { parseUserAgent } from '../lib/userAgent'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -923,26 +924,35 @@ export async function listAttendanceActivity(req: AuthedRequest, res: Response):
     where: { date: { gte, lte }, ...(userId ? { userId } : {}) },
     include: { user: { select: { name: true } }, breaks: true },
   })
-  type Ev = { userName: string; kind: 'CHECK_IN' | 'CHECK_OUT' | 'BREAK_START' | 'BREAK_END'; breakType?: string; at: Date }
+  type Ev = { userName: string; kind: 'CHECK_IN' | 'CHECK_OUT' | 'BREAK_START' | 'BREAK_END'; breakType?: string; at: Date; ua: string | null; mobile: boolean }
   const events: Ev[] = []
   for (const d of days) {
     const userName = d.user?.name ?? '—'
-    if (d.checkInAt) events.push({ userName, kind: 'CHECK_IN', at: d.checkInAt })
+    if (d.checkInAt) events.push({ userName, kind: 'CHECK_IN', at: d.checkInAt, ua: d.checkInUa, mobile: !!d.checkInMobile })
     for (const b of d.breaks) {
-      events.push({ userName, kind: 'BREAK_START', breakType: b.type, at: b.startAt })
-      if (b.endAt) events.push({ userName, kind: 'BREAK_END', breakType: b.type, at: b.endAt })
+      events.push({ userName, kind: 'BREAK_START', breakType: b.type, at: b.startAt, ua: b.startUa, mobile: !!b.startMobile })
+      if (b.endAt) events.push({ userName, kind: 'BREAK_END', breakType: b.type, at: b.endAt, ua: b.endUa, mobile: !!b.endMobile })
     }
-    if (d.checkOutAt) events.push({ userName, kind: 'CHECK_OUT', at: d.checkOutAt })
+    if (d.checkOutAt) events.push({ userName, kind: 'CHECK_OUT', at: d.checkOutAt, ua: d.checkOutUa, mobile: !!d.checkOutMobile })
   }
   events.sort((a, b) => b.at.getTime() - a.at.getTime())
   res.json({
-    events: events.slice(0, 500).map((e, i) => ({
-      id: `${e.at.getTime()}-${e.kind}-${i}`,
-      userName: e.userName,
-      kind: e.kind,
-      breakType: e.breakType ?? null,
-      createdAt: e.at.toISOString(),
-    })),
+    events: events.slice(0, 500).map((e, i) => {
+      const { browser, os, device } = parseUserAgent(e.ua)
+      return {
+        id: `${e.at.getTime()}-${e.kind}-${i}`,
+        userName: e.userName,
+        kind: e.kind,
+        breakType: e.breakType ?? null,
+        createdAt: e.at.toISOString(),
+        browser,
+        os,
+        device,
+        // Physical-input hint (survives desktop-mode UA spoofing) — a true value
+        // with a Desktop UA is the "requested desktop site on a phone" case.
+        clientMobile: e.mobile,
+      }
+    }),
   })
 }
 

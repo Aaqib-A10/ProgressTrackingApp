@@ -1,5 +1,7 @@
 // Thin typed fetch wrapper around the Metriq API.
 // Base URL comes from VITE_API_URL; in dev, Vite also proxies /api to the server.
+import { isMobileOrTablet } from './device'
+
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 type JsonBody = unknown
@@ -26,7 +28,12 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 async function request<T>(method: string, path: string, body?: JsonBody): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // Spoof-resistant device signal for the attendance laptop-only gate — set on
+      // every request (harmless elsewhere); the server reads it on attendance POSTs.
+      'X-Client-Mobile': isMobileOrTablet() ? '1' : '0',
+    },
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
   })

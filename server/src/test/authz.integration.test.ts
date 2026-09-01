@@ -104,6 +104,32 @@ describe('member profile — ownership + department scope (IDOR)', () => {
   })
 })
 
+describe('attendance device gate — desktop-mode-on-phone bypass', () => {
+  // A phone using Chrome "Request Desktop Site" sends a DESKTOP User-Agent, but the
+  // client still reports a touch device via X-Client-Mobile. The gate must block it.
+  const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
+
+  it('blocks a desktop-UA request that reports a touch device (403)', async () => {
+    const res = await request(app)
+      .post('/api/attendance/check-in')
+      .set(...auth(w.itadMember))
+      .set('User-Agent', DESKTOP_UA)
+      .set('X-Client-Mobile', '1')
+      .expect(403)
+    expect(res.body.error).toMatch(/laptop or desktop/i)
+  })
+
+  it('allows a genuine desktop (desktop UA, no touch hint) — not device-blocked', async () => {
+    // leadgenMember (unused elsewhere) so this check-in doesn't collide with other tests.
+    await request(app)
+      .post('/api/attendance/check-in')
+      .set(...auth(w.leadgenMember))
+      .set('User-Agent', DESKTOP_UA)
+      .set('X-Client-Mobile', '0')
+      .expect(200)
+  })
+})
+
 describe('public signup cannot mint a privileged account (AUDIT §2.1 regression)', () => {
   it('a department signup is created PENDING, is NOT signed in, and cannot authenticate', async () => {
     const email = 'regression.signup@test.local'

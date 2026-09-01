@@ -298,13 +298,24 @@ async function officeNetworkBlock(ip: string, role: Role, isRemote: boolean): Pr
  * Laptop-only gate. Blocks phones + tablets; Super Admins and unparseable UAs pass.
  * Returns null when allowed, or an error message when blocked.
  */
+/** Raw UA + the spoof-resistant client-mobile flag (X-Client-Mobile, set by the web client). */
+function deviceMeta(req: AuthedRequest): { ua: string | null; mobile: boolean } {
+  return {
+    ua: (req.headers['user-agent'] as string | undefined) ?? null,
+    mobile: req.headers['x-client-mobile'] === '1',
+  }
+}
+
 function attendanceDeviceBlock(req: AuthedRequest, role: Role): string | null {
   if (role === 'SUPER_ADMIN') return null
   const { device } = parseUserAgent(req.headers['user-agent'] as string | undefined)
-  // Unknown device (null) is allowed on purpose so a desktop browser we fail to
-  // parse is never wrongly blocked; only explicit Mobile/Tablet are refused.
-  if (device === 'Mobile' || device === 'Tablet') {
-    return 'Attendance can only be recorded from a laptop or desktop — not a phone or tablet.'
+  // Two signals: the UA (Mobile/Tablet), and the client's physical-input hint
+  // (X-Client-Mobile) which survives Chrome's "Request Desktop Site" UA spoof.
+  // Unknown UA device (null) is allowed on purpose so a desktop browser we fail
+  // to parse is never wrongly blocked; only explicit Mobile/Tablet or the client
+  // hint refuse.
+  if (device === 'Mobile' || device === 'Tablet' || req.headers['x-client-mobile'] === '1') {
+    return 'Attendance can only be recorded from a laptop or desktop — not a phone or tablet. Requesting the desktop site does not bypass this.'
   }
   return null
 }
@@ -389,10 +400,11 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
       return
     }
   }
+  const dev = deviceMeta(req)
   await prisma.attendanceDay.upsert({
     where: { userId_date: { userId: me.id, date: dateValue } },
-    update: { checkInAt: now, checkInIp: ip },
-    create: { userId: me.id, date: dateValue, checkInAt: now, checkInIp: ip },
+    update: { checkInAt: now, checkInIp: ip, checkInUa: dev.ua, checkInMobile: dev.mobile },
+    create: { userId: me.id, date: dateValue, checkInAt: now, checkInIp: ip, checkInUa: dev.ua, checkInMobile: dev.mobile },
   })
   res.json(await buildMePayload(me))
 }
@@ -422,8 +434,9 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
     res.status(409).json({ error: 'Already checked out today.' })
     return
   }
-  await prisma.breakEntry.updateMany({ where: { dayId: existing.id, endAt: null }, data: { endAt: now } })
-  await prisma.attendanceDay.update({ where: { id: existing.id }, data: { checkOutAt: now, checkOutIp: ip } })
+  const dev = deviceMeta(req)
+  await prisma.breakEntry.updateMany({ where: { dayId: existing.id, endAt: null }, data: { endAt: now, endUa: dev.ua, endMobile: dev.mobile } })
+  await prisma.attendanceDay.update({ where: { id: existing.id }, data: { checkOutAt: now, checkOutIp: ip, checkOutUa: dev.ua, checkOutMobile: dev.mobile } })
   res.json(await buildMePayload(me))
 }
 
@@ -455,7 +468,8 @@ export async function startBreak(req: AuthedRequest, res: Response): Promise<voi
     return
   }
   const type = req.body?.type === 'BRB' ? 'BRB' : 'BREAK'
-  await prisma.breakEntry.create({ data: { dayId: existing.id, startAt: now, type } })
+  const dev = deviceMeta(req)
+  await prisma.breakEntry.create({ data: { dayId: existing.id, startAt: now, type, startUa: dev.ua, startMobile: dev.mobile } })
   res.json(await buildMePayload(me))
 }
 
@@ -479,7 +493,8 @@ export async function endBreak(req: AuthedRequest, res: Response): Promise<void>
     res.status(409).json({ error: 'No break is running.' })
     return
   }
-  await prisma.breakEntry.update({ where: { id: open.id }, data: { endAt: now } })
+  const dev = deviceMeta(req)
+  await prisma.breakEntry.update({ where: { id: open.id }, data: { endAt: now, endUa: dev.ua, endMobile: dev.mobile } })
   res.json(await buildMePayload(me))
 }
 

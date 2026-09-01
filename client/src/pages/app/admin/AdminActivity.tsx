@@ -103,6 +103,20 @@ export default function AdminActivity() {
         <span className="flex items-center gap-1.5">{ATT_EVENT[e.kind].icon}{attLabel(e)}</span>
       </Badge>
     ) },
+    { key: 'device', header: 'Device', render: (e) => {
+      // A touch device reported behind a Desktop UA is the "request desktop site on a phone" trick.
+      const spoof = e.clientMobile && e.device === 'Desktop'
+      const label = [e.browser, e.os].filter(Boolean).join(' · ')
+      return (
+        <span className="flex flex-wrap items-center gap-1.5 text-ink">
+          {e.device && <span className="text-ink-muted">{DEVICE_ICON[e.device]}</span>}
+          {label || '—'}
+          {spoof
+            ? <Badge tone="danger">desktop-mode on phone</Badge>
+            : e.clientMobile && <Badge tone="warning">📱 phone/tablet</Badge>}
+        </span>
+      )
+    } },
   ]
 
   return (
@@ -110,7 +124,7 @@ export default function AdminActivity() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-ink">Activity Log</h1>
-          <p className="mt-0.5 text-body-md text-ink-muted">Sign-ins (who, when, device, IP), attendance (check-in, breaks, check-out), and data-change activity. Use the range filter in the top bar.</p>
+          <p className="mt-0.5 text-body-md text-ink-muted">Sign-ins (who, when, device, IP), attendance (check-in, breaks, check-out — with the device used), and data-change activity. Use the range filter in the top bar.</p>
         </div>
         <div>
           <label className="mb-1 block text-body-sm font-semibold text-ink">Member</label>

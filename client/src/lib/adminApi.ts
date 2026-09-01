@@ -164,6 +164,10 @@ export interface AttendanceEvent {
   kind: 'CHECK_IN' | 'CHECK_OUT' | 'BREAK_START' | 'BREAK_END'
   breakType: string | null // "BREAK" | "BRB"
   createdAt: string
+  browser: string | null
+  os: string | null
+  device: string | null // "Desktop" | "Mobile" | "Tablet"
+  clientMobile: boolean // spoof-resistant touch-device hint; true + Desktop UA = desktop-mode-on-phone
 }
 
 export const listLoginEvents = (range: RangeKey, custom?: CustomRange | null, userId?: string) =>
