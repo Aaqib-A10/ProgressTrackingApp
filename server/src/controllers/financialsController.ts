@@ -110,6 +110,7 @@ export async function listSalaries(_req: AuthedRequest, res: Response): Promise<
   const rows = await prisma.salaryRecord.findMany({
     include: { department: { select: { type: true } }, user: { select: { isActive: true, status: true } } },
     orderBy: [{ departmentId: 'asc' }, { name: 'asc' }],
+    take: 500, // safety cap against unbounded growth
   })
   res.json({ salaries: rows.map(serialize) })
 }

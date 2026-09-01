@@ -132,6 +132,7 @@ export async function listFeedback(req: AuthedRequest, res: Response): Promise<v
     where,
     include: { author: true, recipient: true, replies: true },
     orderBy: { updatedAt: 'desc' },
+    take: 500, // safety cap against unbounded growth (well above current volume)
   })
   res.json({ feedback: threads.map((t) => serializeThread(t, me.id)) })
 }

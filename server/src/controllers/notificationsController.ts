@@ -18,6 +18,30 @@ async function submittedToday(userId: string, dept?: string | null, sub?: string
   return true // no daily form for this user → nothing to remind
 }
 
+/** Does this member's dept/sub have a daily form to submit? Mirrors submittedToday's coverage. */
+function hasDailyForm(dept?: string | null, sub?: string | null): boolean {
+  return dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || (dept === 'MARKETING' && (sub === 'seo' || sub === 'social'))
+}
+
+/**
+ * Batched version of submittedToday for many members — the set of userIds (among
+ * `ids`) that submitted today, in a fixed number of queries instead of one per
+ * member (avoids an N+1 on every TL/Super-Admin dashboard + bell poll).
+ */
+async function submittedTodayIds(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set()
+  const where = { userId: { in: ids }, date: dbDateFromString(companyToday()) }
+  const select = { userId: true }
+  const [itad, leadgen, seo, social, ecom] = await Promise.all([
+    prisma.itadDailyEntry.findMany({ where, select }),
+    prisma.leadGenDailyEntry.findMany({ where, select }),
+    prisma.seoDailyEntry.findMany({ where, select }),
+    prisma.socialDailyEntry.findMany({ where, select }),
+    prisma.ecommerceDailyEntry.findMany({ where, select }),
+  ])
+  return new Set([...itad, ...leadgen, ...seo, ...social, ...ecom].map((e) => e.userId))
+}
+
 /** GET /api/notifications — contextual notifications derived from live state. */
 export async function getNotifications(req: AuthedRequest, res: Response): Promise<void> {
   const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, include: { department: true, subDepartment: true } })
@@ -55,8 +79,8 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   if ((me.role === 'TEAM_LEAD' || me.role === 'SUPER_ADMIN') && (dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || me.role === 'SUPER_ADMIN')) {
     const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
     const members = await prisma.user.findMany({ where: { role: 'MEMBER', isActive: true, ...deptFilter }, include: { department: true, subDepartment: true } })
-    let missing = 0
-    for (const m of members) if (!(await submittedToday(m.id, m.department?.type, m.subDepartment?.slug))) missing++
+    const submitted = await submittedTodayIds(members.map((m) => m.id))
+    const missing = members.filter((m) => hasDailyForm(m.department?.type, m.subDepartment?.slug) && !submitted.has(m.id)).length
     if (missing > 0) {
       notifications.push({ id: 'team-missing', type: 'alert', title: `${missing} not submitted`, body: `${missing} team member${missing > 1 ? 's haven’t' : ' hasn’t'} submitted today.`, date: today })
     }
@@ -133,9 +157,10 @@ export async function getNotSubmitted(req: AuthedRequest, res: Response): Promis
   })
 
   // Bucket missing members by department.
+  const submitted = await submittedTodayIds(members.map((m) => m.id))
   const byDept = new Map<string, { department: string; label: string; members: { id: string; name: string; email: string; subDepartment: string | null }[] }>()
   for (const m of members) {
-    if (await submittedToday(m.id, m.department?.type, m.subDepartment?.slug)) continue
+    if (!hasDailyForm(m.department?.type, m.subDepartment?.slug) || submitted.has(m.id)) continue
     const type = m.department?.type ?? 'UNASSIGNED'
     if (!byDept.has(type)) byDept.set(type, { department: type, label: DEPT_LABEL[type] ?? 'Unassigned', members: [] })
     byDept.get(type)!.members.push({ id: m.id, name: m.name, email: m.email, subDepartment: m.subDepartment?.name ?? null })

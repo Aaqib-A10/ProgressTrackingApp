@@ -205,7 +205,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       include: { lines: { include: { marketplace: true, taskType: true } } },
     }),
     prisma.stockRequest.count({ where: { departmentId: dept.id, status: { not: 'RESOLVED' } } }),
-    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } } }, orderBy: [{ status: 'asc' }, { order: 'asc' }] }),
+    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } } }, orderBy: [{ status: 'asc' }, { order: 'asc' }], take: 500 }),
   ])
 
   const byUser = new Map<string, typeof entries>()
@@ -303,7 +303,7 @@ export async function getBoard(req: AuthedRequest, res: Response): Promise<void>
   if (!dept) { res.status(500).json({ error: 'Ecommerce department missing' }); return }
 
   const [tasks, members] = await Promise.all([
-    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } }, _count: { select: { comments: true } } }, orderBy: [{ order: 'asc' }, { updatedAt: 'asc' }] }),
+    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } }, _count: { select: { comments: true } } }, orderBy: [{ order: 'asc' }, { updatedAt: 'asc' }], take: 500 }),
     ecommerceMembers(dept.id),
   ])
   const columns = ECOM_STATUSES.map((status) => ({

@@ -42,6 +42,7 @@ export async function listBlogs(req: AuthedRequest, res: Response): Promise<void
     where,
     include: { brand: true, author: { select: { id: true, name: true } } },
     orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+    take: 500, // safety cap against unbounded growth
   })
   res.json({ blogs: blogs.map(serialize) })
 }
