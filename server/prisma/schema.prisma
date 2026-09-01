@@ -673,8 +673,10 @@ model AuditLog {
 /// A sign-in event — who logged in, when, from where (IP) and on which device.
 model LoginEvent {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Nullable + SetNull so deleting a user preserves the sign-in audit trail
+  // (matches AuditLog). In practice users are soft-deleted (isActive=false).
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   kind      String   @default("LOGIN") // "LOGIN" | "SIGNUP"
   ip        String?
   userAgent String?
