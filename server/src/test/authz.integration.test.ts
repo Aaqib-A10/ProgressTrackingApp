@@ -15,6 +15,13 @@ afterAll(async () => {
   await prisma.$disconnect()
 })
 
+describe('security headers (helmet, AUDIT §2.6)', () => {
+  it('sends X-Content-Type-Options: nosniff', async () => {
+    const res = await request(app).get('/api/health').expect(200)
+    expect(res.headers['x-content-type-options']).toBe('nosniff')
+  })
+})
+
 describe('authentication', () => {
   it('rejects unauthenticated access to a protected route (401)', async () => {
     await request(app).get('/api/admin/users').expect(401)

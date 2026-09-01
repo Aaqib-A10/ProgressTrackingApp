@@ -1,5 +1,6 @@
 import express, { type Express, type NextFunction, type Request, type Response } from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import { healthRouter } from './routes/health'
 import { authRouter } from './routes/auth'
@@ -43,13 +44,20 @@ export function createApp(): Express {
   if (tp && /^\d+$/.test(tp)) app.set('trust proxy', Number(tp))
   else if (tp) app.set('trust proxy', tp) // e.g. a specific subnet like "10.0.0.0/8"
 
+  // Security headers (HSTS, X-Content-Type-Options: nosniff, X-Frame-Options,
+  // Referrer-Policy, etc.). This is a JSON API (no HTML), so the CSP is disabled
+  // here — the real CSP belongs on the nginx-served frontend, and helmet's default
+  // CSP would otherwise apply pointlessly to API responses.
+  app.use(helmet({ contentSecurityPolicy: false }))
+
   app.use(
     cors({
       origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
       credentials: true,
     }),
   )
-  app.use(express.json())
+  // Cap JSON bodies to blunt memory-pressure DoS from oversized payloads.
+  app.use(express.json({ limit: '1mb' }))
   app.use(cookieParser())
 
   // All API routes are mounted under /api (matches the Vite dev proxy).

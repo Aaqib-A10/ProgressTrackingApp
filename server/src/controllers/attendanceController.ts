@@ -8,6 +8,7 @@ import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRan
 import { isOvernight, shiftMinutes, shiftDayString, timesForWeekday, type DayTimes } from '../lib/shiftDay'
 import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
+import { sendCsv } from '../lib/csv'
 import type { Role, DepartmentType } from '@prisma/client'
 
 type DayWithBreaks = Prisma.AttendanceDayGetPayload<{ include: { breaks: true } }>
@@ -637,15 +638,6 @@ function minToHHmm(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 }
 
-/** RFC-4180-ish CSV: quote any field containing comma/quote/newline. */
-function toCsv(rows: (string | number)[][]): string {
-  return rows
-    .map((row) => row.map((cell) => {
-      const s = String(cell)
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-    }).join(','))
-    .join('\r\n')
-}
 
 /** Duration in minutes → "7h 42m" (or "" when null, e.g. a non-present day). */
 function hm(min: number | null): string {
@@ -757,9 +749,7 @@ export async function exportTeamAttendanceCsv(req: AuthedRequest, res: Response)
   }
 
   const filename = `attendance-${scopeLabel}-${companyRange.startDate}_to_${companyRange.endDate}.csv`
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
-  res.send(toCsv(rows))
+  sendCsv(res, filename, rows)
 }
 
 /**

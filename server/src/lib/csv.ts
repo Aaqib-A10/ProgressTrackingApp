@@ -1,12 +1,18 @@
 import type { Response } from 'express'
 
-/** RFC-4180-ish CSV: quote fields containing comma/quote/newline. */
+/**
+ * RFC-4180-ish CSV: quote fields containing comma/quote/newline. String cells that
+ * begin with a spreadsheet formula trigger (= + - @ tab CR) are prefixed with a
+ * single quote so Excel/Sheets treat them as text (CSV formula-injection guard).
+ * Numeric cells are exempt so real (incl. negative) numbers are unaffected.
+ */
 export function toCsv(rows: (string | number)[][]): string {
   return rows
     .map((row) =>
       row
         .map((cell) => {
-          const s = String(cell)
+          let s = String(cell)
+          if (typeof cell !== 'number' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
           return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
         })
         .join(','),
