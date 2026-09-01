@@ -34,6 +34,9 @@ blue "==> [2/2] Deploying on the live server ($SERVER)..."
 ssh -i "$KEY" "$SERVER" APP_DIR="$APP_DIR" WEB_ROOT="$WEB_ROOT" PM2_APP="$PM2_APP" 'bash -s' <<'REMOTE'
 set -e
 cd "$APP_DIR"
+# npm install rewrites package-lock.json in place each deploy, leaving it dirty;
+# reset it so `git pull` never conflicts when a commit changes the lockfile.
+echo "-- reset lockfile";          git checkout -- package-lock.json 2>/dev/null || true
 echo "-- git pull";               git pull
 echo "-- npm install";            npm install --no-audit --no-fund
 echo "-- prisma migrate deploy";  ( cd server && npx prisma migrate deploy )

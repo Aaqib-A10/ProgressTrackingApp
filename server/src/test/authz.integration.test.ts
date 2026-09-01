@@ -55,6 +55,33 @@ describe('financials are Super-Admin only (router-level guard)', () => {
   })
 })
 
+describe('router-level RBAC guards (AUDIT §2.9/§3.1)', () => {
+  // TL/SA surfaces: a plain MEMBER is blocked at the router.
+  it.each(['/api/admin/team-members', '/api/admin/targets', '/api/admin/tags', '/api/admin/leave'])(
+    'MEMBER is forbidden on %s (403)',
+    async (path) => {
+      await request(app).get(path).set(...auth(w.itadMember)).expect(403)
+    },
+  )
+  it.each(['/api/admin/team-members', '/api/admin/targets', '/api/admin/tags', '/api/admin/leave'])(
+    'TEAM_LEAD is allowed on %s (200)',
+    async (path) => {
+      await request(app).get(path).set(...auth(w.itadLead)).expect(200)
+    },
+  )
+  // SA-only surfaces: a TEAM_LEAD is blocked at the router.
+  it.each(['/api/admin/office-networks', '/api/admin/login-events', '/api/admin/audit-log'])(
+    'TEAM_LEAD is forbidden on %s (403)',
+    async (path) => {
+      await request(app).get(path).set(...auth(w.itadLead)).expect(403)
+    },
+  )
+  // Company-wide read stays open to any authenticated user.
+  it('any authenticated user can read the holiday calendar (200)', async () => {
+    await request(app).get('/api/admin/holidays').set(...auth(w.itadMember)).expect(200)
+  })
+})
+
 describe('member profile — ownership + department scope (IDOR)', () => {
   it('a member can view their OWN profile (200)', async () => {
     await request(app).get(`/api/members/${w.itadMember.id}`).set(...auth(w.itadMember)).expect(200)
