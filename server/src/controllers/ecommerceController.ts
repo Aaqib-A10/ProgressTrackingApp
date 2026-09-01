@@ -147,19 +147,19 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     create: { userId: me.id, date: dateValue, status, notes: notes ?? null, pricingNotes: pricing },
   })
 
-  // Replace the lines — only valid dept tags, only on submitted days.
-  await prisma.ecommerceListingLine.deleteMany({ where: { entryId: entry.id } })
+  // Replace the lines atomically (compute rows, then delete+recreate in one
+  // transaction) — only valid dept tags, only on submitted days.
+  let rows: { taskTypeId: string; marketplaceId: string; listings: number }[] = []
   if (status === 'SUBMITTED' && lines?.length) {
     const [taskTypes, marketplaces] = await Promise.all([deptTags(dept.id, 'TASK_TYPE'), deptTags(dept.id, 'MARKETPLACE')])
     const taskIds = new Set(taskTypes.map((t) => t.id))
     const mpIds = new Set(marketplaces.map((m) => m.id))
-    const rows = lines.filter((l) => l.listings > 0 && taskIds.has(l.taskTypeId) && mpIds.has(l.marketplaceId))
-    if (rows.length) {
-      await prisma.ecommerceListingLine.createMany({
-        data: rows.map((l) => ({ entryId: entry.id, taskTypeId: l.taskTypeId, marketplaceId: l.marketplaceId, listings: l.listings })),
-      })
-    }
+    rows = lines.filter((l) => l.listings > 0 && taskIds.has(l.taskTypeId) && mpIds.has(l.marketplaceId))
   }
+  await prisma.$transaction([
+    prisma.ecommerceListingLine.deleteMany({ where: { entryId: entry.id } }),
+    ...(rows.length ? [prisma.ecommerceListingLine.createMany({ data: rows.map((l) => ({ entryId: entry.id, taskTypeId: l.taskTypeId, marketplaceId: l.marketplaceId, listings: l.listings })) })] : []),
+  ])
 
   await prisma.auditLog.create({
     data: { userId: me.id, entityType: 'EcommerceDailyEntry', entityId: entry.id, action: existing ? 'UPDATE' : 'CREATE', after: { status, lines: lines ?? [] } },

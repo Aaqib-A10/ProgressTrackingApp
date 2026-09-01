@@ -144,18 +144,18 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     create: { userId: me.id, date: dateValue, status, notes: notes ?? null, ...metrics },
   })
 
-  // Replace the per-country breakdown — only valid dept countries, only on submitted days.
-  await prisma.talkloopCountryCount.deleteMany({ where: { entryId: entry.id } })
+  // Replace the per-country breakdown atomically (compute rows, then delete+recreate
+  // in one transaction) — only valid dept countries, only on submitted days.
+  let rows: { tagId: string; calls: number; demos: number }[] = []
   if (status === 'SUBMITTED') {
     const countries = await deptCountries(dept.id)
     const validIds = new Set(countries.map((t) => t.id))
-    const rows = (countryCounts ?? []).filter((c) => (c.calls > 0 || c.demos > 0) && validIds.has(c.tagId))
-    if (rows.length) {
-      await prisma.talkloopCountryCount.createMany({
-        data: rows.map((c) => ({ entryId: entry.id, tagId: c.tagId, calls: c.calls, demos: c.demos })),
-      })
-    }
+    rows = (countryCounts ?? []).filter((c) => (c.calls > 0 || c.demos > 0) && validIds.has(c.tagId))
   }
+  await prisma.$transaction([
+    prisma.talkloopCountryCount.deleteMany({ where: { entryId: entry.id } }),
+    ...(rows.length ? [prisma.talkloopCountryCount.createMany({ data: rows.map((c) => ({ entryId: entry.id, tagId: c.tagId, calls: c.calls, demos: c.demos })) })] : []),
+  ])
 
   await prisma.auditLog.create({
     data: {

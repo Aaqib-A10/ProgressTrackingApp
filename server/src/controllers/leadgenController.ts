@@ -165,20 +165,19 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
   })
 
   // Replace the breakdown — industries (VERTICAL) and lead types (LEAD_TYPE) share
-  // the same count table. Only valid dept tags, only on submitted days.
-  await prisma.leadGenVerticalCount.deleteMany({ where: { entryId: entry.id } })
+  // the same count table. Only valid dept tags, only on submitted days. Compute the
+  // rows first, then delete+recreate in ONE transaction so a failure can't wipe the
+  // breakdown without rewriting it.
+  let rows: { tagId: string; count: number }[] = []
   if (status === 'SUBMITTED') {
     const [verticals, leadTypes] = await Promise.all([deptVerticals(dept.id), deptLeadTypes(dept.id)])
     const validIds = new Set([...verticals, ...leadTypes].map((t) => t.id))
-    const rows = [...(verticalCounts ?? []), ...(leadTypeCounts ?? [])].filter(
-      (c) => c.count > 0 && validIds.has(c.tagId),
-    )
-    if (rows.length) {
-      await prisma.leadGenVerticalCount.createMany({
-        data: rows.map((c) => ({ entryId: entry.id, tagId: c.tagId, count: c.count })),
-      })
-    }
+    rows = [...(verticalCounts ?? []), ...(leadTypeCounts ?? [])].filter((c) => c.count > 0 && validIds.has(c.tagId))
   }
+  await prisma.$transaction([
+    prisma.leadGenVerticalCount.deleteMany({ where: { entryId: entry.id } }),
+    ...(rows.length ? [prisma.leadGenVerticalCount.createMany({ data: rows.map((c) => ({ entryId: entry.id, tagId: c.tagId, count: c.count })) })] : []),
+  ])
 
   await prisma.auditLog.create({
     data: {

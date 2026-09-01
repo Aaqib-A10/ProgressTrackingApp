@@ -267,15 +267,19 @@ async function reconcileStaleCheckIn(userId: string, existing: DayWithBreaks, sh
     // (earliest check-in, latest check-out), move its breaks, then vacate today.
     const ins = [clash.checkInAt, existing.checkInAt].filter((d): d is Date => !!d)
     const outs = [clash.checkOutAt, existing.checkOutAt].filter((d): d is Date => !!d)
-    await prisma.attendanceDay.update({
-      where: { id: clash.id },
-      data: {
-        checkInAt: ins.reduce((a, b) => (a < b ? a : b)),
-        checkOutAt: outs.length ? outs.reduce((a, b) => (a > b ? a : b)) : null,
-      },
-    })
-    await prisma.breakEntry.updateMany({ where: { dayId: existing.id }, data: { dayId: clash.id } })
-    await prisma.attendanceDay.update({ where: { id: existing.id }, data: { checkInAt: null, checkOutAt: null, checkInIp: null, checkOutIp: null } })
+    // Atomic: merge times, reparent breaks, and vacate today's slot together so a
+    // mid-sequence failure can't leave reparented breaks or a half-merged day.
+    await prisma.$transaction([
+      prisma.attendanceDay.update({
+        where: { id: clash.id },
+        data: {
+          checkInAt: ins.reduce((a, b) => (a < b ? a : b)),
+          checkOutAt: outs.length ? outs.reduce((a, b) => (a > b ? a : b)) : null,
+        },
+      }),
+      prisma.breakEntry.updateMany({ where: { dayId: existing.id }, data: { dayId: clash.id } }),
+      prisma.attendanceDay.update({ where: { id: existing.id }, data: { checkInAt: null, checkOutAt: null, checkInIp: null, checkOutIp: null } }),
+    ])
   }
   return true
 }

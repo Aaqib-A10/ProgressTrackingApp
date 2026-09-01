@@ -144,12 +144,16 @@ export async function socialUpsert(req: AuthedRequest, res: Response): Promise<v
     update: { status, notes: notes ?? null, ...metrics },
     create: { userId: me.id, date: dateValue, status, notes: notes ?? null, ...metrics },
   })
-  await prisma.socialPlatformCount.deleteMany({ where: { entryId: entry.id } })
+  // Atomic replace: compute rows, then delete+recreate in one transaction.
+  let rows: { tagId: string; posts: number }[] = []
   if (status === 'SUBMITTED' && platformCounts?.length) {
     const valid = new Set((await prisma.tag.findMany({ where: { departmentId: dept?.id, type: 'PLATFORM' } })).map((t) => t.id))
-    const rows = platformCounts.filter((p) => p.posts > 0 && valid.has(p.tagId))
-    if (rows.length) await prisma.socialPlatformCount.createMany({ data: rows.map((p) => ({ entryId: entry.id, tagId: p.tagId, posts: p.posts })) })
+    rows = platformCounts.filter((p) => p.posts > 0 && valid.has(p.tagId))
   }
+  await prisma.$transaction([
+    prisma.socialPlatformCount.deleteMany({ where: { entryId: entry.id } }),
+    ...(rows.length ? [prisma.socialPlatformCount.createMany({ data: rows.map((p) => ({ entryId: entry.id, tagId: p.tagId, posts: p.posts })) })] : []),
+  ])
   const full = await prisma.socialDailyEntry.findUniqueOrThrow({ where: { id: entry.id }, include: { platformCounts: { include: { tag: true } } } })
   res.json({ entry: serializeSocial(full) })
 }
