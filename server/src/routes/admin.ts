@@ -57,10 +57,11 @@ adminRouter.get('/leave/members', teamLeadOrAdmin, asyncHandler(listLeaveMembers
 adminRouter.post('/leave', teamLeadOrAdmin, asyncHandler(createLeave))
 adminRouter.delete('/leave/:id', teamLeadOrAdmin, asyncHandler(deleteLeave))
 
-// Activity log — sign-ins + data-change audit (Super Admin)
-adminRouter.get('/login-events', superAdmin, asyncHandler(listLoginEvents))
-adminRouter.get('/audit-log', superAdmin, asyncHandler(listAuditLog))
-adminRouter.get('/attendance-activity', superAdmin, asyncHandler(listAttendanceActivity))
+// Activity log — sign-ins + attendance + data-change audit. Super Admin sees all;
+// Team Lead sees only their own department (scoped in-handler via activityScope).
+adminRouter.get('/login-events', teamLeadOrAdmin, asyncHandler(listLoginEvents))
+adminRouter.get('/audit-log', teamLeadOrAdmin, asyncHandler(listAuditLog))
+adminRouter.get('/attendance-activity', teamLeadOrAdmin, asyncHandler(listAttendanceActivity))
 
 // Office networks — IP allowlist for attendance (Super Admin)
 adminRouter.get('/office-networks', superAdmin, asyncHandler(listOfficeNetworks))

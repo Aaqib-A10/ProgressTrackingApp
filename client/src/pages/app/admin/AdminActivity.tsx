@@ -6,7 +6,8 @@ import { PillFilter } from '../../../components/ui/PillFilter'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
-import { listUsers, listLoginEvents, listAuditLog, listAttendanceActivity, type AdminUser, type LoginEvent, type AuditEntry, type AttendanceEvent } from '../../../lib/adminApi'
+import { useAuth } from '../../../lib/auth'
+import { listUsers, listTeamMembers, listLoginEvents, listAuditLog, listAttendanceActivity, type LoginEvent, type AuditEntry, type AttendanceEvent } from '../../../lib/adminApi'
 
 type Tab = 'signins' | 'activity' | 'attendance'
 const sel = 'h-10 rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
@@ -48,14 +49,22 @@ function attLabel(e: AttendanceEvent): string {
 export default function AdminActivity() {
   const { range, custom } = useRange()
   const { addToast } = useToast()
+  const { user } = useAuth()
   const [tab, setTab] = useState<Tab>('signins')
-  const [users, setUsers] = useState<AdminUser[]>([])
+  // Member filter options: Super Admin lists everyone; a Team Lead lists only their
+  // own department's members (both endpoints return id + name).
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([])
   const [userId, setUserId] = useState('')
   const [events, setEvents] = useState<LoginEvent[] | null>(null)
   const [entries, setEntries] = useState<AuditEntry[] | null>(null)
   const [attendance, setAttendance] = useState<AttendanceEvent[] | null>(null)
 
-  useEffect(() => { listUsers().then((r) => setUsers(r.users)).catch(() => undefined) }, [])
+  useEffect(() => {
+    const load = user?.role === 'SUPER_ADMIN'
+      ? listUsers().then((r) => r.users as { id: string; name: string }[])
+      : listTeamMembers().then((r) => r.members as { id: string; name: string }[])
+    load.then(setUsers).catch(() => undefined)
+  }, [user?.role])
 
   useEffect(() => {
     let active = true

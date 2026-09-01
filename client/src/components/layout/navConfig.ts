@@ -209,7 +209,7 @@ export const NAV_GROUPS: NavGroup[] = [
     color: '#EF4444',
     items: [
       { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, roles: ['SUPER_ADMIN'] },
-      { label: 'Activity Log', to: '/app/admin/activity', icon: History, roles: ['SUPER_ADMIN'] },
+      { label: 'Activity Log', to: '/app/admin/activity', icon: History, roles: ['SUPER_ADMIN', 'TEAM_LEAD'] },
       { label: 'Users', to: '/app/admin/users', icon: UserCog, roles: ['SUPER_ADMIN'], badge: { text: 'ADMIN', tone: 'danger' } },
       { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon, roles: ADMIN_ROLES },
       { label: 'Tags', to: '/app/admin/tags', icon: Tags, roles: ADMIN_ROLES },

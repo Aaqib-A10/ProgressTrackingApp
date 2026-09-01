@@ -862,13 +862,40 @@ function activityWindow(q: AuthedRequest['query']): { gte: Date; lte: Date } {
   return { gte: dbDateFromString(r.startDate), lte: new Date(dbDateFromString(r.endDate).getTime() + 86_400_000 - 1) }
 }
 
-/** GET /api/admin/login-events — sign-in history (Super Admin). */
+/**
+ * Activity-log access scope. Super Admin sees everyone; a Team Lead sees only
+ * their own department's members; anyone else is forbidden (403 sent).
+ * `userIds === null` means unrestricted (Super Admin); an array is the TL's dept.
+ */
+async function activityScope(req: AuthedRequest, res: Response): Promise<{ ok: false } | { ok: true; userIds: string[] | null }> {
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { role: true, departmentId: true } })
+  if (me.role === 'SUPER_ADMIN') return { ok: true, userIds: null }
+  if (me.role === 'TEAM_LEAD') {
+    const rows = me.departmentId
+      ? await prisma.user.findMany({ where: { departmentId: me.departmentId }, select: { id: true } })
+      : []
+    return { ok: true, userIds: rows.map((r) => r.id) }
+  }
+  res.status(403).json({ error: 'Forbidden' })
+  return { ok: false }
+}
+
+/** Combine the scope with an optional ?userId filter into a Prisma `userId` where clause. */
+function scopedUserIdWhere(userIds: string[] | null, requested?: string): { userId?: string | { in: string[] } } {
+  if (userIds === null) return requested ? { userId: requested } : {}
+  // Team Lead: constrain to their department; honor a specific ?userId only if in-dept.
+  if (requested) return { userId: userIds.includes(requested) ? requested : '__no_such_user__' }
+  return { userId: { in: userIds } }
+}
+
+/** GET /api/admin/login-events — sign-in history (Super Admin: all; Team Lead: own department). */
 export async function listLoginEvents(req: AuthedRequest, res: Response): Promise<void> {
-  if (!(await requireSuperAdmin(req, res))) return
+  const scope = await activityScope(req, res)
+  if (!scope.ok) return
   const { gte, lte } = activityWindow(req.query)
   const userId = typeof req.query.userId === 'string' && req.query.userId ? (req.query.userId as string) : undefined
   const events = await prisma.loginEvent.findMany({
-    where: { createdAt: { gte, lte }, ...(userId ? { userId } : {}) },
+    where: { createdAt: { gte, lte }, ...scopedUserIdWhere(scope.userIds, userId) },
     orderBy: { createdAt: 'desc' },
     take: 500,
     include: { user: { select: { name: true } } },
@@ -887,14 +914,15 @@ export async function listLoginEvents(req: AuthedRequest, res: Response): Promis
   })
 }
 
-/** GET /api/admin/audit-log — data-change activity (Super Admin). First reader of AuditLog. */
+/** GET /api/admin/audit-log — data-change activity (Super Admin: all; Team Lead: own department). */
 export async function listAuditLog(req: AuthedRequest, res: Response): Promise<void> {
-  if (!(await requireSuperAdmin(req, res))) return
+  const scope = await activityScope(req, res)
+  if (!scope.ok) return
   const { gte, lte } = activityWindow(req.query)
   const userId = typeof req.query.userId === 'string' && req.query.userId ? (req.query.userId as string) : undefined
   const entityType = typeof req.query.entityType === 'string' && req.query.entityType ? (req.query.entityType as string) : undefined
   const entries = await prisma.auditLog.findMany({
-    where: { createdAt: { gte, lte }, ...(userId ? { userId } : {}), ...(entityType ? { entityType } : {}) },
+    where: { createdAt: { gte, lte }, ...scopedUserIdWhere(scope.userIds, userId), ...(entityType ? { entityType } : {}) },
     orderBy: { createdAt: 'desc' },
     take: 500,
     include: { user: { select: { name: true } } },
@@ -916,12 +944,13 @@ export async function listAuditLog(req: AuthedRequest, res: Response): Promise<v
  * Reconstructed from AttendanceDay + BreakEntry so it covers history, not just going-forward.
  */
 export async function listAttendanceActivity(req: AuthedRequest, res: Response): Promise<void> {
-  if (!(await requireSuperAdmin(req, res))) return
+  const scope = await activityScope(req, res)
+  if (!scope.ok) return
   const { gte, lte } = activityWindow(req.query)
   const userId = typeof req.query.userId === 'string' && req.query.userId ? (req.query.userId as string) : undefined
   const days = await prisma.attendanceDay.findMany({
     // `date` is the shift day; the window bounds (midnight → end-of-day) select whole days.
-    where: { date: { gte, lte }, ...(userId ? { userId } : {}) },
+    where: { date: { gte, lte }, ...scopedUserIdWhere(scope.userIds, userId) },
     include: { user: { select: { name: true } }, breaks: true },
   })
   type Ev = { userName: string; kind: 'CHECK_IN' | 'CHECK_OUT' | 'BREAK_START' | 'BREAK_END'; breakType?: string; at: Date; ua: string | null; mobile: boolean }

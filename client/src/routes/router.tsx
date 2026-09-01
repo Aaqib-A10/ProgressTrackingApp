@@ -175,7 +175,7 @@ export const router = createBrowserRouter([
       { path: 'admin/leave', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminLeave /></RequireRole> },
       { path: 'admin/networks', element: <RequireRole roles={['SUPER_ADMIN']}><AdminNetworks /></RequireRole> },
       { path: 'admin/financials', element: <RequireRole roles={['SUPER_ADMIN']}><FinancialReports /></RequireRole> },
-      { path: 'admin/activity', element: <RequireRole roles={['SUPER_ADMIN']}><AdminActivity /></RequireRole> },
+      { path: 'admin/activity', element: <RequireRole roles={['SUPER_ADMIN', 'TEAM_LEAD']}><AdminActivity /></RequireRole> },
     ],
   },
 

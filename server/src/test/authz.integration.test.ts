@@ -69,16 +69,38 @@ describe('router-level RBAC guards (AUDIT §2.9/§3.1)', () => {
       await request(app).get(path).set(...auth(w.itadLead)).expect(200)
     },
   )
-  // SA-only surfaces: a TEAM_LEAD is blocked at the router.
-  it.each(['/api/admin/office-networks', '/api/admin/login-events', '/api/admin/audit-log'])(
-    'TEAM_LEAD is forbidden on %s (403)',
-    async (path) => {
-      await request(app).get(path).set(...auth(w.itadLead)).expect(403)
-    },
-  )
+  // SA-only surface: a TEAM_LEAD is still blocked on office networks.
+  it('TEAM_LEAD is forbidden on /api/admin/office-networks (403)', async () => {
+    await request(app).get('/api/admin/office-networks').set(...auth(w.itadLead)).expect(403)
+  })
   // Company-wide read stays open to any authenticated user.
   it('any authenticated user can read the holiday calendar (200)', async () => {
     await request(app).get('/api/admin/holidays').set(...auth(w.itadMember)).expect(200)
+  })
+})
+
+describe('activity log — Team Lead access is allowed but department-scoped', () => {
+  it.each(['/api/admin/login-events', '/api/admin/audit-log', '/api/admin/attendance-activity'])(
+    'TEAM_LEAD can read %s (200)',
+    async (path) => {
+      await request(app).get(path).set(...auth(w.itadLead)).expect(200)
+    },
+  )
+  it.each(['/api/admin/login-events', '/api/admin/audit-log', '/api/admin/attendance-activity'])(
+    'MEMBER is still forbidden on %s (403)',
+    async (path) => {
+      await request(app).get(path).set(...auth(w.itadMember)).expect(403)
+    },
+  )
+  it('a TEAM_LEAD sees ONLY their own department in the activity log', async () => {
+    // Two sign-ins in different departments; the ITAD lead must see only the ITAD one.
+    await prisma.loginEvent.createMany({
+      data: [{ userId: w.itadMember.id, kind: 'LOGIN' }, { userId: w.leadgenMember.id, kind: 'LOGIN' }],
+    })
+    const res = await request(app).get('/api/admin/login-events').set(...auth(w.itadLead)).expect(200)
+    const names = res.body.events.map((e: { userName: string }) => e.userName)
+    expect(names).toContain('itad member')
+    expect(names).not.toContain('leadgen member')
   })
 })
 
