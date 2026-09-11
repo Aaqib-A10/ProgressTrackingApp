@@ -3,6 +3,9 @@ import { getBoard, createTask, updateTask, deleteTask, getTask, addComment } fro
 import { seoGet, seoUpsert, socialGet, socialUpsert, contentList, contentGet, contentUpsert } from '../controllers/marketingActivityController'
 import { calendar, marketingAnalytics, socialPlanner } from '../controllers/marketingViewsController'
 import { listBrands, createBrand, updateBrand, deleteBrand } from '../controllers/marketingBrandController'
+import { listProfiles, createProfile, updateProfile, deleteProfile } from '../controllers/marketingProfileController'
+import { listSearchTerms, createSearchTerm, updateSearchTerm, deleteSearchTerm } from '../controllers/marketingSearchTermController'
+import { listBusinessSuites, createBusinessSuite, updateBusinessSuite, deleteBusinessSuite } from '../controllers/marketingBusinessSuiteController'
 import { getMonthly, upsertMonthly, compareMonthly, crossBrand } from '../controllers/marketingSocialMonthlyController'
 import { syncSeo, uploadSeoCsv } from '../controllers/marketingSeoController'
 import { listBlogs, createBlog, updateBlog, deleteBlog, blogCounts } from '../controllers/marketingBlogController'
@@ -38,6 +41,24 @@ marketingRouter.get('/brands', asyncHandler(listBrands))
 marketingRouter.post('/brands', asyncHandler(createBrand))
 marketingRouter.patch('/brands/:id', asyncHandler(updateBrand))
 marketingRouter.delete('/brands/:id', asyncHandler(deleteBrand))
+
+// Active platform profiles per brand (Profiles & Platforms registry)
+marketingRouter.get('/profiles', asyncHandler(listProfiles))
+marketingRouter.post('/profiles', asyncHandler(createProfile))
+marketingRouter.patch('/profiles/:id', asyncHandler(updateProfile))
+marketingRouter.delete('/profiles/:id', asyncHandler(deleteProfile))
+
+// SEO search-term landing pages per brand (target + live/total ratio)
+marketingRouter.get('/search-terms', asyncHandler(listSearchTerms))
+marketingRouter.post('/search-terms', asyncHandler(createSearchTerm))
+marketingRouter.patch('/search-terms/:id', asyncHandler(updateSearchTerm))
+marketingRouter.delete('/search-terms/:id', asyncHandler(deleteSearchTerm))
+
+// Meta Business Suites (shared across brands; FB/IG profiles connect to one)
+marketingRouter.get('/business-suites', asyncHandler(listBusinessSuites))
+marketingRouter.post('/business-suites', asyncHandler(createBusinessSuite))
+marketingRouter.patch('/business-suites/:id', asyncHandler(updateBusinessSuite))
+marketingRouter.delete('/business-suites/:id', asyncHandler(deleteBusinessSuite))
 
 // Monthly per-brand social stats
 marketingRouter.get('/social/monthly', asyncHandler(getMonthly))

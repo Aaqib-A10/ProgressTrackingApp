@@ -29,6 +29,7 @@ import {
   Wifi,
   Megaphone,
   Mail,
+  Globe,
   Shield,
   DollarSign,
   PhoneCall,
@@ -162,6 +163,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'] },
       { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart, departments: ['MARKETING'], roles: TL_ROLES },
       { label: 'Brands', to: '/app/marketing/brands', icon: Building2, departments: ['MARKETING'], roles: ADMIN_ROLES },
+      { label: 'Profiles & Platforms', to: '/app/marketing/profiles', icon: Globe, departments: ['MARKETING'], roles: ADMIN_ROLES },
     ],
     subgroups: [
       {

@@ -114,6 +114,7 @@ model Department {
   meetingNotes    MeetingNote[]
   bids            Bid[]
   brands          Brand[]
+  businessSuites  BusinessSuite[]
   marketingPlans  MarketingPlan[]
   salaryRecords   SalaryRecord[]
 }
@@ -126,10 +127,10 @@ model SubDepartment {
   department   Department @relation(fields: [departmentId], references: [id])
   createdAt    DateTime   @default(now())
 
-  users          User[]
+  users           User[]
   userMemberships UserDepartment[]
-  targets        Target[]
-  marketingPlans MarketingPlan[]
+  targets         Target[]
+  marketingPlans  MarketingPlan[]
 
   @@unique([departmentId, slug])
 }
@@ -137,16 +138,16 @@ model SubDepartment {
 // ---------- Users & auth ----------
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String? // null for SSO-only accounts
-  googleId     String?    @unique
-  name         String
-  role         Role       @default(MEMBER)
-  status       UserStatus @default(ACTIVE)
-  isActive     Boolean    @default(true)
+  id                String     @id @default(cuid())
+  email             String     @unique
+  passwordHash      String? // null for SSO-only accounts
+  googleId          String?    @unique
+  name              String
+  role              Role       @default(MEMBER)
+  status            UserStatus @default(ACTIVE)
+  isActive          Boolean    @default(true)
   // Permanently remote: exempt from the office-network IP check-in restriction.
-  attendanceRemote Boolean @default(false)
+  attendanceRemote  Boolean    @default(false)
   // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
   // password change, and admin password reset to revoke existing tokens.
   sessionsValidFrom DateTime?
@@ -161,7 +162,7 @@ model User {
   subDepartment   SubDepartment? @relation(fields: [subDepartmentId], references: [id])
 
   // All departments this user belongs to, each with its own role + sub-department.
-  memberships     UserDepartment[]
+  memberships UserDepartment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -175,11 +176,11 @@ model User {
   marketingTasks  MarketingTask[]
   leaveDays       LeaveDay[]
   attendanceDays  AttendanceDay[]
-  attendanceShift AttendanceShift?    @relation("UserShift")
-  targets         Target[]            @relation("UserTargets")
-  setTargets      Target[]            @relation("TargetSetBy")
-  salaries        SalaryRecord[]      @relation("UserSalaries")
-  setSalaries     SalaryRecord[]      @relation("SalarySetBy")
+  attendanceShift AttendanceShift?     @relation("UserShift")
+  targets         Target[]             @relation("UserTargets")
+  setTargets      Target[]             @relation("TargetSetBy")
+  salaries        SalaryRecord[]       @relation("UserSalaries")
+  setSalaries     SalaryRecord[]       @relation("SalarySetBy")
   auditLogs       AuditLog[]
   loginEvents     LoginEvent[]
 
@@ -193,20 +194,20 @@ model User {
 
   attachments EntryAttachment[]
 
-  ecommerceEntries  EcommerceDailyEntry[]
-  ecomTasksAssigned EcommerceTask[]       @relation("EcomTaskAssignee")
-  ecomTasksCreated  EcommerceTask[]       @relation("EcomTaskCreator")
-  ecomTaskComments  EcomTaskComment[]     @relation("EcomCommentAuthor")
+  ecommerceEntries      EcommerceDailyEntry[]
+  ecomTasksAssigned     EcommerceTask[]        @relation("EcomTaskAssignee")
+  ecomTasksCreated      EcommerceTask[]        @relation("EcomTaskCreator")
+  ecomTaskComments      EcomTaskComment[]      @relation("EcomCommentAuthor")
   marketingTaskComments MarketingTaskComment[] @relation("MarketingCommentAuthor")
-  notifications      Notification[] @relation("NotificationRecipient")
-  notificationsActed Notification[] @relation("NotificationActor")
-  stockAssignedTo   StockRequest[]        @relation("StockAssignee")
-  stockAssignedBy   StockRequest[]        @relation("StockAssigner")
+  notifications         Notification[]         @relation("NotificationRecipient")
+  notificationsActed    Notification[]         @relation("NotificationActor")
+  stockAssignedTo       StockRequest[]         @relation("StockAssignee")
+  stockAssignedBy       StockRequest[]         @relation("StockAssigner")
 
-  todos               TodoItem[]
-  meetingNotes        MeetingNote[]        @relation("MeetingNoteAuthor")
-  bids                Bid[]                @relation("BidAgent")
-  attendanceReminders AttendanceReminder[]
+  todos                TodoItem[]
+  meetingNotes         MeetingNote[]         @relation("MeetingNoteAuthor")
+  bids                 Bid[]                 @relation("BidAgent")
+  attendanceReminders  AttendanceReminder[]
   attendanceViolations AttendanceViolation[]
 
   brandSocialEntries    BrandSocialMonthly[] @relation("BrandSocialEnteredBy")
@@ -214,6 +215,8 @@ model User {
   marketingPlansCreated MarketingPlan[]      @relation("MarketingPlanCreatedBy")
   planItemsOwned        MarketingPlanItem[]  @relation("PlanItemOwner")
   adCampaignsCreated    AdCampaign[]         @relation("AdCampaignCreatedBy")
+  brandsOwned           Brand[]              @relation("BrandOwner")
+  brandProfilesOwned    BrandProfile[]       @relation("BrandProfileOwner")
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -398,8 +401,8 @@ model Tag {
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
 
-  verticalCounts LeadGenVerticalCount[]
-  socialCounts   SocialPlatformCount[]
+  verticalCounts        LeadGenVerticalCount[]
+  socialCounts          SocialPlatformCount[]
   talkloopCountryCounts TalkloopCountryCount[]
 
   ecomTaskLines        EcommerceListingLine[] @relation("LineTaskType")
@@ -494,22 +497,22 @@ model LeaveDay {
 /// the `date` is the company-day bucket (companyToday). Worked/break minutes are
 /// computed on read from these + the breaks, never stored.
 model AttendanceDay {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date       DateTime  @db.Date
-  checkInAt  DateTime?
-  checkOutAt DateTime?
-  checkInIp  String? // client IP recorded at check-in (audit / office-network enforcement)
-  checkOutIp String?
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime  @db.Date
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  checkInIp      String? // client IP recorded at check-in (audit / office-network enforcement)
+  checkOutIp     String?
   // Device audit (like LoginEvent): raw UA + the spoof-resistant client-mobile flag.
   checkInUa      String?
   checkInMobile  Boolean?
   checkOutUa     String?
   checkOutMobile Boolean?
-  note       String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  note           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   breaks BreakEntry[]
 
@@ -565,18 +568,18 @@ model AttendanceViolation {
 
 /// A single break within an attendance day. `endAt` null = break still open.
 model BreakEntry {
-  id        String        @id @default(cuid())
-  dayId     String
-  day       AttendanceDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  type      BreakType     @default(BREAK)
-  startAt   DateTime
-  endAt     DateTime?
+  id          String        @id @default(cuid())
+  dayId       String
+  day         AttendanceDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  type        BreakType     @default(BREAK)
+  startAt     DateTime
+  endAt       DateTime?
   // Device audit — captured on break start and (separately) on break end.
   startUa     String?
   startMobile Boolean?
   endUa       String?
   endMobile   Boolean?
-  createdAt DateTime      @default(now())
+  createdAt   DateTime      @default(now())
 
   @@index([dayId])
 }
@@ -586,23 +589,23 @@ model BreakEntry {
 /// A row is one of: company default (both ids null), a department row
 /// (departmentId set), or a per-account override (userId set).
 model AttendanceShift {
-  id              String      @id @default(cuid())
-  departmentId    String?     @unique
-  department      Department? @relation(fields: [departmentId], references: [id])
-  userId          String?     @unique
-  user            User?       @relation("UserShift", fields: [userId], references: [id], onDelete: Cascade)
-  startTime       String // "HH:mm" in the shift's timezone, e.g. "09:00"
-  endTime         String // "HH:mm", e.g. "18:00". If <= startTime the shift crosses midnight (overnight).
+  id                String      @id @default(cuid())
+  departmentId      String?     @unique
+  department        Department? @relation(fields: [departmentId], references: [id])
+  userId            String?     @unique
+  user              User?       @relation("UserShift", fields: [userId], references: [id], onDelete: Cascade)
+  startTime         String // "HH:mm" in the shift's timezone, e.g. "09:00"
+  endTime           String // "HH:mm", e.g. "18:00". If <= startTime the shift crosses midnight (overnight).
   // Optional per-weekday start/end overrides: { "1": { startTime, endTime }, ... }
   // (0=Sun..6=Sat). Weekdays absent here use the base startTime/endTime above.
-  dayTimes        Json?
-  graceMin        Int         @default(10)
-  requiredMinutes Int         @default(480) // full-shift target; worked >= this = shift completed
-  brbAllowanceMin Int         @default(20) // total BRB minutes allowed per day
-  breakAllowanceMin Int       @default(65) // total regular break minutes allowed per day (1h05m)
-  workingDays     Int[]       @default([1, 2, 3, 4, 5]) // 0=Sun … 6=Sat; which weekdays are worked
-  timeZone        String? // IANA tz (e.g. "America/New_York"); null = company timezone
-  updatedAt       DateTime    @updatedAt
+  dayTimes          Json?
+  graceMin          Int         @default(10)
+  requiredMinutes   Int         @default(480) // full-shift target; worked >= this = shift completed
+  brbAllowanceMin   Int         @default(20) // total BRB minutes allowed per day
+  breakAllowanceMin Int         @default(65) // total regular break minutes allowed per day (1h05m)
+  workingDays       Int[]       @default([1, 2, 3, 4, 5]) // 0=Sun … 6=Sat; which weekdays are worked
+  timeZone          String? // IANA tz (e.g. "America/New_York"); null = company timezone
+  updatedAt         DateTime    @updatedAt
 }
 
 // ---------- RDP inventory & assignment history (Ecommerce/CSR/Shipping) ----------
@@ -932,19 +935,33 @@ model MarketingTaskComment {
 /// Computers, Recycle Technologies). The spine that ties monthly social stats,
 /// blog counts and master-plan items together. User-manageable (add/edit).
 model Brand {
-  id           String     @id @default(cuid())
-  departmentId String // always the MARKETING department
-  department   Department @relation(fields: [departmentId], references: [id])
-  name         String
-  slug         String
-  website      String?
-  isActive     Boolean    @default(true) // soft-delete; preserves historical stats
+  id            String       @id @default(cuid())
+  departmentId  String // always the MARKETING department
+  department    Department   @relation(fields: [departmentId], references: [id])
+  name          String
+  slug          String
+  website       String?
+  isActive      Boolean      @default(true) // soft-delete; preserves historical stats
+  // Service tier — how much active management this brand suite gets.
+  tier          ServiceTier  @default(TIER_1)
+  // Brand owner (the lead accountable for this suite). Nullable; SetNull on user delete.
+  ownerId       String?
+  owner         User?        @relation("BrandOwner", fields: [ownerId], references: [id])
+  // CRM connection tracker (registry only — no live sync). "Connected" once crmStatus = CONNECTED.
+  crmProvider   CrmProvider?
+  crmStatus     CrmStatus    @default(NONE)
+  crmAccount    String? // account name / workspace / URL
+  crmNote       String?
+  crmCheckedAt  DateTime? // last time the CRM connection was verified/reviewed
+  // SEO search-term landing pages (e.g. RTI's 80-100 keyword pages on one site):
+  // the goal count. Live pages are tracked as SearchTermPage rows; ratio = live/target.
+  searchTermTarget Int?
   // SEO integration — a brand is "connected" once both are set.
   gscSiteUrl    String? // Search Console property, e.g. "sc-domain:example.com" or "https://example.com/"
   ga4PropertyId String? // GA4 property, e.g. "properties/123456789" (or the bare numeric id)
   seoSyncedAt   DateTime? // last successful GSC/GA sync
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   socialStats BrandSocialMonthly[]
   seoDaily    BrandSeoDaily[]
@@ -953,9 +970,133 @@ model Brand {
   planItems   MarketingPlanItem[]
   adCampaigns AdCampaign[]
   targets     Target[]
+  profiles    BrandProfile[]
+  searchTerms SearchTermPage[]
 
   @@unique([departmentId, slug])
   @@index([departmentId, isActive])
+}
+
+/// A single SEO search-term landing page for a brand (one keyword/term → one URL).
+/// A brand's `searchTermTarget` is the goal; the count of status=LIVE rows is the
+/// numerator of the live/target ratio.
+model SearchTermPage {
+  id        String           @id @default(cuid())
+  brandId   String
+  brand     Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  term      String // the search term / keyword this page targets
+  url       String? // the published page URL (null until built)
+  status    SearchTermStatus @default(PLANNED)
+  note      String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([brandId])
+}
+
+/// Build state of a search-term page. LIVE counts toward the live/target ratio.
+enum SearchTermStatus {
+  PLANNED
+  IN_PROGRESS
+  LIVE
+}
+
+/// Service tier for a brand suite — drives how effort is allocated across the portfolio.
+enum ServiceTier {
+  TIER_1
+  TIER_2
+  MAINTENANCE
+}
+
+/// CRM the brand is (or is being) connected to — registry/tracker only.
+enum CrmProvider {
+  HUBSPOT
+  SALESFORCE
+  ZOHO
+  PIPEDRIVE
+  MONDAY
+  OTHER
+}
+
+/// Tracked state of a brand's CRM connection (no live integration).
+enum CrmStatus {
+  NONE
+  PLANNED
+  IN_PROGRESS
+  CONNECTED
+}
+
+/// A single platform account we manage for a brand (its Facebook page, LinkedIn
+/// company profile, X handle, website, …). A brand may hold more than one per
+/// platform (e.g. regional pages), so no per-platform uniqueness is enforced.
+model BrandProfile {
+  id        String          @id @default(cuid())
+  brandId   String
+  brand     Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platform  ProfilePlatform
+  handle    String? // @handle or page name
+  url       String? // profile URL
+  status    ProfileStatus   @default(ACTIVE)
+  // How this channel is published: centralised via the Mixpost workspace, or
+  // posted manually one login at a time (e.g. Reddit, which Mixpost can't post to).
+  managedVia ManagedVia     @default(MANUAL)
+  // Meta Business Suite / Business Manager this page is connected under (FB/IG).
+  businessSuiteId String?
+  businessSuite   BusinessSuite? @relation(fields: [businessSuiteId], references: [id])
+  ownerId   String?
+  owner     User?           @relation("BrandProfileOwner", fields: [ownerId], references: [id])
+  note      String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([brandId])
+  @@index([businessSuiteId])
+}
+
+/// A Meta Business Suite / Business Manager account. Dept-scoped and shared across
+/// brands (one Business Manager can hold pages for several brands, e.g. the group's
+/// "99 Technologies" BM). FB/IG profiles connect to one via businessSuiteId.
+model BusinessSuite {
+  id                String     @id @default(cuid())
+  departmentId      String
+  department        Department @relation(fields: [departmentId], references: [id])
+  name              String
+  businessManagerId String? // Meta Business Manager ID
+  url               String? // link to the Business Suite / Manager
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  profiles BrandProfile[]
+
+  @@unique([departmentId, name])
+}
+
+/// Platforms a brand profile can live on. Dedicated (superset incl. REDDIT +
+/// WEBSITE) so it stays decoupled from SocialPlatform, which feeds monthly stats.
+enum ProfilePlatform {
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+  X
+  REDDIT
+  YOUTUBE
+  TIKTOK
+  WEBSITE
+  GOOGLE_BUSINESS
+  OTHER
+}
+
+/// Lifecycle of a managed profile.
+enum ProfileStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/// How a profile is published — centralised via Mixpost, or posted manually.
+enum ManagedVia {
+  MIXPOST
+  MANUAL
 }
 
 enum SocialPlatform {
@@ -1015,9 +1156,9 @@ model BrandSocialMonthly {
 /// Upsert key = (brandId, date). CTR and position are averages, not sums —
 /// aggregate them impressions-weighted, never added.
 model BrandSeoDaily {
-  id      String @id @default(cuid())
+  id      String   @id @default(cuid())
   brandId String
-  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand   Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   date    DateTime @db.Date
 
   // Google Search Console
@@ -1044,20 +1185,20 @@ model BrandSeoDaily {
 
 /// A blog/article attributed to a brand, for month-end per-brand counts.
 model BlogPost {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   brandId     String
-  brand       Brand     @relation(fields: [brandId], references: [id])
+  brand       Brand      @relation(fields: [brandId], references: [id])
   title       String
   url         String?
   wordCount   Int?
   status      BlogStatus @default(DRAFT) // publish state (drives the "published or not" column)
   authorId    String?
-  author      User?     @relation("BlogAuthor", fields: [authorId], references: [id])
-  publishedAt DateTime? @db.Date
+  author      User?      @relation("BlogAuthor", fields: [authorId], references: [id])
+  publishedAt DateTime?  @db.Date
   month       String // "YYYY-MM" the blog counts toward (denormalized for fast counts)
   taskId      String? // optional link to the originating MarketingTask card
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([brandId, month])
   @@index([month])
@@ -1072,7 +1213,7 @@ model AdCampaign {
   brand        Brand            @relation(fields: [brandId], references: [id])
   platform     AdPlatform
   month        String // "YYYY-MM" rollup bucket (derived from date)
-  date         DateTime? @db.Date // the campaign's day; nullable for legacy rows (backfilled to month-01)
+  date         DateTime?        @db.Date // the campaign's day; nullable for legacy rows (backfilled to month-01)
   title        String
   campaignType AdCampaignType   @default(OTHER)
   status       AdCampaignStatus @default(ACTIVE)

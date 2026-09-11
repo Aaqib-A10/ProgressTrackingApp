@@ -228,33 +228,231 @@ export function getMarketingAnalytics(range: RangeKey, custom?: CustomRange | nu
 }
 
 // ---------- Brands / profiles ----------
+export type ServiceTier = 'TIER_1' | 'TIER_2' | 'MAINTENANCE'
+export type CrmProvider = 'HUBSPOT' | 'SALESFORCE' | 'ZOHO' | 'PIPEDRIVE' | 'MONDAY' | 'OTHER'
+export type CrmStatus = 'NONE' | 'PLANNED' | 'IN_PROGRESS' | 'CONNECTED'
+
 export interface Brand {
   id: string
   name: string
   slug: string
   website: string | null
   isActive: boolean
+  tier: ServiceTier
+  ownerId: string | null
+  ownerName: string | null
+  // CRM connection tracker (registry only)
+  crmProvider: CrmProvider | null
+  crmStatus: CrmStatus
+  crmAccount: string | null
+  crmNote: string | null
+  crmConnected: boolean
+  crmCheckedAt: string | null
+  // Platform profile counts
+  profileCount: number
+  activeProfiles: number
+  // SEO search-term landing pages: goal + live count for the ratio
+  searchTermTarget: number | null
+  searchTermsTotal: number
+  searchTermsLive: number
   // SEO (Google Search Console + GA4) connection
   gscSiteUrl: string | null
   ga4PropertyId: string | null
   seoConnected: boolean
   seoSyncedAt: string | null
 }
+
+export interface BrandInput {
+  name?: string
+  website?: string | null
+  isActive?: boolean
+  tier?: ServiceTier
+  ownerId?: string | null
+  crmProvider?: CrmProvider | null
+  crmStatus?: CrmStatus
+  crmAccount?: string | null
+  crmNote?: string | null
+  searchTermTarget?: number | null
+  gscSiteUrl?: string | null
+  ga4PropertyId?: string | null
+}
+
 export function listBrands(all = false) {
   return api.get<{ brands: Brand[] }>(`/marketing/brands${all ? '?all=1' : ''}`)
 }
-export function createBrand(input: { name: string; website?: string }) {
+export function createBrand(input: BrandInput & { name: string }) {
   return api.post<{ brand: Brand }>('/marketing/brands', input)
 }
-export function updateBrand(
-  id: string,
-  patch: { name?: string; website?: string | null; isActive?: boolean; gscSiteUrl?: string | null; ga4PropertyId?: string | null },
-) {
+export function updateBrand(id: string, patch: BrandInput) {
   return api.patch<{ brand: Brand }>(`/marketing/brands/${id}`, patch)
 }
 export function deleteBrand(id: string) {
   return api.del(`/marketing/brands/${id}`)
 }
+
+export const SERVICE_TIERS = [
+  { key: 'TIER_1', label: 'Tier 1', tone: 'success' },
+  { key: 'TIER_2', label: 'Tier 2', tone: 'primary' },
+  { key: 'MAINTENANCE', label: 'Maintenance', tone: 'neutral' },
+] as const
+
+export const CRM_PROVIDERS = [
+  { key: 'HUBSPOT', label: 'HubSpot' },
+  { key: 'SALESFORCE', label: 'Salesforce' },
+  { key: 'ZOHO', label: 'Zoho' },
+  { key: 'PIPEDRIVE', label: 'Pipedrive' },
+  { key: 'MONDAY', label: 'monday.com' },
+  { key: 'OTHER', label: 'Other' },
+] as const
+
+export const CRM_STATUSES = [
+  { key: 'NONE', label: 'Not connected', tone: 'neutral' },
+  { key: 'PLANNED', label: 'Planned', tone: 'neutral' },
+  { key: 'IN_PROGRESS', label: 'In progress', tone: 'warning' },
+  { key: 'CONNECTED', label: 'Connected', tone: 'success' },
+] as const
+
+// ---------- Platform profiles (Profiles & Platforms registry) ----------
+export type ProfilePlatform =
+  | 'FACEBOOK' | 'INSTAGRAM' | 'LINKEDIN' | 'X' | 'REDDIT' | 'YOUTUBE' | 'TIKTOK' | 'WEBSITE' | 'GOOGLE_BUSINESS' | 'OTHER'
+export type ProfileStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
+export type ManagedVia = 'MIXPOST' | 'MANUAL'
+
+export interface BrandProfile {
+  id: string
+  brandId: string
+  platform: ProfilePlatform
+  handle: string | null
+  url: string | null
+  status: ProfileStatus
+  managedVia: ManagedVia
+  businessSuiteId: string | null
+  businessSuiteName: string | null
+  ownerId: string | null
+  ownerName: string | null
+  note: string | null
+  updatedAt: string
+}
+
+export interface ProfileInput {
+  platform?: ProfilePlatform
+  handle?: string | null
+  url?: string | null
+  status?: ProfileStatus
+  managedVia?: ManagedVia
+  businessSuiteId?: string | null
+  ownerId?: string | null
+  note?: string | null
+}
+
+export function listProfiles(brandId?: string, all = false) {
+  const q = new URLSearchParams()
+  if (brandId) q.set('brandId', brandId)
+  if (all) q.set('all', '1')
+  const qs = q.toString()
+  return api.get<{ profiles: BrandProfile[] }>(`/marketing/profiles${qs ? `?${qs}` : ''}`)
+}
+export function createProfile(input: ProfileInput & { brandId: string; platform: ProfilePlatform }) {
+  return api.post<{ profile: BrandProfile }>('/marketing/profiles', input)
+}
+export function updateProfile(id: string, patch: ProfileInput) {
+  return api.patch<{ profile: BrandProfile }>(`/marketing/profiles/${id}`, patch)
+}
+export function deleteProfile(id: string) {
+  return api.del(`/marketing/profiles/${id}`)
+}
+
+export const PROFILE_PLATFORMS = [
+  { key: 'FACEBOOK', label: 'Facebook' },
+  { key: 'INSTAGRAM', label: 'Instagram' },
+  { key: 'LINKEDIN', label: 'LinkedIn' },
+  { key: 'X', label: 'X (Twitter)' },
+  { key: 'REDDIT', label: 'Reddit' },
+  { key: 'YOUTUBE', label: 'YouTube' },
+  { key: 'TIKTOK', label: 'TikTok' },
+  { key: 'WEBSITE', label: 'Website' },
+  { key: 'GOOGLE_BUSINESS', label: 'Google Business' },
+  { key: 'OTHER', label: 'Other' },
+] as const
+
+export const PROFILE_STATUSES = [
+  { key: 'ACTIVE', label: 'Active', tone: 'success' },
+  { key: 'PAUSED', label: 'Paused', tone: 'warning' },
+  { key: 'ARCHIVED', label: 'Archived', tone: 'neutral' },
+] as const
+
+export const MANAGED_VIA = [
+  { key: 'MIXPOST', label: 'Mixpost', tone: 'accent' },
+  { key: 'MANUAL', label: 'Manual', tone: 'neutral' },
+] as const
+
+// Platforms that live under a Meta Business Suite / Business Manager.
+export const META_PLATFORMS: ProfilePlatform[] = ['FACEBOOK', 'INSTAGRAM']
+
+// ---------- Meta Business Suites (shared across brands) ----------
+export interface BusinessSuite {
+  id: string
+  name: string
+  businessManagerId: string | null
+  url: string | null
+  profileCount: number
+}
+export interface BusinessSuiteInput {
+  name?: string
+  businessManagerId?: string | null
+  url?: string | null
+}
+export function listBusinessSuites() {
+  return api.get<{ suites: BusinessSuite[] }>('/marketing/business-suites')
+}
+export function createBusinessSuite(input: BusinessSuiteInput & { name: string }) {
+  return api.post<{ suite: BusinessSuite }>('/marketing/business-suites', input)
+}
+export function updateBusinessSuite(id: string, patch: BusinessSuiteInput) {
+  return api.patch<{ suite: BusinessSuite }>(`/marketing/business-suites/${id}`, patch)
+}
+export function deleteBusinessSuite(id: string) {
+  return api.del(`/marketing/business-suites/${id}`)
+}
+
+// ---------- SEO search-term landing pages (per brand) ----------
+export type SearchTermStatus = 'PLANNED' | 'IN_PROGRESS' | 'LIVE'
+
+export interface SearchTermPage {
+  id: string
+  brandId: string
+  term: string
+  url: string | null
+  status: SearchTermStatus
+  note: string | null
+  updatedAt: string
+}
+
+export interface SearchTermInput {
+  term?: string
+  url?: string | null
+  status?: SearchTermStatus
+  note?: string | null
+}
+
+export function listSearchTerms(brandId: string) {
+  return api.get<{ pages: SearchTermPage[] }>(`/marketing/search-terms?brandId=${brandId}`)
+}
+export function createSearchTerm(input: SearchTermInput & { brandId: string; term: string }) {
+  return api.post<{ page: SearchTermPage }>('/marketing/search-terms', input)
+}
+export function updateSearchTerm(id: string, patch: SearchTermInput) {
+  return api.patch<{ page: SearchTermPage }>(`/marketing/search-terms/${id}`, patch)
+}
+export function deleteSearchTerm(id: string) {
+  return api.del(`/marketing/search-terms/${id}`)
+}
+
+export const SEARCH_TERM_STATUSES = [
+  { key: 'PLANNED', label: 'Planned', tone: 'neutral' },
+  { key: 'IN_PROGRESS', label: 'In progress', tone: 'warning' },
+  { key: 'LIVE', label: 'Live', tone: 'success' },
+] as const
 
 // ---------- SEO (Google Search Console + GA4) ----------
 export interface SeoSyncResult { brandId: string; name: string; from: string; to: string; days: number; errors: string[] }

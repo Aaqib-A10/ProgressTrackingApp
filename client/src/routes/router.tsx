@@ -55,6 +55,7 @@ const SeoAnalytics = lazy(() => import('../pages/app/marketing/SeoAnalytics'))
 const EmailMarketing = lazy(() => import('../pages/app/marketing/EmailMarketing'))
 const MarketingAnalytics = lazy(() => import('../pages/app/marketing/MarketingAnalytics'))
 const MarketingBrands = lazy(() => import('../pages/app/marketing/MarketingBrands'))
+const MarketingProfiles = lazy(() => import('../pages/app/marketing/MarketingProfiles'))
 const SocialMonthly = lazy(() => import('../pages/app/marketing/SocialMonthly'))
 const SocialAnalytics = lazy(() => import('../pages/app/marketing/SocialAnalytics'))
 const MarketingBlogs = lazy(() => import('../pages/app/marketing/MarketingBlogs'))
@@ -163,6 +164,7 @@ export const router = createBrowserRouter([
       { path: 'marketing/plan', element: <MasterPlan /> },
       { path: 'marketing/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']}><MarketingAnalytics /></RequireRole> },
       { path: 'marketing/brands', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><MarketingBrands /></RequireRole> },
+      { path: 'marketing/profiles', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><MarketingProfiles /></RequireRole> },
 
       // Attendance (all authed users; team view for TL/Admin)
       { path: 'attendance/me', element: <MyAttendance /> },
