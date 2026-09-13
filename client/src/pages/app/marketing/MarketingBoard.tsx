@@ -184,7 +184,7 @@ function TaskCard({ task, onOpen }: { task: MarketingTask; onOpen: (id: string) 
       <div className="flex items-start gap-2">
         <span className="mt-1 h-full w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: meta.color }} />
         <div className="min-w-0 flex-1">
-          <p className="text-body-md font-medium text-ink">{task.title}</p>
+          <p className="line-clamp-3 break-words text-body-md font-medium text-ink" title={task.title}>{task.title}</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: `${meta.color}1a`, color: meta.color }}>
               {meta.label}
