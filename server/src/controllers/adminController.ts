@@ -837,7 +837,16 @@ export async function deleteLeave(req: AuthedRequest, res: Response): Promise<vo
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  await prisma.leaveDay.delete({ where: { id: req.params.id } }).catch(() => undefined)
+  // Object-level authz: a Team Lead may only delete leave for their own
+  // department (mirrors createLeave). Silently no-op otherwise so the response
+  // is idempotent and doesn't leak which ids exist in other departments.
+  const leave = await prisma.leaveDay.findUnique({
+    where: { id: req.params.id },
+    include: { user: { select: { departmentId: true } } },
+  })
+  if (leave && (me.role === 'SUPER_ADMIN' || leave.user.departmentId === me.departmentId)) {
+    await prisma.leaveDay.delete({ where: { id: leave.id } }).catch(() => undefined)
+  }
   res.status(204).end()
 }
 

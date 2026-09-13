@@ -43,7 +43,8 @@ export function signToken(payload: { sub: string; role: Role }): string {
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, JWT_SECRET) as JwtPayload
+  // Pin the algorithm so a token can't be verified under an unexpected alg.
+  return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload
 }
 
 // --- Stateless password-reset token (no DB table needed) ---
@@ -52,7 +53,7 @@ export function signResetToken(userId: string): string {
 }
 
 export function verifyResetToken(token: string): string {
-  const payload = jwt.verify(token, JWT_SECRET) as { sub: string; kind?: string }
+  const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { sub: string; kind?: string }
   if (payload.kind !== 'reset') throw new Error('Not a reset token')
   return payload.sub
 }

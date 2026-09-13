@@ -31,8 +31,9 @@ export async function sendMail({ to, subject, html, text }: SendOpts): Promise<v
       console.error('[mail] Resend error', res.status, bodyText)
       return
     }
+    // Don't log the recipient address (PII/data-minimization); the Resend id is enough to trace.
     // eslint-disable-next-line no-console
-    console.log('[mail] sent to', to, '-', bodyText)
+    console.log('[mail] sent -', bodyText)
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('[mail] send failed:', e)
