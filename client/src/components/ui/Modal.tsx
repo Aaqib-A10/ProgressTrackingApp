@@ -20,6 +20,12 @@ const SIZES = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl'
 export function Modal({ open, onClose, title, children, footer, size = 'md' }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const restoreRef = useRef<HTMLElement | null>(null)
+  // Hold the latest onClose in a ref so the focus effect can depend on `open`
+  // alone. Callers pass an inline onClose (new identity every render); keeping it
+  // out of the deps prevents the effect from re-running on every keystroke and
+  // stealing focus back to the first focusable (which breaks typing in inputs).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
@@ -31,7 +37,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
     ;(visibleFocusables()[0] ?? dialogRef.current)?.focus()
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
+      if (e.key === 'Escape') { onCloseRef.current(); return }
       if (e.key !== 'Tab') return
       // Trap Tab within the dialog.
       const els = visibleFocusables()
@@ -45,7 +51,9 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
       window.removeEventListener('keydown', onKey)
       restoreRef.current?.focus?.()
     }
-  }, [open, onClose])
+    // onClose is read via onCloseRef; depending on it would re-run on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   if (!open) return null
 
