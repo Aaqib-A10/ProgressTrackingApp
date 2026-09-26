@@ -7,7 +7,7 @@ import ResetPassword from '../pages/auth/ResetPassword'
 import ResetSuccess from '../pages/auth/ResetSuccess'
 import Landing from '../pages/Landing'
 import NotFound from '../pages/NotFound'
-import { RequireAuth, RequireRole, AppShellRoute } from './guards'
+import { RequireAuth, RequireRole, RequireFinance, AppShellRoute } from './guards'
 
 // App screens are code-split — the public landing/auth pages don't pull in
 // Recharts/dnd-kit. Suspense boundary lives in <AppShell>.
@@ -45,6 +45,7 @@ const EcommerceBoard = lazy(() => import('../pages/app/ecommerce/EcommerceBoard'
 const EcommerceStock = lazy(() => import('../pages/app/ecommerce/EcommerceStock'))
 const RdpRecords = lazy(() => import('../pages/app/ecommerce/RdpRecords'))
 const MarketingBoard = lazy(() => import('../pages/app/marketing/MarketingBoard'))
+const MarketingTeam = lazy(() => import('../pages/app/marketing/MarketingTeam'))
 const SeoActivity = lazy(() => import('../pages/app/marketing/SeoActivity'))
 const SocialActivity = lazy(() => import('../pages/app/marketing/SocialActivity'))
 const ContentActivity = lazy(() => import('../pages/app/marketing/ContentActivity'))
@@ -148,6 +149,7 @@ export const router = createBrowserRouter([
 
       // Marketing
       { path: 'marketing/board', element: <MarketingBoard /> },
+      { path: 'marketing/team', element: <RequireRole roles={['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']}><MarketingTeam /></RequireRole> },
       // Social Planner replaces the old editorial calendar — keep the link alive.
       { path: 'marketing/calendar', element: <Navigate to="/app/marketing/planner" replace /> },
       { path: 'marketing/planner', element: <SocialPlanner /> },
@@ -176,7 +178,7 @@ export const router = createBrowserRouter([
       { path: 'admin/tags', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminTags /></RequireRole> },
       { path: 'admin/leave', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminLeave /></RequireRole> },
       { path: 'admin/networks', element: <RequireRole roles={['SUPER_ADMIN']}><AdminNetworks /></RequireRole> },
-      { path: 'admin/financials', element: <RequireRole roles={['SUPER_ADMIN']}><FinancialReports /></RequireRole> },
+      { path: 'admin/financials', element: <RequireFinance><FinancialReports /></RequireFinance> },
       { path: 'admin/activity', element: <RequireRole roles={['SUPER_ADMIN', 'TEAM_LEAD']}><AdminActivity /></RequireRole> },
     ],
   },

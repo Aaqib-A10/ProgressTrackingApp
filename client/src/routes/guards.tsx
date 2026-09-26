@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { Activity } from 'lucide-react'
 import type { Role } from '../lib/types'
 import { useAuth } from '../lib/auth'
+import { canViewFinance } from '../lib/finance'
 import { AppShell } from '../components/layout/AppShell'
 
 function FullScreenSpinner() {
@@ -34,5 +35,13 @@ export function RequireRole({ roles, children }: { roles: Role[]; children: Reac
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
   if (!roles.includes(user.role)) return <Navigate to="/app/dashboard" replace />
+  return <>{children}</>
+}
+
+/** Finance gate — restricted to allowlisted identities (Aqib), not the SUPER_ADMIN role. */
+export function RequireFinance({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  if (!canViewFinance(user)) return <Navigate to="/app/dashboard" replace />
   return <>{children}</>
 }

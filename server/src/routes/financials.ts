@@ -3,13 +3,15 @@ import {
   getFinancialReport, exportFinancialCsv,
   listSalaries, createSalary, updateSalary, deleteSalary,
 } from '../controllers/financialsController'
-import { requireAuth, requireRole } from '../middleware/auth'
+import { requireAuth } from '../middleware/auth'
+import { requireFinanceAccess } from '../lib/financeAccess'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const financialsRouter = Router()
 
-// Financials expose salary figures — Super Admin only, across the whole group.
-financialsRouter.use(requireAuth, requireRole('SUPER_ADMIN'))
+// Financials expose salary + cost/revenue figures — restricted to specific people
+// (Aqib) by identity, not just the SUPER_ADMIN role. See lib/financeAccess.ts.
+financialsRouter.use(requireAuth, requireFinanceAccess)
 
 // The literal .csv route must precede any param routes.
 financialsRouter.get('/report.csv', asyncHandler(exportFinancialCsv))

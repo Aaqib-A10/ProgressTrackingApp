@@ -1,5 +1,8 @@
 import { Router, raw } from 'express'
-import { getBoard, createTask, updateTask, deleteTask, getTask, addComment } from '../controllers/marketingController'
+import {
+  getBoard, createTask, updateTask, deleteTask, getTask, addComment, getTeam,
+  listTaskAttachments, uploadTaskAttachment, downloadTaskAttachment, deleteTaskAttachment,
+} from '../controllers/marketingController'
 import { seoGet, seoUpsert, socialGet, socialUpsert, contentList, contentGet, contentUpsert } from '../controllers/marketingActivityController'
 import { calendar, marketingAnalytics, socialPlanner } from '../controllers/marketingViewsController'
 import { listBrands, createBrand, updateBrand, deleteBrand } from '../controllers/marketingBrandController'
@@ -26,6 +29,15 @@ marketingRouter.get('/tasks/:id', asyncHandler(getTask))
 marketingRouter.patch('/tasks/:id', asyncHandler(updateTask))
 marketingRouter.delete('/tasks/:id', asyncHandler(deleteTask))
 marketingRouter.post('/tasks/:id/comments', asyncHandler(addComment))
+
+// Marketing team tree (members grouped by sub-department + task counts)
+marketingRouter.get('/team', asyncHandler(getTeam))
+
+// Board-card attachments (media/files). Upload is raw binary (express.raw), ?name= filename.
+marketingRouter.get('/tasks/:id/attachments', asyncHandler(listTaskAttachments))
+marketingRouter.post('/tasks/:id/attachments', raw({ type: () => true, limit: '26mb' }), asyncHandler(uploadTaskAttachment))
+marketingRouter.get('/attachments/:id/download', asyncHandler(downloadTaskAttachment))
+marketingRouter.delete('/attachments/:id', asyncHandler(deleteTaskAttachment))
 
 // Sub-department activity
 marketingRouter.get('/seo/entries', asyncHandler(seoGet))

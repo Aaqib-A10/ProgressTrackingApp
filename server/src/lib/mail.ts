@@ -97,3 +97,26 @@ export function sendAttendanceReminderEmail(opts: {
   const text = [`Hi ${opts.name},`, '', line, link].join('\n')
   return sendMail({ to: opts.to, subject: isIn ? 'Reminder: check in for your shift' : 'Reminder: check out of your shift', html, text })
 }
+
+/** Notify an assignee that a marketing board task was assigned to them. */
+export function sendTaskAssignedEmail(opts: { to: string; name: string; taskTitle: string; taskId: string; assignerName: string; dueLabel?: string | null }): Promise<void> {
+  const link = `${APP_URL}/app/marketing/board?task=${encodeURIComponent(opts.taskId)}`
+  const dueLine = opts.dueLabel ? `<p style="font-size:13px;color:#64748B">Due: ${opts.dueLabel}</p>` : ''
+  const html = shell(
+    `Hi ${opts.name},`,
+    `<p style="font-size:14px;line-height:1.5">${opts.assignerName} assigned you a task: <strong>${opts.taskTitle}</strong>.</p>${dueLine}${button(link, 'Open the task')}`,
+  )
+  const text = [`Hi ${opts.name},`, '', `${opts.assignerName} assigned you a task: ${opts.taskTitle}`, opts.dueLabel ? `Due: ${opts.dueLabel}` : '', link].filter((l) => l !== '').join('\n')
+  return sendMail({ to: opts.to, subject: `New task assigned: ${opts.taskTitle}`, html, text })
+}
+
+/** Remind an assignee that an urgent task is due within the hour. */
+export function sendTaskDueSoonEmail(opts: { to: string; name: string; taskTitle: string; taskId: string; dueLabel: string }): Promise<void> {
+  const link = `${APP_URL}/app/marketing/board?task=${encodeURIComponent(opts.taskId)}`
+  const html = shell(
+    `Hi ${opts.name},`,
+    `<p style="font-size:14px;line-height:1.5">Your urgent task <strong>${opts.taskTitle}</strong> is due at <strong>${opts.dueLabel}</strong> — within the hour.</p>${button(link, 'Open the task')}`,
+  )
+  const text = [`Hi ${opts.name},`, '', `Your urgent task "${opts.taskTitle}" is due at ${opts.dueLabel} (within the hour).`, link].join('\n')
+  return sendMail({ to: opts.to, subject: `Due soon: ${opts.taskTitle}`, html, text })
+}

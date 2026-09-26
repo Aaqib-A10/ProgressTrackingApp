@@ -248,16 +248,19 @@ enum AttachmentKind {
   ITAD
   LEAD_GEN
   QA_RECORDING
+  MARKETING_TASK // media/files attached to a marketing board card
 }
 
-/// A file an employee attaches to their daily log (Excel, Word, PDF, ...).
-/// Linked by user + kind + date so it survives entry re-submission.
+/// A file an employee attaches to their daily log (Excel, Word, PDF, ...) or a board card.
+/// Daily-log files are linked by user + kind + date; board-card files by taskId.
 model EntryAttachment {
   id           String         @id @default(cuid())
   userId       String
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind         AttachmentKind
-  date         DateTime       @db.Date
+  date         DateTime?      @db.Date // null for task attachments (not day-scoped)
+  taskId       String? // set for MARKETING_TASK attachments
+  task         MarketingTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
   storedName   String // randomized filename on disk
   originalName String // name shown to the user
   mimeType     String
@@ -267,6 +270,7 @@ model EntryAttachment {
   qaEvaluation QaEvaluation? // set when this attachment is a QA call recording
 
   @@index([userId, kind, date])
+  @@index([taskId])
 }
 
 // ---------- ITAD daily entries (§4.1) ----------
@@ -709,6 +713,14 @@ enum TaskStatus {
   PUBLISHED
 }
 
+/// Task priority (marketing board cards).
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum ContentType {
   BLOG
   LANDING_PAGE
@@ -830,6 +842,7 @@ model MarketingTask {
   description String?
   discipline  MarketingDiscipline
   status      TaskStatus          @default(BACKLOG)
+  priority    Priority            @default(MEDIUM)
   order       Int                 @default(0) // position within its column
 
   assigneeId String?
@@ -853,16 +866,22 @@ model MarketingTask {
   publishedDate DateTime? @db.Date
   completedAt   DateTime? // set when the task reaches PUBLISHED; powers "completed by day/week"
 
+  // Full due timestamp (date + time). Drives the "1h before due" reminder for urgent tasks.
+  dueAt             DateTime?
+  dueReminderSentAt DateTime? // claim stamp so the reminder fires at most once
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  comments MarketingTaskComment[]
+  comments    MarketingTaskComment[]
+  attachments EntryAttachment[]
 
   @@index([status])
   @@index([discipline])
   @@index([scheduledDate])
   @@index([discipline, scheduledDate])
   @@index([assigneeId])
+  @@index([priority, dueAt])
 }
 
 /// Once-only claim so the scheduled monthly report emails each (month, department)
@@ -882,6 +901,8 @@ enum NotificationType {
   BREAK_OVERRUN
   BRB_OVERRUN
   GRACE_LIMIT
+  TASK_ASSIGNED
+  TASK_DUE_SOON
 }
 
 enum BreakType {

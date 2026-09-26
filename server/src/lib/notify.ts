@@ -57,3 +57,49 @@ export async function notifyMentions(opts: {
     })),
   })
 }
+
+/**
+ * "You were assigned a task" in-app notification. Self-assignment is skipped.
+ * Best-effort — never blocks the create/update it hangs off.
+ */
+export async function notifyTaskAssigned(opts: {
+  assigneeId: string
+  actorId: string
+  actorName: string
+  taskTitle: string
+  taskId: string
+}): Promise<void> {
+  if (!opts.assigneeId || opts.assigneeId === opts.actorId) return
+  await prisma.notification.create({
+    data: {
+      userId: opts.assigneeId,
+      type: 'TASK_ASSIGNED',
+      actorId: opts.actorId,
+      title: `${opts.actorName} assigned you a task`,
+      body: `“${trunc(opts.taskTitle)}”`,
+      link: `/app/marketing/board?task=${opts.taskId}`,
+      entityType: 'MarketingTask',
+      entityId: opts.taskId,
+    },
+  })
+}
+
+/** "Task due soon" in-app notification (fired by the reminder cron). */
+export async function notifyTaskDueSoon(opts: {
+  assigneeId: string
+  taskTitle: string
+  taskId: string
+}): Promise<void> {
+  if (!opts.assigneeId) return
+  await prisma.notification.create({
+    data: {
+      userId: opts.assigneeId,
+      type: 'TASK_DUE_SOON',
+      title: `Urgent task due within the hour`,
+      body: `“${trunc(opts.taskTitle)}”`,
+      link: `/app/marketing/board?task=${opts.taskId}`,
+      entityType: 'MarketingTask',
+      entityId: opts.taskId,
+    },
+  })
+}

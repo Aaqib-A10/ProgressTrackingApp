@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
 import type { BadgeTone } from '../ui/Badge'
+import { FINANCE_EMAILS } from '../../lib/finance'
 
 export interface NavItem {
   label: string
@@ -49,6 +50,8 @@ export interface NavItem {
   departments?: Department[]
   /** Hidden for these roles, even Super Admin (who otherwise sees everything). */
   hideFor?: Role[]
+  /** Restricted to these exact emails (identity gate) — overrides even Super Admin. */
+  requireEmail?: string[]
   badge?: { text: string; tone: BadgeTone }
 }
 
@@ -161,6 +164,7 @@ export const NAV_GROUPS: NavGroup[] = [
     color: '#8B5CF6',
     items: [
       { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'] },
+      { label: 'Team', to: '/app/marketing/team', icon: Users, departments: ['MARKETING'], roles: TL_ROLES },
       { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart, departments: ['MARKETING'], roles: TL_ROLES },
       { label: 'Brands', to: '/app/marketing/brands', icon: Building2, departments: ['MARKETING'], roles: ADMIN_ROLES },
       { label: 'Profiles & Platforms', to: '/app/marketing/profiles', icon: Globe, departments: ['MARKETING'], roles: ADMIN_ROLES },
@@ -210,7 +214,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Shield,
     color: '#EF4444',
     items: [
-      { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, roles: ['SUPER_ADMIN'] },
+      { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, roles: ['SUPER_ADMIN'], requireEmail: FINANCE_EMAILS },
       { label: 'Activity Log', to: '/app/admin/activity', icon: History, roles: ['SUPER_ADMIN', 'TEAM_LEAD'] },
       { label: 'Users', to: '/app/admin/users', icon: UserCog, roles: ['SUPER_ADMIN'], badge: { text: 'ADMIN', tone: 'danger' } },
       { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon, roles: ADMIN_ROLES },
@@ -221,7 +225,11 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-function itemVisible(item: NavItem, role: Role, department?: Department | null): boolean {
+function itemVisible(item: NavItem, role: Role, department?: Department | null, email?: string | null): boolean {
+  // Identity gate wins over everything, including Super Admin: only the listed emails see it.
+  if (item.requireEmail) {
+    return !!email && item.requireEmail.map((e) => e.toLowerCase()).includes(email.toLowerCase())
+  }
   // Super Admin sees every screen (needed for management demos / full oversight),
   // regardless of department or per-item hideFor opt-outs.
   if (role === 'SUPER_ADMIN') return true
@@ -233,12 +241,12 @@ function itemVisible(item: NavItem, role: Role, department?: Department | null):
 }
 
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
-export function filterNav(role: Role, department?: Department | null): NavGroup[] {
+export function filterNav(role: Role, department?: Department | null, email?: string | null): NavGroup[] {
   return NAV_GROUPS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => itemVisible(i, role, department)),
+    items: g.items.filter((i) => itemVisible(i, role, department, email)),
     subgroups: g.subgroups
-      ?.map((sg) => ({ ...sg, items: sg.items.filter((i) => itemVisible(i, role, department)) }))
+      ?.map((sg) => ({ ...sg, items: sg.items.filter((i) => itemVisible(i, role, department, email)) }))
       .filter((sg) => sg.items.length > 0),
   })).filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
 }

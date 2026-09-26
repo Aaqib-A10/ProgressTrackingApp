@@ -4,6 +4,7 @@ import { startAttendanceReminders } from './lib/attendanceReminders'
 import { startAttendanceViolations } from './lib/attendanceViolations'
 import { startAutoCheckout } from './lib/autoCheckout'
 import { startMonthlyReports } from './lib/monthlyReportCron'
+import { startTaskReminders } from './lib/taskReminders'
 
 const PORT = Number(process.env.PORT) || 4000
 
@@ -30,4 +31,5 @@ app.listen(PORT, () => {
   startAttendanceViolations()
   startAutoCheckout()
   startMonthlyReports()
+  startTaskReminders()
 })

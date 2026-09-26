@@ -27,7 +27,7 @@ function initials(name: string): string {
 }
 
 export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
-  const groups = filterNav(user.role, user.department)
+  const groups = filterNav(user.role, user.department, user.email)
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
   const [unreadQa, setUnreadQa] = useState(0)

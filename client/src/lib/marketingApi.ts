@@ -1,10 +1,12 @@
 import { api } from './api'
 import type { RangeKey, CustomRange } from '../components/layout/RangeSelector'
+import type { BadgeTone } from '../components/ui/Badge'
 import { rangeQuery } from './range'
 
 export type Discipline = 'SEO' | 'SOCIAL' | 'CONTENT'
 export type TaskStatus = 'BACKLOG' | 'IN_PROGRESS' | 'IN_REVIEW' | 'SCHEDULED' | 'PUBLISHED'
 export type ContentType = 'BLOG' | 'LANDING_PAGE' | 'SOCIAL_COPY' | 'VIDEO_SCRIPT' | 'EMAIL' | 'OTHER'
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 
 export interface MarketingTask {
   id: string
@@ -12,6 +14,7 @@ export interface MarketingTask {
   description: string
   discipline: Discipline
   status: TaskStatus
+  priority: Priority
   order: number
   assignee: { id: string; name: string } | null
   brand: { id: string; name: string } | null
@@ -20,9 +23,20 @@ export interface MarketingTask {
   wordCount: number | null
   wordTarget: number | null
   dueDate: string | null
+  dueAt: string | null
   scheduledDate: string | null
   publishedDate: string | null
   commentCount: number
+  attachmentCount: number
+}
+
+export interface TaskAttachment {
+  id: string
+  originalName: string
+  mimeType: string
+  size: number
+  createdAt: string
+  downloadUrl: string
 }
 
 export interface BoardColumn {
@@ -31,20 +45,30 @@ export interface BoardColumn {
   tasks: MarketingTask[]
 }
 
+export interface BoardViewer {
+  id: string
+  isLead: boolean
+  role: string
+  subDeptSlug: string | null
+}
+
 export interface BoardResponse {
   columns: BoardColumn[]
   members: { id: string; name: string }[]
+  viewer: BoardViewer
 }
 
 export interface CreateTaskInput {
   title: string
   discipline: Discipline
   status?: TaskStatus
+  priority?: Priority
   assigneeId?: string | null
   brandId?: string | null
   platform?: SocialPlatform | null
   description?: string
   dueDate?: string | null
+  dueAt?: string | null
   scheduledDate?: string | null
 }
 
@@ -53,11 +77,13 @@ export type UpdateTaskInput = Partial<{
   description: string | null
   discipline: Discipline
   status: TaskStatus
+  priority: Priority
   order: number
   assigneeId: string | null
   brandId: string | null
   platform: SocialPlatform | null
   dueDate: string | null
+  dueAt: string | null
   scheduledDate: string | null
   publishedDate: string | null
 }>
@@ -70,6 +96,21 @@ export interface TaskComment {
   author: { id: string; name: string }
 }
 
+export interface TeamMember {
+  id: string
+  name: string
+  role: string
+  subDeptSlug: string | null
+  openTasks: number
+  totalTasks: number
+}
+export interface TeamGroup {
+  slug: string
+  name: string
+  lead: { id: string; name: string } | null
+  members: TeamMember[]
+}
+
 export function getBoard(discipline?: Discipline) {
   return api.get<BoardResponse>(`/marketing/board${discipline ? `?discipline=${discipline}` : ''}`)
 }
@@ -77,7 +118,16 @@ export function createTask(input: CreateTaskInput) {
   return api.post<{ task: MarketingTask }>('/marketing/tasks', input)
 }
 export function getTask(id: string) {
-  return api.get<{ task: MarketingTask; comments: TaskComment[] }>(`/marketing/tasks/${id}`)
+  return api.get<{ task: MarketingTask; comments: TaskComment[]; attachments: TaskAttachment[] }>(`/marketing/tasks/${id}`)
+}
+export function listTaskAttachments(taskId: string) {
+  return api.get<{ attachments: TaskAttachment[] }>(`/marketing/tasks/${taskId}/attachments`)
+}
+export function uploadTaskAttachment(taskId: string, file: File) {
+  return api.postRaw<{ attachment: TaskAttachment }>(`/marketing/tasks/${taskId}/attachments?name=${encodeURIComponent(file.name)}`, file, file.type || 'application/octet-stream')
+}
+export function deleteTaskAttachment(id: string) {
+  return api.del(`/marketing/attachments/${id}`)
 }
 export function updateTask(id: string, patch: UpdateTaskInput) {
   return api.patch<{ task: MarketingTask }>(`/marketing/tasks/${id}`, patch)
@@ -88,12 +138,23 @@ export function addTaskComment(id: string, body: string, mentions: string[]) {
 export function deleteTask(id: string) {
   return api.del(`/marketing/tasks/${id}`)
 }
+export function getMarketingTeam() {
+  return api.get<{ groups: TeamGroup[] }>('/marketing/team')
+}
 
 export const DISCIPLINE_META: Record<Discipline, { label: string; color: string }> = {
   SEO: { label: 'SEO', color: '#4F46E5' },
   SOCIAL: { label: 'Social', color: '#14B8A6' },
   CONTENT: { label: 'Content', color: '#F59E0B' },
 }
+
+export const PRIORITY_META: Record<Priority, { label: string; tone: BadgeTone; color: string }> = {
+  LOW: { label: 'Low', tone: 'neutral', color: '#64748B' },
+  MEDIUM: { label: 'Medium', tone: 'primary', color: '#4F46E5' },
+  HIGH: { label: 'High', tone: 'warning', color: '#F59E0B' },
+  URGENT: { label: 'Urgent', tone: 'danger', color: '#EF4444' },
+}
+export const PRIORITY_ORDER: Priority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
 
 // ---------- SEO ----------
 export const SEO_METRICS = [
