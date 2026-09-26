@@ -8,7 +8,7 @@ import type { AuthedRequest } from '../middleware/auth'
  * The allowlist is configurable via FINANCE_ALLOWED_EMAILS (comma-separated); it
  * defaults to Aqib's account.
  */
-export const FINANCE_EMAILS = (process.env.FINANCE_ALLOWED_EMAILS ?? 'asimhaiderzaida@gmail.com')
+export const FINANCE_EMAILS = (process.env.FINANCE_ALLOWED_EMAILS ?? 'aqibalishehzad3@gmail.com')
   .split(',')
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean)
