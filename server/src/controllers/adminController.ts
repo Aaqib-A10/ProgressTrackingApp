@@ -81,6 +81,12 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
     return
   }
   const dept = v.department ? await prisma.department.findUnique({ where: { type: v.department } }) : null
+  // Reject a department that has no row (e.g. a new dept whose row wasn't seeded) —
+  // otherwise the user would be saved with no department at all, silently.
+  if (v.department && !dept) {
+    res.status(400).json({ error: `Unknown department ${v.department}` })
+    return
+  }
   let subDepartmentId: string | undefined
   if (dept && v.department === 'MARKETING' && v.subDepartmentSlug) {
     const sub = await prisma.subDepartment.findUnique({ where: { departmentId_slug: { departmentId: dept.id, slug: v.subDepartmentSlug } } })
@@ -137,6 +143,10 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
   if (v.isActive === false || (v.status !== undefined && v.status !== 'ACTIVE')) data.sessionsValidFrom = new Date()
   if (v.department !== undefined) {
     const dept = v.department ? await prisma.department.findUnique({ where: { type: v.department } }) : null
+    if (v.department && !dept) {
+      res.status(400).json({ error: `Unknown department ${v.department}` })
+      return
+    }
     data.departmentId = dept?.id ?? null
     data.subDepartmentId = null
     if (dept && v.department === 'MARKETING' && v.subDepartmentSlug) {
