@@ -17,6 +17,8 @@ export interface SeededWorld {
   itadMember: { id: string; role: Role }
   leadgenLead: { id: string; role: Role }
   leadgenMember: { id: string; role: Role }
+  inventoryLead: { id: string; role: Role }
+  inventoryMember: { id: string; role: Role }
 }
 
 /**
@@ -26,9 +28,10 @@ export interface SeededWorld {
 export async function seedWorld(): Promise<SeededWorld> {
   await prisma.$executeRawUnsafe('TRUNCATE TABLE "User", "Department" RESTART IDENTITY CASCADE')
 
-  const [itad, leadgen] = await Promise.all([
+  const [itad, leadgen, inventory] = await Promise.all([
     prisma.department.create({ data: { type: 'ITAD', name: 'ITAD' } }),
     prisma.department.create({ data: { type: 'LEAD_GEN', name: 'Lead Generation' } }),
+    prisma.department.create({ data: { type: 'INVENTORY', name: 'Inventory' } }),
   ])
   const passwordHash = await hashPassword('Password123!')
   const mk = (name: string, role: Role, departmentId?: string) =>
@@ -36,12 +39,14 @@ export async function seedWorld(): Promise<SeededWorld> {
       data: { name, email: `${name.replace(/\s+/g, '.').toLowerCase()}@test.local`, role, status: 'ACTIVE', isActive: true, passwordHash, departmentId },
     })
 
-  const [superAdmin, itadLead, itadMember, leadgenLead, leadgenMember] = await Promise.all([
+  const [superAdmin, itadLead, itadMember, leadgenLead, leadgenMember, inventoryLead, inventoryMember] = await Promise.all([
     mk('super admin', 'SUPER_ADMIN'),
     mk('itad lead', 'TEAM_LEAD', itad.id),
     mk('itad member', 'MEMBER', itad.id),
     mk('leadgen lead', 'TEAM_LEAD', leadgen.id),
     mk('leadgen member', 'MEMBER', leadgen.id),
+    mk('inventory lead', 'TEAM_LEAD', inventory.id),
+    mk('inventory member', 'MEMBER', inventory.id),
   ])
 
   const pick = (u: { id: string; role: Role }) => ({ id: u.id, role: u.role })
@@ -51,5 +56,7 @@ export async function seedWorld(): Promise<SeededWorld> {
     itadMember: pick(itadMember),
     leadgenLead: pick(leadgenLead),
     leadgenMember: pick(leadgenMember),
+    inventoryLead: pick(inventoryLead),
+    inventoryMember: pick(inventoryMember),
   }
 }

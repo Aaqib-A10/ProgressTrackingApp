@@ -20,6 +20,7 @@ async function main() {
     ['CSR', 'CSR'],
     ['ECOMMERCE', 'Ecommerce'],
     ['TALKLOOP', 'Talkloop'],
+    ['INVENTORY', 'Inventory'],
   ] as [DepartmentType, string][]) {
     const dept = await prisma.department.upsert({ where: { type }, update: { name }, create: { type, name } })
     departments[type] = dept.id

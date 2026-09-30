@@ -45,6 +45,7 @@ enum DepartmentType {
   CSR
   ECOMMERCE
   TALKLOOP
+  INVENTORY
 }
 
 /// Status of a daily entry. A non-SUBMITTED day carries no metrics and is
@@ -117,6 +118,7 @@ model Department {
   businessSuites  BusinessSuite[]
   marketingPlans  MarketingPlan[]
   salaryRecords   SalaryRecord[]
+  inventoryItems  InventoryItem[]
 }
 
 model SubDepartment {
@@ -203,6 +205,10 @@ model User {
   notificationsActed    Notification[]         @relation("NotificationActor")
   stockAssignedTo       StockRequest[]         @relation("StockAssignee")
   stockAssignedBy       StockRequest[]         @relation("StockAssigner")
+  inventoryItemsCreated InventoryItem[]        @relation("InvItemCreator")
+  inventoryRequested    InventoryMovement[]    @relation("InvReqBy")
+  inventoryAssignedTo   InventoryMovement[]    @relation("InvAssignee")
+  inventoryAssignedBy   InventoryMovement[]    @relation("InvAssigner")
 
   todos                TodoItem[]
   meetingNotes         MeetingNote[]         @relation("MeetingNoteAuthor")
@@ -1620,6 +1626,74 @@ model StockRequest {
   resolvedAt   DateTime?
 
   @@index([departmentId, status])
+}
+
+// ---------- Inventory Management (Operations team) ----------
+
+enum InventoryMovementType {
+  STOCK_IN
+  STOCK_OUT
+}
+
+enum InventoryReqStatus {
+  REQUESTED
+  ASSIGNED
+  COMPLETED
+  CANCELLED
+}
+
+/// A tracked stock item (shared list, department = INVENTORY). quantity = live on-hand.
+/// `category` is one of the shared INVENTORY_CATEGORIES; `active` drives the
+/// Active/Inactive toggle column. Item field edits are recorded in AuditLog
+/// (entityType "InventoryItem") so they appear in the per-item activity timeline.
+model InventoryItem {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  name         String
+  category     String
+  active       Boolean    @default(true)
+  quantity     Int        @default(0)
+  price        Decimal?   @db.Decimal(12, 2)
+  lowStockAt   Int        @default(0)
+  sku          String?
+  unit         String?
+  location     String?
+  notes        String?
+  createdById  String?
+  createdBy    User?      @relation("InvItemCreator", fields: [createdById], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  movements InventoryMovement[]
+
+  @@index([departmentId])
+  @@index([category])
+}
+
+/// A stock-in / stock-out request against an item. Doubles as the per-item
+/// activity log. Quantity is applied to the item only when status = COMPLETED.
+model InventoryMovement {
+  id              String                @id @default(cuid())
+  itemId          String
+  item            InventoryItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type            InventoryMovementType
+  quantity        Int                   @default(1)
+  status          InventoryReqStatus    @default(REQUESTED)
+  requestedById   String?
+  requestedBy     User?                 @relation("InvReqBy", fields: [requestedById], references: [id])
+  requestedByName String?
+  note            String?
+  assignedToId    String?
+  assignedTo      User?                 @relation("InvAssignee", fields: [assignedToId], references: [id])
+  assignedById    String?
+  assignedBy      User?                 @relation("InvAssigner", fields: [assignedById], references: [id])
+  requestedAt     DateTime              @default(now())
+  assignedAt      DateTime?
+  resolvedAt      DateTime?
+
+  @@index([itemId])
+  @@index([status])
 }
 
 // Personal, private to-do list — one owner, not shared. Every user gets one.

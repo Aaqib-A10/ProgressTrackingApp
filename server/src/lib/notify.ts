@@ -84,6 +84,31 @@ export async function notifyTaskAssigned(opts: {
   })
 }
 
+/**
+ * "You were assigned a stock request" in-app notification. Self-assignment is
+ * skipped. Best-effort — never blocks the assign it hangs off.
+ */
+export async function notifyStockAssigned(opts: {
+  recipientId: string
+  actorId: string
+  itemName: string
+  type: 'STOCK_IN' | 'STOCK_OUT'
+}): Promise<void> {
+  if (!opts.recipientId || opts.recipientId === opts.actorId) return
+  const label = opts.type === 'STOCK_IN' ? 'stock-in' : 'stock-out'
+  await prisma.notification.create({
+    data: {
+      userId: opts.recipientId,
+      type: 'TASK_ASSIGNED',
+      actorId: opts.actorId,
+      title: `You were assigned a ${label} task`,
+      body: `“${trunc(opts.itemName)}”`,
+      link: `/app/inventory/requests`,
+      entityType: 'InventoryMovement',
+    },
+  })
+}
+
 /** "Task due soon" in-app notification (fired by the reminder cron). */
 export async function notifyTaskDueSoon(opts: {
   assigneeId: string

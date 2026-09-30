@@ -8,6 +8,7 @@ export const DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'CSR', label: 'CSR' },
   { value: 'ECOMMERCE', label: 'Ecommerce' },
   { value: 'TALKLOOP', label: 'Talkloop' },
+  { value: 'INVENTORY', label: 'Inventory' },
 ]
 
 export const DEPARTMENT_LABEL: Record<Department, string> = {
@@ -17,6 +18,7 @@ export const DEPARTMENT_LABEL: Record<Department, string> = {
   CSR: 'CSR',
   ECOMMERCE: 'Ecommerce',
   TALKLOOP: 'Talkloop',
+  INVENTORY: 'Inventory',
 }
 
 /** Departments whose agents QA evaluates. */

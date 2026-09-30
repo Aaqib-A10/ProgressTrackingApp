@@ -43,6 +43,9 @@ const EcommerceDailyLog = lazy(() => import('../pages/app/ecommerce/EcommerceDai
 const EcommerceTeamView = lazy(() => import('../pages/app/ecommerce/EcommerceTeamView'))
 const EcommerceBoard = lazy(() => import('../pages/app/ecommerce/EcommerceBoard'))
 const EcommerceStock = lazy(() => import('../pages/app/ecommerce/EcommerceStock'))
+const InventoryList = lazy(() => import('../pages/app/inventory/InventoryList'))
+const InventoryRequests = lazy(() => import('../pages/app/inventory/InventoryRequests'))
+const InventoryTeam = lazy(() => import('../pages/app/inventory/InventoryTeam'))
 const RdpRecords = lazy(() => import('../pages/app/ecommerce/RdpRecords'))
 const MarketingBoard = lazy(() => import('../pages/app/marketing/MarketingBoard'))
 const MarketingTeam = lazy(() => import('../pages/app/marketing/MarketingTeam'))
@@ -146,6 +149,11 @@ export const router = createBrowserRouter([
       { path: 'ecommerce/team', element: <EcommerceTeamView /> },
       { path: 'ecommerce/notes', element: <MeetingNotes /> },
       { path: 'ecommerce/rdp', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><RdpRecords /></RequireRole> },
+
+      // Inventory
+      { path: 'inventory', element: <InventoryList /> },
+      { path: 'inventory/requests', element: <InventoryRequests /> },
+      { path: 'inventory/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><InventoryTeam /></RequireRole> },
 
       // Marketing
       { path: 'marketing/board', element: <MarketingBoard /> },

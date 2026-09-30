@@ -159,6 +159,16 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    title: 'Inventory',
+    icon: Boxes,
+    color: '#0891B2',
+    items: [
+      { label: 'Inventory', to: '/app/inventory', icon: Boxes, departments: ['INVENTORY'] },
+      { label: 'Requests', to: '/app/inventory/requests', icon: ListChecks, departments: ['INVENTORY'] },
+      { label: 'Team', to: '/app/inventory/team', icon: Users, departments: ['INVENTORY'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
+    ],
+  },
+  {
     title: 'Marketing',
     icon: Megaphone,
     color: '#8B5CF6',
@@ -242,6 +252,14 @@ function itemVisible(item: NavItem, role: Role, department?: Department | null, 
 
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
 export function filterNav(role: Role, department?: Department | null, email?: string | null): NavGroup[] {
+  // Inventory-only operations users see ONLY the Inventory tab — nothing else.
+  // Super Admin keeps full see-all access.
+  if (department === 'INVENTORY' && role !== 'SUPER_ADMIN') {
+    return NAV_GROUPS
+      .filter((g) => g.title === 'Inventory')
+      .map((g) => ({ ...g, items: g.items.filter((i) => itemVisible(i, role, department, email)) }))
+      .filter((g) => g.items.length > 0)
+  }
   return NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((i) => itemVisible(i, role, department, email)),
