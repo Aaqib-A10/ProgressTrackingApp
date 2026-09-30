@@ -43,6 +43,7 @@ echo "-- prisma migrate deploy";  ( cd server && npx prisma migrate deploy )
 echo "-- prisma generate";        ( cd server && npx prisma generate )
 echo "-- build server";           npm run build -w server
 echo "-- seed marketing example";  ( cd server && npx tsx src/scripts/seedMarketingExample.ts ) || echo "   (seed skipped/failed — non-fatal)"
+echo "-- ensure inventory dept";   ( cd server && npx tsx src/scripts/seedInventoryDept.ts ) || echo "   (inventory dept seed skipped/failed — non-fatal)"
 echo "-- restart API";            pm2 restart "$PM2_APP"
 echo "   >> server is now LIVE"
 echo "-- build client";           npm run build -w client
