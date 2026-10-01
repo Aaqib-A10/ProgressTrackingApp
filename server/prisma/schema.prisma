@@ -1655,6 +1655,7 @@ model InventoryItem {
   active       Boolean    @default(true)
   quantity     Int        @default(0)
   price        Decimal?   @db.Decimal(12, 2)
+  previousPrice Decimal?  @db.Decimal(12, 2) // last price before the current one (shown in the Price column)
   lowStockAt   Int        @default(0)
   sku          String?
   unit         String?

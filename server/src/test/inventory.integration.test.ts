@@ -63,13 +63,17 @@ describe('item lifecycle + stock request flow', () => {
     expect(all.body.items.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('lead toggles active + edits price inline (PATCH)', async () => {
+  it('lead toggles active + sets a new price (old price becomes previousPrice)', async () => {
     const res = await request(app).patch(`/api/inventory/items/${itemId}`).set(...auth(w.inventoryLead))
       .send({ active: false, price: 79.5 }).expect(200)
     expect(res.body.item.active).toBe(false)
     expect(res.body.item.price).toBe(79.5)
+    // the prior price (89.99) is retained as the "last price" shown in the Price column
+    expect(res.body.item.previousPrice).toBe(89.99)
     // put it back active
     await request(app).patch(`/api/inventory/items/${itemId}`).set(...auth(w.inventoryLead)).send({ active: true }).expect(200)
+    // restore the price for later assertions
+    await request(app).patch(`/api/inventory/items/${itemId}`).set(...auth(w.inventoryLead)).send({ price: 89.99 }).expect(200)
   })
 
   it('member logs a stock-out request (201)', async () => {

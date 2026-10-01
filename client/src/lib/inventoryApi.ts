@@ -11,6 +11,7 @@ export interface InventoryItem {
   active: boolean
   quantity: number
   price: number | null
+  previousPrice: number | null
   lowStockAt: number
   sku: string
   unit: string

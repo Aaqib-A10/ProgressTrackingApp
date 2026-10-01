@@ -166,11 +166,11 @@ function ItemRow({ item, canManage, onPatch, onOpen }: { item: InventoryItem; ca
         </div>
       </td>
       <td className="px-3 py-2.5">
-        <span className="tabular-nums text-ink">{money(item.price)}</span>
+        <span className="tabular-nums text-ink">{money(item.previousPrice ?? item.price)}</span>
       </td>
       {canManage && (
         <td className="px-3 py-2.5">
-          <NewPriceBox onSave={(v) => save({ price: v })} />
+          <NewPriceBox current={item.price} onSave={(v) => save({ price: v })} />
         </td>
       )}
       <td className="px-4 py-2.5 text-right">
@@ -206,16 +206,20 @@ function NumberBox({ value, onSave, decimals, prefix }: { value: number | null; 
   )
 }
 
-/** Empty box to set a NEW price. Once submitted, the value flows to the Price column. */
-function NewPriceBox({ onSave }: { onSave: (v: number) => void }) {
-  const [v, setV] = useState('')
+/** The CURRENT price box. Seeded with the current price; commits ONLY on Enter
+ * (or the check button). On commit the current price moves to the Price column
+ * ("last price") and this becomes the new current price. */
+function NewPriceBox({ current, onSave }: { current: number | null; onSave: (v: number) => void }) {
+  const [v, setV] = useState(current == null ? '' : String(current))
+  // Re-sync when the item's current price changes elsewhere.
+  useEffect(() => { setV(current == null ? '' : String(current)) }, [current])
+  const dirty = v.trim() !== '' && v.trim() !== (current == null ? '' : String(current))
   function commit() {
     const trimmed = v.trim()
     if (trimmed === '') return
     const n = parseFloat(trimmed)
-    if (Number.isNaN(n) || n < 0) { setV(''); return }
-    onSave(n)
-    setV('')
+    if (Number.isNaN(n) || n < 0) { setV(current == null ? '' : String(current)); return }
+    if (n !== current) onSave(n)
   }
   return (
     <span className="inline-flex items-center gap-1">
@@ -223,14 +227,13 @@ function NewPriceBox({ onSave }: { onSave: (v: number) => void }) {
       <input
         value={v}
         onChange={(e) => setV(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
         inputMode="decimal"
         placeholder="New price"
         className="h-8 w-24 rounded-btn border border-line bg-card px-2 text-body-sm tabular-nums text-ink placeholder:text-ink-muted/60 focus:border-primary focus:outline-none"
       />
-      {v.trim() !== '' && (
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={commit} title="Set price" className="text-primary hover:text-primary/80">
+      {dirty && (
+        <button type="button" onClick={commit} title="Set price (Enter)" className="text-primary hover:text-primary/80">
           <Check size={16} />
         </button>
       )}

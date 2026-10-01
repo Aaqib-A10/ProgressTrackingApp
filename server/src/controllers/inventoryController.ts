@@ -47,6 +47,7 @@ function serializeItem(i: ItemRow) {
     active: i.active,
     quantity: i.quantity,
     price: i.price != null ? Number(i.price) : null,
+    previousPrice: i.previousPrice != null ? Number(i.previousPrice) : null,
     lowStockAt: i.lowStockAt,
     sku: i.sku ?? '',
     unit: i.unit ?? '',
@@ -186,7 +187,15 @@ export async function updateItem(req: AuthedRequest, res: Response): Promise<voi
   if (v.name !== undefined) data.name = v.name
   if (v.category !== undefined) data.category = v.category
   if (v.quantity !== undefined) data.quantity = v.quantity
-  if (v.price !== undefined) data.price = v.price
+  if (v.price !== undefined) {
+    // Changing the price pushes the current price into previousPrice ("last price"),
+    // which is what the Price column shows.
+    const currentPrice = existing.price != null ? Number(existing.price) : null
+    if (v.price !== currentPrice) {
+      data.price = v.price
+      data.previousPrice = currentPrice
+    }
+  }
   if (v.lowStockAt !== undefined) data.lowStockAt = v.lowStockAt
   if (v.active !== undefined) data.active = v.active
   if (v.sku !== undefined) data.sku = v.sku || null
