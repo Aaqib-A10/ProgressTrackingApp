@@ -1,11 +1,14 @@
 import { api } from './api'
 
-export type TaskSource = 'ecommerce' | 'marketing'
+export type TaskSource = 'ecommerce' | 'marketing' | 'project'
 
 export interface PendingTask {
   id: string
   source: TaskSource
   title: string
+  /** Project tasks: code (RTI-12) + project name. */
+  code?: string
+  projectName?: string
   status: string
   dueDate: string | null
   overdue: boolean

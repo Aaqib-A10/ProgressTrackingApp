@@ -224,6 +224,21 @@ model User {
   brandsOwned           Brand[]              @relation("BrandOwner")
   brandProfilesOwned    BrandProfile[]       @relation("BrandProfileOwner")
 
+  // Projects + chat
+  pmProjectsOwned  PmProject[]          @relation("PmProjectOwner")
+  pmMemberships    PmProjectMember[]    @relation("PmMemberships")
+  pmTasksCreated   PmTask[]             @relation("PmTaskCreator")
+  pmAssignments    PmTaskAssignee[]     @relation("PmAssignments")
+  pmWatching       PmTaskWatcher[]      @relation("PmWatching")
+  pmComments       PmComment[]          @relation("PmCommentAuthor")
+  pmAttachments    PmAttachment[]       @relation("PmAttachmentUploader")
+  pmActivity       PmActivity[]         @relation("PmActivityActor")
+  pmExtRequested   PmExtensionRequest[] @relation("PmExtRequester")
+  pmExtDecided     PmExtensionRequest[] @relation("PmExtDecider")
+  pmNotifyPref     PmNotifyPref?        @relation("PmNotifyPref")
+  chatMemberships  ChatMember[]         @relation("ChatMemberships")
+  chatMessagesSent ChatMessage[]        @relation("ChatMessagesSent")
+
   @@index([departmentId])
   @@index([subDepartmentId])
 }
@@ -909,6 +924,17 @@ enum NotificationType {
   GRACE_LIMIT
   TASK_ASSIGNED
   TASK_DUE_SOON
+  // Projects module
+  TASK_UNASSIGNED
+  TASK_STATUS_CHANGED
+  TASK_COMPLETED
+  TASK_COMMENT
+  TASK_DUE_CHANGED
+  TASK_OVERDUE
+  EXTENSION_REQUESTED
+  EXTENSION_DECIDED
+  PROJECT_MEMBER_ADDED
+  CHAT_MESSAGE
 }
 
 enum BreakType {
@@ -962,33 +988,33 @@ model MarketingTaskComment {
 /// Computers, Recycle Technologies). The spine that ties monthly social stats,
 /// blog counts and master-plan items together. User-manageable (add/edit).
 model Brand {
-  id            String       @id @default(cuid())
-  departmentId  String // always the MARKETING department
-  department    Department   @relation(fields: [departmentId], references: [id])
-  name          String
-  slug          String
-  website       String?
-  isActive      Boolean      @default(true) // soft-delete; preserves historical stats
+  id               String       @id @default(cuid())
+  departmentId     String // always the MARKETING department
+  department       Department   @relation(fields: [departmentId], references: [id])
+  name             String
+  slug             String
+  website          String?
+  isActive         Boolean      @default(true) // soft-delete; preserves historical stats
   // Service tier — how much active management this brand suite gets.
-  tier          ServiceTier  @default(TIER_1)
+  tier             ServiceTier  @default(TIER_1)
   // Brand owner (the lead accountable for this suite). Nullable; SetNull on user delete.
-  ownerId       String?
-  owner         User?        @relation("BrandOwner", fields: [ownerId], references: [id])
+  ownerId          String?
+  owner            User?        @relation("BrandOwner", fields: [ownerId], references: [id])
   // CRM connection tracker (registry only — no live sync). "Connected" once crmStatus = CONNECTED.
-  crmProvider   CrmProvider?
-  crmStatus     CrmStatus    @default(NONE)
-  crmAccount    String? // account name / workspace / URL
-  crmNote       String?
-  crmCheckedAt  DateTime? // last time the CRM connection was verified/reviewed
+  crmProvider      CrmProvider?
+  crmStatus        CrmStatus    @default(NONE)
+  crmAccount       String? // account name / workspace / URL
+  crmNote          String?
+  crmCheckedAt     DateTime? // last time the CRM connection was verified/reviewed
   // SEO search-term landing pages (e.g. RTI's 80-100 keyword pages on one site):
   // the goal count. Live pages are tracked as SearchTermPage rows; ratio = live/target.
   searchTermTarget Int?
   // SEO integration — a brand is "connected" once both are set.
-  gscSiteUrl    String? // Search Console property, e.g. "sc-domain:example.com" or "https://example.com/"
-  ga4PropertyId String? // GA4 property, e.g. "properties/123456789" (or the bare numeric id)
-  seoSyncedAt   DateTime? // last successful GSC/GA sync
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  gscSiteUrl       String? // Search Console property, e.g. "sc-domain:example.com" or "https://example.com/"
+  ga4PropertyId    String? // GA4 property, e.g. "properties/123456789" (or the bare numeric id)
+  seoSyncedAt      DateTime? // last successful GSC/GA sync
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   socialStats BrandSocialMonthly[]
   seoDaily    BrandSeoDaily[]
@@ -1057,24 +1083,24 @@ enum CrmStatus {
 /// company profile, X handle, website, …). A brand may hold more than one per
 /// platform (e.g. regional pages), so no per-platform uniqueness is enforced.
 model BrandProfile {
-  id        String          @id @default(cuid())
-  brandId   String
-  brand     Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  platform  ProfilePlatform
-  handle    String? // @handle or page name
-  url       String? // profile URL
-  status    ProfileStatus   @default(ACTIVE)
+  id              String          @id @default(cuid())
+  brandId         String
+  brand           Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platform        ProfilePlatform
+  handle          String? // @handle or page name
+  url             String? // profile URL
+  status          ProfileStatus   @default(ACTIVE)
   // How this channel is published: centralised via the Mixpost workspace, or
   // posted manually one login at a time (e.g. Reddit, which Mixpost can't post to).
-  managedVia ManagedVia     @default(MANUAL)
+  managedVia      ManagedVia      @default(MANUAL)
   // Meta Business Suite / Business Manager this page is connected under (FB/IG).
   businessSuiteId String?
-  businessSuite   BusinessSuite? @relation(fields: [businessSuiteId], references: [id])
-  ownerId   String?
-  owner     User?           @relation("BrandProfileOwner", fields: [ownerId], references: [id])
-  note      String?
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  businessSuite   BusinessSuite?  @relation(fields: [businessSuiteId], references: [id])
+  ownerId         String?
+  owner           User?           @relation("BrandProfileOwner", fields: [ownerId], references: [id])
+  note            String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   @@index([brandId])
   @@index([businessSuiteId])
@@ -1647,24 +1673,24 @@ enum InventoryReqStatus {
 /// Active/Inactive toggle column. Item field edits are recorded in AuditLog
 /// (entityType "InventoryItem") so they appear in the per-item activity timeline.
 model InventoryItem {
-  id           String     @id @default(cuid())
-  departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
-  name         String
-  category     String
-  active       Boolean    @default(true)
-  quantity     Int        @default(0)
-  price        Decimal?   @db.Decimal(12, 2)
-  previousPrice Decimal?  @db.Decimal(12, 2) // last price before the current one (shown in the Price column)
-  lowStockAt   Int        @default(0)
-  sku          String?
-  unit         String?
-  location     String?
-  notes        String?
-  createdById  String?
-  createdBy    User?      @relation("InvItemCreator", fields: [createdById], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            String     @id @default(cuid())
+  departmentId  String
+  department    Department @relation(fields: [departmentId], references: [id])
+  name          String
+  category      String
+  active        Boolean    @default(true)
+  quantity      Int        @default(0)
+  price         Decimal?   @db.Decimal(12, 2)
+  previousPrice Decimal?   @db.Decimal(12, 2) // last price before the current one (shown in the Price column)
+  lowStockAt    Int        @default(0)
+  sku           String?
+  unit          String?
+  location      String?
+  notes         String?
+  createdById   String?
+  createdBy     User?      @relation("InvItemCreator", fields: [createdById], references: [id])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   movements InventoryMovement[]
 
@@ -1783,4 +1809,343 @@ model Bid {
   @@index([agentId])
   @@index([dueDate])
   @@index([status, closedDate])
+}
+
+// ========== Projects (project management) + Team Chat ==========
+// Per-project Kanban boards with membership-based visibility, task assignment,
+// due/overdue alerts and team chat. All models are prefixed Pm/Chat so they never
+// collide with the Marketing/Ecommerce board models above.
+
+enum PmProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// Role a user holds inside ONE project (separate from their global Role).
+enum PmProjectRole {
+  ADMIN // manages members, columns, settings; edits any task; gets overdue alerts
+  MEMBER // creates/assigns/moves tasks
+  VIEWER // read only (can comment + chat)
+}
+
+/// Column category drives completion + overdue logic and reporting.
+enum PmColumnCategory {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum PmExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ChatConversationType {
+  DIRECT
+  GROUP
+  PROJECT
+}
+
+model PmProject {
+  id                     String          @id @default(cuid())
+  name                   String          @unique
+  key                    String          @unique // 2-6 uppercase chars, used in task codes (RTI-12)
+  description            String?
+  color                  String          @default("#4F46E5")
+  status                 PmProjectStatus @default(ACTIVE)
+  ownerId                String
+  owner                  User            @relation("PmProjectOwner", fields: [ownerId], references: [id])
+  taskCounter            Int             @default(0)
+  overdueNotifyAdmins    Boolean         @default(true)
+  overdueRepeatHours     Int             @default(24)
+  reminderOffsetsMinutes Int[]           @default([1440, 60])
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  members      PmProjectMember[]
+  columns      PmColumn[]
+  tasks        PmTask[]
+  labels       PmLabel[]
+  conversation ChatConversation?
+
+  @@index([status])
+}
+
+model PmProjectMember {
+  id        String        @id @default(cuid())
+  projectId String
+  project   PmProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation("PmMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  role      PmProjectRole @default(MEMBER)
+  addedById String?
+  createdAt DateTime      @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model PmColumn {
+  id        String           @id @default(cuid())
+  projectId String
+  project   PmProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  category  PmColumnCategory @default(TODO)
+  position  Int              @default(0)
+  color     String?
+  wipLimit  Int?
+  isDefault Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  tasks PmTask[]
+
+  @@index([projectId, position])
+}
+
+model PmTask {
+  id                    String    @id @default(cuid())
+  projectId             String
+  project               PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code                  String    @unique // e.g. RTI-142
+  title                 String
+  description           String?
+  columnId              String
+  column                PmColumn  @relation(fields: [columnId], references: [id])
+  position              Float     @default(0) // rank within the column (midpoint ordering)
+  priority              Priority  @default(MEDIUM)
+  createdById           String
+  createdBy             User      @relation("PmTaskCreator", fields: [createdById], references: [id])
+  startAt               DateTime?
+  dueAt                 DateTime?
+  completedAt           DateTime?
+  estimateHours         Float?
+  isOverdue             Boolean   @default(false)
+  overdueSince          DateTime?
+  lastOverdueNotifiedAt DateTime?
+  deletedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  assignees         PmTaskAssignee[]
+  watchers          PmTaskWatcher[]
+  labels            PmTaskLabel[]
+  checklist         PmChecklistItem[]
+  comments          PmComment[]
+  attachments       PmAttachment[]
+  activity          PmActivity[]
+  extensionRequests PmExtensionRequest[]
+  dispatches        PmDispatchLog[]
+  chatRefs          ChatMessage[]
+
+  @@index([projectId, columnId, position])
+  @@index([dueAt])
+  @@index([isOverdue])
+  @@index([createdById])
+}
+
+model PmTaskAssignee {
+  id           String   @id @default(cuid())
+  taskId       String
+  task         PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation("PmAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  assignedById String?
+  assignedAt   DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+model PmTaskWatcher {
+  id     String @id @default(cuid())
+  taskId String
+  task   PmTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation("PmWatching", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+model PmLabel {
+  id        String        @id @default(cuid())
+  projectId String
+  project   PmProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  color     String        @default("#64748B")
+  tasks     PmTaskLabel[]
+
+  @@unique([projectId, name])
+}
+
+model PmTaskLabel {
+  taskId  String
+  task    PmTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  labelId String
+  label   PmLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+}
+
+model PmChecklistItem {
+  id        String    @id @default(cuid())
+  taskId    String
+  task      PmTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  text      String
+  isDone    Boolean   @default(false)
+  position  Int       @default(0)
+  doneById  String?
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([taskId])
+}
+
+model PmComment {
+  id        String    @id @default(cuid())
+  taskId    String
+  task      PmTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation("PmCommentAuthor", fields: [authorId], references: [id])
+  body      String
+  mentions  String[]
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+model PmAttachment {
+  id           String   @id @default(cuid())
+  taskId       String
+  task         PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation("PmAttachmentUploader", fields: [uploadedById], references: [id])
+  storedName   String
+  originalName String
+  mimeType     String
+  size         Int
+  createdAt    DateTime @default(now())
+
+  @@index([taskId])
+}
+
+/// Append-only audit trail for a task (who changed what, when).
+model PmActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation("PmActivityActor", fields: [userId], references: [id], onDelete: SetNull)
+  action    String // created, status_changed, assigned, due_changed, became_overdue, ...
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+model PmExtensionRequest {
+  id             String            @id @default(cuid())
+  taskId         String
+  task           PmTask            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User              @relation("PmExtRequester", fields: [requestedById], references: [id])
+  currentDueAt   DateTime?
+  requestedDueAt DateTime
+  reason         String
+  status         PmExtensionStatus @default(PENDING)
+  decidedById    String?
+  decidedBy      User?             @relation("PmExtDecider", fields: [decidedById], references: [id])
+  decidedAt      DateTime?
+  decisionNote   String?
+  createdAt      DateTime          @default(now())
+
+  @@index([taskId, status])
+}
+
+/// Idempotency log for the deadline cron: one row per (task, user, kind, due snapshot)
+/// so a reminder is never sent twice, and changing the due date re-arms reminders.
+model PmDispatchLog {
+  id            String   @id @default(cuid())
+  taskId        String
+  task          PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId        String
+  kind          String // due_soon_1440, due_soon_60, overdue_first, overdue_repeat_<n>
+  dueAtSnapshot DateTime
+  sentAt        DateTime @default(now())
+
+  @@unique([taskId, userId, kind, dueAtSnapshot])
+}
+
+/// Per-user email preferences for project + chat notifications (in-app is always on).
+model PmNotifyPref {
+  userId        String   @id
+  user          User     @relation("PmNotifyPref", fields: [userId], references: [id], onDelete: Cascade)
+  emailAssigned Boolean  @default(true)
+  emailMention  Boolean  @default(true)
+  emailComment  Boolean  @default(false)
+  emailDueSoon  Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+}
+
+model ChatConversation {
+  id            String               @id @default(cuid())
+  type          ChatConversationType
+  projectId     String?              @unique
+  project       PmProject?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name          String?
+  directKey     String?              @unique // "<userA>:<userB>" sorted, for DIRECT de-dupe
+  createdById   String?
+  lastMessageAt DateTime             @default(now())
+  createdAt     DateTime             @default(now())
+
+  members  ChatMember[]
+  messages ChatMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model ChatMember {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation("ChatMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  isAdmin        Boolean          @default(false)
+  lastReadSeq    Int              @default(0) // seq of the last message this member has read
+  lastReadAt     DateTime?
+  mutedUntil     DateTime?
+  joinedAt       DateTime         @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  seq            Int              @default(autoincrement()) // monotonic cursor for polling + unread
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation("ChatMessagesSent", fields: [userId], references: [id])
+  body           String
+  mentions       String[]
+  replyToId      String?
+  replyTo        ChatMessage?     @relation("ChatReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        ChatMessage[]    @relation("ChatReplies")
+  taskRefId      String?
+  taskRef        PmTask?          @relation(fields: [taskRefId], references: [id], onDelete: SetNull)
+  // Optional single file per message (stored like other uploads)
+  fileStoredName String?
+  fileName       String?
+  fileMime       String?
+  fileSize       Int?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime         @default(now())
+
+  @@unique([seq])
+  @@index([conversationId, seq])
 }

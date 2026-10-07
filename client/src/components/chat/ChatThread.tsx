@@ -1,0 +1,386 @@
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Send, Smile, Trash2, Users, X } from 'lucide-react'
+import { chatApi, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
+import { errMsg } from '../../lib/projectsApi'
+import { useToast } from '../ui/Toast'
+import { PersonAvatar, fmtBytes, fmtDateTime } from '../projects/pmUi'
+import { refreshChatUnread } from './useChatUnread'
+import { cn } from '../../lib/cn'
+
+const API = import.meta.env.VITE_API_URL ?? '/api'
+const EMOJI = ['👍', '🙏', '✅', '🎉', '👀', '🔥', '😂', '❤️', '🚀', '⏰', '❗', '🙂']
+const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
+
+/**
+ * One conversation: history (scroll up for older), live polling for new messages,
+ * edits and deletes, typing indicator, read receipts, replies, @mentions and files.
+ */
+export function ChatThread({ conversationId, meId, compact, prefill, onHeaderClick, actions, onSent }: { conversationId: string; meId: string; compact?: boolean; prefill?: string; onHeaderClick?: () => void; actions?: React.ReactNode; onSent?: () => void }) {
+  const { addToast } = useToast()
+  const [conv, setConv] = useState<ConversationDetail | null>(null)
+  const [msgs, setMsgs] = useState<ChatMessage[]>([])
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [typing, setTyping] = useState<string[]>([])
+  const [reads, setReads] = useState<{ userId: string; lastReadSeq: number }[]>([])
+  const [text, setText] = useState(prefill ?? '')
+  const [mentionIds, setMentionIds] = useState<string[]>([])
+  const [suggest, setSuggest] = useState<{ id: string; name: string }[] | null>(null)
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [editing, setEditing] = useState<ChatMessage | null>(null)
+  const [sending, setSending] = useState(false)
+  const [showEmoji, setShowEmoji] = useState(false)
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  const scroller = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const lastSeq = useRef(0)
+  const lastSync = useRef<string | null>(null)
+  const atBottom = useRef(true)
+  const lastTypingPing = useRef(0)
+  const keepScroll = useRef<number | null>(null)
+
+  const members = useMemo(() => (conv?.members ?? []).filter((m) => m.id !== meId), [conv, meId])
+  const nameOf = (id: string) => conv?.members.find((m) => m.id === id)?.name ?? 'Someone'
+
+  const markRead = useCallback((seq: number) => {
+    if (document.visibilityState !== 'visible' || !atBottom.current) return
+    chatApi.read(conversationId, seq).then(() => refreshChatUnread()).catch(() => undefined)
+  }, [conversationId])
+
+  // Initial load
+  useEffect(() => {
+    let alive = true
+    setConv(null); setMsgs([]); setReplyTo(null); setEditing(null); lastSeq.current = 0; atBottom.current = true
+    setText(prefill ?? '')
+    chatApi.conversation(conversationId).then((r) => alive && setConv(r.conversation)).catch(() => undefined)
+    chatApi.messages(conversationId, { limit: 50 }).then((r) => {
+      if (!alive) return
+      setMsgs(r.messages); setHasMore(r.hasMore); setReads(r.reads); setTyping(r.typing)
+      lastSeq.current = r.messages.at(-1)?.seq ?? 0
+      lastSync.current = r.serverTime
+      if (lastSeq.current) markRead(lastSeq.current)
+    }).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not open the chat') }))
+    return () => { alive = false }
+  }, [conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live poll
+  useEffect(() => visiblePoll(async () => {
+    try {
+      const r = await chatApi.messages(conversationId, { after: lastSeq.current, changedSince: lastSync.current ?? undefined })
+      lastSync.current = r.serverTime
+      setTyping(r.typing)
+      setReads(r.reads)
+      if (r.messages.length || r.changed.length) {
+        setMsgs((cur) => {
+          const map = new Map(cur.map((m) => [m.id, m]))
+          for (const m of [...r.changed, ...r.messages]) map.set(m.id, m)
+          return [...map.values()].sort((a, b) => a.seq - b.seq)
+        })
+      }
+      if (r.messages.length) {
+        lastSeq.current = r.messages.at(-1)!.seq
+        markRead(lastSeq.current)
+      }
+    } catch { /* transient */ }
+  }, 2500), [conversationId, markRead])
+
+  useEffect(() => visiblePoll(() => { chatApi.conversation(conversationId).then((r) => setConv(r.conversation)).catch(() => undefined) }, 30000), [conversationId])
+
+  // Scroll: stick to bottom for new messages, keep position when older ones load.
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    if (keepScroll.current != null) {
+      el.scrollTop = el.scrollHeight - keepScroll.current
+      keepScroll.current = null
+    } else if (atBottom.current) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [msgs])
+
+  async function loadOlder() {
+    if (!hasMore || loadingOlder || !msgs.length) return
+    setLoadingOlder(true)
+    try {
+      const r = await chatApi.messages(conversationId, { before: msgs[0].seq, limit: 50 })
+      keepScroll.current = (scroller.current?.scrollHeight ?? 0) - (scroller.current?.scrollTop ?? 0)
+      setMsgs((cur) => [...r.messages, ...cur])
+      setHasMore(r.hasMore)
+    } finally { setLoadingOlder(false) }
+  }
+
+  function onScroll() {
+    const el = scroller.current
+    if (!el) return
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    if (bottom && !atBottom.current && lastSeq.current) { atBottom.current = true; markRead(lastSeq.current) }
+    atBottom.current = bottom
+    if (el.scrollTop < 80) loadOlder()
+  }
+
+  function onType(v: string, pos: number) {
+    setText(v)
+    const m = v.slice(0, pos).match(/(?:^|\s)@([\w.-]{0,30})$/)
+    setSuggest(m ? members.filter((x) => x.name.toLowerCase().includes(m[1].toLowerCase())).slice(0, 6) : null)
+    const now = Date.now()
+    if (v && now - lastTypingPing.current > 3000) { lastTypingPing.current = now; chatApi.typing(conversationId, true).catch(() => undefined) }
+  }
+  function pickMention(p: { id: string; name: string }) {
+    const el = inputRef.current
+    const pos = el?.selectionStart ?? text.length
+    const before = text.slice(0, pos)
+    const m = before.match(/(?:^|\s)@([\w.-]{0,30})$/)
+    if (!m) return
+    const at = before.length - m[1].length - 1
+    const nb = before.slice(0, at) + '@' + p.name + ' '
+    setText(nb + text.slice(pos))
+    setMentionIds((ids) => (ids.includes(p.id) ? ids : [...ids, p.id]))
+    setSuggest(null)
+    setTimeout(() => { el?.focus(); el?.setSelectionRange(nb.length, nb.length) }, 0)
+  }
+
+  async function send() {
+    const body = text.trim()
+    if (!body || sending) return
+    if (body.length > 5000) { addToast({ type: 'error', message: 'Messages are limited to 5000 characters' }); return }
+    setSending(true)
+    try {
+      if (editing) {
+        const r = await chatApi.edit(editing.id, body)
+        setMsgs((cur) => cur.map((m) => (m.id === r.message.id ? r.message : m)))
+        setEditing(null)
+      } else {
+        const mentions = mentionIds.filter((id) => body.includes('@' + nameOf(id)))
+        const r = await chatApi.send(conversationId, body, { replyToId: replyTo?.id ?? null, mentions })
+        atBottom.current = true
+        setMsgs((cur) => (cur.some((m) => m.id === r.message.id) ? cur : [...cur, r.message]))
+        lastSeq.current = Math.max(lastSeq.current, r.message.seq)
+        setReplyTo(null)
+      }
+      setText(''); setMentionIds([])
+      chatApi.typing(conversationId, false).catch(() => undefined)
+      refreshChatUnread()
+      onSent?.()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Message not sent') })
+    } finally {
+      setSending(false)
+      inputRef.current?.focus()
+    }
+  }
+
+  async function sendFile(f: File) {
+    if (f.size > 25 * 1024 * 1024) { addToast({ type: 'error', message: 'Files are limited to 25 MB' }); return }
+    setSending(true)
+    try {
+      const r = await chatApi.sendFile(conversationId, f, text.trim())
+      atBottom.current = true
+      setMsgs((cur) => [...cur, r.message]); lastSeq.current = Math.max(lastSeq.current, r.message.seq)
+      setText('')
+      onSent?.()
+    } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Upload failed') }) } finally { setSending(false) }
+  }
+
+  async function remove(m: ChatMessage) {
+    try { await chatApi.remove(m.id); setMsgs((cur) => cur.map((x) => (x.id === m.id ? { ...x, deleted: true, body: '', file: null, task: null } : x))) } catch (e) { addToast({ type: 'error', message: errMsg(e) }) }
+  }
+
+  const otherReadSeq = conv?.type === 'DIRECT' ? reads.find((r) => r.userId !== meId)?.lastReadSeq ?? 0 : 0
+  const lastMine = [...msgs].reverse().find((m) => m.user.id === meId && !m.deleted)
+  const isDirect = conv?.type === 'DIRECT'
+  const other = isDirect ? members[0] : null
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Header */}
+      <div className={cn('flex shrink-0 items-center gap-3 border-b border-line', compact ? 'px-3 py-2' : 'px-4 py-3')}>
+        {conv ? (
+          <button type="button" onClick={onHeaderClick} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            {isDirect && other ? <PersonAvatar person={other} size={compact ? 28 : 34} presence={other.presence} /> : (
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn text-body-sm font-bold text-white" style={{ backgroundColor: conv.project?.color ?? '#64748B' }}>{conv.type === 'PROJECT' ? '#' : <Users size={15} />}</span>
+            )}
+            <span className="min-w-0">
+              <span className="block truncate text-body-md font-semibold text-ink">{conv.title}</span>
+              <span className="block truncate text-body-sm text-ink-muted">
+                {isDirect && other ? (other.presence === 'online' ? 'Online' : other.presence === 'away' ? 'Away' : 'Offline') : `${conv.members.length} members`}
+                {conv.muted && <> · <BellOff size={11} className="inline" /> muted</>}
+              </span>
+            </span>
+          </button>
+        ) : <span className="h-8 w-40 animate-pulse rounded bg-slate-100" />}
+        {conv?.project && !compact && <Link to={`/app/projects/${conv.project.key}`} className="shrink-0 text-body-sm font-semibold text-primary">Open board</Link>}
+        {actions}
+      </div>
+
+      {/* Messages */}
+      <div ref={scroller} onScroll={onScroll} className={cn('min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-4 py-3')} role="log" aria-live="polite" aria-label="Messages">
+        {loadingOlder && <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-ink-muted" /></div>}
+        {!hasMore && msgs.length > 0 && <p className="py-3 text-center text-body-sm text-ink-muted">Start of the conversation</p>}
+        {msgs.length === 0 && conv && <p className="py-10 text-center text-body-md text-ink-muted">No messages yet. Say hello 👋</p>}
+        {msgs.map((m, i) => {
+          const prev = msgs[i - 1]
+          const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString()
+          const grouped = !newDay && prev && prev.user.id === m.user.id && new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60000
+          const mine = m.user.id === meId
+          return (
+            <Fragment key={m.id}>
+              {newDay && <div className="my-3 flex items-center gap-3 text-body-sm text-ink-muted"><span className="h-px flex-1 bg-line" />{new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}<span className="h-px flex-1 bg-line" /></div>}
+              <div className={cn('group relative flex gap-2.5 rounded-btn px-1 hover:bg-slate-50', grouped ? 'mt-0.5' : 'mt-3')}>
+                <div className="w-8 shrink-0">{!grouped && <PersonAvatar person={m.user} size={32} />}</div>
+                <div className="min-w-0 flex-1">
+                  {!grouped && (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-body-md font-semibold text-ink">{m.user.name}</span>
+                      <span className="text-[11px] text-ink-muted" title={fmtDateTime(m.createdAt)}>{new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
+                    </div>
+                  )}
+                  {m.replyTo && !m.deleted && (
+                    <div className="mb-1 mt-0.5 border-l-2 border-primary/40 pl-2 text-body-sm text-ink-muted"><b className="text-ink">{m.replyTo.userName}</b>: {m.replyTo.body}</div>
+                  )}
+                  {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
+                    <>
+                      {m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
+                      {m.file && <FileBubble file={m.file} />}
+                      {m.task && <TaskRefCard task={m.task} />}
+                    </>
+                  )}
+                  {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
+                </div>
+                {!m.deleted && (
+                  <div className={cn('absolute right-1 top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', menuFor === m.id && 'flex')}>
+                    <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Reply" title="Reply"><CornerUpLeft size={14} /></button>
+                    {mine && (
+                      <>
+                        {!m.file && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
+                        <button type="button" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More"><MoreHorizontal size={14} /></button>
+                        {menuFor === m.id && <button type="button" onClick={() => { setMenuFor(null); remove(m) }} className="rounded px-1.5 py-0.5 text-body-sm text-danger hover:bg-danger/10"><Trash2 size={13} className="inline" /> Delete</button>}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Fragment>
+          )
+        })}
+      </div>
+
+      {/* Typing */}
+      <div className="h-5 shrink-0 px-4 text-[12px] text-ink-muted">
+        {typing.length > 0 && <span className="animate-pulse">{typing.map(nameOf).slice(0, 2).join(' and ')}{typing.length > 2 ? ' and others' : ''} {typing.length === 1 ? 'is' : 'are'} typing…</span>}
+      </div>
+
+      {/* Composer */}
+      <div className={cn('relative shrink-0 border-t border-line', compact ? 'p-2' : 'p-3')}>
+        {(replyTo || editing) && (
+          <div className="mb-2 flex items-center gap-2 rounded-btn bg-slate-50 px-2 py-1 text-body-sm text-ink-muted">
+            {replyTo ? <><CornerUpLeft size={13} /> Replying to <b className="text-ink">{replyTo.user.name}</b>: <span className="truncate">{replyTo.body || replyTo.file?.name}</span></> : <><Pencil size={13} /> Editing message</>}
+            <button type="button" className="ml-auto" onClick={() => { setReplyTo(null); if (editing) { setEditing(null); setText('') } }} aria-label="Cancel"><X size={14} /></button>
+          </div>
+        )}
+        {suggest && suggest.length > 0 && (
+          <ul className="absolute bottom-full left-3 z-10 mb-1 w-60 overflow-hidden rounded-btn border border-line bg-card shadow-overlay">
+            {suggest.map((p) => <li key={p.id}><button type="button" onClick={() => pickMention(p)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body-sm hover:bg-slate-50"><PersonAvatar person={p} size={20} />{p.name}</button></li>)}
+          </ul>
+        )}
+        {showEmoji && (
+          <div className="absolute bottom-full right-3 z-10 mb-1 grid grid-cols-6 gap-1 rounded-btn border border-line bg-card p-2 shadow-overlay">
+            {EMOJI.map((e) => <button key={e} type="button" className="rounded p-1 text-lg hover:bg-slate-100" onClick={() => { setText((t) => t + e); setShowEmoji(false); inputRef.current?.focus() }}>{e}</button>)}
+          </div>
+        )}
+        <div className="flex items-end gap-1.5 rounded-btn border border-line bg-card px-2 py-1.5 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+          <button type="button" onClick={() => fileRef.current?.click()} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Attach a file" title="Attach a file"><Paperclip size={18} /></button>
+          <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendFile(f); e.target.value = '' }} />
+          <textarea
+            ref={inputRef}
+            value={text}
+            onChange={(e) => onType(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+            onKeyDown={(e) => {
+              if (suggest?.length && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); pickMention(suggest[0]); return }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+              if (e.key === 'Escape') { setSuggest(null); setShowEmoji(false); if (editing) { setEditing(null); setText('') } }
+              if (e.key === 'ArrowUp' && !text && lastMine && !lastMine.file) { e.preventDefault(); setEditing(lastMine); setText(lastMine.body) }
+            }}
+            onPaste={(e) => { const f = e.clipboardData.files?.[0]; if (f) { e.preventDefault(); sendFile(f) } }}
+            rows={1}
+            maxLength={5000}
+            placeholder={conv ? `Message ${conv.title}` : 'Message'}
+            aria-label="Message"
+            className="max-h-40 min-h-[34px] flex-1 resize-none bg-transparent py-1.5 text-body-md text-ink placeholder:text-ink-muted focus:outline-none"
+            style={{ height: Math.min(160, 34 + (text.split('\n').length - 1) * 20) }}
+          />
+          <button type="button" onClick={() => setShowEmoji((s) => !s)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Emoji"><Smile size={18} /></button>
+          <button type="button" onClick={send} disabled={!text.trim() || sending} className="rounded-btn bg-primary p-1.5 text-white disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button>
+        </div>
+        {!compact && <p className="mt-1 text-[11px] text-ink-muted">Enter to send, Shift+Enter for a new line, @ to mention, paste a task code like RTI-12 to share it.</p>}
+      </div>
+    </div>
+  )
+}
+
+function renderBody(body: string, members: { id: string; name: string }[], mentionIds: string[], meId: string, hasTask: boolean): React.ReactNode[] {
+  const names = mentionIds.map((id) => members.find((m) => m.id === id)).filter((m): m is { id: string; name: string } => !!m).sort((a, b) => b.name.length - a.name.length)
+  const out: React.ReactNode[] = []
+  let buf = ''
+  let i = 0
+  const flush = () => {
+    if (!buf) return
+    // linkify URLs; highlight task codes softly
+    const parts = buf.split(/(https?:\/\/[^\s)]+)/g)
+    parts.forEach((p, j) => {
+      if (/^https?:\/\//.test(p)) out.push(<a key={`${i}-u${j}`} href={p} target="_blank" rel="noreferrer noopener" className="text-primary underline">{p}</a>)
+      else if (hasTask) out.push(...p.split(TASK_RE).map((x, k) => (k % 2 === 1 ? <b key={`${i}-${j}-${k}`} className="font-mono">{x}</b> : x)))
+      else out.push(p)
+    })
+    buf = ''
+  }
+  while (i < body.length) {
+    if (body[i] === '@') {
+      const hit = names.find((n) => body.startsWith('@' + n.name, i))
+      if (hit) {
+        flush()
+        out.push(<span key={`m${i}`} className={cn('rounded px-0.5 font-medium', hit.id === meId ? 'bg-warning/20 text-amber-800' : 'bg-primary/10 text-primary')}>@{hit.name}</span>)
+        i += hit.name.length + 1
+        continue
+      }
+    }
+    buf += body[i]
+    i++
+  }
+  flush()
+  return out
+}
+
+function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
+  const href = API + file.url.replace(/^\/api/, '')
+  const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(file.mime ?? '')
+  return (
+    <div className="mt-1">
+      {isImage ? (
+        <a href={href} target="_blank" rel="noreferrer"><img src={`${href}?inline=1`} alt={file.name ?? 'image'} className="max-h-64 max-w-full rounded-btn border border-line object-contain" loading="lazy" /></a>
+      ) : (
+        <a href={href} className="inline-flex max-w-full items-center gap-2 rounded-btn border border-line bg-card px-3 py-2 text-body-sm hover:bg-slate-50">
+          <FileText size={18} className="shrink-0 text-primary" />
+          <span className="min-w-0"><span className="block truncate font-medium text-ink">{file.name}</span><span className="text-ink-muted">{fmtBytes(file.size ?? 0)}</span></span>
+          <Download size={15} className="shrink-0 text-ink-muted" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+function TaskRefCard({ task }: { task: NonNullable<ChatMessage['task']> }) {
+  return (
+    <Link to={`/app/projects/${task.projectKey}?task=${task.code}`} className="mt-1.5 flex max-w-md items-center gap-3 rounded-btn border border-line bg-card p-2.5 hover:border-primary/40 hover:shadow-card">
+      <span className="h-9 w-1 shrink-0 rounded-full" style={{ backgroundColor: task.color }} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-body-md font-medium text-ink">{task.title}</span>
+        <span className="flex items-center gap-2 text-body-sm text-ink-muted">
+          <span className="font-mono">{task.code}</span> · {task.status}
+          {task.overdue && <span className="inline-flex items-center gap-0.5 font-semibold text-danger"><AlertTriangle size={11} /> overdue</span>}
+        </span>
+      </span>
+    </Link>
+  )
+}

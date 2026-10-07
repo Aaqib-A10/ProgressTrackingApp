@@ -76,6 +76,12 @@ const AdminLeave = lazy(() => import('../pages/app/admin/AdminLeave'))
 const AdminNetworks = lazy(() => import('../pages/app/admin/AdminNetworks'))
 const FinancialReports = lazy(() => import('../pages/app/admin/FinancialReports'))
 const AdminActivity = lazy(() => import('../pages/app/admin/AdminActivity'))
+const ProjectsList = lazy(() => import('../pages/app/projects/ProjectsList'))
+const ProjectBoard = lazy(() => import('../pages/app/projects/ProjectBoard'))
+const ProjectSettings = lazy(() => import('../pages/app/projects/ProjectSettings'))
+const ProjectsDashboard = lazy(() => import('../pages/app/projects/ProjectsDashboard'))
+const ChatPage = lazy(() => import('../pages/app/chat/ChatPage'))
+const Notifications = lazy(() => import('../pages/app/Notifications'))
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
 export const router = createBrowserRouter([
@@ -149,6 +155,14 @@ export const router = createBrowserRouter([
       { path: 'ecommerce/team', element: <EcommerceTeamView /> },
       { path: 'ecommerce/notes', element: <MeetingNotes /> },
       { path: 'ecommerce/rdp', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><RdpRecords /></RequireRole> },
+
+      // Projects + chat (membership is enforced by the API; every role can open these)
+      { path: 'projects', element: <ProjectsList /> },
+      { path: 'projects/dashboard', element: <ProjectsDashboard /> },
+      { path: 'projects/:key', element: <ProjectBoard /> },
+      { path: 'projects/:key/settings', element: <ProjectSettings /> },
+      { path: 'chat', element: <ChatPage /> },
+      { path: 'notifications', element: <Notifications /> },
 
       // Inventory
       { path: 'inventory', element: <InventoryList /> },

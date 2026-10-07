@@ -34,6 +34,9 @@ import {
   DollarSign,
   PhoneCall,
   History,
+  FolderKanban,
+  MessagesSquare,
+  LayoutGrid,
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, Department } from '../../lib/types'
@@ -92,6 +95,16 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart, roles: ['TEAM_LEAD', 'SUPER_ADMIN'], departments: ['ITAD', 'LEAD_GEN'] },
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: HIDE_FROM_SA },
       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
+    ],
+  },
+  {
+    title: 'Projects',
+    icon: FolderKanban,
+    color: '#6366F1',
+    items: [
+      { label: 'Projects', to: '/app/projects', icon: KanbanSquare },
+      { label: 'Chat', to: '/app/chat', icon: MessagesSquare },
+      { label: 'Projects Dashboard', to: '/app/projects/dashboard', icon: LayoutGrid, roles: ['SUPER_ADMIN', 'TEAM_LEAD'] },
     ],
   },
   {
@@ -256,7 +269,7 @@ export function filterNav(role: Role, department?: Department | null, email?: st
   // Super Admin keeps full see-all access.
   if (department === 'INVENTORY' && role !== 'SUPER_ADMIN') {
     return NAV_GROUPS
-      .filter((g) => g.title === 'Inventory')
+      .filter((g) => g.title === 'Inventory' || g.title === 'Projects')
       .map((g) => ({ ...g, items: g.items.filter((i) => itemVisible(i, role, department, email)) }))
       .filter((g) => g.items.length > 0)
   }

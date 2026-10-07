@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check } from 'lucide-react'
+import { Search, Bell, MessagesSquare, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { DEPARTMENTS } from '../../lib/departments'
 import { useAuth } from '../../lib/auth'
-import { getNotifications, markNotificationRead, type AppNotification } from '../../lib/notificationsApi'
+import { getNotifications, markNotificationRead, markAllNotificationsRead, type AppNotification } from '../../lib/notificationsApi'
+import { useChatUnread } from '../chat/useChatUnread'
 import { RangeSelector, type RangeKey, type CustomRange } from './RangeSelector'
 import { Avatar } from './Sidebar'
 import { ClockWidget } from '../attendance/ClockWidget'
@@ -44,6 +45,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   const [seenKey, setSeenKey] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
+  const chatUnread = useChatUnread()
 
   // Load once, then poll so new feedback / alerts surface without a refresh.
   useEffect(() => {
@@ -132,6 +134,17 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
 
         <div className="mx-1 h-6 w-px bg-line" />
 
+        {/* Chat */}
+        <button
+          onClick={() => navigate('/app/chat')}
+          className="relative rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink"
+          aria-label={chatUnread.total ? `Chat, ${chatUnread.total} unread` : 'Chat'}
+          title="Chat"
+        >
+          <MessagesSquare size={20} />
+          {chatUnread.total > 0 && <span className="absolute right-0.5 top-0.5 min-w-[16px] rounded-full bg-primary px-1 text-center text-[10px] font-bold leading-4 text-white ring-2 ring-card">{chatUnread.total > 99 ? '99+' : chatUnread.total}</span>}
+        </button>
+
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button
@@ -144,7 +157,17 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           </button>
           {notifOpen && (
             <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-80 animate-scale-in overflow-hidden rounded-card border border-line bg-card shadow-overlay">
-              <div className="border-b border-line px-4 py-3 text-body-md font-semibold text-ink">Notifications</div>
+              <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                <span className="text-body-md font-semibold text-ink">Notifications</span>
+                {notifs.some((n) => n.persistent) && (
+                  <button
+                    onClick={() => { setNotifs((ns) => ns.filter((x) => !x.persistent)); markAllNotificationsRead().catch(() => undefined) }}
+                    className="text-body-sm font-medium text-primary hover:underline"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
               {notifs.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                   <CheckCircle2 size={22} className="text-success" />
@@ -188,6 +211,12 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                   })}
                 </ul>
               )}
+              <button
+                onClick={() => { setNotifOpen(false); navigate('/app/notifications') }}
+                className="block w-full border-t border-line px-4 py-2.5 text-center text-body-sm font-semibold text-primary hover:bg-slate-50"
+              >
+                View all notifications
+              </button>
             </div>
           )}
         </div>

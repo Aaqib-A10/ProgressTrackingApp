@@ -6,6 +6,7 @@ import type { CurrentUser } from '../../lib/types'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import type { RangeKey, CustomRange } from './RangeSelector'
+import { FloatingChat } from '../chat/FloatingChat'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -107,6 +108,7 @@ export function AppShell({ user, children }: AppShellProps) {
           </main>
         </div>
       </div>
+      <FloatingChat meId={user.id} />
     </RangeContext.Provider>
   )
 }

@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dateStringFromDb } from '../lib/time'
+import { visibleProjectIds } from '../lib/pm/access'
 
 /**
  * GET /api/tasks/mine — every task assigned to the caller, unified across the
@@ -10,12 +11,15 @@ import { COMPANY_TZ, companyToday, dateStringFromDb } from '../lib/time'
  * assignee. Returns the open list plus completed-by-day/week/month counts.
  */
 
-type Source = 'ecommerce' | 'marketing'
+type Source = 'ecommerce' | 'marketing' | 'project'
 
 interface PendingTask {
   id: string
   source: Source
   title: string
+  /** Project tasks only: code + project chip. */
+  code?: string
+  projectName?: string
   status: string
   dueDate: string | null
   overdue: boolean
@@ -39,7 +43,8 @@ export async function getMyTasks(req: AuthedRequest, res: Response): Promise<voi
   const startOfMonth = now.startOf('month')
   const monthStartJs = startOfMonth.toJSDate()
 
-  const [ecomOpen, mktOpen, ecomDone, mktDone] = await Promise.all([
+  const projectIds = await visibleProjectIds({ id: userId, role: req.user!.role })
+  const [ecomOpen, mktOpen, ecomDone, mktDone, pmOpen, pmDone] = await Promise.all([
     prisma.ecommerceTask.findMany({
       where: { assignedToId: userId, status: { not: 'DONE' } },
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
@@ -55,6 +60,16 @@ export async function getMyTasks(req: AuthedRequest, res: Response): Promise<voi
     }),
     prisma.marketingTask.findMany({
       where: { assigneeId: userId, status: 'PUBLISHED', completedAt: { gte: monthStartJs } },
+      select: { completedAt: true },
+    }),
+    // Project management tasks (any project I can still see).
+    prisma.pmTask.findMany({
+      where: { projectId: { in: projectIds }, deletedAt: null, assignees: { some: { userId } }, column: { category: { not: 'DONE' } } },
+      include: { project: { select: { key: true, name: true } }, column: { select: { name: true } } },
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+    }),
+    prisma.pmTask.findMany({
+      where: { deletedAt: null, assignees: { some: { userId } }, completedAt: { gte: monthStartJs }, column: { category: 'DONE' } },
       select: { completedAt: true },
     }),
   ])
@@ -80,6 +95,17 @@ export async function getMyTasks(req: AuthedRequest, res: Response): Promise<voi
       overdue: isOverdue(t.dueDate),
       link: '/app/marketing/board',
     })),
+    ...pmOpen.map((t) => ({
+      id: t.id,
+      source: 'project' as const,
+      title: t.title,
+      code: t.code,
+      projectName: t.project.name,
+      status: t.column.name,
+      dueDate: t.dueAt ? DateTime.fromJSDate(t.dueAt).setZone(COMPANY_TZ).toISODate() : null,
+      overdue: !!t.dueAt && t.dueAt.getTime() < Date.now(),
+      link: `/app/projects/${t.project.key}?task=${t.code}`,
+    })),
   ]
 
   // Sort: overdue first, then by due date (undated last), then title.
@@ -91,7 +117,7 @@ export async function getMyTasks(req: AuthedRequest, res: Response): Promise<voi
     return a.title.localeCompare(b.title)
   })
 
-  const completedDates = [...ecomDone, ...mktDone]
+  const completedDates = [...ecomDone, ...mktDone, ...pmDone]
     .map((t) => t.completedAt)
     .filter((d): d is Date => d != null)
   const inWindow = (d: Date, start: DateTime) => DateTime.fromJSDate(d).setZone(COMPANY_TZ) >= start

@@ -59,7 +59,7 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   for (const m of mentions) {
     notifications.push({
       id: m.id,
-      type: 'info',
+      type: m.type === 'TASK_OVERDUE' ? 'alert' : m.type === 'TASK_DUE_SOON' || m.type === 'EXTENSION_REQUESTED' ? 'reminder' : 'info',
       title: m.title,
       body: m.body,
       date: m.createdAt.toISOString().slice(0, 10),
@@ -179,4 +179,28 @@ export async function markNotificationRead(req: AuthedRequest, res: Response): P
     data: { readAt: new Date() },
   })
   res.status(204).end()
+}
+
+/** POST /api/notifications/read-all — clear every stored notification of mine. */
+export async function markAllNotificationsRead(req: AuthedRequest, res: Response): Promise<void> {
+  const r = await prisma.notification.updateMany({ where: { userId: req.user!.id, readAt: null }, data: { readAt: new Date() } })
+  res.json({ cleared: r.count })
+}
+
+/** GET /api/notifications/history?cursor= — my stored notifications, newest first (read + unread). */
+export async function getNotificationHistory(req: AuthedRequest, res: Response): Promise<void> {
+  const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : null
+  const rows = await prisma.notification.findMany({
+    where: { userId: req.user!.id },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 51,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: { actor: { select: { name: true } } },
+  })
+  const hasMore = rows.length > 50
+  const page = rows.slice(0, 50)
+  res.json({
+    notifications: page.map((n) => ({ id: n.id, type: n.type, title: n.title, body: n.body, link: n.link, actorName: n.actor?.name ?? null, readAt: n.readAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString() })),
+    nextCursor: hasMore ? page[page.length - 1].id : null,
+  })
 }
