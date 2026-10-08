@@ -14,13 +14,21 @@ export function highlightMentions(body: string, mentionIds: string[], members: M
     .map((id) => members.find((m) => m.id === id)?.name)
     .filter((n): n is string => !!n)
     .sort((a, b) => b.length - a.length)
-  if (!names.length) return body
+  const hasAll = /(^|\s)@(all|everyone)\b/i.test(body)
+  if (!names.length && !hasAll) return body
   const out: ReactNode[] = []
   let i = 0
   let buf = ''
   const flush = () => { if (buf) { out.push(buf); buf = '' } }
   while (i < body.length) {
     if (body[i] === '@') {
+      const all = /^@(all|everyone)\b/i.exec(body.slice(i))
+      if (all && (i === 0 || /\s/.test(body[i - 1]))) {
+        flush()
+        out.push(<span key={i} className="rounded bg-warning/20 px-1 font-medium text-amber-800">{all[0]}</span>)
+        i += all[0].length
+        continue
+      }
       const hit = names.find((n) => body.startsWith('@' + n, i))
       if (hit) {
         flush()
@@ -40,7 +48,9 @@ export function highlightMentions(body: string, mentionIds: string[], members: M
  * A comment composer with @mention autocomplete. Calls onSubmit(body, mentionIds, reset);
  * the parent posts and invokes reset() on success. Cmd/Ctrl+Enter submits.
  */
-export function MentionBox({ members, onSubmit }: { members: Member[]; onSubmit: (body: string, mentions: string[], reset: () => void) => void | Promise<void> }) {
+const ALL_ID = '__all__'
+
+export function MentionBox({ members, onSubmit, allowAll = false }: { members: Member[]; onSubmit: (body: string, mentions: string[], reset: () => void) => void | Promise<void>; /** Offer "@all" (the server must expand it). */ allowAll?: boolean }) {
   const [text, setText] = useState('')
   const [mentionIds, setMentionIds] = useState<string[]>([])
   const [suggest, setSuggest] = useState<Member[] | null>(null)
@@ -51,7 +61,10 @@ export function MentionBox({ members, onSubmit }: { members: Member[]; onSubmit:
     const m = v.slice(0, pos).match(/(?:^|\s)@([\w-]{0,30})$/)
     if (!m) { setSuggest(null); return }
     const token = m[1].toLowerCase()
-    setSuggest(members.filter((mm) => mm.name.toLowerCase().includes(token)).slice(0, 6))
+    const people = members.filter((mm) => mm.name.toLowerCase().includes(token)).slice(0, 6)
+    // "@all" mentions everyone on the project; offer it first when it matches what's typed.
+    const all = allowAll && members.length > 1 && ('all'.startsWith(token) || 'everyone'.startsWith(token)) ? [{ id: ALL_ID, name: 'all' }] : []
+    setSuggest([...all, ...people])
   }
   function pick(member: Member) {
     const el = ref.current
@@ -64,7 +77,7 @@ export function MentionBox({ members, onSubmit }: { members: Member[]; onSubmit:
     const at = before.length - m[1].length - 1
     const nb = before.slice(0, at) + '@' + member.name + ' '
     setText(nb + after)
-    setMentionIds((ids) => (ids.includes(member.id) ? ids : [...ids, member.id]))
+    if (member.id !== ALL_ID) setMentionIds((ids) => (ids.includes(member.id) ? ids : [...ids, member.id]))
     setSuggest(null)
     setTimeout(() => { el.focus(); el.setSelectionRange(nb.length, nb.length) }, 0)
   }
@@ -92,9 +105,16 @@ export function MentionBox({ members, onSubmit }: { members: Member[]; onSubmit:
         <ul className="absolute bottom-full z-10 mb-1 w-56 overflow-hidden rounded-btn border border-line bg-card shadow-overlay">
           {suggest.map((m) => (
             <li key={m.id}>
-              <button type="button" onClick={() => pick(m)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body-sm hover:bg-slate-50">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">{initials(m.name)}</span>{m.name}
-              </button>
+              {m.id === ALL_ID ? (
+                <button type="button" onClick={() => pick(m)} className="flex w-full items-center gap-2 border-b border-line px-3 py-1.5 text-left text-body-sm hover:bg-slate-50">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-white">ALL</span>
+                  <span className="font-semibold text-ink">@all</span><span className="text-ink-muted">everyone on this project</span>
+                </button>
+              ) : (
+                <button type="button" onClick={() => pick(m)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body-sm hover:bg-slate-50">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">{initials(m.name)}</span>{m.name}
+                </button>
+              )}
             </li>
           ))}
         </ul>

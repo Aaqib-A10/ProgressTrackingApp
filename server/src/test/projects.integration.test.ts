@@ -424,3 +424,27 @@ describe('team leads can create projects', () => {
     expect(mem.body.canCreate).toBe(false)
   })
 })
+
+describe('@all mentions', () => {
+  it('@all in a project channel mentions every member except the sender', async () => {
+    const ch = await request(app).get('/api/chat/projects/RTI').set(...auth(w.itadLead)).expect(200)
+    const convId = ch.body.conversation.id
+    const sent = await request(app).post(`/api/chat/conversations/${convId}/messages`).set(...auth(w.itadLead)).send({ body: '@all standup in 5' }).expect(201)
+    const members = (await prisma.chatMember.findMany({ where: { conversationId: convId }, select: { userId: true } })).map((m) => m.userId).filter((id) => id !== w.itadLead.id)
+    expect([...sent.body.message.mentions].sort()).toEqual([...members].sort())
+    const notes = await prisma.notification.findMany({ where: { type: 'MENTION', body: { contains: 'standup in 5' } } })
+    expect(new Set(notes.map((n) => n.userId))).toEqual(new Set(members))
+    // "@allison" is not @all
+    const other = await request(app).post(`/api/chat/conversations/${convId}/messages`).set(...auth(w.itadLead)).send({ body: 'ping @allison' }).expect(201)
+    expect(other.body.message.mentions).toEqual([])
+  })
+
+  it('@all in a task comment mentions every project member except the author', async () => {
+    const t = await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadLead)).send({ title: 'All hands' }).expect(201)
+    await request(app).post(`/api/projects/tasks/${t.body.task.code}/comments`).set(...auth(w.itadLead)).send({ body: '@all please read' }).expect(201)
+    const proj = await prisma.pmProject.findUniqueOrThrow({ where: { key: 'RTI' } })
+    const members = (await prisma.pmProjectMember.findMany({ where: { projectId: proj.id }, select: { userId: true } })).map((m) => m.userId).filter((id) => id !== w.itadLead.id)
+    const notes = await prisma.notification.findMany({ where: { type: 'MENTION', entityId: t.body.task.id } })
+    expect(new Set(notes.map((n) => n.userId))).toEqual(new Set(members))
+  })
+})

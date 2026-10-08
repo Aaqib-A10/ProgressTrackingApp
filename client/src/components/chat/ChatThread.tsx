@@ -123,7 +123,13 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   function onType(v: string, pos: number) {
     setText(v)
     const m = v.slice(0, pos).match(/(?:^|\s)@([\w.-]{0,30})$/)
-    setSuggest(m ? members.filter((x) => x.name.toLowerCase().includes(m[1].toLowerCase())).slice(0, 6) : null)
+    if (!m) { setSuggest(null) } else {
+      const tok = m[1].toLowerCase()
+      const people = members.filter((x) => x.name.toLowerCase().includes(tok)).slice(0, 6)
+      // "@all" notifies everyone in the conversation; offer it first when it matches what's typed.
+      const all = members.length > 1 && ('all'.startsWith(tok) || 'everyone'.startsWith(tok)) ? [{ id: ALL_ID, name: 'all' }] : []
+      setSuggest([...all, ...people])
+    }
     const now = Date.now()
     if (v && now - lastTypingPing.current > 3000) { lastTypingPing.current = now; chatApi.typing(conversationId, true).catch(() => undefined) }
   }
@@ -136,7 +142,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     const at = before.length - m[1].length - 1
     const nb = before.slice(0, at) + '@' + p.name + ' '
     setText(nb + text.slice(pos))
-    setMentionIds((ids) => (ids.includes(p.id) ? ids : [...ids, p.id]))
+    if (p.id !== ALL_ID) setMentionIds((ids) => (ids.includes(p.id) ? ids : [...ids, p.id]))
     setSuggest(null)
     setTimeout(() => { el?.focus(); el?.setSelectionRange(nb.length, nb.length) }, 0)
   }
@@ -287,7 +293,19 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         )}
         {suggest && suggest.length > 0 && (
           <ul className="absolute bottom-full left-3 z-10 mb-1 w-60 overflow-hidden rounded-btn border border-line bg-card shadow-overlay">
-            {suggest.map((p) => <li key={p.id}><button type="button" onClick={() => pickMention(p)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body-sm hover:bg-slate-50"><PersonAvatar person={p} size={20} />{p.name}</button></li>)}
+            {suggest.map((p) => (
+              <li key={p.id}>
+                {p.id === ALL_ID ? (
+                  <button type="button" onClick={() => pickMention(p)} className="flex w-full items-center gap-2 border-b border-line px-3 py-1.5 text-left text-body-sm hover:bg-slate-50">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white"><Users size={11} /></span>
+                    <span className="font-semibold text-ink">@all</span>
+                    <span className="text-ink-muted">Notify everyone here ({members.length})</span>
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => pickMention(p)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body-sm hover:bg-slate-50"><PersonAvatar person={p} size={20} />{p.name}</button>
+                )}
+              </li>
+            ))}
           </ul>
         )}
         {showEmoji && (
@@ -325,6 +343,8 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   )
 }
 
+const ALL_ID = '__all__'
+
 function renderBody(body: string, members: { id: string; name: string }[], mentionIds: string[], meId: string, hasTask: boolean): React.ReactNode[] {
   const names = mentionIds.map((id) => members.find((m) => m.id === id)).filter((m): m is { id: string; name: string } => !!m).sort((a, b) => b.name.length - a.name.length)
   const out: React.ReactNode[] = []
@@ -343,6 +363,13 @@ function renderBody(body: string, members: { id: string; name: string }[], menti
   }
   while (i < body.length) {
     if (body[i] === '@') {
+      const all = /^@(all|everyone)\b/i.exec(body.slice(i))
+      if (all && (i === 0 || /\s/.test(body[i - 1]))) {
+        flush()
+        out.push(<span key={`m${i}`} className="rounded bg-warning/20 px-0.5 font-medium text-amber-800">{all[0]}</span>)
+        i += all[0].length
+        continue
+      }
       const hit = names.find((n) => body.startsWith('@' + n.name, i))
       if (hit) {
         flush()

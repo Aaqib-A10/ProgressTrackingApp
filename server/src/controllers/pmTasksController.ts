@@ -432,7 +432,10 @@ export async function addComment(req: AuthedRequest, res: Response): Promise<voi
   const { task, ctx } = await loadTaskCtx(req)
   const body = parse(commentSchema, req.body)
   const members = await projectMemberIds(ctx.project.id)
-  const mentions = [...new Set(body.mentions ?? [])].filter((id) => members.has(id))
+  // "@all" (or "@everyone") mentions every member of the project except the author.
+  const mentions = /(^|\s)@(all|everyone)\b/i.test(body.body)
+    ? [...members].filter((id) => id !== ctx.me.id)
+    : [...new Set(body.mentions ?? [])].filter((id) => members.has(id))
   const c = await prisma.$transaction(async (tx) => {
     const row = await tx.pmComment.create({ data: { taskId: task.id, authorId: ctx.me.id, body: body.body, mentions }, include: { author: { select: { id: true, name: true } } } })
     await tx.pmTaskWatcher.createMany({ data: [{ taskId: task.id, userId: ctx.me.id }], skipDuplicates: true })

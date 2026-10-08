@@ -345,7 +345,11 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
   if (!text) throw new HttpError(422, 'Message is empty')
   rateLimitSend(me.id)
   const memberIds = new Set((await prisma.chatMember.findMany({ where: { conversationId: m.conversationId }, select: { userId: true } })).map((x) => x.userId))
-  const mentions = [...new Set(body.mentions ?? [])].filter((id) => memberIds.has(id) && id !== me.id)
+  // "@all" (or "@everyone") mentions every member of the conversation except the sender.
+  const mentionAll = /(^|\s)@(all|everyone)\b/i.test(text)
+  const mentions = mentionAll
+    ? [...memberIds].filter((id) => id !== me.id)
+    : [...new Set(body.mentions ?? [])].filter((id) => memberIds.has(id) && id !== me.id)
   let replyToId: string | null = null
   if (body.replyToId) {
     const r = await prisma.chatMessage.findFirst({ where: { id: body.replyToId, conversationId: m.conversationId }, select: { id: true } })

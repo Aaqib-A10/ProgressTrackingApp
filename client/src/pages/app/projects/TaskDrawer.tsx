@@ -292,7 +292,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
                   <Comment key={c.id} comment={c} members={people} mine={c.author.id === meId} canDelete={c.author.id === meId || perms.canDelete} onChanged={load} />
                 ))}
               </ul>
-              <MentionBox members={people} onSubmit={async (b, mentions, reset) => {
+              <MentionBox members={people} allowAll onSubmit={async (b, mentions, reset) => {
                 try { await projectsApi.addComment(code, b, mentions); reset(); await load(); const r = await projectsApi.task(code); onChanged(r.task) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not post') }) }
               }} />
             </div>
