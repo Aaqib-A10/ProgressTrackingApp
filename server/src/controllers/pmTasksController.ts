@@ -702,12 +702,15 @@ export async function bulkUpdate(req: AuthedRequest, res: Response): Promise<voi
   const ctx = await loadProjectCtx(req.params.key, viewer(req))
   if (!ctx.canManage) throw new HttpError(403, 'Only project admins can use bulk actions')
   const body = parse(bulkSchema, req.body)
-  const tasks = await prisma.pmTask.findMany({ where: { id: { in: body.taskIds }, projectId: ctx.project.id, deletedAt: null }, select: { id: true, assignees: { select: { userId: true } }, priority: true, columnId: true } })
+  const tasks = await prisma.pmTask.findMany({ where: { id: { in: body.taskIds }, projectId: ctx.project.id, deletedAt: null }, select: { id: true, createdById: true, assignees: { select: { userId: true } }, priority: true, columnId: true } })
   if (body.assigneeId) await assertMembers(ctx, [body.assigneeId])
+  let deleted = 0
   for (const t of tasks) {
     if (body.delete) {
+      if (t.createdById !== ctx.me.id) continue // only the creator can delete a task
       await prisma.pmTask.update({ where: { id: t.id }, data: { deletedAt: new Date(), isOverdue: false } })
       await logActivity(t.id, ctx.me.id, 'deleted', { bulk: true })
+      deleted++
       continue
     }
     if (body.priority && body.priority !== t.priority) {
@@ -725,7 +728,7 @@ export async function bulkUpdate(req: AuthedRequest, res: Response): Promise<voi
     }
     if (body.columnId && body.columnId !== t.columnId) await moveTaskTo(ctx, t.id, body.columnId, null, null)
   }
-  res.json({ updated: tasks.length })
+  res.json({ updated: body.delete ? deleted : tasks.length, skipped: body.delete ? tasks.length - deleted : 0 })
 }
 
 export { isTaskOverdue }

@@ -92,10 +92,9 @@ export function canChangeDue(ctx: ProjectCtx, task: TaskForPerm): boolean {
   return ctx.pmRole === 'MEMBER' && task.createdById === ctx.me.id
 }
 
-/** Members may delete only tasks they created that haven't been started yet. */
+/** Only the person who created a task can delete it (in any project, at any stage). */
 export function canDeleteTask(ctx: ProjectCtx, task: TaskForPerm): boolean {
-  if (ctx.canManage) return true
-  return ctx.pmRole === 'MEMBER' && task.createdById === ctx.me.id && task.column?.category === 'TODO'
+  return task.createdById === ctx.me.id
 }
 
 /** Approve/reject a due date extension: creator or project admin. */

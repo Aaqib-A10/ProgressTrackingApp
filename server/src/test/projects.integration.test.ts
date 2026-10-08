@@ -448,3 +448,24 @@ describe('@all mentions', () => {
     expect(new Set(notes.map((n) => n.userId))).toEqual(new Set(members))
   })
 })
+
+describe('deleting tasks: creator only', () => {
+  it('the creator can delete their task at any stage; nobody else can (not even admins)', async () => {
+    const t = await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadMember)).send({ title: 'Made by mistake', assigneeIds: [w.itadLead.id] }).expect(201)
+    const code = t.body.task.code
+    const inProgress = board.columns.find((c) => c.category === 'IN_PROGRESS')!.id
+    await request(app).patch(`/api/projects/tasks/${code}/move`).set(...auth(w.itadMember)).send({ columnId: inProgress }).expect(200)
+    const asCreator = await request(app).get(`/api/projects/tasks/${code}`).set(...auth(w.itadMember)).expect(200)
+    expect(asCreator.body.perms.canDelete).toBe(true)
+    const asAdmin = await request(app).get(`/api/projects/tasks/${code}`).set(...auth(w.itadLead)).expect(200)
+    expect(asAdmin.body.perms.canDelete).toBe(false)
+    await request(app).delete(`/api/projects/tasks/${code}`).set(...auth(w.itadLead)).expect(403)
+    await request(app).delete(`/api/projects/tasks/${code}`).set(...auth(w.superAdmin)).expect(403)
+    // bulk delete by an admin skips tasks they didn't create
+    const b = await request(app).post('/api/projects/RTI/tasks/bulk').set(...auth(w.itadLead)).send({ taskIds: [t.body.task.id], delete: true }).expect(200)
+    expect(b.body.updated).toBe(0)
+    expect(b.body.skipped).toBe(1)
+    await request(app).delete(`/api/projects/tasks/${code}`).set(...auth(w.itadMember)).expect(204)
+    await request(app).get(`/api/projects/tasks/${code}`).set(...auth(w.itadMember)).expect(404)
+  })
+})

@@ -43,7 +43,13 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
   async function bulk(body: { columnId?: string; priority?: PmPriority; assigneeId?: string | null; delete?: boolean }) {
     try {
       const r = await projectsApi.bulk(projectKey, { taskIds: [...sel], ...body })
-      addToast({ type: 'success', message: `Updated ${r.updated} task${r.updated === 1 ? '' : 's'}` })
+      const skipped = (r as { skipped?: number }).skipped ?? 0
+      addToast({
+        type: skipped && !r.updated ? 'error' : 'success',
+        message: body.delete
+          ? `Deleted ${r.updated} task${r.updated === 1 ? '' : 's'}${skipped ? `. ${skipped} skipped: only the person who created a task can delete it` : ''}`
+          : `Updated ${r.updated} task${r.updated === 1 ? '' : 's'}`,
+      })
       setSel(new Set())
       onChanged()
     } catch (e) { addToast({ type: 'error', message: errMsg(e) }) }
@@ -75,7 +81,7 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
             <option value="__none">Nobody</option>
             {members.filter((m) => m.role !== 'VIEWER').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
-          <Button size="sm" variant="danger" leadingIcon={<Trash2 size={14} />} onClick={() => { if (window.confirm(`Delete ${sel.size} task(s)?`)) bulk({ delete: true }) }}>Delete</Button>
+          <Button size="sm" variant="danger" leadingIcon={<Trash2 size={14} />} onClick={() => { if (window.confirm(`Delete ${sel.size} task(s)? Only tasks you created will be deleted.`)) bulk({ delete: true }) }}>Delete</Button>
           <button type="button" className="ml-auto text-ink-muted hover:text-ink" onClick={() => setSel(new Set())}>Clear</button>
         </div>
       )}
