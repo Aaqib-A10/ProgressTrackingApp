@@ -38,7 +38,7 @@ const colKey = (id: string) => `col:${id}`
 const isColKey = (id: string) => id.startsWith('col:')
 const colIdOf = (id: string) => id.slice(4)
 
-export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTask, onReorderColumns, onQuickAdd, onDragState }: {
+export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTask, onReorderColumns, onQuickAdd, onAddTask, onDragState }: {
   columns: BoardColumn[]
   tasks: TaskCard[]
   canMove: boolean
@@ -47,6 +47,8 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
   onMoveTask: (taskId: string, columnId: string, beforeId: string | null, afterId: string | null) => void
   onReorderColumns: (orderedIds: string[]) => void
   onQuickAdd: ((columnId: string, title: string) => Promise<void>) | null
+  /** Open the full "New task" form with this column preselected (used instead of the inline quick add). */
+  onAddTask?: ((columnId: string) => void) | null
   onDragState: (dragging: boolean) => void
 }) {
   // Local mirror of "which column holds which card ids, in order" so cards can
@@ -173,7 +175,7 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
         <SortableContext items={orderedCols.map((c) => colKey(c.id))} strategy={horizontalListSortingStrategy}>
           <div className="flex min-h-[60vh] snap-x snap-mandatory items-start gap-3 sm:snap-none xl:gap-2.5">
             {orderedCols.map((c) => (
-              <Column key={c.id} column={c} ids={view[c.id] ?? []} byId={byId} canMove={canMove} canDragColumn={canManage} onOpen={onOpen} onQuickAdd={onQuickAdd} />
+              <Column key={c.id} column={c} ids={view[c.id] ?? []} byId={byId} canMove={canMove} canDragColumn={canManage} onOpen={onOpen} onQuickAdd={onQuickAdd} onAddTask={onAddTask ?? null} />
             ))}
           </div>
         </SortableContext>
@@ -185,7 +187,7 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
   )
 }
 
-function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd }: {
+function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd, onAddTask }: {
   column: BoardColumn
   ids: string[]
   byId: Map<string, TaskCard>
@@ -193,6 +195,7 @@ function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd 
   canDragColumn: boolean
   onOpen: (code: string) => void
   onQuickAdd: ((columnId: string, title: string) => Promise<void>) | null
+  onAddTask: ((columnId: string) => void) | null
 }) {
   const sortable = useSortable({ id: colKey(column.id), data: { type: 'column' }, disabled: !canDragColumn })
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: column.id, data: { type: 'zone' } })
@@ -230,7 +233,13 @@ function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd 
         </SortableContext>
         {ids.length === 0 && !adding && <p className="px-1 py-4 text-center text-body-sm text-ink-muted">{canMove ? 'Drop tasks here' : 'No tasks'}</p>}
       </div>
-      {onQuickAdd && (
+      {onAddTask ? (
+        <div className="px-2 pb-2">
+          <button type="button" onClick={() => onAddTask(column.id)} className="flex w-full items-center gap-1.5 rounded-btn px-2 py-1.5 text-body-sm font-medium text-ink-muted hover:bg-slate-200/70 hover:text-ink">
+            <Plus size={14} /> Add task
+          </button>
+        </div>
+      ) : onQuickAdd && (
         <div className="px-2 pb-2">
           {adding ? (
             <form onSubmit={async (e) => { e.preventDefault(); if (!title.trim()) return; setBusy(true); try { await onQuickAdd(column.id, title.trim()); setTitle('') } finally { setBusy(false) } }}>

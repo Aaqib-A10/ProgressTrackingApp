@@ -29,6 +29,7 @@ export default function ProjectBoard() {
   const [notFound, setNotFound] = useState(false)
   const [showOld, setShowOld] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createInColumn, setCreateInColumn] = useState<string | undefined>(undefined)
   const dragging = useRef(false)
   const pending = useRef(0)
 
@@ -227,6 +228,7 @@ export default function ProjectBoard() {
           onMoveTask={moveTask}
           onReorderColumns={reorderColumns}
           onQuickAdd={perms.canContribute && project.status === 'ACTIVE' && !filtersOn ? quickAdd : null}
+          onAddTask={perms.canContribute && project.status === 'ACTIVE' ? (colId) => { setCreateInColumn(colId); setCreating(true) } : null}
           onDragState={(d) => { dragging.current = d }}
         />
       ) : (
@@ -240,7 +242,7 @@ export default function ProjectBoard() {
       ) : null}
 
       {creating && (
-        <CreateTaskModal projectKey={project.key} columns={data.columns} members={data.members} labels={data.labels} onClose={() => setCreating(false)} onCreated={upsert} onLabelCreated={addLabel} />
+        <CreateTaskModal projectKey={project.key} columns={data.columns} members={data.members} labels={data.labels} defaultColumnId={createInColumn} onClose={() => { setCreating(false); setCreateInColumn(undefined) }} onCreated={upsert} onLabelCreated={addLabel} />
       )}
       {openCode && (
         <TaskDrawer
