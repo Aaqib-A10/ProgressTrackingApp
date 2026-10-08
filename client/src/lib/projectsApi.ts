@@ -68,7 +68,8 @@ export interface TaskCard {
   createdBy: PersonRef
   assignees: PersonRef[]
   labels: Label[]
-  counts: { comments: number; attachments: number; checklistDone: number; checklistTotal: number }
+  counts: { comments: number; attachments: number; checklistDone: number; checklistTotal: number; reviews: number }
+  lastReviewVerdict: ReviewVerdict | null
   updatedAt: string
   createdAt: string
 }
@@ -87,6 +88,9 @@ export interface BoardData {
   serverTime: string
 }
 
+export type ReviewVerdict = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENT'
+export interface TaskReview { id: string; verdict: ReviewVerdict; rating: number | null; body: string; reviewer: PersonRef; createdAt: string }
+export interface ProjectReview extends TaskReview { task: { code: string; title: string; status: string; category: ColumnCategory; assignees: PersonRef[] } }
 export interface TaskComment { id: string; body: string; mentions: string[]; author: PersonRef; createdAt: string; editedAt: string | null }
 export interface TaskAttachment { id: string; originalName: string; mimeType: string; size: number; uploadedBy: PersonRef; createdAt: string; downloadUrl: string }
 export interface ChecklistItem { id: string; text: string; isDone: boolean; position: number }
@@ -112,6 +116,7 @@ export interface TaskDetail extends TaskCard {
   watchers: PersonRef[]
   checklist: ChecklistItem[]
   comments: TaskComment[]
+  reviews: TaskReview[]
   attachments: TaskAttachment[]
   extensionRequests: ExtensionRequest[]
 }
@@ -172,6 +177,9 @@ export const projectsApi = {
   addComment: (code: string, body: string, mentions: string[]) => api.post<{ comment: TaskComment }>(`/projects/tasks/${k(code)}/comments`, { body, mentions }),
   editComment: (id: string, body: string) => api.patch<{ comment: TaskComment }>(`/projects/comments/${id}`, { body }),
   deleteComment: (id: string) => api.del(`/projects/comments/${id}`),
+  addReview: (code: string, body: { verdict: ReviewVerdict; rating?: number | null; body: string }) => api.post<{ review: TaskReview }>(`/projects/tasks/${k(code)}/reviews`, body),
+  deleteReview: (id: string) => api.del(`/projects/reviews/${id}`),
+  projectReviews: (key: string) => api.get<{ reviews: ProjectReview[] }>(`/projects/${k(key)}/reviews`),
   addChecklist: (code: string, text: string) => api.post<{ item: ChecklistItem }>(`/projects/tasks/${k(code)}/checklist`, { text }),
   updateChecklist: (id: string, body: Partial<{ text: string; isDone: boolean }>) => api.patch<{ item: ChecklistItem }>(`/projects/checklist/${id}`, body),
   deleteChecklist: (id: string) => api.del(`/projects/checklist/${id}`),

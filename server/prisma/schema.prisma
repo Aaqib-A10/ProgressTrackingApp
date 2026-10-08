@@ -231,6 +231,7 @@ model User {
   pmAssignments    PmTaskAssignee[]     @relation("PmAssignments")
   pmWatching       PmTaskWatcher[]      @relation("PmWatching")
   pmComments       PmComment[]          @relation("PmCommentAuthor")
+  pmReviews        PmReview[]           @relation("PmReviewer")
   pmAttachments    PmAttachment[]       @relation("PmAttachmentUploader")
   pmActivity       PmActivity[]         @relation("PmActivityActor")
   pmExtRequested   PmExtensionRequest[] @relation("PmExtRequester")
@@ -935,6 +936,7 @@ enum NotificationType {
   EXTENSION_DECIDED
   PROJECT_MEMBER_ADDED
   CHAT_MESSAGE
+  TASK_REVIEW
 }
 
 enum BreakType {
@@ -1932,6 +1934,7 @@ model PmTask {
   labels            PmTaskLabel[]
   checklist         PmChecklistItem[]
   comments          PmComment[]
+  reviews           PmReview[]
   attachments       PmAttachment[]
   activity          PmActivity[]
   extensionRequests PmExtensionRequest[]
@@ -2000,6 +2003,29 @@ model PmChecklistItem {
   createdAt DateTime  @default(now())
 
   @@index([taskId])
+}
+
+/// A review on a task: who reviewed it, their verdict and feedback.
+enum PmReviewVerdict {
+  APPROVED
+  CHANGES_REQUESTED
+  COMMENT
+}
+
+model PmReview {
+  id         String          @id @default(cuid())
+  taskId     String
+  task       PmTask          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reviewerId String
+  reviewer   User            @relation("PmReviewer", fields: [reviewerId], references: [id])
+  verdict    PmReviewVerdict @default(COMMENT)
+  rating     Int?
+  body       String
+  deletedAt  DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([reviewerId])
 }
 
 model PmComment {

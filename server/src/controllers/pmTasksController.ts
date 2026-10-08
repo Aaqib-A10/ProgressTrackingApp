@@ -110,6 +110,7 @@ export async function createTask(req: AuthedRequest, res: Response): Promise<voi
   if (!ctx.canContribute) throw new HttpError(403, 'Viewers cannot create tasks')
   if (ctx.project.status !== 'ACTIVE') throw new HttpError(422, 'This project is archived')
   const body = parse(createSchema, req.body)
+  assertDateRange(toDate(body.startAt) ?? null, toDate(body.dueAt) ?? null)
   const assigneeIds = [...new Set(body.assigneeIds ?? [])]
   await assertMembers(ctx, assigneeIds)
 
@@ -168,6 +169,7 @@ export async function getTask(req: AuthedRequest, res: Response): Promise<void> 
       watchers: { include: { user: { select: { id: true, name: true } } } },
       checklist: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
       comments: { where: { deletedAt: null }, include: { author: { select: { id: true, name: true } } }, orderBy: { createdAt: 'asc' } },
+      reviews: { where: { deletedAt: null }, include: { reviewer: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
       attachments: { include: { uploadedBy: { select: { id: true, name: true } } }, orderBy: { createdAt: 'asc' } },
       extensionRequests: { include: { requestedBy: { select: { id: true, name: true } }, decidedBy: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
     },
@@ -185,6 +187,7 @@ export async function getTask(req: AuthedRequest, res: Response): Promise<void> 
       watchers: full.watchers.map((w) => w.user),
       checklist: full.checklist.map((c) => ({ id: c.id, text: c.text, isDone: c.isDone, position: c.position })),
       comments: full.comments.map((c) => ({ id: c.id, body: c.body, mentions: c.mentions, author: c.author, createdAt: c.createdAt.toISOString(), editedAt: iso(c.editedAt) })),
+      reviews: full.reviews.map(serializeReview),
       attachments: full.attachments.map((a) => ({ id: a.id, originalName: a.originalName, mimeType: a.mimeType, size: a.size, uploadedBy: a.uploadedBy, createdAt: a.createdAt.toISOString(), downloadUrl: `/api/projects/attachments/${a.id}/download` })),
       extensionRequests: full.extensionRequests.map((e) => ({
         id: e.id,
@@ -242,6 +245,10 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
   if ('dueAt' in body && !canChangeDue(ctx, task)) throw new HttpError(403, 'Only the person who assigned this task or a project admin can change the due date')
   if (body.columnId && !ctx.canContribute) throw new HttpError(403, 'Viewers cannot move tasks')
 
+  assertDateRange(
+    body.startAt !== undefined ? toDate(body.startAt) ?? null : task.startAt,
+    body.dueAt !== undefined ? toDate(body.dueAt) ?? null : task.dueAt,
+  )
   const data: Prisma.PmTaskUpdateInput = {}
   const acts: { action: string; meta: Prisma.InputJsonValue }[] = []
   if (body.title !== undefined && body.title !== task.title) { data.title = body.title; acts.push({ action: 'title_changed', meta: { from: task.title, to: body.title } }) }
@@ -719,3 +726,89 @@ export async function bulkUpdate(req: AuthedRequest, res: Response): Promise<voi
 }
 
 export { isTaskOverdue }
+
+// ---------- Reviews ----------
+
+/** The end (due) date can't be before the start date. */
+function assertDateRange(start: Date | null, end: Date | null): void {
+  if (start && end && end.getTime() < start.getTime()) throw new HttpError(422, 'The end date must be after the start date')
+}
+
+const VERDICT_LABEL = { APPROVED: 'Approved', CHANGES_REQUESTED: 'Changes requested', COMMENT: 'Reviewed' } as const
+
+function serializeReview(r: { id: string; verdict: keyof typeof VERDICT_LABEL; rating: number | null; body: string; createdAt: Date; reviewer: { id: string; name: string } }) {
+  return { id: r.id, verdict: r.verdict, rating: r.rating, body: r.body, reviewer: r.reviewer, createdAt: r.createdAt.toISOString() }
+}
+
+const reviewSchema = z.object({
+  verdict: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'COMMENT']).default('COMMENT'),
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  body: z.string().trim().min(1, 'Write your review').max(5000),
+})
+
+/** POST /api/projects/tasks/:code/reviews — any project member can review a task. */
+export async function addReview(req: AuthedRequest, res: Response): Promise<void> {
+  const { task, ctx } = await loadTaskCtx(req)
+  const body = parse(reviewSchema, req.body)
+  const r = await prisma.$transaction(async (tx) => {
+    const row = await tx.pmReview.create({
+      data: { taskId: task.id, reviewerId: ctx.me.id, verdict: body.verdict, rating: body.rating ?? null, body: body.body },
+      include: { reviewer: { select: { id: true, name: true } } },
+    })
+    await tx.pmTaskWatcher.createMany({ data: [{ taskId: task.id, userId: ctx.me.id }], skipDuplicates: true })
+    await logActivity(task.id, ctx.me.id, 'review_added', { reviewId: row.id, verdict: body.verdict }, tx)
+    await tx.pmTask.update({ where: { id: task.id }, data: { updatedAt: new Date() } })
+    return row
+  })
+  const name = r.reviewer.name
+  const label = VERDICT_LABEL[body.verdict]
+  const watchers = (await prisma.pmTaskWatcher.findMany({ where: { taskId: task.id }, select: { userId: true } })).map((w) => w.userId)
+  await pmNotify({
+    userIds: [...task.assignees.map((a) => a.userId), task.createdById, ...watchers],
+    actorId: ctx.me.id,
+    type: 'TASK_REVIEW',
+    title: `${name} reviewed ${task.code}: ${label}`,
+    body: `"${trunc(task.title, 60)}": ${trunc(body.body, 100)}`,
+    link: taskLink(ctx.project.key, task.code),
+    taskId: task.id,
+    email: {
+      pref: 'emailComment',
+      subject: `${name} reviewed ${task.code}: ${label}`,
+      heading: `New review on ${task.code}`,
+      lines: [`${name} reviewed "${task.title}" (${label}${body.rating ? `, ${body.rating}/5` : ''}):`, `"${trunc(body.body, 400)}"`],
+      cta: 'Open the task',
+    },
+  })
+  res.status(201).json({ review: serializeReview(r) })
+}
+
+/** DELETE /api/projects/reviews/:id — the reviewer or a project admin. */
+export async function deleteReview(req: AuthedRequest, res: Response): Promise<void> {
+  const r = await prisma.pmReview.findUnique({ where: { id: req.params.id }, include: { task: true } })
+  if (!r || r.deletedAt || r.task.deletedAt) throw new HttpError(404, 'Review not found')
+  const ctx = await loadProjectCtx(r.task.projectId, viewer(req))
+  if (r.reviewerId !== ctx.me.id && !ctx.canManage) throw new HttpError(403, 'You can only delete your own reviews')
+  await prisma.pmReview.update({ where: { id: r.id }, data: { deletedAt: new Date() } })
+  await logActivity(r.taskId, ctx.me.id, 'review_deleted', { reviewId: r.id })
+  res.status(204).end()
+}
+
+/** GET /api/projects/:key/reviews — every review in the project, newest first (who reviewed which task). */
+export async function listProjectReviews(req: AuthedRequest, res: Response): Promise<void> {
+  const ctx = await loadProjectCtx(req.params.key, viewer(req))
+  const rows = await prisma.pmReview.findMany({
+    where: { deletedAt: null, task: { projectId: ctx.project.id, deletedAt: null } },
+    include: {
+      reviewer: { select: { id: true, name: true } },
+      task: { select: { code: true, title: true, column: { select: { name: true, category: true } }, assignees: { include: { user: { select: { id: true, name: true } } } } } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+  })
+  res.json({
+    reviews: rows.map((r) => ({
+      ...serializeReview(r),
+      task: { code: r.task.code, title: r.task.title, status: r.task.column.name, category: r.task.column.category, assignees: r.task.assignees.map((a) => a.user) },
+    })),
+  })
+}

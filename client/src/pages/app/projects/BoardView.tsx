@@ -17,10 +17,11 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { CheckSquare, GripVertical, MessageSquare, Paperclip, Plus } from 'lucide-react'
+import { ArrowRight, CheckSquare, GripVertical, MessageSquare, Paperclip, Plus } from 'lucide-react'
 import type { BoardColumn, TaskCard } from '../../../lib/projectsApi'
 import { AvatarStack, DueChip, PriorityIcon } from '../../../components/projects/pmUi'
 import { LabelChip } from '../../../components/projects/Pickers'
+import { VERDICT_META, VerdictBadge } from '../../../components/projects/Reviews'
 import { cn } from '../../../lib/cn'
 
 /**
@@ -168,9 +169,9 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
 
   return (
     <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={finish}>
-      <div className="-mx-4 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6">
+      <div className="-mx-4 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6 xl:mx-0 xl:overflow-x-visible xl:px-0">
         <SortableContext items={orderedCols.map((c) => colKey(c.id))} strategy={horizontalListSortingStrategy}>
-          <div className="flex min-h-[60vh] snap-x snap-mandatory items-start gap-3 sm:snap-none">
+          <div className="flex min-h-[60vh] snap-x snap-mandatory items-start gap-3 sm:snap-none xl:gap-2.5">
             {orderedCols.map((c) => (
               <Column key={c.id} column={c} ids={view[c.id] ?? []} byId={byId} canMove={canMove} canDragColumn={canManage} onOpen={onOpen} onQuickAdd={onQuickAdd} />
             ))}
@@ -178,7 +179,7 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
         </SortableContext>
       </div>
       <DragOverlay dropAnimation={{ duration: 160, easing: 'ease-out' }}>
-        {active ? <CardBody task={active} lifted /> : activeCol ? <div className="w-72 rounded-card border border-primary/40 bg-card px-3 py-2 text-label-md uppercase text-ink shadow-overlay">{activeCol.name}</div> : null}
+        {active ? <CardBody task={active} lifted /> : activeCol ? <div className="w-60 rounded-card border border-primary/40 bg-card px-3 py-2 text-label-md uppercase text-ink shadow-overlay">{activeCol.name}</div> : null}
       </DragOverlay>
     </DndContext>
   )
@@ -206,9 +207,9 @@ function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd 
       ref={sortable.setNodeRef}
       style={style}
       aria-label={`${column.name} column, ${ids.length} tasks`}
-      className={cn('flex w-[85vw] max-w-[300px] shrink-0 snap-start flex-col rounded-card border bg-slate-50/80 sm:w-72', isOver ? 'border-primary/40 bg-primary/5' : 'border-line', sortable.isDragging && 'opacity-40')}
+      className={cn('flex w-[85vw] max-w-[300px] shrink-0 snap-start flex-col rounded-card border bg-slate-50/80 sm:w-64 xl:w-auto xl:min-w-0 xl:max-w-none xl:flex-1 xl:basis-0', isOver ? 'border-primary/40 bg-primary/5' : 'border-line', sortable.isDragging && 'opacity-40')}
     >
-      <header className="flex items-center gap-2 px-3 pb-1 pt-2.5">
+      <header className="flex items-center gap-2 px-3 pb-1 pt-2.5 xl:px-2.5">
         {canDragColumn && (
           <button type="button" {...sortable.attributes} {...sortable.listeners} className="-ml-1 cursor-grab touch-none rounded p-0.5 text-ink-muted hover:bg-slate-200 active:cursor-grabbing" aria-label={`Drag to reorder ${column.name} column`}>
             <GripVertical size={14} />
@@ -220,7 +221,7 @@ function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd 
           {ids.length}{column.wipLimit != null ? `/${column.wipLimit}` : ''}
         </span>
       </header>
-      <div ref={dropRef} className="flex min-h-[96px] flex-1 flex-col gap-2 p-2">
+      <div ref={dropRef} className="flex min-h-[96px] flex-1 flex-col gap-2 p-2 xl:gap-1.5 xl:p-1.5">
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {ids.map((id) => {
             const t = byId.get(id)
@@ -283,20 +284,27 @@ function SortableCard({ task, canMove, onOpen }: { task: TaskCard; canMove: bool
   )
 }
 
+
 export function CardBody({ task, lifted }: { task: TaskCard; lifted?: boolean }) {
   const c = task.counts
   return (
-    <div className={cn('cursor-pointer rounded-btn border bg-card p-3 shadow-card transition-shadow hover:shadow-overlay', task.isOverdue ? 'border-danger/40' : 'border-line', lifted && 'w-72 rotate-1 cursor-grabbing shadow-overlay')}>
+    <div className={cn('cursor-pointer rounded-btn border bg-card p-3 shadow-card transition-shadow hover:shadow-overlay xl:p-2.5', task.isOverdue ? 'border-danger/40' : 'border-line', lifted && 'w-60 rotate-1 cursor-grabbing shadow-overlay')}>
       {task.labels.length > 0 && <div className="mb-1.5 flex flex-wrap gap-1">{task.labels.map((l) => <LabelChip key={l.id} label={l} />)}</div>}
-      <p className="line-clamp-3 break-words text-body-md font-medium text-ink">{task.title}</p>
-      <div className="mt-2 flex items-center gap-2">
+      <p className="line-clamp-3 break-words text-body-md font-medium text-ink xl:text-body-sm">{task.title}</p>
+      <p className="mt-1 truncate text-[11px] text-ink-muted" title={`Assigned by ${task.createdBy.name} to ${task.assignees.map((a) => a.name).join(', ') || 'nobody yet'}`}>
+        <span className="font-medium text-ink">{task.createdBy.name}</span>
+        <ArrowRight size={10} className="mx-1 inline" />
+        {task.assignees.length ? <span className="font-medium text-ink">{task.assignees.map((a) => a.name).join(', ')}</span> : <span className="italic">unassigned</span>}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 xl:mt-1.5">
         <span className="font-mono text-[11px] font-semibold text-ink-muted">{task.code}</span>
         <PriorityIcon priority={task.priority} />
         <DueChip dueAt={task.dueAt} category={task.category} compact />
         <span className="ml-auto">{task.assignees.length > 0 && <AvatarStack people={task.assignees} max={3} size={22} />}</span>
       </div>
-      {(c.comments > 0 || c.attachments > 0 || c.checklistTotal > 0) && (
-        <div className="mt-2 flex items-center gap-3 text-[11px] text-ink-muted">
+      {(c.comments > 0 || c.attachments > 0 || c.checklistTotal > 0 || task.lastReviewVerdict) && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-muted">
+          {task.lastReviewVerdict && <span title={`${c.reviews} review${c.reviews === 1 ? '' : 's'}, latest: ${VERDICT_META[task.lastReviewVerdict].label}`}><VerdictBadge verdict={task.lastReviewVerdict} short /></span>}
           {c.comments > 0 && <span className="inline-flex items-center gap-1"><MessageSquare size={12} />{c.comments}</span>}
           {c.attachments > 0 && <span className="inline-flex items-center gap-1"><Paperclip size={12} />{c.attachments}</span>}
           {c.checklistTotal > 0 && <span className={cn('inline-flex items-center gap-1', c.checklistDone === c.checklistTotal && 'text-success')}><CheckSquare size={12} />{c.checklistDone}/{c.checklistTotal}</span>}

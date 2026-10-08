@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Bell, BellOff, CalendarClock, Check, CheckSquare, Copy, Download, History, Link2, MessageSquare, MessagesSquare, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { AlertTriangle, Bell, BellOff, CalendarClock, Check, CheckSquare, ClipboardCheck, Copy, Download, History, Link2, MessageSquare, MessagesSquare, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/Toast'
 import { MentionBox, highlightMentions } from '../../../components/MentionBox'
 import { LabelPicker, PeoplePicker } from '../../../components/projects/Pickers'
+import { ReviewForm, ReviewItem } from '../../../components/projects/Reviews'
 import { PRIORITIES, PRIORITY_META, PersonAvatar, fieldCls, fmtAgo, fmtBytes, fmtDateTime, fmtSpan, fromLocalInput, toLocalInput } from '../../../components/projects/pmUi'
 import { errMsg, projectsApi, type ActivityRow, type BoardColumn, type Label, type PmPriority, type ProjectMember, type TaskCard, type TaskDetail, type TaskPerms } from '../../../lib/projectsApi'
 import { cn } from '../../../lib/cn'
@@ -39,6 +40,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
   const [editingDesc, setEditingDesc] = useState(false)
   const [newItem, setNewItem] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [extOpen, setExtOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -49,7 +51,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
       .then((r) => { setTask(r.task); setPerms(r.perms); setTitle(r.task.title); setDesc(r.task.description ?? ''); setMissing(false) })
       .catch(() => setMissing(true))
 
-  useEffect(() => { setTask(null); setActivity(null); setTab('comments'); load() }, [code]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setTask(null); setActivity(null); setTab('comments'); setReviewOpen(false); load() }, [code]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'activity') projectsApi.activity(code).then((r) => setActivity(r.activity)).catch(() => setActivity([])) }, [tab, code, task?.updatedAt])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !extOpen && !confirmDelete) onClose() }
@@ -115,11 +117,15 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
               {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </dd>
-          <dt className="text-ink-muted">Assignees</dt>
+          <dt className="text-ink-muted">Assigned by</dt>
+          <dd className="flex items-center gap-2"><PersonAvatar person={task.createdBy} size={22} />{task.createdBy.name} <span className="text-body-sm text-ink-muted">· {fmtAgo(task.createdAt)}</span></dd>
+          <dt className="text-ink-muted">Assigned to</dt>
           <dd><PeoplePicker people={people} value={task.assignees.map((a) => a.id)} onChange={(ids) => patch({ assigneeIds: ids })} disabled={!canEdit} /></dd>
-          <dt className="text-ink-muted">Due</dt>
+          <dt className="text-ink-muted">Start date</dt>
+          <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="Start date" /></dd>
+          <dt className="text-ink-muted">End date</dt>
           <dd className="flex items-center gap-2">
-            <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="Due date" />
+            <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="End date (due)" />
             {perms.canChangeDue && task.dueAt && <button type="button" className="text-body-sm text-ink-muted hover:text-danger" onClick={() => patch({ dueAt: null })}>Clear</button>}
           </dd>
           <dt className="text-ink-muted">Priority</dt>
@@ -133,12 +139,8 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             <LabelPicker labels={labels} value={task.labels.map((l) => l.id)} disabled={!canEdit} onChange={(ids) => patch({ labelIds: ids })}
               onCreate={async (name) => { try { const r = await projectsApi.createLabel(task.projectKey, { name }); onLabelCreated(r.label); return r.label } catch (e) { addToast({ type: 'error', message: errMsg(e) }); return null } }} />
           </dd>
-          <dt className="text-ink-muted">Start</dt>
-          <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="Start date" /></dd>
           <dt className="text-ink-muted">Estimate</dt>
           <dd className="flex items-center gap-2"><input type="number" min={0} step={0.5} defaultValue={task.estimateHours ?? ''} key={`e${task.estimateHours}`} disabled={!canEdit} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== task.estimateHours) patch({ estimateHours: v }) }} className={cn(fieldCls, 'h-9 w-28')} aria-label="Estimate in hours" /><span className="text-body-sm text-ink-muted">hours</span></dd>
-          <dt className="text-ink-muted">Assigned by</dt>
-          <dd className="flex items-center gap-2"><PersonAvatar person={task.createdBy} size={22} />{task.createdBy.name} <span className="text-body-sm text-ink-muted">· {fmtAgo(task.createdAt)}</span></dd>
           <dt className="text-ink-muted">Watching</dt>
           <dd className="flex items-center gap-2">
             <span className="flex -space-x-1.5">{task.watchers.slice(0, 6).map((w) => <PersonAvatar key={w.id} person={w} size={22} ring />)}</span>
@@ -216,12 +218,12 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
         {/* Attachments */}
         <section
           onDragOver={(e) => { if (perms.canMove) e.preventDefault() }}
-          onDrop={(e) => { e.preventDefault(); if (perms.canMove && e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]) }}
+          onDrop={(e) => { e.preventDefault(); if (perms.canMove) uploadMany(Array.from(e.dataTransfer.files)) }}
         >
           <div className="mb-1 flex items-center justify-between">
             <h3 className="text-body-md font-semibold text-ink"><Paperclip size={15} className="mr-1 inline" />Attachments</h3>
             {perms.canMove && <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 text-body-sm text-primary" disabled={uploading}><Upload size={13} /> {uploading ? 'Uploading…' : 'Add file'}</button>}
-            <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }} />
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { uploadMany(Array.from(e.target.files ?? [])); e.target.value = '' }} />
           </div>
           {task.attachments.length === 0 ? <p className="text-body-sm text-ink-muted">{perms.canMove ? 'Drop a file here or use Add file (25 MB max).' : 'No files.'}</p> : (
             <ul className="divide-y divide-line rounded-btn border border-line">
@@ -236,6 +238,34 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
               ))}
             </ul>
           )}
+        </section>
+
+        {/* Reviews */}
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-body-md font-semibold text-ink"><ClipboardCheck size={15} className="mr-1 inline" />Reviews ({task.reviews.length})</h3>
+            {!reviewOpen && <button type="button" onClick={() => setReviewOpen(true)} className="inline-flex items-center gap-1 text-body-sm text-primary"><Plus size={13} /> Add review</button>}
+          </div>
+          {reviewOpen && (
+            <div className="mb-2">
+              <ReviewForm
+                onCancel={() => setReviewOpen(false)}
+                onSubmit={async (v) => {
+                  try { await projectsApi.addReview(code, v); setReviewOpen(false); await load(); const r = await projectsApi.task(code); onChanged(r.task); addToast({ type: 'success', message: 'Review posted' }); return true } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not post the review') }); return false }
+                }}
+              />
+            </div>
+          )}
+          {task.reviews.length === 0 && !reviewOpen
+            ? <p className="text-body-sm text-ink-muted">No reviews yet. Use Add review to approve the work or ask for changes.</p>
+            : (
+              <ul className="space-y-2">
+                {task.reviews.map((rv) => (
+                  <ReviewItem key={rv.id} review={rv} canDelete={rv.reviewer.id === meId || perms.canDelete}
+                    onDelete={() => projectsApi.deleteReview(rv.id).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} />
+                ))}
+              </ul>
+            )}
         </section>
 
         {/* Comments / activity */}
@@ -267,10 +297,14 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
     )
   })()
 
-  async function upload(f: File) {
-    if (f.size > 25 * 1024 * 1024) { addToast({ type: 'error', message: 'Files are limited to 25 MB' }); return }
+  async function uploadMany(files: File[]) {
+    if (!files.length) return
     setUploading(true)
-    try { await projectsApi.uploadAttachment(code, f); await load(); const r = await projectsApi.task(code); onChanged(r.task) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Upload failed') }) } finally { setUploading(false) }
+    for (const f of files) {
+      if (f.size > 25 * 1024 * 1024) { addToast({ type: 'error', message: `${f.name} is over 25 MB` }); continue }
+      try { await projectsApi.uploadAttachment(code, f) } catch (e) { addToast({ type: 'error', message: `${f.name}: ${errMsg(e, 'upload failed')}` }) }
+    }
+    try { await load(); const r = await projectsApi.task(code); onChanged(r.task) } finally { setUploading(false) }
   }
 
   return createPortal(
@@ -352,6 +386,8 @@ const ACTION_TEXT: Record<string, string> = {
   label_added: 'added a label',
   label_removed: 'removed a label',
   comment_added: 'commented',
+  review_added: 'reviewed the task',
+  review_deleted: 'deleted a review',
   attachment_added: 'attached a file',
   attachment_removed: 'removed a file',
   checklist_updated: 'updated the checklist',
@@ -376,6 +412,7 @@ function ActivityList({ rows, people }: { rows: ActivityRow[] | null; columns: B
     if (r.action === 'priority_changed') return ` from ${String(m.from).toLowerCase()} to ${String(m.to).toLowerCase()}`
     if (r.action === 'title_changed') return ` to "${m.to}"`
     if (r.action === 'attachment_added' || r.action === 'attachment_removed') return ` ${m.name}`
+    if (r.action === 'review_added') return m.verdict === 'APPROVED' ? ': approved' : m.verdict === 'CHANGES_REQUESTED' ? ': changes requested' : ''
     return ''
   }
   return (

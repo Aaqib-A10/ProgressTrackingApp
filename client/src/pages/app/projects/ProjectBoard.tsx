@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Columns3, List, MessagesSquare, Plus, Search, Settings2, X } from 'lucide-react'
+import { AlertTriangle, ClipboardCheck, Columns3, List, MessagesSquare, Plus, Search, Settings2, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/Toast'
 import { AvatarStack, PRIORITIES, PRIORITY_META, fieldCls } from '../../../components/projects/pmUi'
@@ -10,6 +10,7 @@ import { errMsg, projectsApi, type BoardData, type Label, type TaskCard } from '
 import { cn } from '../../../lib/cn'
 import { BoardView } from './BoardView'
 import { ListView } from './ListView'
+import { ReviewsView } from './ReviewsView'
 import { CreateTaskModal } from './CreateTaskModal'
 import { TaskDrawer } from './TaskDrawer'
 
@@ -31,7 +32,7 @@ export default function ProjectBoard() {
   const dragging = useRef(false)
   const pending = useRef(0)
 
-  const view = params.get('view') === 'list' ? 'list' : 'board'
+  const view = params.get('view') === 'list' ? 'list' : params.get('view') === 'reviews' ? 'reviews' : 'board'
   const q = params.get('q') ?? ''
   const assignee = params.get('assignee') ?? ''
   const priority = params.get('priority') ?? ''
@@ -173,6 +174,7 @@ export default function ProjectBoard() {
           <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist" aria-label="View">
             <button type="button" role="tab" aria-selected={view === 'board'} onClick={() => setParam('view', null)} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'board' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><Columns3 size={14} /> Board</button>
             <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => setParam('view', 'list')} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'list' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><List size={14} /> List</button>
+            <button type="button" role="tab" aria-selected={view === 'reviews'} onClick={() => setParam('view', 'reviews')} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'reviews' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><ClipboardCheck size={14} /> Reviews</button>
           </div>
           <Button size="sm" variant="secondary" leadingIcon={<MessagesSquare size={15} />} onClick={() => navigate(`/app/chat?project=${project.key}`)}>Chat</Button>
           {perms.canManage && <Button size="sm" variant="secondary" leadingIcon={<Settings2 size={15} />} onClick={() => navigate(`/app/projects/${project.key}/settings`)}>Settings</Button>}
@@ -187,7 +189,7 @@ export default function ProjectBoard() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={cn('flex flex-wrap items-center gap-2', view === 'reviews' && 'hidden')}>
         <div className="relative w-full sm:w-56">
           <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input value={q} onChange={(e) => setParam('q', e.target.value || null)} placeholder="Search title or code" aria-label="Search tasks" className={cn(fieldCls, 'h-8 pl-8 text-body-sm')} />
@@ -205,7 +207,9 @@ export default function ProjectBoard() {
         <span className="ml-auto text-body-sm text-ink-muted">{filtered.length} of {data.tasks.length} tasks</span>
       </div>
 
-      {data.tasks.length === 0 && !creating ? (
+      {view === 'reviews' ? (
+        <ReviewsView projectKey={project.key} refreshKey={data.tasks.map((t) => t.updatedAt).sort().at(-1) ?? ''} onOpen={(c) => setParam('task', c)} />
+      ) : data.tasks.length === 0 && !creating ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-card py-14 text-center">
           <p className="text-body-lg text-ink">No tasks yet</p>
           <p className="text-body-md text-ink-muted">{perms.canContribute ? 'Create the first task and assign it to someone on the team.' : 'Tasks will appear here when the team adds them.'}</p>

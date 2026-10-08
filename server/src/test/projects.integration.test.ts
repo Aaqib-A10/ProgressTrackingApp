@@ -354,3 +354,55 @@ describe('reports + my tasks', () => {
     expect(unified.body.pending.some((t: { source: string }) => t.source === 'project')).toBe(true)
   })
 })
+
+describe('start / end dates, attachments and reviews', () => {
+  it('rejects an end date before the start date (create and edit)', async () => {
+    const start = new Date(Date.now() + 3 * 86400000).toISOString()
+    const end = new Date(Date.now() + 1 * 86400000).toISOString()
+    await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadMember)).send({ title: 'Bad range', startAt: start, dueAt: end }).expect(422)
+    const ok = await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadMember)).send({ title: 'Good range', startAt: end, dueAt: start, assigneeIds: [w.itadLead.id] }).expect(201)
+    expect(ok.body.task.startAt).toBe(end)
+    expect(ok.body.task.createdBy.id).toBe(w.itadMember.id)
+    expect(ok.body.task.assignees.map((a: { id: string }) => a.id)).toEqual([w.itadLead.id])
+    await request(app).patch(`/api/projects/tasks/${ok.body.task.code}`).set(...auth(w.itadMember)).send({ startAt: new Date(Date.now() + 9 * 86400000).toISOString() }).expect(422)
+  })
+
+  it('a PDF can be attached to a task', async () => {
+    const t = await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadMember)).send({ title: 'With a PDF' }).expect(201)
+    await request(app).post(`/api/projects/tasks/${t.body.task.code}/attachments?name=brief.pdf`).set(...auth(w.itadMember)).set('Content-Type', 'application/pdf').send(Buffer.from('%PDF-1.4 test')).expect(201)
+    const d = await request(app).get(`/api/projects/tasks/${t.body.task.code}`).set(...auth(w.itadMember)).expect(200)
+    expect(d.body.task.attachments[0].originalName).toBe('brief.pdf')
+  })
+
+  it('a review shows who reviewed which task, notifies the team and appears in the project list', async () => {
+    const t = await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadLead)).send({ title: 'Review me', assigneeIds: [w.itadMember.id] }).expect(201)
+    const code = t.body.task.code
+    await request(app).post(`/api/projects/tasks/${code}/reviews`).set(...auth(w.itadLead)).send({ verdict: 'CHANGES_REQUESTED', body: '' }).expect(422)
+    const r = await request(app).post(`/api/projects/tasks/${code}/reviews`).set(...auth(w.itadLead)).send({ verdict: 'CHANGES_REQUESTED', rating: 3, body: 'Fix the headline' }).expect(201)
+    expect(r.body.review.reviewer.id).toBe(w.itadLead.id)
+    // viewers can review too (read + feedback)
+    await request(app).post('/api/projects/RTI/members').set(...auth(w.itadLead)).send({ userIds: [w.inventoryMember.id], role: 'VIEWER' })
+    await request(app).post(`/api/projects/tasks/${code}/reviews`).set(...auth(w.inventoryMember)).send({ verdict: 'APPROVED', body: 'Looks good' }).expect(201)
+    // non members cannot
+    await request(app).post(`/api/projects/tasks/${code}/reviews`).set(...auth(w.leadgenLead)).send({ verdict: 'APPROVED', body: 'x' }).expect(404)
+
+    const d = await request(app).get(`/api/projects/tasks/${code}`).set(...auth(w.itadMember)).expect(200)
+    expect(d.body.task.reviews).toHaveLength(2)
+    expect(d.body.task.lastReviewVerdict).toBe('APPROVED')
+    expect(d.body.task.counts.reviews).toBe(2)
+
+    const notes = await prisma.notification.findMany({ where: { entityId: d.body.task.id, type: 'TASK_REVIEW' } })
+    expect(notes.some((n) => n.userId === w.itadMember.id && n.title.includes('Changes requested'))).toBe(true)
+    expect(notes.some((n) => n.userId === w.itadLead.id)).toBe(true) // creator hears about the viewer's review
+
+    const list = await request(app).get('/api/projects/RTI/reviews').set(...auth(w.itadMember)).expect(200)
+    expect(list.body.reviews[0].task.code).toBe(code)
+    await request(app).get('/api/projects/RTI/reviews').set(...auth(w.leadgenLead)).expect(404)
+
+    // only the reviewer or a project admin can delete
+    await request(app).delete(`/api/projects/reviews/${r.body.review.id}`).set(...auth(w.itadMember)).expect(403)
+    await request(app).delete(`/api/projects/reviews/${r.body.review.id}`).set(...auth(w.itadLead)).expect(204)
+    const after = await request(app).get(`/api/projects/tasks/${code}`).set(...auth(w.itadMember)).expect(200)
+    expect(after.body.task.reviews).toHaveLength(1)
+  })
+})

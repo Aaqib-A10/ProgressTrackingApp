@@ -19,7 +19,8 @@ export const CARD_INCLUDE = {
   createdBy: { select: { id: true, name: true } },
   column: { select: { id: true, name: true, category: true } },
   checklist: { select: { isDone: true } },
-  _count: { select: { comments: { where: { deletedAt: null } }, attachments: true } },
+  _count: { select: { comments: { where: { deletedAt: null } }, attachments: true, reviews: { where: { deletedAt: null } } } },
+  reviews: { where: { deletedAt: null }, select: { verdict: true }, orderBy: { createdAt: 'desc' }, take: 1 },
 } satisfies Prisma.PmTaskInclude
 
 export type CardTask = Prisma.PmTaskGetPayload<{ include: typeof CARD_INCLUDE }>
@@ -46,7 +47,9 @@ export function serializeCard(t: CardTask) {
       attachments: t._count.attachments,
       checklistDone: t.checklist.filter((c) => c.isDone).length,
       checklistTotal: t.checklist.length,
+      reviews: t._count.reviews,
     },
+    lastReviewVerdict: t.reviews[0]?.verdict ?? null,
     updatedAt: t.updatedAt.toISOString(),
     createdAt: t.createdAt.toISOString(),
   }

@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Paperclip, Plus, Upload, X } from 'lucide-react'
+import { useAuth } from '../../../lib/auth'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { TextField } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { LabelPicker, PeoplePicker } from '../../../components/projects/Pickers'
-import { PRIORITIES, PRIORITY_META, fieldCls, fromLocalInput } from '../../../components/projects/pmUi'
+import { PRIORITIES, PRIORITY_META, PersonAvatar, fieldCls, fmtBytes, fromLocalInput } from '../../../components/projects/pmUi'
 import { errMsg, projectsApi, type BoardColumn, type Label, type PmPriority, type ProjectMember, type TaskCard } from '../../../lib/projectsApi'
 import { cn } from '../../../lib/cn'
 
@@ -24,7 +25,12 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [assignees, setAssignees] = useState<string[]>([])
+  const { user } = useAuth()
+  const [start, setStart] = useState('')
   const [due, setDue] = useState('')
+  const [files, setFiles] = useState<File[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
+  const MAX = 25 * 1024 * 1024
   const [priority, setPriority] = useState<PmPriority>('MEDIUM')
   const [labelIds, setLabelIds] = useState<string[]>([])
   const [columnId, setColumnId] = useState(def)
@@ -33,18 +39,32 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  function addFiles(list: File[]) {
+    const tooBig = list.filter((f) => f.size > MAX)
+    if (tooBig.length) setError(`${tooBig.map((f) => f.name).join(', ')} ${tooBig.length > 1 ? 'are' : 'is'} over 25 MB`)
+    setFiles((cur) => [...cur, ...list.filter((f) => f.size <= MAX)].slice(0, 20))
+  }
+
   const people = members.filter((m) => m.role !== 'VIEWER' || assignees.includes(m.id)).map((m) => ({ id: m.id, name: m.name }))
 
   async function submit(again = false) {
     if (!title.trim()) { setError('Give the task a title'); return }
+    if (start && due && new Date(due) < new Date(start)) { setError('The end date must be after the start date'); return }
     setBusy(true)
     setError('')
     try {
       const items = newItem.trim() ? [...checklist, newItem.trim()] : checklist
-      const r = await projectsApi.createTask(projectKey, { title: title.trim(), description: description.trim() || null, assigneeIds: assignees, dueAt: fromLocalInput(due), priority, labelIds, columnId, checklist: items })
-      onCreated(r.task)
-      addToast({ type: 'success', message: `${r.task.code} created` })
-      if (again) { setTitle(''); setDescription(''); setChecklist([]); setNewItem('') }
+      const r = await projectsApi.createTask(projectKey, { title: title.trim(), description: description.trim() || null, assigneeIds: assignees, startAt: fromLocalInput(start), dueAt: fromLocalInput(due), priority, labelIds, columnId, checklist: items })
+      let failed = 0
+      for (const f of files) {
+        try { await projectsApi.uploadAttachment(r.task.code, f) } catch { failed++ }
+      }
+      const task = files.length ? (await projectsApi.task(r.task.code)).task : r.task
+      onCreated(task)
+      addToast(failed
+        ? { type: 'error', message: `${r.task.code} created, but ${failed} file${failed > 1 ? 's' : ''} could not be uploaded` }
+        : { type: 'success', message: `${r.task.code} created${files.length ? ` with ${files.length} file${files.length > 1 ? 's' : ''}` : ''}` })
+      if (again) { setTitle(''); setDescription(''); setChecklist([]); setNewItem(''); setFiles([]) }
       else onClose()
     } catch (e) {
       setError(errMsg(e, 'Could not create the task'))
@@ -63,7 +83,7 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button variant="secondary" onClick={() => submit(true)} disabled={busy}>Create and add another</Button>
-          <Button onClick={() => submit(false)} disabled={busy}>{busy ? 'Creating…' : 'Create task'}</Button>
+          <Button onClick={() => submit(false)} disabled={busy}>{busy ? (files.length ? 'Uploading…' : 'Creating…') : 'Create task'}</Button>
         </>
       }
     >
@@ -75,12 +95,24 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <span className="mb-1 block text-body-sm font-semibold text-ink">Assignees</span>
+            <span className="mb-1 block text-body-sm font-semibold text-ink">Assigned by</span>
+            <div className="flex h-10 items-center gap-2 rounded-btn border border-line bg-slate-50 px-3 text-body-md text-ink">
+              {user && <PersonAvatar person={{ id: user.id, name: user.name }} size={22} />}
+              <span className="truncate">{user?.name ?? 'You'}</span>
+              <span className="text-body-sm text-ink-muted">(you)</span>
+            </div>
+          </div>
+          <div>
+            <span className="mb-1 block text-body-sm font-semibold text-ink">Assign to</span>
             <PeoplePicker people={people} value={assignees} onChange={setAssignees} />
           </div>
           <div>
-            <label className="mb-1 block text-body-sm font-semibold text-ink" htmlFor="ct-due">Due date and time</label>
-            <input id="ct-due" type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className={fieldCls} />
+            <label className="mb-1 block text-body-sm font-semibold text-ink" htmlFor="ct-start">Start date</label>
+            <input id="ct-start" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={fieldCls} />
+          </div>
+          <div>
+            <label className="mb-1 block text-body-sm font-semibold text-ink" htmlFor="ct-due">End date <span className="font-normal text-ink-muted">(due)</span></label>
+            <input id="ct-due" type="datetime-local" value={due} min={start || undefined} onChange={(e) => setDue(e.target.value)} className={fieldCls} />
           </div>
           <div>
             <span className="mb-1 block text-body-sm font-semibold text-ink">Priority</span>
@@ -109,6 +141,33 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
               try { const r = await projectsApi.createLabel(projectKey, { name }); onLabelCreated(r.label); return r.label } catch (e) { addToast({ type: 'error', message: errMsg(e) }); return null }
             }}
           />
+        </div>
+        <div>
+          <span className="mb-1 block text-body-sm font-semibold text-ink">Attachments <span className="font-normal text-ink-muted">(PDF, Word, Excel, images, zip… up to 25 MB each)</span></span>
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); addFiles(Array.from(e.dataTransfer.files)) }}
+            onClick={() => fileRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click() } }}
+            className="flex cursor-pointer items-center justify-center gap-2 rounded-btn border border-dashed border-line px-3 py-3 text-body-sm text-ink-muted hover:border-primary hover:text-primary"
+          >
+            <Upload size={15} /> Drop files here or click to choose
+          </div>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
+          {files.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {files.map((f, i) => (
+                <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-btn bg-slate-50 px-2 py-1 text-body-sm">
+                  <Paperclip size={13} className="text-ink-muted" />
+                  <span className="min-w-0 flex-1 truncate text-ink" title={f.name}>{f.name}</span>
+                  <span className="text-ink-muted">{fmtBytes(f.size)}</span>
+                  <button type="button" onClick={() => setFiles((l) => l.filter((_, j) => j !== i))} aria-label={`Remove ${f.name}`}><X size={14} className="text-ink-muted" /></button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div>
           <span className="mb-1 block text-body-sm font-semibold text-ink">Checklist <span className="font-normal text-ink-muted">(optional)</span></span>
