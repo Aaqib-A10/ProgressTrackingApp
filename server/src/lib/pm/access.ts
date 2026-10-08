@@ -10,7 +10,7 @@ import { prisma } from '../prisma'
  */
 
 /** Global roles allowed to create projects. */
-export const PROJECT_CREATOR_ROLES: Role[] = ['SUPER_ADMIN']
+export const PROJECT_CREATOR_ROLES: Role[] = ['SUPER_ADMIN', 'TEAM_LEAD']
 
 export interface PmViewer {
   id: string

@@ -81,10 +81,10 @@ const createSchema = z.object({
   members: z.array(z.object({ userId: z.string(), role: roleEnum })).max(200).optional(),
 })
 
-/** POST /api/projects — Super Admin creates a project (default columns + # channel). */
+/** POST /api/projects — a Super Admin or Team Lead creates a project (default columns + # channel); the creator becomes its project admin. */
 export async function createProject(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
-  if (!PROJECT_CREATOR_ROLES.includes(me.role)) throw new HttpError(403, 'Only a Super Admin can create projects')
+  if (!PROJECT_CREATOR_ROLES.includes(me.role)) throw new HttpError(403, 'Only Super Admins and Team Leads can create projects')
   const body = parse(createSchema, req.body)
   const clash = await prisma.pmProject.findFirst({ where: { OR: [{ key: body.key }, { name: { equals: body.name, mode: 'insensitive' } }] } })
   if (clash) throw new HttpError(409, clash.key === body.key ? `Key ${body.key} is already used` : 'A project with that name already exists')

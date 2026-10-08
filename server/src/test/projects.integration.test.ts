@@ -25,8 +25,8 @@ afterAll(async () => {
 })
 
 describe('projects: creation + visibility', () => {
-  it('only a Super Admin can create a project', async () => {
-    await request(app).post('/api/projects').set(...auth(w.itadLead)).send({ name: 'Nope', key: 'NOPE' }).expect(403)
+  it('a regular member cannot create a project', async () => {
+    await request(app).post('/api/projects').set(...auth(w.itadMember)).send({ name: 'Nope', key: 'NOPE' }).expect(403)
   })
 
   it('Super Admin creates RTI with members and roles', async () => {
@@ -404,5 +404,23 @@ describe('start / end dates, attachments and reviews', () => {
     await request(app).delete(`/api/projects/reviews/${r.body.review.id}`).set(...auth(w.itadLead)).expect(204)
     const after = await request(app).get(`/api/projects/tasks/${code}`).set(...auth(w.itadMember)).expect(200)
     expect(after.body.task.reviews).toHaveLength(1)
+  })
+})
+
+describe('team leads can create projects', () => {
+  it('a Team Lead creates a project and becomes its admin', async () => {
+    const before = await request(app).get('/api/projects').set(...auth(w.inventoryLead)).expect(200)
+    expect(before.body.canCreate).toBe(true)
+    const r = await request(app).post('/api/projects').set(...auth(w.inventoryLead)).send({ name: 'Warehouse Ops', key: 'WHO', members: [{ userId: w.inventoryMember.id, role: 'MEMBER' }] }).expect(201)
+    expect(r.body.project.key).toBe('WHO')
+    const m = await request(app).get('/api/projects/WHO/members').set(...auth(w.inventoryLead)).expect(200)
+    const mine = m.body.members.find((x: { id?: string; userId?: string; user?: { id: string } }) => (x.id ?? x.userId ?? x.user?.id) === w.inventoryLead.id)
+    expect(mine.role).toBe('ADMIN')
+    // the lead can manage their own project, but cannot archive it (Super Admin only)
+    await request(app).post('/api/projects/WHO/labels').set(...auth(w.inventoryLead)).send({ name: 'Urgent' }).expect(201)
+    await request(app).post('/api/projects/WHO/archive').set(...auth(w.inventoryLead)).expect(403)
+    // members still cannot create
+    const mem = await request(app).get('/api/projects').set(...auth(w.inventoryMember)).expect(200)
+    expect(mem.body.canCreate).toBe(false)
   })
 })

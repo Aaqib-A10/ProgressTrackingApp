@@ -20,7 +20,7 @@ Express + Prisma on the server, React + Tailwind + dnd-kit on the client. No new
 * A project is visible only to its members and to Super Admins. Everyone else gets 404 (the API never reveals that it exists).
 * Project roles: **Admin** (manage members, columns, settings, any task), **Member** (create, assign, move; edit tasks they created or are assigned to), **Viewer** (read, comment, chat).
 * Only the person who assigned a task (or a project admin) can change its due date. Assignees can request an extension instead.
-* Only Super Admins create and archive projects (`PROJECT_CREATOR_ROLES` in `server/src/lib/pm/access.ts`).
+* Super Admins and Team Leads create projects (`PROJECT_CREATOR_ROLES` in `server/src/lib/pm/access.ts`); the creator becomes the project's Admin. Only Super Admins archive projects.
 * Chat: only conversation members can read a conversation. Admins have no access to other people's direct messages.
 
 ## Deadline alerts (`server/src/lib/pm/deadlines.ts`, every 5 minutes)
