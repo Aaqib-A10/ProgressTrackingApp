@@ -22,7 +22,8 @@ async function refresh(): Promise<void> {
     } else if (latest && latest.id !== lastAlerted) {
       lastAlerted = latest.id
       const onChatPage = window.location.pathname.startsWith('/app/chat') && document.visibilityState === 'visible' && document.hasFocus()
-      if (!onChatPage) {
+      // Calls have their own ringing banner and pop-up.
+      if (!onChatPage && !latest.isCall) {
         popup({
           kind: 'chat',
           title: latest.isDirect ? `${latest.from}` : `${latest.from} in ${latest.where ?? 'a group'}`,

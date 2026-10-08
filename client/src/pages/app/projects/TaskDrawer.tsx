@@ -48,7 +48,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
 
   const load = () =>
     projectsApi.task(code)
-      .then((r) => { setTask(r.task); setPerms(r.perms); setTitle(r.task.title); setDesc(r.task.description ?? ''); setMissing(false) })
+      .then((r) => { setTask({ ...r.task, reviews: r.task.reviews ?? [], comments: r.task.comments ?? [], attachments: r.task.attachments ?? [], checklist: r.task.checklist ?? [] }); setPerms(r.perms); setTitle(r.task.title); setDesc(r.task.description ?? ''); setMissing(false) })
       .catch(() => setMissing(true))
 
   useEffect(() => { setTask(null); setActivity(null); setTab('comments'); setReviewOpen(false); load() }, [code]) // eslint-disable-line react-hooks/exhaustive-deps

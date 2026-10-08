@@ -232,6 +232,7 @@ model User {
   pmWatching       PmTaskWatcher[]      @relation("PmWatching")
   pmComments       PmComment[]          @relation("PmCommentAuthor")
   pmReviews        PmReview[]           @relation("PmReviewer")
+  chatCallsStarted ChatCall[]           @relation("ChatCallsStarted")
   pmAttachments    PmAttachment[]       @relation("PmAttachmentUploader")
   pmActivity       PmActivity[]         @relation("PmActivityActor")
   pmExtRequested   PmExtensionRequest[] @relation("PmExtRequester")
@@ -2129,8 +2130,26 @@ model ChatConversation {
 
   members  ChatMember[]
   messages ChatMessage[]
+  calls    ChatCall[]
 
   @@index([lastMessageAt])
+}
+
+/// A voice or video call in a conversation (media is browser to browser; the server only connects people).
+model ChatCall {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  startedById    String
+  startedBy      User             @relation("ChatCallsStarted", fields: [startedById], references: [id])
+  video          Boolean          @default(true)
+  startedAt      DateTime         @default(now())
+  endedAt        DateTime?
+  /// Everyone who joined at some point (for the "Call ended" summary).
+  joinedIds      String[]
+  messages       ChatMessage[]
+
+  @@index([conversationId, endedAt])
 }
 
 model ChatMember {
@@ -2163,6 +2182,8 @@ model ChatMessage {
   replies        ChatMessage[]    @relation("ChatReplies")
   taskRefId      String?
   taskRef        PmTask?          @relation(fields: [taskRefId], references: [id], onDelete: SetNull)
+  callId         String?
+  call           ChatCall?        @relation(fields: [callId], references: [id], onDelete: SetNull)
   // Optional single file per message (stored like other uploads)
   fileStoredName String?
   fileName       String?

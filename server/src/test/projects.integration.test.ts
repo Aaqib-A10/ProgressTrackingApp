@@ -469,3 +469,83 @@ describe('deleting tasks: creator only', () => {
     await request(app).get(`/api/projects/tasks/${code}`).set(...auth(w.itadMember)).expect(404)
   })
 })
+
+describe('voice / video calls', () => {
+  it('start, ring, join, relay signals, leave and end; outsiders cannot see or join', async () => {
+    const { resetCalls } = await import('../lib/pm/calls')
+    resetCalls()
+    const ch = await request(app).get('/api/chat/projects/RTI').set(...auth(w.itadLead)).expect(200)
+    const convId = ch.body.conversation.id
+    const s = await request(app).post(`/api/chat/conversations/${convId}/calls`).set(...auth(w.itadLead)).send({ video: true }).expect(201)
+    const callId = s.body.call.id
+    // starting again returns the same running call
+    const again = await request(app).post(`/api/chat/conversations/${convId}/calls`).set(...auth(w.itadMember)).send({ video: false }).expect(200)
+    expect(again.body.call.id).toBe(callId)
+    // starter joins
+    const j1 = await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.itadLead)).send({ mic: true, cam: true }).expect(200)
+    expect(j1.body.others).toEqual([])
+    expect(j1.body.iceServers.length).toBeGreaterThan(0)
+    // member sees it ringing
+    const act = await request(app).get('/api/chat/calls/active').set(...auth(w.itadMember)).expect(200)
+    expect(act.body.calls.find((c: { id: string }) => c.id === callId).ringing).toBe(true)
+    // outsider sees nothing and cannot join
+    const out = await request(app).get('/api/chat/calls/active').set(...auth(w.leadgenLead)).expect(200)
+    expect(out.body.calls).toEqual([])
+    await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.leadgenLead)).send({}).expect(404)
+    // member joins and is told who is already there
+    const j2 = await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.itadMember)).send({ mic: true, cam: false }).expect(200)
+    expect(j2.body.others.map((o: { userId: string }) => o.userId)).toEqual([w.itadLead.id])
+    // relay an offer
+    await request(app).post(`/api/chat/calls/${callId}/signal`).set(...auth(w.itadMember)).send({ to: w.itadLead.id, kind: 'offer', data: { sdp: 'x' } }).expect(200)
+    const p1 = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadLead)).expect(200)
+    expect(p1.body.signals).toHaveLength(1)
+    expect(p1.body.signals[0]).toMatchObject({ from: w.itadMember.id, kind: 'offer', data: { sdp: 'x' } })
+    expect(p1.body.participants).toHaveLength(2)
+    // drained
+    const p2 = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadLead)).expect(200)
+    expect(p2.body.signals).toHaveLength(0)
+    // the chat shows an active call card
+    const msgs = await request(app).get(`/api/chat/conversations/${convId}/messages`).set(...auth(w.itadMember)).expect(200)
+    const card = msgs.body.messages.find((m: { call: { id: string } | null }) => m.call?.id === callId)
+    expect(card.call.active).toBe(true)
+    // leaving: the other side gets "bye"; last one out ends the call
+    await request(app).post(`/api/chat/calls/${callId}/leave`).set(...auth(w.itadMember)).expect(200)
+    const p3 = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadLead)).expect(200)
+    expect(p3.body.signals.map((x: { kind: string }) => x.kind)).toContain('bye')
+    await request(app).post(`/api/chat/calls/${callId}/leave`).set(...auth(w.itadLead)).expect(200)
+    const ended = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadLead)).expect(200)
+    expect(ended.body.ended).toBe(true)
+    const row = await prisma.chatCall.findUniqueOrThrow({ where: { id: callId } })
+    expect(row.endedAt).not.toBeNull()
+    expect(new Set(row.joinedIds)).toEqual(new Set([w.itadLead.id, w.itadMember.id]))
+  })
+
+  it('one-to-one: decline is reported to the caller; an unanswered call leaves a missed-call alert', async () => {
+    const { resetCalls } = await import('../lib/pm/calls')
+    resetCalls()
+    const dm = await request(app).post('/api/chat/conversations').set(...auth(w.itadLead)).send({ type: 'DIRECT', userId: w.itadMember.id })
+    const convId = (dm.body.conversation ?? dm.body).id
+    // 1) declined
+    const a = await request(app).post(`/api/chat/conversations/${convId}/calls`).set(...auth(w.itadLead)).send({ video: false }).expect(201)
+    await request(app).post(`/api/chat/calls/${a.body.call.id}/join`).set(...auth(w.itadLead)).send({ mic: true }).expect(200)
+    const ring = await request(app).get('/api/chat/calls/active').set(...auth(w.itadMember)).expect(200)
+    expect(ring.body.calls[0]).toMatchObject({ id: a.body.call.id, isDirect: true, ringing: true, video: false })
+    await request(app).post(`/api/chat/calls/${a.body.call.id}/decline`).set(...auth(w.itadMember)).expect(200)
+    const pa = await request(app).get(`/api/chat/calls/${a.body.call.id}/poll`).set(...auth(w.itadLead)).expect(200)
+    expect(pa.body.declined).toEqual([w.itadMember.id])
+    await request(app).post(`/api/chat/calls/${a.body.call.id}/leave`).set(...auth(w.itadLead)).expect(200)
+    const before = await prisma.notification.count({ where: { userId: w.itadMember.id, title: { startsWith: 'Missed' } } })
+    expect(before).toBe(0) // declined, so no "missed call" alert
+    // 2) never answered
+    const b = await request(app).post(`/api/chat/conversations/${convId}/calls`).set(...auth(w.itadLead)).send({ video: true }).expect(201)
+    await request(app).post(`/api/chat/calls/${b.body.call.id}/join`).set(...auth(w.itadLead)).send({ mic: true, cam: true }).expect(200)
+    await request(app).post(`/api/chat/calls/${b.body.call.id}/leave`).set(...auth(w.itadLead)).expect(200)
+    const missed = await prisma.notification.findMany({ where: { userId: w.itadMember.id, title: { startsWith: 'Missed' } } })
+    expect(missed).toHaveLength(1)
+    expect(missed[0].title).toContain('Missed video call from')
+    // the call message refreshes for people already looking at the chat (ended calls come back as "changed")
+    const since = new Date(Date.now() - 60_000).toISOString()
+    const r = await request(app).get(`/api/chat/conversations/${convId}/messages`).query({ after: 999999999, changedSince: since }).set(...auth(w.itadMember)).expect(200)
+    expect(r.body.changed.some((m: { call: { id: string; active: boolean } | null }) => !!m.call && m.call.id === b.body.call.id && !m.call.active)).toBe(true)
+  })
+})

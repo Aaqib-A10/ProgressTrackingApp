@@ -46,6 +46,23 @@ PM_SUPER_ADMIN_OVERDUE_ALERTS=true
 
 Email uses the existing Resend setup (`RESEND_API_KEY`, `MAIL_FROM`, `APP_URL`).
 
+## Voice and video calls (`server/src/lib/pm/calls.ts`, `client/src/lib/callEngine.ts`)
+
+- Phone / camera buttons in every chat header (direct, group and project channels). Up to 6 people per call.
+- Audio and video go straight between browsers (WebRTC mesh). PulseTrack only relays the small set-up
+  messages over normal HTTPS polling, so nothing changes in Nginx, the Cloudflare Tunnel or the firewall.
+- Incoming calls show a banner (Answer / Audio / Decline) on every page, a soft ring for one-to-one calls,
+  and a desktop pop-up when pop-ups are on. Missed one-to-one calls leave a bell notification.
+- In a call: mute, camera on/off, share screen, minimise (keep working; the call follows you), leave.
+- The chat keeps a call card: "Video call · 12 min · 3 joined", "Missed call", or "Join" while it runs.
+- Optional TURN relay for strict office / mobile networks (calls work without it on most networks):
+  create a TURN key in your Cloudflare dashboard (Realtime > TURN) and add to server/.env:
+
+```
+CF_TURN_KEY_ID=...
+CF_TURN_API_TOKEN=...
+```
+
 ## Realtime
 
 The board refreshes every 5 s, an open chat every 2.5 s, chat badges every 15 s, only while the tab is visible.

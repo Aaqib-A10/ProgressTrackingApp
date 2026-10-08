@@ -1,12 +1,13 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Send, Smile, Trash2, Users, X } from 'lucide-react'
+import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, Trash2, Users, Video, X } from 'lucide-react'
 import { chatApi, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { useToast } from '../ui/Toast'
 import { PersonAvatar, fmtBytes, fmtDateTime } from '../projects/pmUi'
 import { refreshChatUnread } from './useChatUnread'
 import { cn } from '../../lib/cn'
+import { useCalls } from '../calls/CallProvider'
 
 const API = import.meta.env.VITE_API_URL ?? '/api'
 const EMOJI = ['👍', '🙏', '✅', '🎉', '👀', '🔥', '😂', '❤️', '🚀', '⏰', '❗', '🙂']
@@ -18,6 +19,7 @@ const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
  */
 export function ChatThread({ conversationId, meId, compact, prefill, onHeaderClick, actions, onSent }: { conversationId: string; meId: string; compact?: boolean; prefill?: string; onHeaderClick?: () => void; actions?: React.ReactNode; onSent?: () => void }) {
   const { addToast } = useToast()
+  const calls = useCalls()
   const [conv, setConv] = useState<ConversationDetail | null>(null)
   const [msgs, setMsgs] = useState<ChatMessage[]>([])
   const [hasMore, setHasMore] = useState(false)
@@ -194,7 +196,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   }
 
   const otherReadSeq = conv?.type === 'DIRECT' ? reads.find((r) => r.userId !== meId)?.lastReadSeq ?? 0 : 0
-  const lastMine = [...msgs].reverse().find((m) => m.user.id === meId && !m.deleted)
+  const lastMine = [...msgs].reverse().find((m) => m.user.id === meId && !m.deleted && !m.call)
   const isDirect = conv?.type === 'DIRECT'
   const other = isDirect ? members[0] : null
 
@@ -216,6 +218,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             </span>
           </button>
         ) : <span className="h-8 w-40 animate-pulse rounded bg-slate-100" />}
+        {conv && calls && <CallButtons conversationId={conversationId} compact={compact} />}
         {conv?.project && !compact && <Link to={`/app/projects/${conv.project.key}`} className="shrink-0 text-body-sm font-semibold text-primary">Open board</Link>}
         {actions}
       </div>
@@ -252,7 +255,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                     )}
                     {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
                       <>
-                        {m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
+                        {m.call ? <CallCard call={m.call} conversationId={conversationId} mine={mine} /> : m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
                         {m.file && <FileBubble file={m.file} />}
                         {m.task && <TaskRefCard task={m.task} />}
                       </>
@@ -265,7 +268,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                     <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Reply" title="Reply"><CornerUpLeft size={14} /></button>
                     {mine && (
                       <>
-                        {!m.file && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
+                        {!m.file && !m.call && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                         <button type="button" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More"><MoreHorizontal size={14} /></button>
                         {menuFor === m.id && <button type="button" onClick={() => { setMenuFor(null); remove(m) }} className="rounded px-1.5 py-0.5 text-body-sm text-danger hover:bg-danger/10"><Trash2 size={13} className="inline" /> Delete</button>}
                       </>
@@ -416,4 +419,65 @@ function TaskRefCard({ task }: { task: NonNullable<ChatMessage['task']> }) {
       </span>
     </Link>
   )
+}
+
+/** Start a voice / video call here, or join the one already running. */
+function CallButtons({ conversationId, compact }: { conversationId: string; compact?: boolean }) {
+  const calls = useCalls()!
+  const mineHere = calls.call?.conversationId === conversationId
+  const live = calls.active.find((c) => c.conversationId === conversationId)
+  if (mineHere) {
+    return (
+      <button type="button" onClick={() => calls.setMinimized(false)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-body-sm font-semibold text-success hover:bg-success/25">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-success" /> In call
+      </button>
+    )
+  }
+  if (live && !live.joined) {
+    return (
+      <button type="button" disabled={live.full} onClick={() => void calls.joinCall(live.id, conversationId, live.video)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success px-3 py-1.5 text-body-sm font-semibold text-white hover:bg-success/90 disabled:opacity-50" title={live.full ? 'This call is full' : 'Join the call'}>
+        {live.video ? <Video size={14} /> : <Phone size={14} />} Join call · {live.participants.length}
+      </button>
+    )
+  }
+  const cls = cn('shrink-0 rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary', compact ? 'p-1' : 'p-1.5')
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      <button type="button" onClick={() => void calls.startCall(conversationId, false)} className={cls} aria-label="Start a voice call" title="Voice call"><Phone size={compact ? 16 : 18} /></button>
+      <button type="button" onClick={() => void calls.startCall(conversationId, true)} className={cls} aria-label="Start a video call" title="Video call"><Video size={compact ? 17 : 19} /></button>
+    </span>
+  )
+}
+
+function CallCard({ call, conversationId, mine }: { call: NonNullable<ChatMessage['call']>; conversationId: string; mine: boolean }) {
+  const calls = useCalls()
+  const live = calls?.active.find((c) => c.id === call.id)
+  const inThis = calls?.call?.callId === call.id
+  const ongoing = !!live || inThis
+  const missed = !ongoing && call.joinedCount <= 1
+  const Icon = missed ? PhoneMissed : call.video ? Video : Phone
+  const kind = call.video ? 'Video call' : 'Voice call'
+  return (
+    <div className="flex min-w-[220px] items-center gap-3 py-0.5">
+      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', ongoing ? 'bg-success text-white' : missed ? 'bg-danger/10 text-danger' : 'bg-white text-ink-muted')}><Icon size={17} /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-body-md font-semibold text-ink">{ongoing ? `${kind} in progress` : missed ? (mine ? 'No answer' : `Missed ${kind.toLowerCase()}`) : kind}</span>
+        <span className="block text-body-sm text-ink-muted">
+          {ongoing ? `${live?.participants.length ?? 1} in call` : call.durationSec != null && !missed ? `${fmtDuration(call.durationSec)} · ${call.joinedCount} joined` : 'Call ended'}
+        </span>
+      </span>
+      {ongoing && calls && (
+        inThis
+          ? <button type="button" onClick={() => calls.setMinimized(false)} className="shrink-0 rounded-btn border border-success px-2.5 py-1 text-body-sm font-semibold text-success">Open</button>
+          : <button type="button" onClick={() => void calls.joinCall(call.id, conversationId, call.video)} className="shrink-0 rounded-btn bg-success px-2.5 py-1 text-body-sm font-semibold text-white hover:bg-success/90">Join</button>
+      )}
+    </div>
+  )
+}
+
+function fmtDuration(sec: number): string {
+  if (sec < 60) return `${sec} sec`
+  const m = Math.floor(sec / 60)
+  if (m < 60) return `${m} min`
+  return `${Math.floor(m / 60)} h ${m % 60} min`
 }
