@@ -60,7 +60,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     let alive = true
     const loop = async () => {
       await refreshActive()
-      if (alive) t = window.setTimeout(loop, document.visibilityState === 'visible' ? 4000 : 10000)
+      if (alive) t = window.setTimeout(loop, document.visibilityState === 'visible' ? 3000 : 5000)
     }
     void loop()
     const onVis = () => { if (document.visibilityState === 'visible') void refreshActive() }
@@ -180,7 +180,8 @@ export function CallProvider({ meId, children }: { meId: string; children: React
       if (announced.current.has(c.id)) continue
       announced.current.add(c.id)
       desktop.popup({
-        kind: 'chat',
+        kind: 'calls',
+        sticky: true,
         title: c.isDirect ? `${c.startedBy.name} is calling you` : `${c.video ? 'Video' : 'Voice'} call in ${c.title}`,
         body: c.isDirect ? `${c.video ? 'Video' : 'Voice'} call · open PulseTrack to answer` : `${c.startedBy.name} started a call · open PulseTrack to join`,
         link: `/app/chat?c=${encodeURIComponent(c.conversationId)}`,

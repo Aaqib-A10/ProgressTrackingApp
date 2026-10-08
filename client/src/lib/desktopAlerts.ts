@@ -56,10 +56,11 @@ export async function enable(): Promise<NotificationPermission | 'unsupported'> 
 }
 
 /** True when pop-ups are switched on here and the browser allows them. */
-export function active(kind?: 'tasks' | 'chat'): boolean {
+export function active(kind?: 'tasks' | 'chat' | 'calls'): boolean {
   const prefs = getPrefs()
   if (!prefs.enabled || permission() !== 'granted') return false
-  return kind ? prefs[kind] : true
+  // Calls always pop up when alerts are on (they can't wait like a message can).
+  return kind && kind !== 'calls' ? prefs[kind] : true
 }
 
 /** Only pop up when the person isn't already looking at PulseTrack. */
@@ -90,7 +91,9 @@ function tone(): void {
 }
 
 export interface PopupInput {
-  kind: 'tasks' | 'chat'
+  kind: 'tasks' | 'chat' | 'calls'
+  /** Keep the pop-up on screen until the person clicks it (incoming calls). */
+  sticky?: boolean
   title: string
   body: string
   /** In-app route to open when the pop-up is clicked. */
@@ -105,13 +108,13 @@ export function popup(p: PopupInput): boolean {
   if (!active(p.kind)) return false
   if (!p.force && !userIsAway()) return false
   try {
-    const n = new Notification(p.title, { body: p.body, tag: p.tag, icon: '/favicon.svg', badge: '/favicon.svg' })
+    const n = new Notification(p.title, { body: p.body, tag: p.tag, icon: '/favicon.svg', badge: '/favicon.svg', requireInteraction: !!p.sticky })
     n.onclick = () => {
       window.focus()
       if (p.link) window.dispatchEvent(new CustomEvent('pt:navigate', { detail: p.link }))
       n.close()
     }
-    if (getPrefs().sound) tone()
+    if (getPrefs().sound && p.kind !== 'calls') tone() // calls have their own ring
     return true
   } catch {
     return false

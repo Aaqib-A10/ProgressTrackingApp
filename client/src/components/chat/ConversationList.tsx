@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Bell, BellOff, Hash, LogOut, Plus, Search, Users } from 'lucide-react'
 import { chatApi, visiblePoll, type ChatUser, type ConversationListItem } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
+import { ApiError } from '../../lib/api'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
@@ -81,10 +82,21 @@ export function NewChatModal({ onClose, onOpened }: { onClose: () => void; onOpe
   const isGroup = sel.length > 1
   async function go() {
     setBusy(true)
+    const open = () => isGroup ? chatApi.createGroup(name.trim() || sel.map((id) => users.find((u) => u.id === id)?.name.split(' ')[0]).join(', '), sel) : chatApi.openDirect(sel[0])
     try {
-      const r = isGroup ? await chatApi.createGroup(name.trim() || sel.map((id) => users.find((u) => u.id === id)?.name.split(' ')[0]).join(', '), sel) : await chatApi.openDirect(sel[0])
+      let r: Awaited<ReturnType<typeof open>>
+      try {
+        r = await open()
+      } catch (e) {
+        // A dropped connection or a server restart: opening a direct chat is safe to repeat, so try once more.
+        if (isGroup || (e instanceof ApiError && e.status < 500)) throw e
+        await new Promise((ok) => setTimeout(ok, 800))
+        r = await open()
+      }
       onOpened(r.conversation.id)
-    } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setBusy(false) }
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not open the chat. Check your connection and try again.') })
+    } finally { setBusy(false) }
   }
   return (
     <Modal open onClose={onClose} title="New message" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button disabled={!sel.length || busy} onClick={go}>{isGroup ? 'Create group' : 'Open chat'}</Button></>}>

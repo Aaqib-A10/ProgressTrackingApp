@@ -8,6 +8,7 @@ import { TopBar } from './TopBar'
 import type { RangeKey, CustomRange } from './RangeSelector'
 import { FloatingChat } from '../chat/FloatingChat'
 import { CallProvider } from '../calls/CallProvider'
+import { UpdateBanner } from './UpdateBanner'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -111,6 +112,7 @@ export function AppShell({ user, children }: AppShellProps) {
           </div>
         </div>
         <FloatingChat meId={user.id} />
+        <UpdateBanner />
       </CallProvider>
     </RangeContext.Provider>
   )

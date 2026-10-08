@@ -1,24 +1,41 @@
-import { useEffect } from 'react'
-import { Phone, PhoneOff, Users, Video } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BellRing, Phone, PhoneOff, Users, Video } from 'lucide-react'
 import type { ActiveCall } from '../../lib/callsApi'
+import * as desktop from '../../lib/desktopAlerts'
 import { PersonAvatar } from '../projects/pmUi'
 
 /**
- * Incoming-call cards (top-right). One-to-one calls ring softly until answered,
- * declined or 60 s pass; group calls show the card with a single gentle chime.
+ * Incoming-call cards (top-right) with a soft ring. One-to-one calls ring until
+ * answered, declined or 60 s pass; group calls ring for the first 20 s. The tab
+ * title flashes so a call is noticed even when PulseTrack is in a background tab.
  */
 export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: ActiveCall[]; inCall: boolean; onJoin: (c: ActiveCall, video: boolean) => void; onDecline: (c: ActiveCall) => void }) {
-  const ringDirect = !inCall && calls.some((c) => c.isDirect)
-  const groupIds = calls.filter((c) => !c.isDirect).map((c) => c.id).join(',')
+  const ringing = !inCall && calls.length > 0
+  const anyDirect = calls.some((c) => c.isDirect)
+  const first = calls[0]
+  const [alertsAsk, setAlertsAsk] = useState(() => desktop.supported() && desktop.permission() !== 'granted' && desktop.permission() !== 'denied')
 
+  // Ring: one-to-one for as long as the card is up, groups for the first 20 seconds.
   useEffect(() => {
-    if (!ringDirect) return
+    if (!ringing) return
+    const started = Date.now()
     ring()
-    const t = window.setInterval(ring, 3000)
+    const t = window.setInterval(() => {
+      if (!anyDirect && Date.now() - started > 20_000) return
+      ring()
+    }, 3000)
     return () => window.clearInterval(t)
-  }, [ringDirect])
+  }, [ringing, anyDirect])
 
-  useEffect(() => { if (groupIds && !inCall) chime() }, [groupIds]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Flash the tab title while a call is waiting.
+  useEffect(() => {
+    if (!ringing || !first) return
+    const original = document.title
+    const msg = first.isDirect ? `📞 ${first.startedBy.name} is calling…` : `📞 Call in ${first.title}`
+    let on = false
+    const t = window.setInterval(() => { on = !on; document.title = on ? msg : original }, 1000)
+    return () => { window.clearInterval(t); document.title = original }
+  }, [ringing, first?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!calls.length) return null
   return (
@@ -53,6 +70,11 @@ export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: Act
             </button>
           </div>
           {inCall && <p className="mt-2 text-[11px] text-ink-muted">Joining will leave your current call first.</p>}
+          {alertsAsk && (
+            <button type="button" onClick={() => { void desktop.enable().then(() => setAlertsAsk(false)) }} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">
+              <BellRing size={12} /> Turn on desktop alerts so you never miss a call
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -61,6 +83,13 @@ export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: Act
 
 // ---- soft sounds (sine tones, gentle fade in/out: no clicks or pops) ----
 let ctx: AudioContext | null = null
+// Browsers only allow sound after the person has clicked or typed on the page once.
+// Unlock it on the first click so later rings also play while the tab is in the background.
+if (typeof window !== 'undefined') {
+  const unlock = () => { audio(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock) }
+  window.addEventListener('pointerdown', unlock)
+  window.addEventListener('keydown', unlock)
+}
 function audio(): AudioContext | null {
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -85,15 +114,8 @@ function ring() {
   const a = audio()
   if (!a) return
   const t = a.currentTime
-  note(a, 659.25, t, 0.4, 0.07)
-  note(a, 783.99, t + 0.22, 0.45, 0.07)
-  note(a, 659.25, t + 0.9, 0.4, 0.06)
-  note(a, 783.99, t + 1.12, 0.45, 0.06)
-}
-function chime() {
-  const a = audio()
-  if (!a) return
-  const t = a.currentTime
-  note(a, 523.25, t, 0.45, 0.06)
-  note(a, 659.25, t + 0.16, 0.5, 0.06)
+  note(a, 659.25, t, 0.4, 0.12)
+  note(a, 783.99, t + 0.22, 0.45, 0.12)
+  note(a, 659.25, t + 0.9, 0.4, 0.11)
+  note(a, 783.99, t + 1.12, 0.45, 0.11)
 }

@@ -440,11 +440,15 @@ function CallButtons({ conversationId, compact }: { conversationId: string; comp
       </button>
     )
   }
-  const cls = cn('shrink-0 rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary', compact ? 'p-1' : 'p-1.5')
+  const btn = cn('inline-flex shrink-0 items-center gap-1.5 rounded-full border font-semibold transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-success/25', compact ? 'px-2 py-1 text-[12px]' : 'px-3 py-1.5 text-body-sm')
   return (
-    <span className="flex shrink-0 items-center gap-0.5">
-      <button type="button" onClick={() => void calls.startCall(conversationId, false)} className={cls} aria-label="Start a voice call" title="Voice call"><Phone size={compact ? 16 : 18} /></button>
-      <button type="button" onClick={() => void calls.startCall(conversationId, true)} className={cls} aria-label="Start a video call" title="Video call"><Video size={compact ? 17 : 19} /></button>
+    <span className="flex shrink-0 items-center gap-1.5">
+      <button type="button" onClick={() => void calls.startCall(conversationId, false)} className={cn(btn, 'border-success/40 bg-success/10 text-success hover:bg-success/20')} aria-label="Start a voice call" title="Voice call">
+        <Phone size={compact ? 13 : 15} /> Call
+      </button>
+      <button type="button" onClick={() => void calls.startCall(conversationId, true)} className={cn(btn, 'border-success bg-success text-white hover:bg-success/90')} aria-label="Start a video call" title="Video call">
+        <Video size={compact ? 14 : 16} /> {compact ? 'Video' : 'Video call'}
+      </button>
     </span>
   )
 }
