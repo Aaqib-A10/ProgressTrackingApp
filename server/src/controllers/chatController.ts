@@ -480,7 +480,32 @@ export async function unreadSummary(req: AuthedRequest, res: Response): Promise<
     total += n
     conversations++
   }
-  res.json({ total, conversations })
+  // Newest unread message (not muted) so the browser can show a desktop pop-up for it.
+  let latest: { id: string; conversationId: string; from: string; text: string; where: string | null; isDirect: boolean } | null = null
+  if (total > 0) {
+    const rows = await prisma.$queryRaw<{ id: string; conversationId: string; body: string; hasFile: boolean; from: string; type: string; name: string | null }[]>(Prisma.sql`
+      SELECT m.id, m."conversationId", m.body, (m."fileName" IS NOT NULL) AS "hasFile", u.name AS "from", c.type::text AS type, c.name
+      FROM "ChatMessage" m
+      JOIN "ChatMember" cm ON cm."conversationId" = m."conversationId" AND cm."userId" = ${me.id}
+      JOIN "ChatConversation" c ON c.id = m."conversationId"
+      JOIN "User" u ON u.id = m."userId"
+      WHERE m.seq > cm."lastReadSeq" AND m."userId" <> ${me.id} AND m."deletedAt" IS NULL
+        AND (cm."mutedUntil" IS NULL OR cm."mutedUntil" <= NOW())
+      ORDER BY m."createdAt" DESC
+      LIMIT 1`)
+    const r = rows[0]
+    if (r) {
+      latest = {
+        id: r.id,
+        conversationId: r.conversationId,
+        from: r.from,
+        text: trunc(r.body || (r.hasFile ? 'Sent a file' : ''), 120),
+        where: r.type === 'DIRECT' ? null : r.type === 'PROJECT' ? `# ${r.name ?? ''}` : r.name,
+        isDirect: r.type === 'DIRECT',
+      }
+    }
+  }
+  res.json({ total, conversations, latest })
 }
 
 /** GET /api/chat/users?q= — active people you can message, with presence. */

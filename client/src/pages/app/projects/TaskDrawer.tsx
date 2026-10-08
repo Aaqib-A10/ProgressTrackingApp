@@ -53,12 +53,19 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
 
   useEffect(() => { setTask(null); setActivity(null); setTab('comments'); setReviewOpen(false); load() }, [code]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'activity') projectsApi.activity(code).then((r) => setActivity(r.activity)).catch(() => setActivity([])) }, [tab, code, task?.updatedAt])
+  // Keep the latest onClose in a ref: the board re-renders every few seconds (live refresh),
+  // and re-running a focus effect on each render pulled the cursor out of the comment box.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !extOpen && !confirmDelete) onClose() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !extOpen && !confirmDelete) onCloseRef.current() }
     window.addEventListener('keydown', onKey)
-    panelRef.current?.focus()
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, extOpen, confirmDelete])
+  }, [extOpen, confirmDelete])
+  // Focus the panel once when a task opens, never while someone is typing in it.
+  useEffect(() => {
+    if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus()
+  }, [code])
 
   async function patch(body: Parameters<typeof projectsApi.updateTask>[1]) {
     try {

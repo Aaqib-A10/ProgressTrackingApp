@@ -45,7 +45,9 @@ export default function ProjectBoard() {
     const n = new URLSearchParams(params)
     if (v) n.set(k, v)
     else n.delete(k)
-    setParams(n, { replace: k !== 'task' })
+    // Always replace: opening or closing a task (or changing a filter) must not add history steps,
+    // so the back button leaves the board instead of re-opening the last task.
+    setParams(n, { replace: true })
   }
 
   const load = useCallback(async (quiet = false) => {
@@ -183,7 +185,7 @@ export default function ProjectBoard() {
       </div>
 
       {myOverdue > 0 && (
-        <button type="button" onClick={() => { const n = new URLSearchParams(params); n.set('due', 'overdue'); n.set('mine', '1'); setParams(n) }} className="flex w-full items-center gap-2 rounded-card border border-danger/30 bg-danger/5 px-4 py-2.5 text-left text-body-md text-danger">
+        <button type="button" onClick={() => { const n = new URLSearchParams(params); n.set('due', 'overdue'); n.set('mine', '1'); setParams(n, { replace: true }) }} className="flex w-full items-center gap-2 rounded-card border border-danger/30 bg-danger/5 px-4 py-2.5 text-left text-body-md text-danger">
           <AlertTriangle size={16} /> You have {myOverdue} overdue task{myOverdue > 1 ? 's' : ''} in this project. <span className="font-semibold underline">Show them</span>
         </button>
       )}
@@ -202,7 +204,7 @@ export default function ProjectBoard() {
           <input type="checkbox" checked={mine} onChange={(e) => setParam('mine', e.target.checked ? '1' : null)} className="h-3.5 w-3.5 accent-primary" /> Only my tasks
         </label>
         {filtersOn && (
-          <button type="button" onClick={() => { const n = new URLSearchParams(); if (view === 'list') n.set('view', 'list'); setParams(n) }} className="inline-flex h-8 items-center gap-1 px-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>
+          <button type="button" onClick={() => { const n = new URLSearchParams(); if (view === 'list') n.set('view', 'list'); setParams(n, { replace: true }) }} className="inline-flex h-8 items-center gap-1 px-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>
         )}
         <span className="ml-auto text-body-sm text-ink-muted">{filtered.length} of {data.tasks.length} tasks</span>
       </div>

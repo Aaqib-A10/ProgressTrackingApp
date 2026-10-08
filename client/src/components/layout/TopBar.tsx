@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, MessagesSquare, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check } from 'lucide-react'
+import { Search, Bell, MessagesSquare, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { DEPARTMENTS } from '../../lib/departments'
 import { useAuth } from '../../lib/auth'
 import { getNotifications, markNotificationRead, markAllNotificationsRead, type AppNotification } from '../../lib/notificationsApi'
+import * as desktop from '../../lib/desktopAlerts'
+import { NotificationPrefsModal } from '../projects/NotificationPrefsModal'
 import { useChatUnread } from '../chat/useChatUnread'
 import { RangeSelector, type RangeKey, type CustomRange } from './RangeSelector'
 import { Avatar } from './Sidebar'
@@ -47,12 +49,35 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   const notifRef = useRef<HTMLDivElement>(null)
   const chatUnread = useChatUnread()
 
+  const [prefsOpen, setPrefsOpen] = useState(false)
+  const [alertsOn, setAlertsOn] = useState(() => desktop.active())
+  const seenIds = useRef<Set<string> | null>(null)
+
+  // Clicking a desktop pop-up opens the right page.
+  useEffect(() => {
+    const go = (e: Event) => { const to = (e as CustomEvent<string>).detail; if (to) navigate(to) }
+    window.addEventListener('pt:navigate', go)
+    const off = desktop.onPrefsChange(() => setAlertsOn(desktop.active()))
+    return () => { window.removeEventListener('pt:navigate', go); off() }
+  }, [navigate])
+
   // Load once, then poll so new feedback / alerts surface without a refresh.
   useEffect(() => {
     let active = true
     const load = () =>
       getNotifications()
-        .then((r) => active && setNotifs(r.notifications))
+        .then((r) => {
+          if (!active) return
+          setNotifs(r.notifications)
+          // Pop up stored alerts that arrived since the last check (never the ones already there on load).
+          const stored = r.notifications.filter((n) => n.persistent)
+          if (seenIds.current) {
+            const fresh = stored.filter((n) => !seenIds.current!.has(n.id))
+            if (fresh.length === 1) desktop.popup({ kind: 'tasks', title: fresh[0].title, body: fresh[0].body, link: fresh[0].link, tag: fresh[0].id })
+            else if (fresh.length > 1) desktop.popup({ kind: 'tasks', title: `${fresh.length} new PulseTrack alerts`, body: fresh.slice(0, 3).map((n) => n.title).join('\n'), link: '/app/notifications', tag: 'pt-many' })
+          }
+          seenIds.current = new Set([...(seenIds.current ?? []), ...stored.map((n) => n.id)])
+        })
         .catch(() => undefined)
     load()
     const timer = setInterval(load, 30000)
@@ -168,6 +193,15 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                   </button>
                 )}
               </div>
+              {!alertsOn && desktop.permission() !== 'unsupported' && (
+                <button
+                  onClick={() => { setNotifOpen(false); setPrefsOpen(true) }}
+                  className="flex w-full items-center gap-3 border-b border-line bg-primary/5 px-4 py-2.5 text-left hover:bg-primary/10"
+                >
+                  <BellRing size={16} className="shrink-0 text-primary" />
+                  <span className="text-body-sm text-ink"><b>Turn on pop-up alerts</b> so you don't miss tasks and messages</span>
+                </button>
+              )}
               {notifs.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                   <CheckCircle2 size={22} className="text-success" />
@@ -211,12 +245,20 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                   })}
                 </ul>
               )}
-              <button
-                onClick={() => { setNotifOpen(false); navigate('/app/notifications') }}
-                className="block w-full border-t border-line px-4 py-2.5 text-center text-body-sm font-semibold text-primary hover:bg-slate-50"
-              >
-                View all notifications
-              </button>
+              <div className="flex border-t border-line">
+                <button
+                  onClick={() => { setNotifOpen(false); setPrefsOpen(true) }}
+                  className="flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-body-sm font-semibold text-ink-muted hover:bg-slate-50 hover:text-ink"
+                >
+                  <Settings size={14} /> Settings
+                </button>
+                <button
+                  onClick={() => { setNotifOpen(false); navigate('/app/notifications') }}
+                  className="flex-1 border-l border-line px-3 py-2.5 text-center text-body-sm font-semibold text-primary hover:bg-slate-50"
+                >
+                  View all
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -259,6 +301,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           )}
         </div>
       </div>
+      {prefsOpen && <NotificationPrefsModal onClose={() => setPrefsOpen(false)} />}
     </header>
   )
 }

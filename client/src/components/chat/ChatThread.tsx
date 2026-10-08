@@ -227,29 +227,35 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
           return (
             <Fragment key={m.id}>
               {newDay && <div className="my-3 flex items-center gap-3 text-body-sm text-ink-muted"><span className="h-px flex-1 bg-line" />{new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}<span className="h-px flex-1 bg-line" /></div>}
-              <div className={cn('group relative flex gap-2.5 rounded-btn px-1 hover:bg-slate-50', grouped ? 'mt-0.5' : 'mt-3')}>
-                <div className="w-8 shrink-0">{!grouped && <PersonAvatar person={m.user} size={32} />}</div>
-                <div className="min-w-0 flex-1">
+              <div className={cn('group relative flex gap-2', mine && 'flex-row-reverse', grouped ? 'mt-0.5' : 'mt-3')}>
+                {!mine && <div className="w-8 shrink-0">{!grouped && <PersonAvatar person={m.user} size={32} />}</div>}
+                <div className={cn('flex min-w-0 flex-col', compact ? 'max-w-[85%]' : 'max-w-[72%]', mine ? 'items-end' : 'items-start')}>
                   {!grouped && (
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-body-md font-semibold text-ink">{m.user.name}</span>
+                    <div className={cn('mb-0.5 flex items-baseline gap-2 px-1', mine && 'flex-row-reverse')}>
+                      <span className="text-body-sm font-semibold text-ink">{mine ? 'You' : m.user.name}</span>
                       <span className="text-[11px] text-ink-muted" title={fmtDateTime(m.createdAt)}>{new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
                     </div>
                   )}
-                  {m.replyTo && !m.deleted && (
-                    <div className="mb-1 mt-0.5 border-l-2 border-primary/40 pl-2 text-body-sm text-ink-muted"><b className="text-ink">{m.replyTo.userName}</b>: {m.replyTo.body}</div>
-                  )}
-                  {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
-                    <>
-                      {m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
-                      {m.file && <FileBubble file={m.file} />}
-                      {m.task && <TaskRefCard task={m.task} />}
-                    </>
-                  )}
-                  {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
+                  <div className={cn(
+                    'min-w-0 max-w-full rounded-2xl px-3 py-2',
+                    mine ? 'bg-primary/10' : 'bg-slate-100',
+                    !grouped && (mine ? 'rounded-tr-md' : 'rounded-tl-md'),
+                  )}>
+                    {m.replyTo && !m.deleted && (
+                      <div className="mb-1 border-l-2 border-primary/40 pl-2 text-body-sm text-ink-muted"><b className="text-ink">{m.replyTo.userName}</b>: {m.replyTo.body}</div>
+                    )}
+                    {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
+                      <>
+                        {m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
+                        {m.file && <FileBubble file={m.file} />}
+                        {m.task && <TaskRefCard task={m.task} />}
+                      </>
+                    )}
+                  </div>
+                  {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
                 </div>
                 {!m.deleted && (
-                  <div className={cn('absolute right-1 top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', menuFor === m.id && 'flex')}>
+                  <div className={cn('absolute top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', mine ? 'left-1' : 'right-1', menuFor === m.id && 'flex')}>
                     <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Reply" title="Reply"><CornerUpLeft size={14} /></button>
                     {mine && (
                       <>

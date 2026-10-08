@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, AtSign, Bell, CalendarClock, CheckCheck, CheckCircle2, ClipboardCheck, ClipboardList, MessageSquare, UserPlus } from 'lucide-react'
+import { AlertTriangle, AtSign, Bell, Settings, CalendarClock, CheckCheck, CheckCircle2, ClipboardCheck, ClipboardList, MessageSquare, UserPlus } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { fmtAgo, fmtDateTime } from '../../components/projects/pmUi'
 import { getNotificationHistory, markAllNotificationsRead, markNotificationRead, type StoredNotification } from '../../lib/notificationsApi'
 import { cn } from '../../lib/cn'
+import { NotificationPrefsModal } from '../../components/projects/NotificationPrefsModal'
 
 const ICON: Record<string, JSX.Element> = {
   TASK_OVERDUE: <AlertTriangle size={16} className="text-danger" />,
@@ -24,6 +25,7 @@ export default function Notifications() {
   const [rows, setRows] = useState<StoredNotification[] | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [prefsOpen, setPrefsOpen] = useState(false)
 
   const load = (c?: string | null) => getNotificationHistory(c ?? undefined).then((r) => { setRows((cur) => (c ? [...(cur ?? []), ...r.notifications] : r.notifications)); setCursor(r.nextCursor) })
   useEffect(() => { load() }, [])
@@ -40,6 +42,7 @@ export default function Notifications() {
           <div className="inline-flex rounded-btn border border-line bg-card p-0.5">
             {(['all', 'unread'] as const).map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn('h-7 rounded-md px-3 text-body-sm font-semibold capitalize', filter === f ? 'bg-primary text-white' : 'text-ink-muted')}>{f}</button>)}
           </div>
+          <Button size="sm" variant="secondary" leadingIcon={<Settings size={15} />} onClick={() => setPrefsOpen(true)}>Notification settings</Button>
           <Button size="sm" variant="secondary" leadingIcon={<CheckCheck size={15} />} onClick={() => markAllNotificationsRead().then(() => setRows((r) => r?.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })) ?? r))}>Mark all read</Button>
         </div>
       </div>
@@ -69,6 +72,7 @@ export default function Notifications() {
         )}
       </div>
       {cursor && <div className="text-center"><Button variant="secondary" size="sm" onClick={() => load(cursor)}>Load older</Button></div>}
+      {prefsOpen && <NotificationPrefsModal onClose={() => setPrefsOpen(false)} />}
     </div>
   )
 }

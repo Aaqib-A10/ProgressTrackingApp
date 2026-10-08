@@ -77,7 +77,7 @@ export const chatApi = {
   read: (id: string, seq: number) => api.post<{ lastReadSeq: number }>(`/chat/conversations/${id}/read`, { seq }),
   mute: (id: string, until: string | null) => api.post(`/chat/conversations/${id}/mute`, { until }),
   typing: (id: string, typing: boolean) => api.post(`/chat/conversations/${id}/typing`, { typing }),
-  unread: () => api.get<{ total: number; conversations: number }>('/chat/unread'),
+  unread: () => api.get<{ total: number; conversations: number; latest?: { id: string; conversationId: string; from: string; text: string; where: string | null; isDirect: boolean } | null }>('/chat/unread'),
   users: (q = '') => api.get<{ users: ChatUser[] }>(`/chat/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   search: (q: string, conversationId?: string) => api.get<{ results: { id: string; seq: number; conversationId: string; conversationName: string | null; userName: string; body: string; createdAt: string }[] }>(`/chat/search?q=${encodeURIComponent(q)}${conversationId ? `&conversationId=${conversationId}` : ''}`),
 }

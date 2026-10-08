@@ -5,12 +5,12 @@ import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { TextField } from '../../../components/ui/Input'
 import { PillFilter } from '../../../components/ui/PillFilter'
-import { Toggle } from '../../../components/ui/Toggle'
 import { useToast } from '../../../components/ui/Toast'
 import { useAuth } from '../../../lib/auth'
-import { errMsg, projectsApi, type NotifyPrefs, type PickUser, type PmRole, type ProjectListItem } from '../../../lib/projectsApi'
+import { errMsg, projectsApi, type PickUser, type PmRole, type ProjectListItem } from '../../../lib/projectsApi'
 import { AvatarStack, ROLE_META, SWATCHES, fieldCls } from '../../../components/projects/pmUi'
 import { cn } from '../../../lib/cn'
+import { NotificationPrefsModal } from '../../../components/projects/NotificationPrefsModal'
 
 /** /app/projects — every project I'm a member of (all of them for a Super Admin). */
 export default function ProjectsList() {
@@ -209,47 +209,6 @@ function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCre
         </div>
         {error && <p className="text-body-sm text-danger">{error}</p>}
       </div>
-    </Modal>
-  )
-}
-
-export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
-  const { addToast } = useToast()
-  const [prefs, setPrefs] = useState<NotifyPrefs | null>(null)
-  useEffect(() => { projectsApi.prefs().then((r) => setPrefs(r.prefs)).catch(() => undefined) }, [])
-  const set = (k: keyof NotifyPrefs, v: boolean) => {
-    setPrefs((p) => (p ? { ...p, [k]: v } : p))
-    projectsApi.savePrefs({ [k]: v }).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not save') }))
-  }
-  const rows: { k: keyof NotifyPrefs; label: string; hint: string }[] = [
-    { k: 'emailAssigned', label: 'A task is assigned to me', hint: 'Email when someone gives you a task' },
-    { k: 'emailMention', label: 'Someone mentions me', hint: 'In task comments and chat' },
-    { k: 'emailDueSoon', label: 'My task is due soon', hint: '24 hours and 1 hour before (per project settings)' },
-    { k: 'emailComment', label: 'New comments on tasks I follow', hint: 'Can get busy on active tasks' },
-  ]
-  return (
-    <Modal open onClose={onClose} title="Project notification settings" footer={<Button onClick={onClose}>Done</Button>}>
-      <p className="text-body-sm text-ink-muted">In app alerts in the bell are always on. Choose which ones also come by email.</p>
-      {!prefs ? <p className="mt-4 text-body-sm text-ink-muted">Loading…</p> : (
-        <ul className="mt-3 divide-y divide-line">
-          {rows.map((r) => (
-            <li key={r.k} className="flex items-center justify-between gap-4 py-3">
-              <div>
-                <p className="text-body-md text-ink">{r.label}</p>
-                <p className="text-body-sm text-ink-muted">{r.hint}</p>
-              </div>
-              <Toggle checked={prefs[r.k]} onChange={(v) => set(r.k, v)} label={r.label} />
-            </li>
-          ))}
-          <li className="flex items-center justify-between gap-4 py-3 opacity-70">
-            <div>
-              <p className="text-body-md text-ink">My task is overdue</p>
-              <p className="text-body-sm text-ink-muted">Always sent, can't be turned off</p>
-            </div>
-            <Toggle checked onChange={() => undefined} disabled label="Overdue alerts" />
-          </li>
-        </ul>
-      )}
     </Modal>
   )
 }
