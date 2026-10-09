@@ -36,3 +36,9 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Quick reactions pop in one after another. */
+@keyframes pt-pop-in {
+  from { transform: scale(0.3) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}

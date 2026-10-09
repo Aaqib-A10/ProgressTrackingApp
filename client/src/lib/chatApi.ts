@@ -27,6 +27,8 @@ export interface ConversationDetail {
   project: { key: string; name: string; color: string } | null
   canManage: boolean
   canChangePicture?: boolean
+  /** Who last changed the picture, and when. */
+  picture?: { by: string; at: string | null } | null
   muted: boolean
   mutedUntil: string | null
   members: { id: string; name: string; email: string; isAdmin: boolean; presence: Presence; lastReadSeq: number }[]
@@ -46,6 +48,8 @@ export interface ChatMessage {
   call: { id: string; video: boolean; active: boolean; startedAt: string; endedAt: string | null; durationSec: number | null; joinedCount: number } | null
   /** "Meeting notes are ready" card. */
   notes: { callId: string } | null
+  /** A line from the app itself, e.g. "picture" = changed the channel picture. */
+  system?: string | null
   reactions: { emoji: string; userIds: string[] }[]
   editedAt: string | null
   createdAt: string

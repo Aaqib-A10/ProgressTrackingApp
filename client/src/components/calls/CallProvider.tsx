@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { callsApi, leaveOnUnload, type ActiveCall } from '../../lib/callsApi'
 import { CallEngine, type CallSnapshot, type Reaction } from '../../lib/callEngine'
+import type { EffectsSettings } from '../../lib/videoEffects'
 import { CallRecorder, type RecorderState } from '../../lib/callRecorder'
 import { Transcriber, getSpeechLang, setSpeechLang as saveSpeechLang, speechSupported, type TranscriberState } from '../../lib/transcriber'
 import { SpeechRecorder, serverSpeechSupported, type SpeechMode } from '../../lib/speechRecorder'
@@ -34,6 +36,7 @@ interface CallsContextValue {
   toggleCam: () => void
   toggleScreen: () => void
   toggleHand: () => void
+  setEffects: (s: EffectsSettings) => void
   muteOthers: (userId: string | '*') => void
   react: (emoji: string) => void
   reactions: Reaction[]
@@ -53,7 +56,7 @@ interface CallsContextValue {
   setPanel: (p: CallPanel) => void
 }
 
-export type CallPanel = 'people' | 'chat' | 'notes' | null
+export type CallPanel = 'people' | 'chat' | 'notes' | 'effects' | null
 
 const CallsContext = createContext<CallsContextValue | null>(null)
 
@@ -70,6 +73,9 @@ export function CallProvider({ meId, children }: { meId: string; children: React
   const [call, setCall] = useState<CallSnapshot | null>(null)
   const [meta, setMeta] = useState<CallMeta | null>(null)
   const [active, setActive] = useState<ActiveCall[]>([])
+  const [activeLoaded, setActiveLoaded] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
   const [minimized, setMinimized] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const busy = useRef(false)
@@ -91,6 +97,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
       const calls = (await callsApi.active()).calls
       // Same as before (the usual case): keep the old list so the app does not redraw every 3 seconds.
       setActive((cur) => (JSON.stringify(cur) === JSON.stringify(calls) ? cur : calls))
+      setActiveLoaded(true)
     } catch { /* offline for a moment */ }
   }, [])
   useEffect(() => {
@@ -380,6 +387,18 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     }
   }, [ringing])
 
+  // "Answer" on a pop-up notification opens /app/chat?...&answer=<callId>: join that call.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search)
+    const id = q.get('answer')
+    if (!id || !activeLoaded) return
+    const c = active.find((x) => x.id === id)
+    q.delete('answer')
+    navigate({ pathname: location.pathname, search: q.toString() ? `?${q.toString()}` : '' }, { replace: true })
+    if (!c) { addToast({ type: 'info', message: 'That call has already ended' }); return }
+    if (!c.joined && !c.full) void joinCall(c.id, c.conversationId, c.video)
+  }, [location.search, active, activeLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const value: CallsContextValue = {
     meId,
     call,
@@ -395,6 +414,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     toggleCam: () => { void engine.current?.toggleCam() },
     toggleScreen: () => { void engine.current?.toggleScreen() },
     toggleHand: () => engine.current?.toggleHand(),
+    setEffects: (s) => { void engine.current?.setEffects(s) },
     muteOthers: (userId: string | '*') => {
       const e = engine.current
       if (!e) return

@@ -32,7 +32,7 @@ export function ChatPicture({ type, conversationId, projectKey, color, size = 32
  * Change / remove a picture. Shows the current one with a camera button over it.
  * The image is cropped to the middle square and shrunk in the browser before upload.
  */
-export function PictureEditor({ kind, id, label, preview, canEdit = true }: { kind: AvatarKind; id: string; label: string; preview: React.ReactNode; canEdit?: boolean }) {
+export function PictureEditor({ kind, id, label, preview, canEdit = true, onChanged }: { kind: AvatarKind; id: string; label: string; preview: React.ReactNode; canEdit?: boolean; onChanged?: () => void }) {
   const { addToast } = useToast()
   const idx = useAvatarIndex()
   const has = !!avatarUrl(idx, kind, id)
@@ -45,6 +45,7 @@ export function PictureEditor({ kind, id, label, preview, canEdit = true }: { ki
     try {
       await uploadAvatar(kind, id, f)
       addToast({ type: 'success', message: `${label} updated` })
+      onChanged?.()
     } catch (e) {
       addToast({ type: 'error', message: e instanceof Error && !('status' in e) ? e.message : errMsg(e, 'Could not upload the picture') })
     } finally { setBusy(false) }
@@ -64,7 +65,7 @@ export function PictureEditor({ kind, id, label, preview, canEdit = true }: { ki
         <div className="space-y-1">
           <button type="button" onClick={() => input.current?.click()} disabled={busy} className="block text-body-sm font-semibold text-primary hover:underline">{has ? 'Change picture' : 'Upload a picture'}</button>
           {has && (
-            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await removeAvatar(kind, id); addToast({ type: 'success', message: `${label} removed` }) } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setBusy(false) } }} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-danger">
+            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await removeAvatar(kind, id); addToast({ type: 'success', message: `${label} removed` }); onChanged?.() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setBusy(false) } }} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-danger">
               <Trash2 size={13} /> Remove
             </button>
           )}

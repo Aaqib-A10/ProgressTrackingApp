@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Captions, CircleDot, Hand, Link2, Loader2, WifiOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, PhoneOff, Pin, PinOff, Search,
-  Smile, Sparkles, Square, UserPlus, Users, Video, VideoOff, X,
+  Smile, Sparkles, Square, UserPlus, Users, Video, VideoOff, WandSparkles, X, Ban, Droplets,
 } from 'lucide-react'
 import type { PeerView } from '../../lib/callEngine'
 import { chatApi, type ChatUser } from '../../lib/chatApi'
@@ -10,6 +10,7 @@ import { SPEECH_LANGS, speechSupported } from '../../lib/transcriber'
 import { PersonAvatar } from '../projects/pmUi'
 import { ChatThread } from '../chat/ChatThread'
 import { cn } from '../../lib/cn'
+import { BACKGROUNDS, FILTERS, bgThumb, effectsOn, effectsSupported, preloadEffects, type EffectsSettings } from '../../lib/videoEffects'
 import { useCalls, type CallPanel } from './CallProvider'
 
 const REACTIONS = ['👍', '👏', '❤️', '😂', '😮', '🎉', '🙏']
@@ -51,6 +52,7 @@ export function CallWindow() {
   const alone = call.status === 'live' && call.peers.length === 0
   const declinedNames = call.declined.map((id) => meta?.members.find((m) => m.id === id)?.name).filter(Boolean) as string[]
   const waitingText = connecting ? 'Connecting…' : meta?.isDirect ? (call.hadPeers ? 'Call ended' : `Calling ${title}…`) : call.invited.length ? 'Calling…' : 'Waiting for others to join…'
+  const fxSupported = effectsSupportedOnce()
   const canShare = typeof navigator !== 'undefined' && !!navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices
   const sharer = call.peers.find((p) => p.screen && hasVideo(p.stream))
   const myName = meta?.members.find((m) => m.id === ctx.meId)?.name ?? 'You'
@@ -186,7 +188,7 @@ export function CallWindow() {
             {ctx.panel && (
               <aside className="flex w-[min(360px,40vw)] shrink-0 flex-col overflow-hidden rounded-card bg-card text-ink">
                 <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-                  <span className="flex-1 text-body-md font-semibold">{ctx.panel === 'people' ? 'People' : ctx.panel === 'chat' ? 'Meeting chat' : 'AI notes'}</span>
+                  <span className="flex-1 text-body-md font-semibold">{ctx.panel === 'people' ? 'People' : ctx.panel === 'chat' ? 'Meeting chat' : ctx.panel === 'effects' ? 'Backgrounds and filters' : 'AI notes'}</span>
                   <button type="button" onClick={() => ctx.setPanel(null)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Close panel"><X size={16} /></button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-hidden">
@@ -195,6 +197,7 @@ export function CallWindow() {
                     ? <p className="p-4 text-body-sm text-ink-muted">You were added to this call, so its chat is private to the people in that conversation.</p>
                     : <ChatThread conversationId={call.conversationId} meId={ctx.meId} compact hideCallButtons />)}
                   {ctx.panel === 'notes' && <NotesPanel />}
+                  {ctx.panel === 'effects' && <EffectsPanel meTile={meTile} />}
                 </div>
               </aside>
             )}
@@ -204,6 +207,7 @@ export function CallWindow() {
           <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-2 px-4 pb-5 pt-2 sm:gap-3">
             <CtrlButton on={call.mic} onClick={ctx.toggleMic} label={call.mic ? 'Mute microphone (M)' : 'Unmute microphone (M)'} icon={call.mic ? <Mic size={20} /> : <MicOff size={20} />} />
             <CtrlButton on={call.cam} onClick={ctx.toggleCam} label={call.cam ? 'Turn camera off (V)' : 'Turn camera on (V)'} icon={call.cam ? <Video size={20} /> : <VideoOff size={20} />} />
+            {fxSupported && <CtrlButton on active={ctx.panel === 'effects' || effectsOn(call.effects)} onClick={() => { preloadEffects(); togglePanel('effects') }} label="Backgrounds and filters" icon={<WandSparkles size={20} />} />}
             {canShare && <CtrlButton on={!call.screen} active={call.screen} onClick={ctx.toggleScreen} label={call.screen ? 'Stop sharing your screen' : 'Share your screen'} icon={call.screen ? <MonitorOff size={20} /> : <MonitorUp size={20} />} />}
             <CtrlButton on active={call.hand} onClick={ctx.toggleHand} label={call.hand ? 'Lower your hand (H)' : 'Raise your hand (H)'} icon={<Hand size={20} />} />
             <div className="relative">
@@ -240,6 +244,65 @@ export function CallWindow() {
 }
 
 // ---------- side panels ----------
+
+let fxSupportedCache: boolean | null = null
+function effectsSupportedOnce(): boolean {
+  if (fxSupportedCache === null) fxSupportedCache = effectsSupported()
+  return fxSupportedCache
+}
+
+/** Pick a background (blur or a picture) and a colour filter, with a live preview of yourself. */
+function EffectsPanel({ meTile }: { meTile: Tile }) {
+  const ctx = useCalls()!
+  const call = ctx.call!
+  const s = call.effects
+  const set = (next: EffectsSettings) => ctx.setEffects(next)
+  const loading = call.effectsState === 'loading'
+  const sameBg = (b: EffectsSettings['bg']) => JSON.stringify(b) === JSON.stringify(s.bg)
+  const tile = (key: string, active: boolean, onClick: () => void, label: string, body: React.ReactNode) => (
+    <button key={key} type="button" onClick={onClick} title={label} aria-label={label} aria-pressed={active} className={cn('group relative aspect-video overflow-hidden rounded-btn border-2 transition-all hover:scale-[1.03]', active ? 'border-primary shadow-card' : 'border-transparent hover:border-line')}>
+      {body}
+      <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-0.5 pt-3 text-left text-[10px] font-semibold text-white">{label}</span>
+    </button>
+  )
+  return (
+    <div className="h-full space-y-4 overflow-y-auto p-3">
+      <div className="relative aspect-video overflow-hidden rounded-card bg-slate-800">
+        {call.cam ? <TileView tile={{ ...meTile, name: 'Preview', hand: false, speaking: false }} compact /> : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-white">
+            <VideoOff size={22} className="text-slate-300" />
+            <p className="text-body-sm text-slate-200">Your camera is off</p>
+            <button type="button" onClick={ctx.toggleCam} className="rounded-btn bg-white/15 px-3 py-1 text-body-sm font-semibold hover:bg-white/25">Turn camera on</button>
+          </div>
+        )}
+        {loading && <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[11px] text-white"><Loader2 size={11} className="animate-spin" /> Getting it ready…</span>}
+      </div>
+
+      <section>
+        <h4 className="mb-1.5 text-body-sm font-semibold text-ink">Background</h4>
+        <div className="grid grid-cols-3 gap-2">
+          {tile('none', s.bg.kind === 'none', () => set({ ...s, bg: { kind: 'none' } }), 'None', <span className="flex h-full w-full items-center justify-center bg-slate-100 text-ink-muted"><Ban size={20} /></span>)}
+          {tile('blur-light', sameBg({ kind: 'blur', strength: 'light' }), () => set({ ...s, bg: { kind: 'blur', strength: 'light' } }), 'Slight blur', <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-sky-200 to-indigo-200 text-indigo-700"><Droplets size={18} /></span>)}
+          {tile('blur-strong', sameBg({ kind: 'blur', strength: 'strong' }), () => set({ ...s, bg: { kind: 'blur', strength: 'strong' } }), 'Blur', <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-300 to-violet-400 text-white"><Droplets size={22} /></span>)}
+          {BACKGROUNDS.map((b) => tile(b.id, sameBg({ kind: 'image', id: b.id }), () => set({ ...s, bg: { kind: 'image', id: b.id } }), b.name, <img src={bgThumb(b.id)} alt="" loading="lazy" className="h-full w-full object-cover" />))}
+        </div>
+      </section>
+
+      <section>
+        <h4 className="mb-1.5 text-body-sm font-semibold text-ink">Filter</h4>
+        <div className="grid grid-cols-4 gap-2">
+          {FILTERS.map((f) => (
+            <button key={f.id} type="button" onClick={() => set({ ...s, filter: f.id })} aria-pressed={s.filter === f.id} className={cn('flex flex-col items-center gap-1 rounded-btn border-2 p-1 transition-all hover:scale-[1.04]', s.filter === f.id ? 'border-primary bg-primary/5' : 'border-transparent hover:border-line')}>
+              <span className="block aspect-square w-full overflow-hidden rounded-full bg-cover bg-center" style={{ backgroundImage: `url(${bgThumb('lounge')})`, filter: f.css || undefined }} />
+              <span className="text-center text-[10px] font-semibold leading-tight text-ink">{f.name}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+      <p className="text-[11px] leading-snug text-ink-muted">Everyone in the call sees it, and it stays on for your next calls. It all happens on your computer: your camera is not sent anywhere else.</p>
+    </div>
+  )
+}
 
 let usersCache: ChatUser[] | null = null
 
@@ -449,7 +512,13 @@ function PeerAudio({ stream }: { stream: MediaStream }) {
     const el = ref.current
     if (!el) return
     el.srcObject = stream
-    void el.play().catch(() => undefined)
+    // Joined from a notification (no click on the page yet): the browser may block sound
+    // until the first tap or key press, so try again then.
+    el.play().catch(() => {
+      const retry = () => { void el.play().catch(() => undefined) }
+      document.addEventListener('pointerdown', retry, { once: true })
+      document.addEventListener('keydown', retry, { once: true })
+    })
   }, [stream, n])
   return <audio ref={ref} autoPlay className="hidden" />
 }

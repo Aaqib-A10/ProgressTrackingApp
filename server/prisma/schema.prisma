@@ -244,6 +244,7 @@ model User {
   pmNotifyPref      PmNotifyPref?        @relation("PmNotifyPref")
   chatMemberships   ChatMember[]         @relation("ChatMemberships")
   chatMessagesSent  ChatMessage[]        @relation("ChatMessagesSent")
+  pushSubscriptions PushSubscription[]
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -1870,6 +1871,8 @@ model PmProject {
   reminderOffsetsMinutes Int[]           @default([1440, 60])
   /// Project picture last changed (also the project chat's picture).
   avatarAt               DateTime?
+  /// Who last changed the picture (shown in the chat).
+  avatarById             String?
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
@@ -2134,8 +2137,9 @@ model ChatConversation {
   directKey     String?              @unique // "<userA>:<userB>" sorted, for DIRECT de-dupe
   createdById   String?
   lastMessageAt DateTime             @default(now())
-  /// Group chat picture last changed.
+  /// Group chat picture last changed, and by whom.
   avatarAt      DateTime?
+  avatarById    String?
   createdAt     DateTime             @default(now())
 
   members  ChatMember[]
@@ -2301,6 +2305,8 @@ model ChatMessage {
   notesCallId    String?
   /// Bumped whenever an emoji reaction changes, so open chats refresh the message.
   reactedAt      DateTime?
+  /// A line from the app itself ("Aqib changed this channel's picture"), shown in the middle.
+  system         String?
   reactions      ChatReaction[]
   // Optional single file per message (stored like other uploads)
   fileStoredName String?
@@ -2313,4 +2319,26 @@ model ChatMessage {
 
   @@unique([seq])
   @@index([conversationId, seq])
+}
+
+/// A browser / phone that gets pop-up notifications even when PulseTrack is closed (Web Push).
+model PushSubscription {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String    @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime  @default(now())
+  lastOkAt  DateTime?
+
+  @@index([userId])
+}
+
+/// Keys the server makes for itself once and keeps (e.g. the Web Push key pair).
+model AppSecret {
+  name      String   @id
+  value     String
+  createdAt DateTime @default(now())
 }

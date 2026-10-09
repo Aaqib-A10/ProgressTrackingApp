@@ -6,6 +6,7 @@ import { Toggle } from '../ui/Toggle'
 import { useToast } from '../ui/Toast'
 import { errMsg, projectsApi, type NotifyPrefs } from '../../lib/projectsApi'
 import * as desktop from '../../lib/desktopAlerts'
+import { PushSetting } from '../layout/PushControls'
 
 /** Notification settings for everyone: pop-ups on this computer + which alerts also come by email. */
 export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
@@ -43,6 +44,11 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal open onClose={onClose} title="Notification settings" footer={<Button onClick={onClose}>Done</Button>}>
+      {/* Pop-ups when PulseTrack is closed (Web Push) */}
+      <section className="mb-5">
+        <PushSetting />
+      </section>
+
       {/* Desktop pop-ups */}
       <section>
         <h3 className="flex items-center gap-2 text-body-md font-semibold text-ink"><MonitorSmartphone size={16} /> Pop-up alerts on this computer</h3>

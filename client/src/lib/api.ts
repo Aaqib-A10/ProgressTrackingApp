@@ -33,6 +33,8 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
       // Spoof-resistant device signal for the attendance laptop-only gate — set on
       // every request (harmless elsewhere); the server reads it on attendance POSTs.
       'X-Client-Mobile': isMobileOrTablet() ? '1' : '0',
+      // Is this tab in front? (the server then skips pushing pop-ups to this person)
+      'X-PT-Visible': typeof document !== 'undefined' && document.visibilityState === 'visible' ? '1' : '0',
     },
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,

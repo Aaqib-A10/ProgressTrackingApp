@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
 import { viewer } from '../lib/pm/http'
+import { announcePicture, canChangeGroupPicture, canChangeProjectPicture } from '../lib/pm/pictures'
 
 /**
  * /api/avatars — profile pictures for people, projects (also their chat channel) and
@@ -28,18 +29,18 @@ async function target(kind: Kind, idOrKey: string, me: { id: string; role: strin
   if (kind === 'user') {
     const u = await prisma.user.findUnique({ where: { id: idOrKey }, select: { id: true, avatarAt: true } })
     if (!u) throw new HttpError(404, 'Person not found')
-    return { dbId: u.id, avatarAt: u.avatarAt, canEdit: u.id === me.id || me.role === 'SUPER_ADMIN' }
+    return { dbId: u.id, avatarAt: u.avatarAt, canEdit: u.id === me.id || me.role === 'SUPER_ADMIN', chatId: null as string | null }
   }
   if (kind === 'project') {
     const p = await prisma.pmProject.findUnique({ where: { key: idOrKey.toUpperCase() }, select: { id: true, avatarAt: true } })
     if (!p) throw new HttpError(404, 'Project not found')
-    const admin = me.role === 'SUPER_ADMIN' || !!(await prisma.pmProjectMember.findFirst({ where: { projectId: p.id, userId: me.id, role: 'ADMIN' }, select: { id: true } }))
-    return { dbId: p.id, avatarAt: p.avatarAt, canEdit: admin }
+    const channel = await prisma.chatConversation.findUnique({ where: { projectId: p.id }, select: { id: true } })
+    return { dbId: p.id, avatarAt: p.avatarAt, canEdit: await canChangeProjectPicture(p.id, me), chatId: channel?.id ?? null }
   }
   const c = await prisma.chatConversation.findUnique({ where: { id: idOrKey }, select: { id: true, type: true, avatarAt: true, createdById: true } })
   if (!c) throw new HttpError(404, 'Chat not found')
   const mem = await prisma.chatMember.findUnique({ where: { conversationId_userId: { conversationId: c.id, userId: me.id } }, select: { isAdmin: true } })
-  return { dbId: c.id, avatarAt: c.avatarAt, canEdit: c.type === 'GROUP' && !!mem && (mem.isAdmin || c.createdById === me.id) }
+  return { dbId: c.id, avatarAt: c.avatarAt, canEdit: canChangeGroupPicture(c, mem, me), chatId: c.id }
 }
 
 /** GET /api/avatars — who has a picture (and its version, for caching). */
@@ -90,8 +91,9 @@ export async function uploadAvatar(req: AuthedRequest, res: Response): Promise<v
   await fs.writeFile(fileFor(kind, t.dbId), buf)
   const avatarAt = new Date()
   if (kind === 'user') await prisma.user.update({ where: { id: t.dbId }, data: { avatarAt } })
-  else if (kind === 'project') await prisma.pmProject.update({ where: { id: t.dbId }, data: { avatarAt } })
-  else await prisma.chatConversation.update({ where: { id: t.dbId }, data: { avatarAt } })
+  else if (kind === 'project') await prisma.pmProject.update({ where: { id: t.dbId }, data: { avatarAt, avatarById: me.id } })
+  else await prisma.chatConversation.update({ where: { id: t.dbId }, data: { avatarAt, avatarById: me.id } })
+  if (kind !== 'user') await announcePicture(t.chatId, me.id, kind, false)
   res.json({ version: avatarAt.getTime() })
 }
 
@@ -103,7 +105,8 @@ export async function deleteAvatar(req: AuthedRequest, res: Response): Promise<v
   if (!t.canEdit) throw new HttpError(403, 'You cannot change this picture')
   await fs.rm(fileFor(kind, t.dbId), { force: true })
   if (kind === 'user') await prisma.user.update({ where: { id: t.dbId }, data: { avatarAt: null } })
-  else if (kind === 'project') await prisma.pmProject.update({ where: { id: t.dbId }, data: { avatarAt: null } })
-  else await prisma.chatConversation.update({ where: { id: t.dbId }, data: { avatarAt: null } })
+  else if (kind === 'project') await prisma.pmProject.update({ where: { id: t.dbId }, data: { avatarAt: null, avatarById: me.id } })
+  else await prisma.chatConversation.update({ where: { id: t.dbId }, data: { avatarAt: null, avatarById: me.id } })
+  if (kind !== 'user' && t.avatarAt) await announcePicture(t.chatId, me.id, kind, true)
   res.status(204).end()
 }

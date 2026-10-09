@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ArrowDown, BellOff, CheckCheck, CornerUpLeft, Download, Expand, FileText, Film, Loader2, Mic, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Square, Trash2, Users, Video, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, Camera, BellOff, CheckCheck, CornerUpLeft, Download, Expand, FileText, Film, Loader2, Mic, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Trash2, Users, Video, X } from 'lucide-react'
 import { chatApi, uploadChatFile, MAX_FILE_BYTES, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { useToast } from '../ui/Toast'
@@ -9,11 +9,15 @@ import { refreshChatUnread } from './useChatUnread'
 import { cn } from '../../lib/cn'
 import { useCalls } from '../calls/CallProvider'
 import { NotesModal } from '../calls/MeetingNotes'
-import { ChatPicture } from '../ui/Pictures'
+import { ChatPicture, PictureEditor } from '../ui/Pictures'
+import { Modal } from '../ui/Modal'
+import { refreshAvatars } from '../../lib/avatars'
 import { MediaViewer } from '../ui/MediaViewer'
+import { VoiceRecorder } from './VoiceRecorder'
+import { EmojiPicker, ReactionPicker } from '../ui/EmojiPicker'
+import { VoiceBubble } from './VoiceBubble'
 
 const API = import.meta.env.VITE_API_URL ?? '/api'
-const EMOJI = ['👍', '🙏', '✅', '🎉', '👀', '🔥', '😂', '❤️', '🚀', '⏰', '❗', '🙂']
 const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
 
 /**
@@ -59,8 +63,10 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const [dragOver, setDragOver] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
-  const [reactFor, setReactFor] = useState<string | null>(null)
+  const [reactAt, setReactAt] = useState<{ id: string; el: HTMLElement; mine: boolean } | null>(null)
+  const emojiBtn = useRef<HTMLButtonElement>(null)
   const [notesFor, setNotesFor] = useState<string | null>(null)
+  const [picOpen, setPicOpen] = useState(false)
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -120,6 +126,8 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         })
       }
       if (r.messages.length) {
+        // Someone changed the picture: show the new one now, not in a few minutes.
+        if (r.messages.some((m) => m.system?.startsWith('picture'))) { refreshAvatars(); chatApi.conversation(conversationId).then((x) => setConv(x.conversation)).catch(() => undefined) }
         lastSeq.current = Math.max(lastSeq.current, r.messages.at(-1)!.seq)
         markRead(lastSeq.current)
         // Scrolled up reading older messages: count what arrived from others for the "new messages" button.
@@ -178,6 +186,17 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     const now = Date.now()
     if (v && now - lastTypingPing.current > 3000) { lastTypingPing.current = now; chatApi.typing(conversationId, true).catch(() => undefined) }
   }
+  /** Put an emoji where the cursor is (the picker stays open for more). */
+  function insertEmoji(e: string) {
+    const el = inputRef.current
+    const from = el?.selectionStart ?? text.length
+    const to = el?.selectionEnd ?? text.length
+    const next = text.slice(0, from) + e + text.slice(to)
+    setText(next)
+    if (!editing) writeDraft(conversationId, next)
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(from + e.length, from + e.length) })
+  }
+
   function pickMention(p: { id: string; name: string }) {
     const el = inputRef.current
     const pos = el?.selectionStart ?? text.length
@@ -238,6 +257,14 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     inputRef.current?.focus()
   }
 
+  /** A finished voice message goes straight out (no extra Send press), like WhatsApp. */
+  function sendVoice(file: File) {
+    const p: PendingFile = { key: `voice-${Date.now()}`, file, kind: 'audio', url: URL.createObjectURL(file), progress: 0, error: null }
+    pendingRef.current = [...pendingRef.current, p]
+    setPending((cur) => [...cur, p])
+    if (!sending) void sendPending('')
+  }
+
   function removePending(key: string) {
     setPending((cur) => {
       const p = cur.find((x) => x.key === key)
@@ -279,6 +306,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   }
 
   async function react(m: ChatMessage, emoji: string) {
+    const before = msgs.find((x) => x.id === m.id)?.reactions ?? m.reactions
     // Show it straight away, then take the server's answer.
     setMsgs((cur) => cur.map((x) => {
       if (x.id !== m.id) return x
@@ -291,7 +319,10 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     try {
       const r = await chatApi.react(m.id, emoji)
       setMsgs((cur) => cur.map((x) => (x.id === r.message.id ? r.message : x)))
-    } catch (e) { addToast({ type: 'error', message: errMsg(e) }) }
+    } catch (e) {
+      setMsgs((cur) => cur.map((x) => (x.id === m.id ? { ...x, reactions: before } : x))) // undo on screen too
+      addToast({ type: 'error', message: errMsg(e) })
+    }
   }
   const nameOrYou = (id: string) => (id === meId ? 'You' : nameOf(id))
 
@@ -316,6 +347,20 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString()
         const grouped = !newDay && prev && prev.user.id === m.user.id && new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60000
         const mine = m.user.id === meId
+        if (m.system && !m.deleted) {
+          return (
+            <Fragment key={m.id}>
+              {newDay && <div className="my-3 flex items-center gap-3 text-body-sm text-ink-muted"><span className="h-px flex-1 bg-line" />{new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}<span className="h-px flex-1 bg-line" /></div>}
+              <div className="my-2 flex justify-center">
+                <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-body-sm text-ink-muted" title={fmtDateTime(m.createdAt)}>
+                  {m.system === 'picture' && conv && conv.type !== 'DIRECT' && <ChatPicture type={conv.type} conversationId={conv.id} projectKey={conv.project?.key} color={conv.project?.color} size={20} />}
+                  <span className="truncate"><b className="font-semibold text-ink">{mine ? 'You' : m.user.name}</b> {m.body}</span>
+                  <span className="shrink-0 text-[11px]">{new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
+                </span>
+              </div>
+            </Fragment>
+          )
+        }
         return (
           <Fragment key={m.id}>
             {newDay && <div className="my-3 flex items-center gap-3 text-body-sm text-ink-muted"><span className="h-px flex-1 bg-line" />{new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}<span className="h-px flex-1 bg-line" /></div>}
@@ -328,6 +373,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                     <span className="text-[11px] text-ink-muted" title={fmtDateTime(m.createdAt)}>{new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
                   </div>
                 )}
+                <div className={cn('flex max-w-full items-center gap-1', mine && 'flex-row-reverse')}>
                 <div className={cn(
                   'min-w-0 max-w-full rounded-2xl px-3 py-2',
                   mine ? 'bg-primary/10' : 'bg-slate-100',
@@ -339,18 +385,34 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                   {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
                     <>
                       {m.notes ? <NotesCard callId={m.notes.callId} body={m.body} onOpen={() => setNotesFor(m.notes!.callId)} /> : m.call ? <CallCard call={m.call} conversationId={conversationId} mine={mine} /> : m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
-                      {m.file && <FileBubble file={m.file} />}
+                      {m.file && <FileBubble file={m.file} mine={mine} />}
                       {m.task && <TaskRefCard task={m.task} />}
                     </>
                   )}
                 </div>
+                {/* Next to the bubble: react (opens the emoji row), reply, and edit / delete for my own. */}
+                {!m.deleted && (
+                  <div className={cn('flex shrink-0 items-center gap-0.5 transition-opacity [@media(hover:none)]:opacity-100', reactAt?.id === m.id || menuFor === m.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100', mine && 'flex-row-reverse')}>
+                    <button type="button" onClick={(e) => { const el = e.currentTarget; setReactAt((cur) => (cur?.id === m.id ? null : { id: m.id, el, mine })) }} className={cn('flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-slate-100 hover:text-ink', reactAt?.id === m.id && 'bg-slate-100 text-ink')} aria-label="React" title="React"><SmilePlus size={16} /></button>
+                    <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Reply" title="Reply"><CornerUpLeft size={15} /></button>
+                    {mine && !m.call && (
+                      <>
+                        {!m.file && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
+                        {menuFor === m.id
+                          ? <button type="button" onClick={() => { setMenuFor(null); h.current.remove(m) }} className="inline-flex h-7 items-center gap-1 rounded-full bg-danger/10 px-2 text-body-sm font-semibold text-danger hover:bg-danger/15" autoFocus onBlur={() => setMenuFor(null)}><Trash2 size={13} /> Delete</button>
+                          : <button type="button" onClick={() => setMenuFor(m.id)} className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="More" title="More"><MoreHorizontal size={15} /></button>}
+                      </>
+                    )}
+                  </div>
+                )}
+                </div>
                 {!m.deleted && m.reactions?.length > 0 && (
-                  <div className={cn('mt-0.5 flex flex-wrap gap-1 px-1', mine && 'justify-end')}>
+                  <div className={cn('relative z-[1] -mt-1.5 flex flex-wrap gap-1 px-2', mine && 'justify-end')}>
                     {m.reactions.map((r) => {
                       const mineR = r.userIds.includes(meId)
                       return (
-                        <button key={r.emoji} type="button" onClick={() => h.current.react(m, r.emoji)} title={r.userIds.map(h.current.nameOrYou).join(', ')} className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none', mineR ? 'border-primary/40 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:bg-slate-50')}>
-                          <span className="text-[14px]">{r.emoji}</span>{r.userIds.length}
+                        <button key={r.emoji} type="button" onClick={() => h.current.react(m, r.emoji)} title={`${r.userIds.map(h.current.nameOrYou).join(', ')}${mineR ? ' (click to take yours back)' : ''}`} className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none shadow-sm transition-transform hover:scale-105', mineR ? 'border-primary/40 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:bg-slate-50')} style={{ animation: 'pt-pop-in 200ms both cubic-bezier(.2,1.4,.4,1)' }}>
+                          <span className="text-[15px]">{r.emoji}</span>{r.userIds.length > 1 ? r.userIds.length : null}
                         </button>
                       )
                     })}
@@ -359,31 +421,12 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                 {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
                 {!isDirect && mine && lastMine?.id === m.id && seenBy && <p className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate px-1 text-[11px] text-primary" title={`Seen by ${seenBy}`}><CheckCheck size={12} className="shrink-0" /> Seen by {seenBy}</p>}
               </div>
-              {!m.deleted && (
-                <div className={cn('absolute top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', mine ? 'left-1' : 'right-1', menuFor === m.id && 'flex')}>
-                  {MSG_REACTIONS.slice(0, compact ? 3 : 5).map((e) => (
-                    <button key={e} type="button" onClick={() => h.current.react(m, e)} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`} title={`React ${e}`}>{e}</button>
-                  ))}
-                  <button type="button" onClick={() => setReactFor(reactFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More reactions" title="More reactions"><SmilePlus size={14} /></button>
-                  {reactFor === m.id && MSG_REACTIONS.slice(compact ? 3 : 5).map((e) => (
-                    <button key={e} type="button" onClick={() => { h.current.react(m, e); setReactFor(null) }} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`}>{e}</button>
-                  ))}
-                  <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Reply" title="Reply"><CornerUpLeft size={14} /></button>
-                  {mine && (
-                    <>
-                      {!m.file && !m.call && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
-                      <button type="button" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More"><MoreHorizontal size={14} /></button>
-                      {menuFor === m.id && <button type="button" onClick={() => { setMenuFor(null); h.current.remove(m) }} className="rounded px-1.5 py-0.5 text-body-sm text-danger hover:bg-danger/10"><Trash2 size={13} className="inline" /> Delete</button>}
-                    </>
-                  )}
-                </div>
-              )}
             </div>
           </Fragment>
         )
       })}
     </>
-  ), [msgs, conv, meId, compact, menuFor, reactFor, isDirect, lastMine?.id, otherReadSeq, seenBy, conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  ), [msgs, conv, meId, compact, menuFor, reactAt, isDirect, lastMine?.id, otherReadSeq, seenBy, conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return (
@@ -395,11 +438,38 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     >
       {dragOver && <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-card border-2 border-dashed border-primary bg-primary/5 text-body-md font-semibold text-primary">Drop files to add them</div>}
       {notesFor && <NotesModal callId={notesFor} onClose={() => setNotesFor(null)} />}
+      {picOpen && conv && conv.type !== 'DIRECT' && (
+        <Modal open onClose={() => setPicOpen(false)} title={conv.type === 'PROJECT' ? 'Channel picture' : 'Group picture'} size="sm">
+          <PictureEditor
+            kind={conv.type === 'PROJECT' ? 'project' : 'chat'}
+            id={conv.type === 'PROJECT' ? conv.project?.key ?? '' : conv.id}
+            label={conv.type === 'PROJECT' ? 'Channel picture' : 'Group picture'}
+            preview={<ChatPicture type={conv.type} conversationId={conv.id} projectKey={conv.project?.key} color={conv.project?.color} size={72} />}
+            onChanged={() => { chatApi.conversation(conversationId).then((x) => setConv(x.conversation)).catch(() => undefined) }}
+          />
+          {conv.picture && <p className="mt-3 text-body-sm text-ink-muted">Last changed by <b className="text-ink">{conv.picture.by}</b>{conv.picture.at ? ` on ${fmtDateTime(conv.picture.at)}` : ''}.</p>}
+          <p className="mt-2 text-body-sm text-ink-muted">Everyone in this chat sees a note that you changed it.{conv.type === 'PROJECT' ? ' It is also the project\'s picture on the Projects page.' : ''}</p>
+        </Modal>
+      )}
       {/* Header */}
       <div className={cn('flex shrink-0 items-center gap-3 border-b border-line', compact ? 'px-3 py-2' : 'px-4 py-3')}>
         {conv ? (
           <button type="button" onClick={onHeaderClick} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-            {isDirect && other ? <PersonAvatar person={other} size={compact ? 28 : 34} presence={other.presence} /> : (
+            {isDirect && other ? <PersonAvatar person={other} size={compact ? 28 : 34} presence={other.presence} /> : conv.canChangePicture ? (
+              // Leads and admins: click the picture to change it.
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setPicOpen(true) }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setPicOpen(true) } }}
+                className="group/pic relative shrink-0 rounded-btn focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+                aria-label="Change the picture"
+                title="Change the picture"
+              >
+                <ChatPicture type={conv.type} conversationId={conv.id} projectKey={conv.project?.key} color={conv.project?.color} size={compact ? 28 : 34} />
+                <span className="absolute inset-0 flex items-center justify-center rounded-btn bg-slate-900/55 text-white opacity-0 transition-opacity group-hover/pic:opacity-100"><Camera size={compact ? 13 : 15} /></span>
+              </span>
+            ) : (
               <ChatPicture type={conv.type} conversationId={conv.id} projectKey={conv.project?.key} color={conv.project?.color} size={compact ? 28 : 34} />
             )}
             <span className="min-w-0">
@@ -470,17 +540,17 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             ))}
           </ul>
         )}
-        {showEmoji && (
-          <div className="absolute bottom-full right-3 z-10 mb-1 grid grid-cols-6 gap-1 rounded-btn border border-line bg-card p-2 shadow-overlay">
-            {EMOJI.map((e) => <button key={e} type="button" className="rounded p-1 text-lg hover:bg-slate-100" onClick={() => { setText((t) => t + e); setShowEmoji(false); inputRef.current?.focus() }}>{e}</button>)}
-          </div>
-        )}
+        {showEmoji && <EmojiPicker anchor={emojiBtn.current} keepOpen onPick={insertEmoji} onClose={() => setShowEmoji(false)} />}
+        {reactAt && (() => {
+          const target = msgs.find((x) => x.id === reactAt.id)
+          return target ? <ReactionPicker anchor={reactAt.el} align={reactAt.mine ? 'end' : 'start'} mine={target.reactions.filter((r) => r.userIds.includes(meId)).map((r) => r.emoji)} onPick={(e) => h.current.react(target, e)} onClose={() => setReactAt(null)} /> : null
+        })()}
         {pending.length > 0 && (
           <div className="mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="Files to send">
             {pending.map((p) => <PendingTile key={p.key} p={p} onRemove={() => (p.progress !== null && cancelUpload.current ? cancelUpload.current() : removePending(p.key))} />)}
           </div>
         )}
-        <div className="flex items-end gap-1.5 rounded-btn border border-line bg-card px-2 py-1.5 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+        <div className="relative flex items-end gap-1.5 rounded-btn border border-line bg-card px-2 py-1.5 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
           <button type="button" onClick={() => fileRef.current?.click()} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Attach a file" title="Attach a file"><Paperclip size={18} /></button>
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <textarea
@@ -501,9 +571,11 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             className="max-h-40 min-h-[34px] flex-1 resize-none bg-transparent py-1.5 text-body-md text-ink placeholder:text-ink-muted focus:outline-none"
             style={{ height: Math.min(160, 34 + (text.split('\n').length - 1) * 20) }}
           />
-          <button type="button" onClick={() => setShowEmoji((s) => !s)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Emoji"><Smile size={18} /></button>
-          {!editing && <VoiceButton onDone={(f) => addFiles([f])} onError={(m) => addToast({ type: 'error', message: m })} />}
-          <button type="button" onClick={send} disabled={(!text.trim() && !pending.length) || sending} className="rounded-btn bg-primary p-1.5 text-white disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button>
+          <button ref={emojiBtn} type="button" onClick={() => setShowEmoji((s) => !s)} className={cn('rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink', showEmoji && 'bg-slate-100 text-ink')} aria-label="Emoji" title="Emoji"><Smile size={18} /></button>
+          {/* Empty box: the mic (hold to talk, or click). Something typed or picked: Send. */}
+          {!editing && !text.trim() && !pending.length
+            ? <VoiceRecorder onSend={(f) => sendVoice(f)} onError={(m) => addToast({ type: 'error', message: m })} />
+            : <button type="button" onClick={send} disabled={(!text.trim() && !pending.length) || sending} className="rounded-full bg-primary p-1.5 text-white transition-transform active:scale-95 disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button>}
         </div>
         {!compact && <p className="mt-1 text-[11px] text-ink-muted">Enter to send, Shift+Enter for a new line, @ to mention, paste a task code like RTI-12 to share it.</p>}
       </div>
@@ -512,7 +584,6 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
 }
 
 const ALL_ID = '__all__'
-const MSG_REACTIONS = ['👍', '❤️', '😂', '🎉', '✅', '😮', '😢', '🙏']
 
 function NotesCard({ body, onOpen }: { callId: string; body: string; onOpen: () => void }) {
   return (
@@ -567,68 +638,6 @@ function renderBody(body: string, members: { id: string; name: string }[], menti
   return out
 }
 
-/** Hold a short voice message: record, then it waits above the box like any file until Send. */
-function VoiceButton({ onDone, onError }: { onDone: (f: File) => void; onError: (msg: string) => void }) {
-  const [rec, setRec] = useState<{ started: number } | null>(null)
-  const [now, setNow] = useState(Date.now())
-  const r = useRef<{ mr: MediaRecorder; stream: MediaStream; chunks: Blob[]; keep: boolean } | null>(null)
-  useEffect(() => {
-    if (!rec) return
-    const t = window.setInterval(() => {
-      setNow(Date.now())
-      if (Date.now() - rec.started > 10 * 60_000) stop(true) // 10 minutes at most
-    }, 500)
-    return () => window.clearInterval(t)
-  }, [rec]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { r.current?.stream.getTracks().forEach((t) => t.stop()) }, [])
-
-  async function start() {
-    if (typeof MediaRecorder === 'undefined') { onError('This browser cannot record voice messages'); return }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
-      const mime = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
-      const mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 32_000 } : undefined)
-      const state = { mr, stream, chunks: [] as Blob[], keep: true }
-      mr.ondataavailable = (e) => { if (e.data.size) state.chunks.push(e.data) }
-      mr.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop())
-        if (!state.keep || !state.chunks.length) return
-        const type = (mr.mimeType || mime || 'audio/webm').split(';')[0]
-        const ext = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm'
-        const stamp = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }).replace(/[^0-9]/g, '-')
-        onDone(new File(state.chunks, `Voice message ${stamp}.${ext}`, { type }))
-      }
-      mr.start(1000)
-      r.current = state
-      setRec({ started: Date.now() })
-      setNow(Date.now())
-    } catch {
-      onError('Microphone blocked: allow it in the browser to record a voice message')
-    }
-  }
-  function stop(keep: boolean) {
-    const st = r.current
-    if (!st) return
-    st.keep = keep
-    try { st.mr.stop() } catch { /* already stopped */ }
-    r.current = null
-    setRec(null)
-  }
-
-  if (!rec) {
-    return <button type="button" onClick={() => void start()} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Record a voice message" title="Record a voice message"><Mic size={18} /></button>
-  }
-  const sec = Math.floor((now - rec.started) / 1000)
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-1 text-[12px] font-semibold text-danger">
-      <span className="h-2 w-2 animate-pulse rounded-full bg-danger" />
-      {Math.floor(sec / 60)}:{String(sec % 60).padStart(2, '0')}
-      <button type="button" onClick={() => stop(true)} className="ml-1 rounded p-0.5 hover:bg-danger/10" aria-label="Stop recording" title="Stop (then press Send)"><Square size={13} /></button>
-      <button type="button" onClick={() => stop(false)} className="rounded p-0.5 hover:bg-danger/10" aria-label="Cancel recording" title="Cancel"><X size={13} /></button>
-    </span>
-  )
-}
-
 interface PendingFile { key: string; file: File; kind: 'image' | 'video' | 'audio' | 'file'; url: string | null; progress: number | null; error: string | null }
 
 function fileKind(f: File): PendingFile['kind'] {
@@ -677,7 +686,7 @@ function PendingTile({ p, onRemove }: { p: PendingFile; onRemove: () => void }) 
   )
 }
 
-function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
+function FileBubble({ file, mine }: { file: NonNullable<ChatMessage['file']>; mine: boolean }) {
   const href = API + file.url.replace(/^\/api/, '')
   const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(file.mime ?? '')
   const isVideo = /^video\/(webm|mp4|quicktime|ogg|x-m4v)$/i.test(file.mime ?? '')
@@ -689,12 +698,8 @@ function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
   if (missing) return <p className="mt-1 inline-flex items-center gap-1.5 rounded-btn border border-dashed border-line px-3 py-2 text-body-sm text-ink-muted"><FileText size={15} /> {name}: this file is no longer on the server</p>
   return (
     <div className="mt-1">
-      {isAudio && !noPlay ? (
-        <div className="flex w-[min(320px,100%)] items-center gap-2">
-          <Mic size={16} className="shrink-0 text-primary" />
-          <audio controls preload="metadata" src={`${href}?inline=1`} onError={() => setNoPlay(true)} className="h-9 min-w-0 flex-1" />
-          <a href={href} className="shrink-0 rounded p-1 text-ink-muted hover:text-ink" aria-label="Download" title="Download"><Download size={14} /></a>
-        </div>
+      {isAudio ? (
+        <VoiceBubble href={href} name={file.name} mine={mine} />
       ) : isVideo && !noPlay ? (
         <div className="w-[min(420px,100%)]">
           <video controls preload="metadata" src={`${href}?inline=1`} onError={() => setNoPlay(true)} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />

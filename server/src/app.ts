@@ -21,6 +21,7 @@ import { attachmentsRouter } from './routes/attachments'
 import { todosRouter } from './routes/todos'
 import { tasksRouter } from './routes/tasks'
 import { financialsRouter } from './routes/financials'
+import { pushRouter } from './routes/push'
 import { talkloopRouter } from './routes/talkloop'
 import { inventoryRouter } from './routes/inventory'
 import { projectsRouter } from './routes/projects'
@@ -91,6 +92,7 @@ export function createApp(): Express {
   app.use('/api/chat', chatRouter)
   app.use('/api/meetings', meetingsRouter)
   app.use('/api/avatars', avatarsRouter)
+  app.use('/api/push', pushRouter)
 
   // Fallback 404 for unknown API paths.
   app.use((_req, res) => {

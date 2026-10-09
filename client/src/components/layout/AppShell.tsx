@@ -9,6 +9,7 @@ import type { RangeKey, CustomRange } from './RangeSelector'
 import { FloatingChat } from '../chat/FloatingChat'
 import { CallProvider } from '../calls/CallProvider'
 import { UpdateBanner } from './UpdateBanner'
+import { PushBanner } from './PushControls'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -120,6 +121,7 @@ export function AppShell({ user, children }: AppShellProps) {
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
             <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
+                <PushBanner />
                 {children ?? <Outlet />}
               </Suspense>
             </main>

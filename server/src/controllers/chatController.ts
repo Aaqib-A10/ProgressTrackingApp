@@ -11,6 +11,9 @@ import { parse, viewer } from '../lib/pm/http'
 import { presenceOf as basePresence, setTyping, touch, typingIn } from '../lib/pm/presence'
 import { pmNotify, trunc } from '../lib/pm/pmNotify'
 import { latestSeq, syncProjectChannel } from '../lib/pm/tasks'
+import { fileLabel } from '../lib/chatPreview'
+import { canChangeGroupPicture, canChangeProjectPicture } from '../lib/pm/pictures'
+import { markActive, pushChatMessage, pushRing } from '../lib/push'
 import { contentDisposition } from '../lib/contentDisposition'
 import * as Calls from '../lib/pm/calls'
 import { generateNotes, notesProvider, transcriptText, type MeetingNotes } from '../lib/pm/notes'
@@ -88,6 +91,7 @@ function serializeMessage(m: MessageRow, visibleProjects: Set<string>) {
         }
       : null,
     notes: m.notesCallId && !deleted ? { callId: m.notesCallId } : null,
+    system: m.system ?? null,
     reactions: groupReactions(m.reactions),
     editedAt: m.editedAt?.toISOString() ?? null,
     createdAt: m.createdAt.toISOString(),
@@ -151,7 +155,7 @@ export async function listConversations(req: AuthedRequest, res: Response): Prom
       archived: c.project?.status === 'ARCHIVED',
       memberCount: c.members.length,
       other: c.type === 'DIRECT' && others[0] ? { id: others[0].user.id, name: others[0].user.name, presence: presenceOf(others[0].user.id) } : null,
-      lastMessage: last ? { body: last.deletedAt ? 'Message deleted' : last.fileStoredName && !last.body ? `📎 ${last.fileName}` : trunc(last.body, 90), userName: last.user.name, createdAt: last.createdAt.toISOString(), mine: last.userId === me.id } : null,
+      lastMessage: last ? { body: last.deletedAt ? 'Message deleted' : last.fileStoredName && !last.body ? fileLabel(last.fileName, last.fileMime) : trunc(last.body, 90), userName: last.user.name, createdAt: last.createdAt.toISOString(), mine: last.userId === me.id } : null,
       lastMessageAt: c.lastMessageAt.toISOString(),
       unread: unread.get(c.id) ?? 0,
       muted: !!m.mutedUntil && m.mutedUntil > now,
@@ -220,15 +224,21 @@ export async function getConversation(req: AuthedRequest, res: Response): Promis
     include: { project: { select: { key: true, name: true, color: true } }, members: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { joinedAt: 'asc' } } },
   })
   const others = c.members.filter((x) => x.userId !== me.id)
-  // Picture: group admins for groups; project admins (or Super Admins) for project channels.
+  // Picture: group admins and leads for groups; project admins and leads for project channels.
   const canChangePicture = c.type === 'GROUP'
-    ? m.isAdmin || c.createdById === me.id
-    : c.type === 'PROJECT' && !!c.projectId && (me.role === 'SUPER_ADMIN' || !!(await prisma.pmProjectMember.findFirst({ where: { projectId: c.projectId, userId: me.id, role: 'ADMIN' }, select: { id: true } })))
+    ? canChangeGroupPicture(c, m, me)
+    : c.type === 'PROJECT' && !!c.projectId && (await canChangeProjectPicture(c.projectId, me))
+  // Who changed the picture last, and when (shown under the picture).
+  const pic = c.type === 'PROJECT' && c.projectId
+    ? await prisma.pmProject.findUnique({ where: { id: c.projectId }, select: { avatarAt: true, avatarById: true } })
+    : { avatarAt: c.avatarAt, avatarById: c.avatarById }
+  const picBy = pic?.avatarById ? await prisma.user.findUnique({ where: { id: pic.avatarById }, select: { name: true } }) : null
   res.json({
     conversation: {
       id: c.id,
       type: c.type,
       canChangePicture,
+      picture: pic?.avatarById ? { by: picBy?.name ?? 'Someone', at: pic.avatarAt?.toISOString() ?? null } : null,
       title: c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.name,
       name: c.name,
       project: c.project,
@@ -358,6 +368,8 @@ async function resolveTaskRef(body: string): Promise<string | null> {
 
 async function afterSend(convId: string, senderId: string, senderName: string, body: string, mentions: string[], convTitle: string) {
   await prisma.chatConversation.update({ where: { id: convId }, data: { lastMessageAt: new Date() } })
+  // Pop-up on phones / computers where PulseTrack is closed (never holds up the reply).
+  void pushChatMessage({ conversationId: convId, senderId, senderName, text: body, mentions }).catch(() => undefined)
   if (mentions.length) {
     await pmNotify({
       userIds: mentions,
@@ -439,6 +451,7 @@ export async function sendFile(req: AuthedRequest, res: Response): Promise<void>
   })
   await prisma.chatMember.update({ where: { id: m.id }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
   await prisma.chatConversation.update({ where: { id: m.conversationId }, data: { lastMessageAt: new Date() } })
+  void pushChatMessage({ conversationId: m.conversationId, senderId: me.id, senderName: msg.user.name, text: caption || fileLabel(msg.fileName, msg.fileMime), mentions: [] }).catch(() => undefined)
   const visible = new Set(await visibleProjectIds(me, true))
   res.status(201).json({ message: serializeMessage(msg, visible) })
 }
@@ -530,6 +543,7 @@ export async function finishUpload(req: AuthedRequest, res: Response): Promise<v
   })
   await prisma.chatMember.update({ where: { id: m.id }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
   await prisma.chatConversation.update({ where: { id: u.conversationId }, data: { lastMessageAt: new Date() } })
+  void pushChatMessage({ conversationId: u.conversationId, senderId: me.id, senderName: msg.user.name, text: caption || fileLabel(msg.fileName, msg.fileMime), mentions: [] }).catch(() => undefined)
   const visible = new Set(await visibleProjectIds(me, true))
   res.status(201).json({ message: serializeMessage(msg, visible) })
 }
@@ -571,6 +585,7 @@ async function ownMessage(req: AuthedRequest) {
 
 export async function editMessage(req: AuthedRequest, res: Response): Promise<void> {
   const { msg, me } = await ownMessage(req)
+  if (msg.system || msg.fileStoredName || msg.callId) throw new HttpError(422, 'This message cannot be edited')
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(MAX_BODY) }), req.body)
   const row = await prisma.chatMessage.update({ where: { id: msg.id }, data: { body, editedAt: new Date(), taskRefId: await resolveTaskRef(body) }, include: MESSAGE_INCLUDE })
   const visible = new Set(await visibleProjectIds(me, true))
@@ -742,6 +757,9 @@ async function startCallInner(me: { id: string; role: string }, m: Awaited<Retur
   if (autoNotes) { const l = Calls.getLive(call.id)!; l.noteTaker = true; l.noteRecorder = me.id }
   await prisma.chatMessage.create({ data: { conversationId: m.conversationId, userId: me.id, body: `Started a ${video ? 'video' : 'voice'} call`, callId: call.id, mentions: [] } })
   await prisma.chatConversation.update({ where: { id: m.conversationId }, data: { lastMessageAt: new Date() } })
+  // Ring phones and computers where PulseTrack is closed.
+  const ringIds = (await prisma.chatMember.findMany({ where: { conversationId: m.conversationId }, select: { userId: true } })).map((x) => x.userId)
+  void pushRing({ callId: call.id, conversationId: m.conversationId, video, callerId: me.id, callerName: name, userIds: ringIds, isDirect: m.conversation.type === 'DIRECT', title: m.conversation.name }).catch(() => undefined)
   res.status(201).json({ call: { id: call.id, video, conversationId: m.conversationId }, existing: false })
 }
 
@@ -749,6 +767,8 @@ async function startCallInner(me: { id: string; role: string }, m: Awaited<Retur
 export async function activeCalls(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
   touch(me.id)
+  // A tab in front: this person sees the in-app ring and messages, so no pop-up is pushed.
+  if (req.headers['x-pt-visible'] === '1') markActive(me.id)
   const lives = Calls.allLive()
   if (!lives.length) { res.json({ calls: [] }); return }
   const mine = await prisma.chatMember.findMany({
@@ -876,6 +896,7 @@ export async function inviteToCall(req: AuthedRequest, res: Response): Promise<v
     }
     Calls.invite(call, u.id, guest, myName)
   }
+  void pushRing({ callId: call.callId, conversationId: call.conversationId, video: call.video, callerId: me.id, callerName: myName, userIds: users.map((u) => u.id), isDirect: true, title: null }).catch(() => undefined)
   res.json({ invited: users.map((u) => ({ id: u.id, name: u.name })) })
 }
 
@@ -1042,7 +1063,11 @@ export async function finishRecording(req: AuthedRequest, res: Response): Promis
 
 // ---------- Emoji reactions on messages ----------
 
-const MESSAGE_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🙏', '✅']
+/** One emoji (any of them, with skin tone / joiners / keycaps), never text. */
+const EMOJI_RE = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\u200d|\ufe0f|\u20e3)+$/u
+export function isOneEmoji(e: string): boolean {
+  return e.length > 0 && e.length <= 32 && EMOJI_RE.test(e) && (/\p{Extended_Pictographic}/u.test(e) || /\u20e3/.test(e))
+}
 
 /** POST /api/chat/messages/:id/react { emoji } — toggles my reaction. */
 export async function toggleReaction(req: AuthedRequest, res: Response): Promise<void> {
@@ -1050,7 +1075,7 @@ export async function toggleReaction(req: AuthedRequest, res: Response): Promise
   const msg = await prisma.chatMessage.findUnique({ where: { id: req.params.id } })
   if (!msg || msg.deletedAt) throw new HttpError(404, 'Message not found')
   await membership(msg.conversationId, me.id)
-  const { emoji } = parse(z.object({ emoji: z.string().refine((e) => MESSAGE_REACTIONS.includes(e), 'Unknown reaction') }), req.body)
+  const { emoji } = parse(z.object({ emoji: z.string().refine(isOneEmoji, 'Pick an emoji') }), req.body)
   const existing = await prisma.chatReaction.findUnique({ where: { messageId_userId_emoji: { messageId: msg.id, userId: me.id, emoji } } })
   // deleteMany / skipDuplicates: a double click must not fail with a duplicate error.
   if (existing) await prisma.chatReaction.deleteMany({ where: { id: existing.id } })

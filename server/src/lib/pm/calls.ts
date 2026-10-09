@@ -1,3 +1,4 @@
+import { pushMissed } from '../push'
 import { prisma } from '../prisma'
 import { pmNotify } from './pmNotify'
 
@@ -203,6 +204,7 @@ export async function endCall(call: LiveCall): Promise<void> {
   const members = await prisma.chatMember.findMany({ where: { conversationId: call.conversationId }, select: { userId: true } }).catch(() => [])
   const missed = members.map((m) => m.userId).filter((id) => !call.joinedIds.has(id) && !call.declined.has(id))
   if (missed.length) {
+    void pushMissed({ callId: call.callId, conversationId: call.conversationId, video: call.video, callerName: call.startedByName, userIds: missed.filter((id) => id !== call.startedById) }).catch(() => undefined)
     await pmNotify({
       userIds: missed,
       actorId: call.startedById,

@@ -1,5 +1,6 @@
 import { callsApi, type Caption, type CallParticipant, type CallSignal } from './callsApi'
 import { createNoiseFilter, type NoiseFilter } from './noiseFilter'
+import { VideoEffects, effectsOn, loadEffects, saveEffects, type EffectsSettings } from './videoEffects'
 
 /**
  * One voice/video call from this browser's point of view.
@@ -63,6 +64,9 @@ export interface CallSnapshot {
   noise: 'on' | 'off' | 'unavailable'
   /** A relay (TURN) is set up on the server. */
   relay: boolean
+  /** Camera background / filter, and whether it is working yet. */
+  effects: EffectsSettings
+  effectsState: 'off' | 'loading' | 'on' | 'failed'
 }
 
 export interface Reaction { emoji: string; name: string; from: string; at: number }
@@ -89,7 +93,12 @@ export class CallEngine {
   /** The real microphone (audioTrack is the cleaned-up copy when the noise filter is on). */
   private rawMic: MediaStreamTrack | null = null
   private filter: NoiseFilter | null = null
+  /** What is sent for the camera: the effects' picture when they are on, else the camera itself. */
   private camTrack: MediaStreamTrack | null = null
+  /** The real camera. */
+  private rawCam: MediaStreamTrack | null = null
+  private fx: VideoEffects | null = null
+  private fxGen = 0
   private screenTrack: MediaStreamTrack | null = null
   private localStream = new MediaStream()
   private me = ''
@@ -101,7 +110,7 @@ export class CallEngine {
   private snap: CallSnapshot
 
   constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void, private opts: { muteOnJoin?: boolean } = {}) {
-    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, noteRecorder: null, captions: [], invited: [], sttMode: 'browser', noise: 'off', relay: true }
+    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, noteRecorder: null, captions: [], invited: [], sttMode: 'browser', noise: 'off', relay: true, effects: loadEffects(), effectsState: 'off' }
   }
 
   get snapshot(): CallSnapshot { return this.snap }
@@ -161,7 +170,7 @@ export class CallEngine {
       try {
         const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: this.snap.video ? { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } : false })
         this.audioTrack = s.getAudioTracks()[0] ?? null
-        this.camTrack = s.getVideoTracks()[0] ?? null
+        this.camTrack = this.rawCam = s.getVideoTracks()[0] ?? null
       } catch {
         // Camera busy or refused: fall back to microphone only.
         try {
@@ -200,6 +209,8 @@ export class CallEngine {
       if (this.closed) return
       this.timer = window.setInterval(() => { void this.poll() }, POLL_MS)
       void this.poll()
+      // The background / filter picked last time comes back on by itself.
+      if (this.rawCam && effectsOn(this.snap.effects)) void this.runEffects()
     } catch (e) {
       this.emit({ status: 'error', error: (e as Error).message || 'Could not join the call' })
       this.stopLocal()
@@ -414,16 +425,22 @@ export class CallEngine {
 
   async toggleCam(): Promise<void> {
     if (this.camTrack) {
-      this.camTrack.stop()
-      this.camTrack = null
+      this.fxGen++
+      this.fx?.destroy()
+      this.fx = null
+      this.rawCam?.stop()
+      this.camTrack?.stop()
+      this.camTrack = this.rawCam = null
+      if (this.snap.effectsState !== 'off') this.emit({ effectsState: 'off' })
     } else {
       try {
         const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } })
-        this.camTrack = s.getVideoTracks()[0] ?? null
+        this.camTrack = this.rawCam = s.getVideoTracks()[0] ?? null
       } catch {
         this.emit({ error: 'Could not turn on the camera. Check that no other app is using it and that the browser allows it.' })
         return
       }
+      if (effectsOn(this.snap.effects)) void this.runEffects()
     }
     if (!this.screenTrack) await this.setVideoTrack(this.camTrack)
     else this.rebuildLocal()
@@ -454,13 +471,64 @@ export class CallEngine {
     this.emit({ screen: !!this.screenTrack })
   }
 
+  /** Pick a background / filter. It is remembered for the next call too. */
+  async setEffects(next: EffectsSettings): Promise<void> {
+    saveEffects(next)
+    this.emit({ effects: next })
+    if (!this.rawCam) return // used when the camera comes on
+    await this.runEffects()
+  }
+
+  /** Bring the camera picture in line with the chosen effects. */
+  private async runEffects(): Promise<void> {
+    const s = this.snap.effects
+    const gen = ++this.fxGen
+    const raw = this.rawCam
+    if (!raw) return
+    if (!effectsOn(s)) {
+      if (this.fx) {
+        const old = this.fx
+        this.fx = null
+        this.camTrack = raw
+        if (!this.screenTrack) await this.setVideoTrack(raw)
+        else this.rebuildLocal()
+        old.destroy()
+      }
+      this.emit({ effectsState: 'off' })
+      return
+    }
+    this.emit({ effectsState: 'loading' })
+    try {
+      if (this.fx) {
+        await this.fx.apply(s)
+        if (gen !== this.fxGen) return
+      } else {
+        const fx = await VideoEffects.create(raw, s)
+        // Changed again (or camera off / hung up) while loading: drop this one.
+        if (gen !== this.fxGen || this.closed || this.rawCam !== raw) { fx.destroy(); return }
+        this.fx = fx
+        this.camTrack = fx.track
+        if (!this.screenTrack) await this.setVideoTrack(fx.track)
+        else this.rebuildLocal()
+      }
+      this.emit({ effectsState: 'on' })
+    } catch {
+      if (gen !== this.fxGen) return
+      this.emit({ effectsState: 'failed', error: 'Backgrounds could not start on this computer. Your normal camera is still on.' })
+    }
+  }
+
   /** Ask everyone else (or one person) to mute. */
   muteOthers(userId: string | '*'): Promise<unknown> {
     return callsApi.mute(this.snap.callId, userId)
   }
 
   private stopLocal() {
-    for (const t of [this.audioTrack, this.rawMic, this.camTrack, this.screenTrack]) t?.stop()
+    this.fxGen++
+    this.fx?.destroy()
+    this.fx = null
+    for (const t of [this.audioTrack, this.rawMic, this.camTrack, this.rawCam, this.screenTrack]) t?.stop()
+    this.rawCam = null
     this.filter?.destroy()
     this.filter = null
     this.audioTrack = this.rawMic = this.camTrack = this.screenTrack = null
