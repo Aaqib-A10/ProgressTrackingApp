@@ -46,14 +46,19 @@ async function target(kind: Kind, idOrKey: string, me: { id: string; role: strin
 export async function avatarIndex(_req: AuthedRequest, res: Response): Promise<void> {
   const [users, projects, chats] = await Promise.all([
     prisma.user.findMany({ where: { avatarAt: { not: null } }, select: { id: true, avatarAt: true } }),
-    prisma.pmProject.findMany({ where: { avatarAt: { not: null } }, select: { key: true, avatarAt: true } }),
+    prisma.pmProject.findMany({ where: { avatarAt: { not: null } }, select: { id: true, key: true, avatarAt: true } }),
     prisma.chatConversation.findMany({ where: { avatarAt: { not: null } }, select: { id: true, avatarAt: true } }),
   ])
+  // Only pictures whose file is really on the server: a missing file would show a broken
+  // image instead of the person's initials.
+  const exists = async (kind: Kind, dbId: string) => fs.access(fileFor(kind, dbId)).then(() => true, () => false)
+  const keep = async <T>(rows: T[], kind: Kind, id: (r: T) => string) => (await Promise.all(rows.map(async (r) => ((await exists(kind, id(r))) ? r : null)))).filter((r): r is Awaited<T> => r !== null)
+  const [u, p, c] = await Promise.all([keep(users, 'user', (r) => r.id), keep(projects, 'project', (r) => r.id), keep(chats, 'chat', (r) => r.id)])
   res.setHeader('Cache-Control', 'private, no-cache')
   res.json({
-    users: Object.fromEntries(users.map((u) => [u.id, u.avatarAt!.getTime()])),
-    projects: Object.fromEntries(projects.map((p) => [p.key, p.avatarAt!.getTime()])),
-    chats: Object.fromEntries(chats.map((c) => [c.id, c.avatarAt!.getTime()])),
+    users: Object.fromEntries(u.map((x) => [x.id, x.avatarAt!.getTime()])),
+    projects: Object.fromEntries(p.map((x) => [x.key, x.avatarAt!.getTime()])),
+    chats: Object.fromEntries(c.map((x) => [x.id, x.avatarAt!.getTime()])),
   })
 }
 

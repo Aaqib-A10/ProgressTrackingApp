@@ -464,12 +464,14 @@ function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
   const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(file.mime ?? '')
   const isVideo = /^video\/(webm|mp4)$/i.test(file.mime ?? '')
   const [open, setOpen] = useState(false)
+  const [missing, setMissing] = useState(false)
   const name = file.name ?? (isImage ? 'image' : 'video')
+  if (missing) return <p className="mt-1 inline-flex items-center gap-1.5 rounded-btn border border-dashed border-line px-3 py-2 text-body-sm text-ink-muted"><FileText size={15} /> {name}: this file is no longer on the server</p>
   return (
     <div className="mt-1">
       {isVideo ? (
         <div className="w-[min(420px,100%)]">
-          <video controls preload="metadata" src={`${href}?inline=1`} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />
+          <video controls preload="metadata" src={`${href}?inline=1`} onError={() => setMissing(true)} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />
           <div className="mt-1 flex items-center gap-3 text-[12px] text-ink-muted">
             <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 hover:text-ink"><Expand size={12} /> Open</button>
             <a href={href} className="inline-flex items-center gap-1 hover:text-ink"><Download size={12} /> Download ({fmtBytes(file.size ?? 0)})</a>
@@ -478,7 +480,7 @@ function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
       ) : isImage ? (
         <div className="group/img relative inline-block max-w-full">
           <button type="button" onClick={() => setOpen(true)} className="block max-w-full cursor-zoom-in" aria-label={`Open ${name}`}>
-            <img src={`${href}?inline=1`} alt={name} className="max-h-64 max-w-full rounded-btn border border-line object-contain" loading="lazy" decoding="async" />
+            <img src={`${href}?inline=1`} alt={name} onError={() => setMissing(true)} className="max-h-64 max-w-full rounded-btn border border-line object-contain" loading="lazy" decoding="async" />
           </button>
           <a href={href} onClick={(e) => e.stopPropagation()} className="absolute right-1.5 top-1.5 hidden h-8 w-8 items-center justify-center rounded-full bg-slate-900/70 text-white hover:bg-slate-900 group-hover/img:inline-flex" aria-label="Download" title="Download">
             <Download size={15} />
