@@ -1,8 +1,9 @@
 import { callsApi } from './callsApi'
 
 /**
- * For the AI note taker (server transcription): records only MY microphone and sends
- * it in short pieces. A piece is cut at a natural pause once it is 15 seconds long
+ * For the AI note taker (server transcription): records ONE person's sound (my microphone,
+ * or another person's sound as it arrives in the call) and sends it in short pieces,
+ * labelled with that person. A piece is cut at a natural pause once it is 15 seconds long
  * (or at 30 seconds whatever happens), and pieces where I did not speak are not sent.
  * The server turns each piece into text with Groq Whisper and labels it with my name.
  *
@@ -18,7 +19,7 @@ const MIN_PIECE_MS = 15_000
 const MAX_PIECE_MS = 30_000
 const PAUSE_MS = 600
 const MIN_SPEECH_MS = 1500
-const LEVEL = 0.02 // RMS above this (and well above the room) counts as speech
+const LEVEL = 0.012 // RMS above this (and well above the room) counts as speech
 const ABOVE_ROOM = 3 // speech must be this many times louder than the background
 
 function pickMime(): string {
@@ -43,7 +44,7 @@ export class SpeechRecorder {
   private uploads: Promise<void> = Promise.resolve()
   private mime = pickMime()
 
-  constructor(private callId: string, private track: MediaStreamTrack, private mode: SpeechMode, private onError?: (msg: string) => void) {}
+  constructor(private callId: string, private track: MediaStreamTrack, private mode: SpeechMode, private speakerId: string, private onError?: (msg: string) => void) {}
 
   start(): void {
     if (this.running || !this.mime) return
@@ -96,12 +97,13 @@ export class SpeechRecorder {
   private async upload(blob: Blob, durationMs: number) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await callsApi.audio(this.callId, blob, this.mode, durationMs)
+        await callsApi.audio(this.callId, blob, this.mode, durationMs, this.speakerId)
         return
       } catch (e) {
         const msg = (e as Error).message || ''
-        if (/410|409|ended|off/i.test(msg)) return
-        if (attempt === 2) this.onError?.('Some of your speech could not be sent for the notes')
+        const status = (e as { status?: number }).status
+        if (status === 409 || status === 410 || /ended|off/i.test(msg)) return // notes off, call over, or another browser records
+        if (attempt === 2) this.onError?.('Some speech could not be sent for the notes')
         await new Promise((ok) => setTimeout(ok, 1500 * (attempt + 1)))
       }
     }

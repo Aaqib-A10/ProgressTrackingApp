@@ -77,7 +77,8 @@ export function CallProvider({ meId, children }: { meId: string; children: React
   const recorder = useRef<CallRecorder | null>(null)
   const [recState, setRecState] = useState<RecorderState>('idle')
   const transcriber = useRef<Transcriber | null>(null)
-  const speechRec = useRef<SpeechRecorder | null>(null)
+  // AI notes: one recorder per person in the call (only in the recording browser).
+  const recorders = useRef(new Map<string, { trackId: string; rec: SpeechRecorder }>())
   const [transcriberState, setTranscriberState] = useState<TranscriberState>('off')
   const [speechLang, setSpeechLangState] = useState(getSpeechLang)
   const [captionsOn, setCaptionsOn] = useState(true)
@@ -180,7 +181,9 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     // A running recording keeps saving in the background after you leave.
     if (recorder.current?.recording) stopRecording()
     transcriber.current?.stop()
-    void speechRec.current?.stop() // sends my last words for the notes
+    // Send everyone's last words for the notes.
+    for (const r of recorders.current.values()) void r.rec.stop()
+    recorders.current.clear()
     void e.leave().then(() => refreshActive())
   }, [refreshActive, stopRecording])
 
@@ -216,38 +219,72 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not add them') }) }
   }, [addToast])
 
-  // The note taker. Server mode (Groq): my microphone is sent in short pieces and turned
-  // into text on the server; the browser's own recognition only adds fast live captions.
-  // Browser mode: the browser's recognition writes the notes itself.
+  // The note taker.
+  // Server mode (Groq): ONE browser (the one that turned the notes on; if they leave, the
+  // person longest in the call) records every person's sound separately: my microphone
+  // and each person's audio as it arrives in the call. Each piece is labelled with that
+  // person and turned into text on the server, then into English. Nobody else records,
+  // so a line is never written twice, and it works even if someone's own app is old,
+  // muted or in the background.
+  // Browser mode (no Groq key): each browser's own speech recognition writes its person's words.
   const noteOn = !!call && call.status === 'live' && call.noteTaker
   const micOn = !!call?.mic
   const serverStt = call?.sttMode === 'server'
+  const iRecord = noteOn && serverStt && !!meId && call?.noteRecorder === meId && serverSpeechSupported()
+  // Which sounds to record: me, plus everyone else who has an audio track (changes as people come and go).
+  const recordKey = iRecord
+    ? [`${meId}:${engine.current?.micTrack?.id ?? ''}`, ...(call?.peers ?? []).map((p) => `${p.userId}:${p.stream?.getAudioTracks()[0]?.id ?? ''}`)].join('|')
+    : ''
   useEffect(() => {
     const e = engine.current
-    if (!noteOn || !micOn || !e) return
-    const callId = e.snapshot.callId
+    const live = recorders.current
+    const wanted = new Map<string, MediaStreamTrack>()
+    if (iRecord && e) {
+      if (e.micTrack && meId) wanted.set(meId, e.micTrack)
+      for (const p of e.snapshot.peers) {
+        const t = p.stream?.getAudioTracks()[0]
+        if (t) wanted.set(p.userId, t)
+      }
+    }
+    // Stop recorders for people who left (sends their last words) or whose sound changed.
+    for (const [userId, r] of live) {
+      if (wanted.get(userId)?.id !== r.trackId) { void r.rec.stop(); live.delete(userId) }
+    }
+    for (const [userId, track] of wanted) {
+      if (live.has(userId)) continue
+      const rec = new SpeechRecorder(e!.snapshot.callId, track, speechLang as SpeechMode, userId, (msg) => addToast({ type: 'warning', message: msg }))
+      rec.start()
+      live.set(userId, { trackId: track.id, rec })
+    }
+    if (iRecord) setTranscriberState('listening')
+  }, [recordKey, speechLang]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Notes off, I am no longer the recorder, or the call ended: stop all (each sends its last piece).
+  useEffect(() => {
+    if (iRecord) return
+    for (const r of recorders.current.values()) void r.rec.stop()
+    recorders.current.clear()
+  }, [iRecord])
+  useEffect(() => () => { for (const r of recorders.current.values()) void r.rec.stop(); recorders.current.clear() }, [])
+
+  // Browser mode only: this browser's speech recognition writes my words.
+  useEffect(() => {
+    const e = engine.current
+    if (!noteOn || serverStt || !micOn || !e) return
     let t: Transcriber | null = null
     if (speechSupported()) {
-      t = new Transcriber(callId, speechLang, serverStt ? (st) => { if (st !== 'unsupported') setTranscriberState(st === 'error' ? 'listening' : st) } : setTranscriberState, serverStt)
+      t = new Transcriber(e.snapshot.callId, speechLang, setTranscriberState, false)
       transcriber.current = t
       t.start()
-    } else if (!serverStt) {
+    } else {
       setTranscriberState('unsupported')
-    }
-    let r: SpeechRecorder | null = null
-    if (serverStt && e.micTrack && serverSpeechSupported()) {
-      r = new SpeechRecorder(callId, e.micTrack, speechLang as SpeechMode, (msg) => addToast({ type: 'warning', message: msg }))
-      speechRec.current = r
-      r.start()
-      setTranscriberState('listening')
     }
     return () => {
       t?.stop()
       if (transcriber.current === t) transcriber.current = null
-      void r?.stop()
-      if (speechRec.current === r) speechRec.current = null
     }
   }, [noteOn, micOn, speechLang, serverStt, call?.callId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // In server mode, everyone else just sees that notes are being taken.
+  useEffect(() => { if (noteOn && serverStt && !iRecord) setTranscriberState('listening') }, [noteOn, serverStt, iRecord])
   useEffect(() => { if (!noteOn) setTranscriberState('off') }, [noteOn])
 
   // Tell me when someone raises a hand, starts recording, or turns the note taker on.

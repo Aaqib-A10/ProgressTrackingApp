@@ -268,6 +268,8 @@ describe('note taker with Groq (mocked)', () => {
         const text = asUrdu ? opts.urduText! : opts.sttText ?? ''
         return new Response(JSON.stringify({ text, language: asUrdu ? 'urdu' : opts.sttLang ?? 'english', segments: opts.segments ?? [{ text, no_speech_prob: 0.01, avg_logprob: -0.2 }] }), { status: 200 })
       }
+      const model = JSON.parse(String(init?.body ?? '{}')).model
+      if (model === 'openai/gpt-oss-20b') return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ en: 'We will send the pages on Friday.' }) } }] }), { status: 200 })
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(opts.notes ?? { summary: 'S', keyPoints: [], decisions: [], actionItems: [], openQuestions: [] }) } }] }), { status: 200 })
     }))
   }
@@ -285,6 +287,7 @@ describe('note taker with Groq (mocked)', () => {
     const j = await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.itadLead)).send({}).expect(200)
     expect(j.body.noteTaker).toBe(true)
     expect(j.body.sttMode).toBe('server')
+    expect(j.body.noteRecorder).toBe(w.itadLead.id) // the person who started the meeting records
     await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.itadMember)).send({}).expect(200)
   })
 
@@ -299,7 +302,10 @@ describe('note taker with Groq (mocked)', () => {
     expect(form.get('language')).toBeNull() // Whisper picks the language
     expect(form.get('prompt')).toBeNull() // no vocabulary prompt: Whisper parrots it on unclear sound
     mockGroq({ sttText: 'I will send the list tomorrow.' })
-    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en' }).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(200)
+    // Only the recording browser (the one that started the notes) sends audio, labelled per person.
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en', speaker: w.itadMember.id }).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(409)
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en', speaker: w.leadgenLead.id }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(409) // not in the call
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en', speaker: w.itadMember.id }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(200)
     await waitForCall(callId, 5000)
     expect(calls[0].url).toContain('/audio/transcriptions')
     expect((calls[0].body as FormData).get('language')).toBe('en')
@@ -319,6 +325,21 @@ describe('note taker with Groq (mocked)', () => {
     vi.unstubAllGlobals()
   })
 
+  it('a line said in Urdu is kept as said and shown in English; the caption is English', async () => {
+    mockGroq({ sttText: 'ہم جمعہ کو پیجز بھیج دیں گے', sttLang: 'urdu' })
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'mixed', speaker: w.itadMember.id }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 4)).expect(200)
+    await waitForCall(callId, 5000)
+    const { waitForCall: waitTranslate } = await import('../lib/pm/translate')
+    await waitTranslate(callId, 5000)
+    const line = await prisma.callTranscriptLine.findFirstOrThrow({ where: { callId, text: 'ہم جمعہ کو پیجز بھیج دیں گے' } })
+    expect(line.speakerName).toBe('itad member')
+    expect(line.textEn).toBe('We will send the pages on Friday.')
+    const p = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadMember)).expect(200)
+    expect(p.body.captions.some((c: { text: string }) => c.text === 'We will send the pages on Friday.')).toBe(true)
+    await prisma.callTranscriptLine.delete({ where: { id: line.id } })
+    vi.unstubAllGlobals()
+  })
+
   it('in Groq mode, the browser\'s own recognition is only used for captions (no duplicate lines)', async () => {
     await request(app).post(`/api/chat/calls/${callId}/transcript`).set(...auth(w.itadLead)).send({ text: 'browser words', final: true }).expect(200)
     expect(await prisma.callTranscriptLine.count({ where: { callId, text: 'browser words' } })).toBe(0)
@@ -335,7 +356,8 @@ describe('note taker with Groq (mocked)', () => {
     mockGroq({ sttText: 'Last words before leaving.', notes })
     await request(app).post(`/api/chat/calls/${callId}/leave`).set(...auth(w.itadMember)).expect(200)
     await request(app).post(`/api/chat/calls/${callId}/leave`).set(...auth(w.itadLead)).expect(200) // call ends
-    await request(app).post(`/api/chat/calls/${callId}/audio`).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 3)).expect(200)
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ speaker: w.itadMember.id }).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 3)).expect(409) // not the recorder
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ speaker: w.itadMember.id }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 3)).expect(200)
     await waitForCall(callId, 5000)
     expect(await prisma.callTranscriptLine.count({ where: { callId } })).toBe(3)
   })

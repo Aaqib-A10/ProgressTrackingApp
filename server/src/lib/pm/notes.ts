@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
 import { chatJson, groqEnabled } from './groq'
 import * as Stt from './stt'
+import * as Translate from './translate'
 
 /**
  * AI meeting notes.
@@ -184,8 +185,10 @@ export async function generateNotes(callId: string, opts: { force?: boolean; lan
     data: { notesStatus: 'pending' },
   })
   if (!claim.count) return
-  // Pieces of speech may still be on their way to text: wait for them first.
+  // Pieces of speech may still be on their way to text, then to English: wait for them first.
   await Stt.waitForCall(callId)
+  await Translate.waitForCall(callId)
+  await Translate.translateMissing(callId)
   const call = await prisma.chatCall.findUnique({
     where: { id: callId },
     include: {
@@ -206,8 +209,10 @@ export async function generateNotes(callId: string, opts: { force?: boolean; lan
   try {
     if (!notesProvider()) throw new Error('no-key')
     const date = call.startedAt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: process.env.APP_TIMEZONE || 'Asia/Karachi' })
-    const transcript = transcriptText(call.startedAt, call.transcript)
-    const lang: NotesLang = opts.lang && opts.lang !== 'auto' ? opts.lang : detectLanguage(call.transcript.map((l) => l.text).join(' '))
+    // Written from the English lines (the original when a line has no English yet).
+    const transcript = transcriptText(call.startedAt, call.transcript.map((l) => ({ ...l, text: l.textEn ?? l.text })))
+    // English unless someone asks for Urdu with the switch.
+    const lang: NotesLang = opts.lang && opts.lang !== 'auto' ? opts.lang : 'en'
     notes = { ...(await writeNotes({ title, agenda: call.meeting?.agenda ?? '', people, transcript, date }, lang)), language: lang }
   } catch (e) {
     const msg = (e as Error).message

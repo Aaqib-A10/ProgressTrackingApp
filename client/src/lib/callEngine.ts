@@ -52,6 +52,8 @@ export interface CallSnapshot {
   meetingId: string | null
   /** AI note taker on for this call. */
   noteTaker: boolean
+  /** Whose browser records everyone for the AI notes. */
+  noteRecorder: string | null
   captions: Caption[]
   /** People added who have not joined yet (still ringing). */
   invited: string[]
@@ -97,7 +99,7 @@ export class CallEngine {
   private snap: CallSnapshot
 
   constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void, private opts: { muteOnJoin?: boolean } = {}) {
-    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, captions: [], invited: [], sttMode: 'browser', noise: 'off', relay: true }
+    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, noteRecorder: null, captions: [], invited: [], sttMode: 'browser', noise: 'off', relay: true }
   }
 
   get snapshot(): CallSnapshot { return this.snap }
@@ -187,7 +189,7 @@ export class CallEngine {
       this.me = j.me
       this.iceServers = j.iceServers
       this.emit({ noise, relay: j.relay !== false })
-      this.emit({ mic: !!this.audioTrack && !startMuted, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker, sttMode: j.sttMode ?? 'browser' })
+      this.emit({ mic: !!this.audioTrack && !startMuted, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker, noteRecorder: j.noteRecorder ?? null, sttMode: j.sttMode ?? 'browser' })
       // The newcomer calls everyone who is already in the call.
       for (const o of j.others) await this.createPeer(o.userId, o.name, true, o)
       this.timer = window.setInterval(() => { void this.poll() }, POLL_MS)
@@ -331,7 +333,7 @@ export class CallEngine {
       for (const p of this.peers.values()) {
         if (p.downSince !== null && Date.now() - p.downSince > 8000 && p.pc.connectionState !== 'connecting') this.reconnect(p)
       }
-      this.emit({ declined: r.declined ?? [], noteTaker: !!r.noteTaker, captions: r.captions ?? [], invited: r.invited ?? [] })
+      this.emit({ declined: r.declined ?? [], noteTaker: !!r.noteTaker, noteRecorder: r.noteRecorder ?? null, captions: r.captions ?? [], invited: r.invited ?? [] })
     } catch {
       /* temporary network hiccup: keep polling */
     } finally {

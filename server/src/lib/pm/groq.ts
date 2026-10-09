@@ -139,8 +139,8 @@ export async function transcribeAudio(audio: Buffer, opts: { mode: SpeechMode; p
 // ---------- notes model ----------
 
 /** Ask the notes model for one JSON answer. */
-export async function chatJson(system: string, user: string, maxTokens = 2500): Promise<string> {
-  const model = process.env.GROQ_NOTES_MODEL || 'openai/gpt-oss-120b'
+export async function chatJson(system: string, user: string, maxTokens = 2500, modelOverride?: string): Promise<string> {
+  const model = modelOverride || process.env.GROQ_NOTES_MODEL || 'openai/gpt-oss-120b'
   let extras: Record<string, unknown> = { response_format: { type: 'json_object' }, ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}) }
   for (let round = 0; round < 2; round++) {
     const r = await groqFetch('/chat/completions', () => ({

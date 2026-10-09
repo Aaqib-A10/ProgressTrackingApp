@@ -333,7 +333,7 @@ function NotesPanel() {
       {!call.noteTaker ? (
         <div className="space-y-3">
           <p className="flex items-start gap-2 text-ink"><Sparkles size={16} className="mt-0.5 shrink-0 text-primary" /> The AI note taker writes down what everyone says. When you stop it or the call ends, you get a summary, decisions and action items in the chat.</p>
-          <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Each person's microphone is turned into text with their name, written the way it was said (Urdu in Urdu script, English in English). The notes come in the language the meeting was in, and you can switch them to English or Urdu." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
+          <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Everyone's voice is written down with their name and shown in English (you can also see it as it was said). The notes are written in English; you can switch them to Urdu." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
           <LangPicker />
           <button type="button" disabled={busy} onClick={() => void toggle(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-btn bg-primary px-3 py-2 font-semibold text-white hover:bg-primary/90 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Start AI notes

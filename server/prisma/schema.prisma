@@ -2180,6 +2180,8 @@ model CallTranscriptLine {
   userId      String
   speakerName String
   text        String
+  /// The same words in English (the line is shown and summarised in English). Null until translated.
+  textEn      String?
   at          DateTime @default(now())
 
   @@index([callId, at])

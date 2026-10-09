@@ -60,6 +60,8 @@ export interface LiveCall {
   noteTaker: boolean
   /** Recent speech for live captions (kept for a short while). */
   captions: Caption[]
+  /** Whose browser records everyone's voice for the AI notes (see recorderOf). */
+  noteRecorder: string | null
   meetingId: string | null
 }
 
@@ -79,8 +81,8 @@ export function allLive(): LiveCall[] {
   return [...live.values()]
 }
 
-export function registerLive(c: Omit<LiveCall, 'participants' | 'inbox' | 'joinedIds' | 'declined' | 'invited' | 'invitedBy' | 'guests' | 'noteTaker' | 'captions' | 'meetingId'> & { meetingId?: string | null }): LiveCall {
-  const call: LiveCall = { ...c, meetingId: c.meetingId ?? null, participants: new Map(), inbox: new Map(), joinedIds: new Set(), declined: new Set(), invited: new Map(), invitedBy: new Map(), guests: new Set(), noteTaker: false, captions: [] }
+export function registerLive(c: Omit<LiveCall, 'participants' | 'inbox' | 'joinedIds' | 'declined' | 'invited' | 'invitedBy' | 'guests' | 'noteTaker' | 'captions' | 'meetingId' | 'noteRecorder'> & { meetingId?: string | null }): LiveCall {
+  const call: LiveCall = { ...c, meetingId: c.meetingId ?? null, participants: new Map(), inbox: new Map(), joinedIds: new Set(), declined: new Set(), invited: new Map(), invitedBy: new Map(), guests: new Set(), noteTaker: false, captions: [], noteRecorder: null }
   live.set(c.callId, call)
   return call
 }
@@ -147,6 +149,27 @@ export function broadcast(call: LiveCall, from: string, kind: SignalKind, data: 
 
 const CAPTION_MS = 12_000
 let captionSeq = 0
+/**
+ * The note taker records in ONE browser: it records every person's sound in the call
+ * (each person's own audio stream, so the speaker is always known). That does not
+ * depend on everyone else having the latest version, a working microphone setting or
+ * the page in front. It is the person who turned the notes on; when they leave, the
+ * person who has been in the call longest takes over.
+ */
+export function recorderOf(call: LiveCall): string | null {
+  if (!call.noteTaker) return null
+  if (call.noteRecorder && call.participants.has(call.noteRecorder)) return call.noteRecorder
+  const next = call.participants.keys().next()
+  call.noteRecorder = next.done ? null : next.value
+  return call.noteRecorder
+}
+
+/** Who recorded the notes of a call that just ended (their last pieces still arrive). */
+const endedRecorders = new Map<string, string>()
+export function lastRecorderOf(callId: string): string | null {
+  return endedRecorders.get(callId) ?? null
+}
+
 /** Live captions: an interim line replaces that speaker's previous interim line. */
 export function addCaption(call: LiveCall, userId: string, name: string, text: string, final: boolean, now = Date.now()): void {
   call.captions = call.captions.filter((c) => now - c.at < CAPTION_MS && !(c.userId === userId && !c.final))
@@ -167,6 +190,10 @@ export function setOnCallEnded(fn: (call: LiveCall) => void): void {
 
 export async function endCall(call: LiveCall): Promise<void> {
   if (!live.delete(call.callId)) return
+  if (call.noteRecorder) {
+    endedRecorders.set(call.callId, call.noteRecorder)
+    setTimeout(() => endedRecorders.delete(call.callId), 10 * 60_000).unref?.()
+  }
   await prisma.chatCall.update({ where: { id: call.callId }, data: { endedAt: new Date(), joinedIds: [...call.joinedIds] } }).catch(() => undefined)
   try { onEnded?.(call) } catch { /* never block ending a call */ }
   if (!call.isDirect) return

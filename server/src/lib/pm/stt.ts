@@ -4,11 +4,18 @@ import { randomUUID } from 'node:crypto'
 import { prisma } from '../prisma'
 import * as Calls from './calls'
 import { transcribeAudio, type SpeechMode } from './groq'
+import * as Translate from './translate'
+
+// A translated line becomes the live caption (people see English while they talk).
+Translate.setOnTranslated((l) => {
+  const live = Calls.getLive(l.callId)
+  if (live) Calls.addCaption(live, l.userId, l.speakerName, l.textEn, true)
+})
 
 /**
  * Server-side transcription queue for the AI note taker.
  *
- * While notes are on, each person's browser records only their OWN microphone and
+ * While notes are on, one browser in the call records each person's sound separately and
  * sends a short piece (cut at a pause, 15 to 45 seconds) whenever they have spoken.
  * Pieces are transcribed one at a time with Groq Whisper (free tier: about 20 a
  * minute), saved as transcript lines with the right speaker, and shown as captions.
@@ -63,9 +70,11 @@ async function work(): Promise<void> {
         const audio = await fs.readFile(job.file)
         const text = await transcribeAudio(audio, { mode: job.mode, prompt: job.prompt, mime: job.mime })
         if (text) {
-          await prisma.callTranscriptLine.create({ data: { callId: job.callId, userId: job.userId, speakerName: job.speakerName, text, at: job.at } })
+          const line = await prisma.callTranscriptLine.create({ data: { callId: job.callId, userId: job.userId, speakerName: job.speakerName, text, at: job.at } })
+          // English straight away when it already is; otherwise the caption shows once translated.
+          const en = await Translate.addLine({ id: line.id, callId: job.callId, text })
           const live = Calls.getLive(job.callId)
-          if (live) Calls.addCaption(live, job.userId, job.speakerName, text, true)
+          if (live && en) Calls.addCaption(live, job.userId, job.speakerName, en, true)
         }
       } catch (e) {
         // eslint-disable-next-line no-console

@@ -714,7 +714,7 @@ export async function startCall(req: AuthedRequest, res: Response): Promise<void
   const call = await prisma.chatCall.create({ data: { conversationId: m.conversationId, startedById: me.id, video, joinedIds: [me.id], meetingId, noteTaker: autoNotes } })
   // People are told by the in-app ringing banner (+ desktop pop-up); a missed one-to-one call leaves an alert.
   Calls.registerLive({ callId: call.id, conversationId: m.conversationId, video, startedById: me.id, startedByName: name, startedAt: Date.now(), isDirect: m.conversation.type === 'DIRECT', meetingId })
-  if (autoNotes) Calls.getLive(call.id)!.noteTaker = true
+  if (autoNotes) { const l = Calls.getLive(call.id)!; l.noteTaker = true; l.noteRecorder = me.id }
   await prisma.chatMessage.create({ data: { conversationId: m.conversationId, userId: me.id, body: `Started a ${video ? 'video' : 'voice'} call`, callId: call.id, mentions: [] } })
   await prisma.chatConversation.update({ where: { id: m.conversationId }, data: { lastMessageAt: new Date() } })
   res.status(201).json({ call: { id: call.id, video, conversationId: m.conversationId }, existing: false })
@@ -766,7 +766,7 @@ export async function joinCall(req: AuthedRequest, res: Response): Promise<void>
   const others = Calls.participantList(call).filter((p) => p.userId !== me.id)
   Calls.join(call, me.id, await displayName(me.id), body)
   await prisma.chatCall.update({ where: { id: call.callId }, data: { joinedIds: [...call.joinedIds] } }).catch(() => undefined)
-  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, meetingId: call.meetingId, isDirect: call.isDirect, sttMode: groqEnabled() ? 'server' : 'browser', relay: Calls.relayConfigured() })
+  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, noteRecorder: Calls.recorderOf(call), meetingId: call.meetingId, isDirect: call.isDirect, sttMode: groqEnabled() ? 'server' : 'browser', relay: Calls.relayConfigured() })
 }
 
 const signalSchema = z.object({ to: z.string(), kind: z.enum(['offer', 'answer', 'ice', 'restart']), data: z.unknown() })
@@ -795,7 +795,7 @@ export async function pollCall(req: AuthedRequest, res: Response): Promise<void>
   p.lastSeen = Date.now()
   const signals = call.inbox.get(me.id) ?? []
   call.inbox.set(me.id, [])
-  res.json({ ended: false, participants: Calls.participantList(call), signals, declined: [...call.declined], noteTaker: call.noteTaker, captions: Calls.recentCaptions(call), invited: [...call.invited.keys()].filter((id) => !call.participants.has(id)) })
+  res.json({ ended: false, participants: Calls.participantList(call), signals, declined: [...call.declined], noteTaker: call.noteTaker, noteRecorder: Calls.recorderOf(call), captions: Calls.recentCaptions(call), invited: [...call.invited.keys()].filter((id) => !call.participants.has(id)) })
 }
 
 /** POST /api/chat/calls/:callId/state — mic / camera / screen share on or off (shown to others). */
@@ -874,6 +874,7 @@ export async function setNoteTaker(req: AuthedRequest, res: Response): Promise<v
   if (call.noteTaker === on) { res.json({ noteTaker: on }); return }
   call.noteTaker = on
   if (on) {
+    call.noteRecorder = me.id // this browser records everyone
     await prisma.chatCall.update({ where: { id: call.callId }, data: { noteTaker: true, notesStatus: null } })
   } else {
     // Stopped by hand: write the notes now rather than waiting for the call to end
@@ -919,8 +920,8 @@ export async function callNotes(req: AuthedRequest, res: Response): Promise<void
     piecesLeft: Stt.pendingFor(call.id),
     notes: notes && !notes.error ? notes : null,
     error: notes?.error ?? null,
-    transcript: lines.map((l) => ({ id: l.id, userId: l.userId, speaker: l.speakerName, text: l.text, at: l.at.toISOString(), offsetSec: Math.max(0, Math.round((l.at.getTime() - call.startedAt.getTime()) / 1000)) })),
-    transcriptText: transcriptText(call.startedAt, lines),
+    transcript: lines.map((l) => ({ id: l.id, userId: l.userId, speaker: l.speakerName, text: l.text, textEn: l.textEn, at: l.at.toISOString(), offsetSec: Math.max(0, Math.round((l.at.getTime() - call.startedAt.getTime()) / 1000)) })),
+    transcriptText: transcriptText(call.startedAt, lines.map((l) => ({ ...l, text: l.textEn ?? l.text }))),
     recordings: recordings.map((r) => ({ id: r.id, messageId: r.messageId, size: r.size, durationSec: r.durationSec, url: r.messageId ? `/api/chat/files/${r.messageId}` : null, createdAt: r.createdAt.toISOString() })),
   })
 }
@@ -1043,17 +1044,27 @@ const RECENT_END_MS = 3 * 60_000
 export async function postAudio(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
   if (!groqEnabled()) throw new HttpError(409, 'Server transcription is not set up')
+  // Whose voice this piece is: the recording browser sends everyone's sound, each with its speaker.
+  const speakerId = typeof req.query.speaker === 'string' && req.query.speaker ? req.query.speaker : me.id
   const live = Calls.getLive(req.params.callId)
-  let speaker: string | null = live?.participants.get(me.id)?.name ?? null
-  let callId = live?.callId ?? null
-  if (!live || !speaker) {
-    // Just ended: still take the last piece from someone who was in it.
+  let speakerName: string | null = null
+  let callId: string
+  if (live && live.participants.has(me.id)) {
+    if (!live.noteTaker) throw new HttpError(409, 'The note taker is off')
+    // Only the recording browser sends audio, so nobody is written down twice.
+    if (Calls.recorderOf(live) !== me.id) throw new HttpError(409, 'Another browser is recording the notes')
+    if (!live.joinedIds.has(speakerId)) throw new HttpError(409, 'That person is not in this call')
+    speakerName = live.participants.get(speakerId)?.name ?? await displayName(speakerId)
+    callId = live.callId
+  } else {
+    // Just ended: still take the last pieces from the browser that was recording.
     const row = await prisma.chatCall.findUnique({ where: { id: req.params.callId }, select: { id: true, joinedIds: true, endedAt: true, noteTaker: true } })
     if (!row || !row.joinedIds.includes(me.id) || !row.noteTaker || (row.endedAt && Date.now() - row.endedAt.getTime() > RECENT_END_MS)) throw new HttpError(410, 'This call has ended')
-    speaker = await displayName(me.id)
+    const rec = Calls.lastRecorderOf(row.id)
+    if (rec && rec !== me.id) throw new HttpError(409, 'Another browser is recording the notes')
+    if (!row.joinedIds.includes(speakerId)) throw new HttpError(409, 'That person was not in this call')
+    speakerName = await displayName(speakerId)
     callId = row.id
-  } else if (!live.noteTaker) {
-    throw new HttpError(409, 'The note taker is off')
   }
   const buf = req.body as Buffer
   if (!Buffer.isBuffer(buf) || buf.length < 200) { res.json({ ok: true, skipped: true }); return }
@@ -1062,7 +1073,7 @@ export async function postAudio(req: AuthedRequest, res: Response): Promise<void
   const durationMs = Math.min(Math.max(Number(req.query.durationMs) || 0, 0), 120_000)
   const mime = String(req.headers['content-type'] || 'audio/webm').split(';')[0].slice(0, 40)
   // No Whisper prompt: with unclear sound it repeats prompt words (names, company names) as if they were said.
-  await Stt.enqueue({ callId: callId!, userId: me.id, speakerName: speaker!, at: new Date(Date.now() - durationMs), mime, mode, audio: buf })
+  await Stt.enqueue({ callId, userId: speakerId, speakerName, at: new Date(Date.now() - durationMs), mime, mode, audio: buf })
   res.json({ ok: true })
 }
 

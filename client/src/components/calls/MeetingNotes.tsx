@@ -40,6 +40,7 @@ export function NotesContent({ callId }: { callId: string }) {
   const [d, setD] = useState<CallNotesResponse | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [showTranscript, setShowTranscript] = useState(false)
+  const [original, setOriginal] = useState(false) // show the words as said (Urdu) instead of English
   const [retrying, setRetrying] = useState(false)
   const [makeTask, setMakeTask] = useState<number | null>(null)
 
@@ -157,16 +158,24 @@ export function NotesContent({ callId }: { callId: string }) {
 
       {d.transcript.length > 0 && (
         <section>
-          <button type="button" onClick={() => setShowTranscript((v) => !v)} className="flex items-center gap-1 text-body-md font-semibold text-ink">
-            {showTranscript ? <ChevronDown size={16} /> : <ChevronRight size={16} />} Transcript ({d.transcript.length} lines)
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setShowTranscript((v) => !v)} className="flex items-center gap-1 text-body-md font-semibold text-ink">
+              {showTranscript ? <ChevronDown size={16} /> : <ChevronRight size={16} />} Transcript ({d.transcript.length} lines)
+            </button>
+            {showTranscript && d.transcript.some((l) => l.textEn && l.textEn !== l.text) && (
+              <div className="ml-auto inline-flex overflow-hidden rounded-btn border border-line text-body-sm">
+                <button type="button" onClick={() => setOriginal(false)} className={cn('px-2.5 py-1 font-semibold', !original ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50')}>English</button>
+                <button type="button" onClick={() => setOriginal(true)} className={cn('px-2.5 py-1 font-semibold', original ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50')}>As spoken</button>
+              </div>
+            )}
+          </div>
           {showTranscript && (
             <div className="mt-2 max-h-96 space-y-1.5 overflow-y-auto rounded-btn border border-line p-3">
               {d.transcript.map((l) => (
                 <p key={l.id} className="text-body-sm leading-relaxed">
                   <span className="mr-2 font-mono text-[11px] text-ink-muted">{fmtClock(l.offsetSec)}</span>
                   <b className={cn('mr-1', SPEAKER_COLORS[speakers.indexOf(l.userId) % SPEAKER_COLORS.length])}>{l.speaker}:</b>
-                  <span dir="auto" className="text-ink">{l.text}</span>
+                  <span dir="auto" className="text-ink">{original ? l.text : l.textEn ?? l.text}</span>
                 </p>
               ))}
             </div>
