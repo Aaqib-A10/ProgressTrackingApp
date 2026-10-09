@@ -9,6 +9,7 @@ import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
 import { getQaUnreadCount } from '../../lib/qaApi'
 import { filterNav, type NavGroup } from './navConfig'
 import { projectsApi } from '../../lib/projectsApi'
+import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
 
 const NAV_STORE = 'pt-nav-expanded'
 const matches = (to: string, path: string) => path === to || path.startsWith(to + '/')
@@ -328,10 +329,11 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
 }
 
 export function Avatar({ user, size = 36 }: { user: CurrentUser; size?: number }) {
-  if (user.avatarUrl) {
+  const uploaded = avatarUrl(useAvatarIndex(), 'user', user.id)
+  if (uploaded || user.avatarUrl) {
     return (
       <img
-        src={user.avatarUrl}
+        src={uploaded ?? user.avatarUrl!}
         alt={user.name}
         className="rounded-full object-cover"
         style={{ width: size, height: size }}

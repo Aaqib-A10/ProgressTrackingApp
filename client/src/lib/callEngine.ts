@@ -52,6 +52,8 @@ export interface CallSnapshot {
   captions: Caption[]
   /** People added who have not joined yet (still ringing). */
   invited: string[]
+  /** Where speech becomes text for the notes: on the server (Groq) or in the browser. */
+  sttMode: 'server' | 'browser'
 }
 
 export interface Reaction { emoji: string; name: string; from: string; at: number }
@@ -82,7 +84,7 @@ export class CallEngine {
   private snap: CallSnapshot
 
   constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void) {
-    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, captions: [], invited: [] }
+    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, captions: [], invited: [], sttMode: 'browser' }
   }
 
   get snapshot(): CallSnapshot { return this.snap }
@@ -139,7 +141,7 @@ export class CallEngine {
       const j = await callsApi.join(this.snap.callId, { mic: !!this.audioTrack, cam: !!this.camTrack })
       this.me = j.me
       this.iceServers = j.iceServers
-      this.emit({ mic: !!this.audioTrack, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker })
+      this.emit({ mic: !!this.audioTrack, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker, sttMode: j.sttMode ?? 'browser' })
       // The newcomer calls everyone who is already in the call.
       for (const o of j.others) await this.createPeer(o.userId, o.name, true, o)
       this.timer = window.setInterval(() => { void this.poll() }, POLL_MS)

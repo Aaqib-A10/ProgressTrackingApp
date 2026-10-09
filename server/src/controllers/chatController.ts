@@ -12,7 +12,9 @@ import { presenceOf as basePresence, setTyping, touch, typingIn } from '../lib/p
 import { pmNotify, trunc } from '../lib/pm/pmNotify'
 import { syncProjectChannel } from '../lib/pm/tasks'
 import * as Calls from '../lib/pm/calls'
-import { generateNotes, transcriptText, type MeetingNotes } from '../lib/pm/notes'
+import { generateNotes, notesProvider, transcriptText, type MeetingNotes } from '../lib/pm/notes'
+import { groqEnabled } from '../lib/pm/groq'
+import * as Stt from '../lib/pm/stt'
 import { meetingFor } from '../lib/pm/meetings'
 
 /** Presence with "busy" while the person is in a call. */
@@ -216,10 +218,15 @@ export async function getConversation(req: AuthedRequest, res: Response): Promis
     include: { project: { select: { key: true, name: true, color: true } }, members: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { joinedAt: 'asc' } } },
   })
   const others = c.members.filter((x) => x.userId !== me.id)
+  // Picture: group admins for groups; project admins (or Super Admins) for project channels.
+  const canChangePicture = c.type === 'GROUP'
+    ? m.isAdmin || c.createdById === me.id
+    : c.type === 'PROJECT' && !!c.projectId && (me.role === 'SUPER_ADMIN' || !!(await prisma.pmProjectMember.findFirst({ where: { projectId: c.projectId, userId: me.id, role: 'ADMIN' }, select: { id: true } })))
   res.json({
     conversation: {
       id: c.id,
       type: c.type,
+      canChangePicture,
       title: c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.type === 'PROJECT' ? `# ${c.name}` : c.name,
       name: c.name,
       project: c.project,
@@ -604,9 +611,12 @@ export async function startCall(req: AuthedRequest, res: Response): Promise<void
   }
   const name = await displayName(me.id)
   const meetingId = await meetingFor(m.conversationId)
-  const call = await prisma.chatCall.create({ data: { conversationId: m.conversationId, startedById: me.id, video, joinedIds: [me.id], meetingId } })
+  // Scheduled meetings can switch the AI note taker on by themselves.
+  const autoNotes = meetingId ? (await prisma.meeting.findUnique({ where: { id: meetingId }, select: { autoNotes: true } }))?.autoNotes ?? false : false
+  const call = await prisma.chatCall.create({ data: { conversationId: m.conversationId, startedById: me.id, video, joinedIds: [me.id], meetingId, noteTaker: autoNotes } })
   // People are told by the in-app ringing banner (+ desktop pop-up); a missed one-to-one call leaves an alert.
   Calls.registerLive({ callId: call.id, conversationId: m.conversationId, video, startedById: me.id, startedByName: name, startedAt: Date.now(), isDirect: m.conversation.type === 'DIRECT', meetingId })
+  if (autoNotes) Calls.getLive(call.id)!.noteTaker = true
   await prisma.chatMessage.create({ data: { conversationId: m.conversationId, userId: me.id, body: `Started a ${video ? 'video' : 'voice'} call`, callId: call.id, mentions: [] } })
   await prisma.chatConversation.update({ where: { id: m.conversationId }, data: { lastMessageAt: new Date() } })
   res.status(201).json({ call: { id: call.id, video, conversationId: m.conversationId }, existing: false })
@@ -658,7 +668,7 @@ export async function joinCall(req: AuthedRequest, res: Response): Promise<void>
   const others = Calls.participantList(call).filter((p) => p.userId !== me.id)
   Calls.join(call, me.id, await displayName(me.id), body)
   await prisma.chatCall.update({ where: { id: call.callId }, data: { joinedIds: [...call.joinedIds] } }).catch(() => undefined)
-  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, meetingId: call.meetingId, isDirect: call.isDirect })
+  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, meetingId: call.meetingId, isDirect: call.isDirect, sttMode: groqEnabled() ? 'server' : 'browser' })
 }
 
 const signalSchema = z.object({ to: z.string(), kind: z.enum(['offer', 'answer', 'ice']), data: z.unknown() })
@@ -768,8 +778,9 @@ export async function setNoteTaker(req: AuthedRequest, res: Response): Promise<v
   if (on) {
     await prisma.chatCall.update({ where: { id: call.callId }, data: { noteTaker: true, notesStatus: null } })
   } else {
-    // Stopped by hand: write the notes now rather than waiting for the call to end.
-    void generateNotes(call.callId).catch((e) => console.error('[notes]', e)) // eslint-disable-line no-console
+    // Stopped by hand: write the notes now rather than waiting for the call to end
+    // (after a few seconds, so everyone's last piece of speech arrives first).
+    scheduleNotes(call.callId)
   }
   res.json({ noteTaker: on })
 }
@@ -783,7 +794,8 @@ export async function postTranscript(req: AuthedRequest, res: Response): Promise
   if (!p) throw new HttpError(409, 'Join the call first')
   const { text, final } = parse(transcriptSchema, req.body)
   Calls.addCaption(call, me.id, p.name, text, final)
-  if (final && call.noteTaker) await prisma.callTranscriptLine.create({ data: { callId: call.callId, userId: me.id, speakerName: p.name, text } })
+  // With Groq set up, the server transcribes the audio itself; browser text is only for live captions.
+  if (final && call.noteTaker && !groqEnabled()) await prisma.callTranscriptLine.create({ data: { callId: call.callId, userId: me.id, speakerName: p.name, text } })
   res.json({ ok: true })
 }
 
@@ -805,6 +817,8 @@ export async function callNotes(req: AuthedRequest, res: Response): Promise<void
   res.json({
     call: { id: call.id, startedAt: call.startedAt.toISOString(), endedAt: call.endedAt?.toISOString() ?? null, video: call.video, title: call.meeting?.title ?? call.conversation.name ?? 'Call', meetingId: call.meeting?.id ?? null, conversationId: call.conversationId },
     status: call.notesStatus ?? (call.noteTaker ? (call.endedAt ? 'pending' : 'recording') : 'none'),
+    provider: notesProvider(),
+    piecesLeft: Stt.pendingFor(call.id),
     notes: notes && !notes.error ? notes : null,
     error: notes?.error ?? null,
     transcript: lines.map((l) => ({ id: l.id, userId: l.userId, speaker: l.speakerName, text: l.text, at: l.at.toISOString(), offsetSec: Math.max(0, Math.round((l.at.getTime() - call.startedAt.getTime()) / 1000)) })),
@@ -911,4 +925,65 @@ export async function toggleReaction(req: AuthedRequest, res: Response): Promise
   const row = await prisma.chatMessage.update({ where: { id: msg.id }, data: { reactedAt: new Date() }, include: MESSAGE_INCLUDE })
   const visible = new Set(await visibleProjectIds(me, true))
   res.json({ message: serializeMessage(row, visible) })
+}
+
+/** Write the notes a few seconds after the note taker stops, so the last pieces of speech arrive. */
+export function scheduleNotes(callId: string, delayMs = Number(process.env.NOTES_DELAY_MS ?? 8000)): void {
+  setTimeout(() => { void generateNotes(callId).catch((e) => console.error('[notes]', e)) }, delayMs) // eslint-disable-line no-console
+}
+
+const AUDIO_MAX = 6 * 1024 * 1024
+const RECENT_END_MS = 3 * 60_000
+
+/**
+ * POST /api/chat/calls/:callId/audio?mode=mixed|en|ur — a short piece of MY microphone
+ * while the note taker is on (raw webm/ogg). Accepted for a few minutes after the call
+ * ends, so the last words are not lost.
+ */
+export async function postAudio(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  if (!groqEnabled()) throw new HttpError(409, 'Server transcription is not set up')
+  const live = Calls.getLive(req.params.callId)
+  let speaker: string | null = live?.participants.get(me.id)?.name ?? null
+  let callId = live?.callId ?? null
+  let title: string | null = null
+  if (!live || !speaker) {
+    // Just ended: still take the last piece from someone who was in it.
+    const row = await prisma.chatCall.findUnique({ where: { id: req.params.callId }, select: { id: true, joinedIds: true, endedAt: true, noteTaker: true } })
+    if (!row || !row.joinedIds.includes(me.id) || !row.noteTaker || (row.endedAt && Date.now() - row.endedAt.getTime() > RECENT_END_MS)) throw new HttpError(410, 'This call has ended')
+    speaker = await displayName(me.id)
+    callId = row.id
+  } else if (!live.noteTaker) {
+    throw new HttpError(409, 'The note taker is off')
+  }
+  const buf = req.body as Buffer
+  if (!Buffer.isBuffer(buf) || buf.length < 200) { res.json({ ok: true, skipped: true }); return }
+  if (buf.length > AUDIO_MAX) throw new HttpError(413, 'Piece too large')
+  const mode = (['mixed', 'en', 'ur'] as const).find((m) => m === req.query.mode) ?? 'mixed'
+  const durationMs = Math.min(Math.max(Number(req.query.durationMs) || 0, 0), 120_000)
+  const mime = String(req.headers['content-type'] || 'audio/webm').split(';')[0].slice(0, 40)
+  // Names and the meeting title help Whisper spell them right.
+  if (live) {
+    const conv = await prisma.chatConversation.findUnique({ where: { id: live.conversationId }, select: { name: true } })
+    title = conv?.name ?? null
+  }
+  const names = live ? [...live.participants.values()].map((p) => p.name) : [speaker!]
+  const prompt = `${title ? `${title}. ` : ''}Meeting with ${names.join(', ')}. PulseTrack, RTI, Minnesota Computers, 99 Technologies.`
+  await Stt.enqueue({ callId: callId!, userId: me.id, speakerName: speaker!, at: new Date(Date.now() - durationMs), mime, mode, prompt, audio: buf })
+  res.json({ ok: true })
+}
+
+/** PATCH /api/chat/calls/:callId/notes/action-items/:index { taskCode } — remember the task made from an action item. */
+export async function linkActionItem(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const call = await callForReader(req.params.callId, me.id)
+  const { taskCode } = parse(z.object({ taskCode: z.string().trim().min(2).max(20) }), req.body)
+  const task = await prisma.pmTask.findFirst({ where: { code: taskCode, deletedAt: null }, select: { id: true } })
+  if (!task) throw new HttpError(422, 'Task not found')
+  const notes = call.notes as unknown as MeetingNotes | null
+  const i = Number(req.params.index)
+  if (!notes || !Array.isArray(notes.actionItems) || !notes.actionItems[i]) throw new HttpError(404, 'Action item not found')
+  notes.actionItems[i] = { ...notes.actionItems[i], taskCode }
+  await prisma.chatCall.update({ where: { id: call.id }, data: { notes: notes as unknown as Prisma.InputJsonValue } })
+  res.json({ ok: true })
 }

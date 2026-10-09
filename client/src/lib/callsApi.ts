@@ -19,15 +19,17 @@ export interface ActiveCall {
   meetingId?: string | null
 }
 export interface CallSignal { id: number; from: string; kind: 'offer' | 'answer' | 'ice' | 'bye' | 'state' | 'react'; data: unknown }
-export interface JoinResponse { callId: string; video: boolean; conversationId: string; me: string; others: CallParticipant[]; iceServers: RTCIceServer[]; guest?: boolean; noteTaker?: boolean; meetingId?: string | null; isDirect?: boolean }
+export interface JoinResponse { callId: string; video: boolean; conversationId: string; me: string; others: CallParticipant[]; iceServers: RTCIceServer[]; guest?: boolean; noteTaker?: boolean; meetingId?: string | null; isDirect?: boolean; sttMode?: 'server' | 'browser' }
 export interface PollResponse { ended: boolean; removed?: boolean; participants: CallParticipant[]; signals: CallSignal[]; declined?: string[]; noteTaker?: boolean; captions?: Caption[]; invited?: string[] }
 
-export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null }[]; openQuestions: string[] }
+export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }[]; openQuestions: string[] }
 export interface CallNotesResponse {
   call: { id: string; startedAt: string; endedAt: string | null; video: boolean; title: string; meetingId: string | null; conversationId: string }
   status: 'none' | 'recording' | 'pending' | 'ready' | 'failed' | 'empty' | 'no-ai'
   notes: MeetingNotesData | null
   error: string | null
+  provider: 'groq' | 'anthropic' | null
+  piecesLeft: number
   transcript: { id: string; userId: string; speaker: string; text: string; at: string; offsetSec: number }[]
   transcriptText: string
   recordings: { id: string; messageId: string | null; size: number; durationSec: number | null; url: string | null; createdAt: string }[]
@@ -46,6 +48,8 @@ export const callsApi = {
   notes: (callId: string) => api.get<CallNotesResponse>(`/chat/calls/${callId}/notes`),
   retryNotes: (callId: string) => api.post(`/chat/calls/${callId}/notes/retry`),
   transcript: (callId: string, text: string, final: boolean) => api.post(`/chat/calls/${callId}/transcript`, { text, final }),
+  audio: (callId: string, blob: Blob, mode: string, durationMs: number) => api.postRaw<{ ok: boolean }>(`/chat/calls/${callId}/audio?mode=${mode}&durationMs=${Math.round(durationMs)}`, blob, blob.type || 'audio/webm'),
+  linkActionItem: (callId: string, index: number, taskCode: string) => api.patch(`/chat/calls/${callId}/notes/action-items/${index}`, { taskCode }),
   startRecording: (callId: string, mime: string) => api.post<{ recording: { id: string } }>(`/chat/calls/${callId}/recordings`, { mime }),
   recordingChunk: (recId: string, index: number, blob: Blob) => api.postRaw<{ ok: boolean }>(`/chat/recordings/${recId}/chunk?index=${index}`, blob, 'application/octet-stream'),
   finishRecording: (recId: string, durationSec: number) => api.post<{ ok: boolean; messageId?: string }>(`/chat/recordings/${recId}/finish`, { durationSec }),

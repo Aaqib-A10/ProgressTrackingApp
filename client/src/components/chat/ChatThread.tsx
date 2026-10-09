@@ -9,6 +9,7 @@ import { refreshChatUnread } from './useChatUnread'
 import { cn } from '../../lib/cn'
 import { useCalls } from '../calls/CallProvider'
 import { NotesModal } from '../calls/MeetingNotes'
+import { ChatPicture } from '../ui/Pictures'
 
 const API = import.meta.env.VITE_API_URL ?? '/api'
 const EMOJI = ['👍', '🙏', '✅', '🎉', '👀', '🔥', '😂', '❤️', '🚀', '⏰', '❗', '🙂']
@@ -228,7 +229,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         {conv ? (
           <button type="button" onClick={onHeaderClick} className="flex min-w-0 flex-1 items-center gap-3 text-left">
             {isDirect && other ? <PersonAvatar person={other} size={compact ? 28 : 34} presence={other.presence} /> : (
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn text-body-sm font-bold text-white" style={{ backgroundColor: conv.project?.color ?? '#64748B' }}>{conv.type === 'PROJECT' ? '#' : <Users size={15} />}</span>
+              <ChatPicture type={conv.type} conversationId={conv.id} projectKey={conv.project?.key} color={conv.project?.color} size={compact ? 28 : 34} />
             )}
             <span className="min-w-0">
               <span className="block truncate text-body-md font-semibold text-ink">{conv.title}</span>

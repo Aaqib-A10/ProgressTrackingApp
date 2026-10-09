@@ -233,6 +233,8 @@ model User {
   pmComments        PmComment[]          @relation("PmCommentAuthor")
   pmReviews         PmReview[]           @relation("PmReviewer")
   chatCallsStarted  ChatCall[]           @relation("ChatCallsStarted")
+  /// Profile picture last changed (file: uploads/avatars/user-<id>.jpg).
+  avatarAt          DateTime?
   meetingsOrganized Meeting[]            @relation("MeetingsOrganized")
   meetingAttendance MeetingAttendee[]    @relation("MeetingAttendance")
   pmAttachments     PmAttachment[]       @relation("PmAttachmentUploader")
@@ -1866,6 +1868,8 @@ model PmProject {
   overdueNotifyAdmins    Boolean         @default(true)
   overdueRepeatHours     Int             @default(24)
   reminderOffsetsMinutes Int[]           @default([1440, 60])
+  /// Project picture last changed (also the project chat's picture).
+  avatarAt               DateTime?
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
@@ -2130,6 +2134,8 @@ model ChatConversation {
   directKey     String?              @unique // "<userA>:<userB>" sorted, for DIRECT de-dupe
   createdById   String?
   lastMessageAt DateTime             @default(now())
+  /// Group chat picture last changed.
+  avatarAt      DateTime?
   createdAt     DateTime             @default(now())
 
   members  ChatMember[]
@@ -2226,6 +2232,8 @@ model Meeting {
   /// Same id on every occurrence of a repeating meeting.
   seriesId       String?
   repeat         String? // daily | weekdays | weekly
+  /// Start the AI note taker automatically when this meeting's call starts.
+  autoNotes      Boolean          @default(true)
   cancelledAt    DateTime?
   reminderSentAt DateTime?
   createdAt      DateTime         @default(now())

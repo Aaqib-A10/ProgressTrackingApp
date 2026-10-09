@@ -50,6 +50,7 @@ function serialize(m: MeetingRow, meId: string) {
     project: m.project,
     seriesId: m.seriesId,
     repeat: m.repeat,
+    autoNotes: m.autoNotes,
     cancelled: !!m.cancelledAt,
     link: `${APP_URL}${meetingLink(m.id)}`,
     live: live ? { callId: live.callId, video: live.video, participants: Calls.participantList(live).map((p) => ({ userId: p.userId, name: p.name })) } : null,
@@ -113,6 +114,7 @@ const createSchema = z.object({
   projectKey: z.string().max(20).nullable().optional(),
   repeat: z.enum(['none', 'daily', 'weekdays', 'weekly']).default('none'),
   repeatCount: z.number().int().min(1).max(52).default(1),
+  autoNotes: z.boolean().default(true),
 })
 
 function checkTimes(startsAt: Date, endsAt: Date): void {
@@ -159,6 +161,7 @@ export async function createMeeting(req: AuthedRequest, res: Response): Promise<
         projectId,
         seriesId,
         repeat: body.repeat === 'none' ? null : body.repeat,
+        autoNotes: body.autoNotes,
         attendees: { create: attendees.map((a) => ({ userId: a.id })) },
       },
     })
@@ -261,6 +264,7 @@ const updateSchema = z.object({
   startsAt: z.coerce.date().optional(),
   endsAt: z.coerce.date().optional(),
   attendeeIds: z.array(z.string()).max(100).optional(),
+  autoNotes: z.boolean().optional(),
   series: z.boolean().default(false),
 })
 
@@ -300,6 +304,7 @@ export async function updateMeeting(req: AuthedRequest, res: Response): Promise<
       data: {
         title: body.title,
         agenda: body.agenda,
+        autoNotes: body.autoNotes,
         ...(timeChanged ? { startsAt: s, endsAt: new Date(s.getTime() + duration), reminderSentAt: null } : {}),
       },
     })

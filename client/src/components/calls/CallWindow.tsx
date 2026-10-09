@@ -317,7 +317,7 @@ function NotesPanel() {
       {!call.noteTaker ? (
         <div className="space-y-3">
           <p className="flex items-start gap-2 text-ink"><Sparkles size={16} className="mt-0.5 shrink-0 text-primary" /> The AI note taker writes down what everyone says. When you stop it or the call ends, you get a summary, decisions and action items in the chat.</p>
-          <p className="text-ink-muted">Everyone in the call sees that notes are on. Each person's own browser turns their voice into text (works in Chrome and Edge).</p>
+          <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Each person's microphone is turned into text with their name, and Urdu or mixed speech is written in English." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
           <LangPicker />
           <button type="button" disabled={busy} onClick={() => void toggle(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-btn bg-primary px-3 py-2 font-semibold text-white hover:bg-primary/90 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Start AI notes
@@ -347,8 +347,9 @@ function NotesPanel() {
 function TranscriberStatus() {
   const ctx = useCalls()!
   const call = ctx.call!
-  if (!speechSupported()) return <p className="rounded-btn bg-warning/15 px-2 py-1.5 text-amber-800">Your browser cannot turn speech into text, so your words are not in the notes. Use Chrome or Edge.</p>
   if (!call.mic) return <p className="text-ink-muted">Your microphone is muted, so nothing of yours is being written down.</p>
+  if (call.sttMode === 'server') return <p className="text-ink-muted">Your speech is being written down. Lines appear here a few seconds after you finish a sentence.</p>
+  if (!speechSupported()) return <p className="rounded-btn bg-warning/15 px-2 py-1.5 text-amber-800">Your browser cannot turn speech into text, so your words are not in the notes. Use Chrome or Edge.</p>
   if (ctx.transcriber === 'blocked') return <p className="rounded-btn bg-danger/10 px-2 py-1.5 text-danger">Speech-to-text was blocked. Allow the microphone for this site and try again.</p>
   if (ctx.transcriber === 'error') return <p className="text-amber-700">Speech-to-text hiccupped; it keeps retrying.</p>
   return <p className="text-ink-muted">Your speech is being written down.</p>
@@ -357,9 +358,9 @@ function TranscriberStatus() {
 function LangPicker() {
   const ctx = useCalls()!
   return (
-    <label className="flex items-center gap-2 text-ink-muted">
-      I am speaking
-      <select value={ctx.speechLang} onChange={(e) => ctx.setSpeechLang(e.target.value)} className="flex-1 rounded-btn border border-line bg-card px-2 py-1 text-ink">
+    <label className="flex flex-col gap-1 text-ink-muted">
+      I speak
+      <select value={ctx.speechLang} onChange={(e) => ctx.setSpeechLang(e.target.value)} className="w-full rounded-btn border border-line bg-card px-2 py-1 text-ink">
         {SPEECH_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
       </select>
     </label>

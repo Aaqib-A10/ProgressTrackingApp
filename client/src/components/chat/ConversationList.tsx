@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bell, BellOff, Hash, LogOut, Plus, Search, Users } from 'lucide-react'
+import { Bell, BellOff, Camera, LogOut, Plus, Search } from 'lucide-react'
 import { chatApi, visiblePoll, type ChatUser, type ConversationListItem } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { ApiError } from '../../lib/api'
@@ -8,6 +8,7 @@ import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
 import { PersonAvatar, fieldCls, fmtAgo } from '../projects/pmUi'
 import { cn } from '../../lib/cn'
+import { ChatPicture, PictureEditor } from '../ui/Pictures'
 
 /** Sidebar list of my conversations, grouped Project channels / Direct / Groups. */
 export function ConversationList({ activeId, onSelect, compact, refreshKey }: { activeId: string | null; onSelect: (id: string) => void; compact?: boolean; refreshKey?: number }) {
@@ -45,7 +46,7 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
                 <li key={c.id}>
                   <button type="button" onClick={() => onSelect(c.id)} className={cn('flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50', activeId === c.id && 'bg-primary/5')}>
                     {c.type === 'DIRECT' && c.other ? <PersonAvatar person={c.other} size={32} presence={c.other.presence} /> : (
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn text-white" style={{ backgroundColor: c.color ?? '#64748B' }}>{c.type === 'PROJECT' ? <Hash size={15} /> : <Users size={15} />}</span>
+                      <ChatPicture type={c.type} conversationId={c.id} projectKey={c.projectKey} color={c.color} size={32} />
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1">
@@ -122,9 +123,10 @@ export function NewChatModal({ onClose, onOpened }: { onClose: () => void; onOpe
 }
 
 /** Header actions for a conversation: mute + (groups) leave. */
-export function ConversationActions({ id, muted, isGroup, onChanged, onLeft }: { id: string; muted: boolean; isGroup: boolean; onChanged: () => void; onLeft: () => void }) {
+export function ConversationActions({ id, muted, isGroup, onChanged, onLeft, picture }: { id: string; muted: boolean; isGroup: boolean; onChanged: () => void; onLeft: () => void; picture?: { type: string; projectKey: string | null; color: string | null } }) {
   const { addToast } = useToast()
   const [open, setOpen] = useState(false)
+  const [picOpen, setPicOpen] = useState(false)
   const muteFor = async (hours: number | null) => {
     setOpen(false)
     try { await chatApi.mute(id, hours === null ? null : hours < 0 ? new Date(Date.now() + 3650 * 86400000).toISOString() : new Date(Date.now() + hours * 3600000).toISOString()); onChanged() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) }
@@ -142,8 +144,20 @@ export function ConversationActions({ id, muted, isGroup, onChanged, onLeft }: {
               <MenuBtn onClick={() => muteFor(-1)}>Mute until I turn it on</MenuBtn>
             </>
           )}
+          {picture && <MenuBtn onClick={() => { setOpen(false); setPicOpen(true) }}><Camera size={13} className="mr-1 inline" />Change picture</MenuBtn>}
           {isGroup && <MenuBtn danger onClick={async () => { setOpen(false); if (!window.confirm('Leave this group?')) return; try { await chatApi.leave(id); onLeft() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } }}><LogOut size={13} className="mr-1 inline" />Leave group</MenuBtn>}
         </div>
+      )}
+      {picOpen && picture && (
+        <Modal open onClose={() => setPicOpen(false)} title={picture.type === 'PROJECT' ? 'Project picture' : 'Group picture'} size="sm">
+          <PictureEditor
+            kind={picture.type === 'PROJECT' ? 'project' : 'chat'}
+            id={picture.type === 'PROJECT' ? picture.projectKey ?? '' : id}
+            label={picture.type === 'PROJECT' ? 'Project picture' : 'Group picture'}
+            preview={<ChatPicture type={picture.type} conversationId={id} projectKey={picture.projectKey} color={picture.color} size={72} />}
+          />
+          {picture.type === 'PROJECT' && <p className="mt-3 text-body-sm text-ink-muted">This is also the project's picture on the Projects page and board.</p>}
+        </Modal>
       )}
     </div>
   )

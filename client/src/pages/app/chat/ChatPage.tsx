@@ -77,7 +77,7 @@ export default function ChatPage() {
                 meId={user.id}
                 prefill={share ? `${share} ` : undefined}
                 onSent={() => { setRefresh((n) => n + 1); if (share) { const n = new URLSearchParams(params); n.delete('share'); setParams(n, { replace: true }) } }}
-                actions={detail && <ConversationActions id={active} muted={detail.muted} isGroup={detail.type === 'GROUP'} onChanged={() => setRefresh((n) => n + 1)} onLeft={() => { setActive(null); setParams({}); setRefresh((n) => n + 1) }} />}
+                actions={detail && <ConversationActions id={active} muted={detail.muted} isGroup={detail.type === 'GROUP'} picture={detail.canChangePicture ? { type: detail.type, projectKey: detail.project?.key ?? null, color: detail.project?.color ?? null } : undefined} onChanged={() => setRefresh((n) => n + 1)} onLeft={() => { setActive(null); setParams({}); setRefresh((n) => n + 1) }} />}
               />
             </div>
           </div>

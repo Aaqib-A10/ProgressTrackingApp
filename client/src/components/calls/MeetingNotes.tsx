@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, ClipboardCopy, HelpCircle, ListChecks, Loader2, RefreshCw, Sparkles, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { CheckCircle2, ChevronDown, ChevronRight, ClipboardCopy, Download, HelpCircle, ListChecks, Loader2, Plus, RefreshCw, Sparkles, Users } from 'lucide-react'
 import { callsApi, type CallNotesResponse } from '../../lib/callsApi'
-import { errMsg } from '../../lib/projectsApi'
+import { errMsg, projectsApi, type ProjectListItem } from '../../lib/projectsApi'
+import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { useToast } from '../ui/Toast'
 import { cn } from '../../lib/cn'
@@ -39,6 +41,7 @@ export function NotesContent({ callId }: { callId: string }) {
   const [err, setErr] = useState<string | null>(null)
   const [showTranscript, setShowTranscript] = useState(false)
   const [retrying, setRetrying] = useState(false)
+  const [makeTask, setMakeTask] = useState<number | null>(null)
 
   const load = useCallback(() => callsApi.notes(callId).then((r) => { setD(r); setErr(null) }).catch((e) => setErr(errMsg(e, 'Could not load the notes'))), [callId])
   useEffect(() => { void load() }, [load])
@@ -63,14 +66,19 @@ export function NotesContent({ callId }: { callId: string }) {
         <button type="button" onClick={() => { void navigator.clipboard.writeText(notesAsText(d)).then(() => addToast({ type: 'success', message: 'Notes copied' })) }} className="ml-auto inline-flex items-center gap-1.5 rounded-btn border border-line px-2.5 py-1 font-semibold text-ink hover:bg-slate-50">
           <ClipboardCopy size={14} /> Copy notes
         </button>
+        {d.transcript.length > 0 && (
+          <button type="button" onClick={() => downloadText(`${d.call.title} transcript ${d.call.startedAt.slice(0, 10)}.txt`, notesAsText(d))} className="inline-flex items-center gap-1.5 rounded-btn border border-line px-2.5 py-1 font-semibold text-ink hover:bg-slate-50">
+            <Download size={14} /> Download
+          </button>
+        )}
       </div>
 
       {(d.status === 'pending' || d.status === 'recording') && (
         <div className="flex items-center gap-2 rounded-btn bg-primary/5 px-3 py-2 text-body-sm text-primary">
-          <Loader2 size={15} className="animate-spin" /> {d.status === 'recording' ? 'The note taker is still listening. Notes are written when it stops or the call ends.' : 'Writing the notes…'}
+          <Loader2 size={15} className="animate-spin" /> {d.status === 'recording' ? 'The note taker is still listening. Notes are written when it stops or the call ends.' : d.piecesLeft > 0 ? `Turning the last ${d.piecesLeft} piece${d.piecesLeft === 1 ? '' : 's'} of speech into text, then writing the notes…` : 'Writing the notes…'}
         </div>
       )}
-      {d.status === 'no-ai' && <div className="rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">The AI summary is not switched on for PulseTrack yet, so here is the full transcript. (Admin: add ANTHROPIC_API_KEY on the server.)</div>}
+      {d.status === 'no-ai' && <div className="rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">The AI summary is not switched on for PulseTrack yet, so here is the full transcript. (Admin: add GROQ_API_KEY on the server.)</div>}
       {d.status === 'failed' && <div className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">The summary could not be written{d.error ? `: ${d.error}` : ''}.</div>}
       {d.status === 'empty' && <div className="rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">The note taker did not hear anyone speak.</div>}
       {(d.status === 'failed' || d.status === 'no-ai') && d.transcript.length > 0 && (
@@ -92,13 +100,18 @@ export function NotesContent({ callId }: { callId: string }) {
               <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink"><ListChecks size={15} className="text-warning" /> Action items</h3>
               <div className="overflow-hidden rounded-btn border border-line">
                 <table className="w-full text-body-sm">
-                  <thead className="bg-slate-50 text-left text-ink-muted"><tr><th className="px-3 py-1.5 font-semibold">Who</th><th className="px-3 py-1.5 font-semibold">What</th><th className="px-3 py-1.5 font-semibold">When</th></tr></thead>
+                  <thead className="bg-slate-50 text-left text-ink-muted"><tr><th className="px-3 py-1.5 font-semibold">Who</th><th className="px-3 py-1.5 font-semibold">What</th><th className="px-3 py-1.5 font-semibold">When</th><th className="px-3 py-1.5" /></tr></thead>
                   <tbody>
                     {n.actionItems.map((a, i) => (
                       <tr key={i} className="border-t border-line align-top">
                         <td className="whitespace-nowrap px-3 py-1.5 font-medium text-ink">{a.owner ?? '·'}</td>
                         <td className="px-3 py-1.5 text-ink">{a.task}</td>
                         <td className="whitespace-nowrap px-3 py-1.5 text-ink-muted">{a.due ?? ''}</td>
+                        <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                          {a.taskCode
+                            ? <Link to={`/app/projects/${encodeURIComponent(a.taskCode.replace(/-\d+$/, ''))}?task=${encodeURIComponent(a.taskCode)}`} className="font-mono text-[12px] font-semibold text-primary hover:underline">{a.taskCode}</Link>
+                            : <button type="button" onClick={() => setMakeTask(i)} className="inline-flex items-center gap-1 rounded-btn border border-line px-2 py-0.5 text-[12px] font-semibold text-ink hover:bg-slate-50"><Plus size={12} /> Task</button>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -117,6 +130,10 @@ export function NotesContent({ callId }: { callId: string }) {
             <video key={r.id} controls preload="metadata" className="mb-2 w-full rounded-btn border border-line bg-black" src={`${API}${r.url.replace(/^\/api/, '')}?inline=1`} />
           ))}
         </section>
+      )}
+
+      {makeTask !== null && n?.actionItems[makeTask] && (
+        <TaskFromActionModal callId={callId} index={makeTask} item={n.actionItems[makeTask]} meetingTitle={d.call.title} onClose={() => setMakeTask(null)} onDone={() => { setMakeTask(null); void load() }} />
       )}
 
       {d.transcript.length > 0 && (
@@ -154,6 +171,90 @@ export function NotesModal({ callId, title, onClose }: { callId: string; title?:
   return (
     <Modal open onClose={onClose} title={title ?? 'Meeting notes'} size="lg">
       <NotesContent callId={callId} />
+    </Modal>
+  )
+}
+
+function downloadText(name: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name.replace(/[\\/:*?"<>|]/g, ' ')
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
+
+/** Turn one action item into a task on a project board, assigned to the person named. */
+function TaskFromActionModal({ callId, index, item, meetingTitle, onClose, onDone }: { callId: string; index: number; item: { owner: string | null; task: string; due: string | null; dueDate?: string | null }; meetingTitle: string; onClose: () => void; onDone: () => void }) {
+  const { addToast } = useToast()
+  const [projects, setProjects] = useState<ProjectListItem[]>([])
+  const [key, setKey] = useState('')
+  const [members, setMembers] = useState<{ userId: string; name: string }[]>([])
+  const [assignee, setAssignee] = useState('')
+  const [title, setTitle] = useState(item.task)
+  const [due, setDue] = useState(item.dueDate ?? (/^\d{4}-\d{2}-\d{2}/.test(item.due ?? '') ? item.due!.slice(0, 10) : ''))
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    projectsApi.list().then((r) => {
+      const can = r.projects.filter((p) => p.myRole === 'ADMIN' || p.myRole === 'MEMBER')
+      setProjects(can)
+      // A project named in the meeting title is the likely home.
+      const guess = can.find((p) => meetingTitle.toLowerCase().includes(p.key.toLowerCase()) || meetingTitle.toLowerCase().includes(p.name.toLowerCase())) ?? can[0]
+      if (guess) setKey(guess.key)
+    }).catch(() => undefined)
+  }, [meetingTitle])
+  useEffect(() => {
+    if (!key) return
+    projectsApi.members(key).then((r) => {
+      const list = r.members.filter((m) => m.isActive && m.role !== 'VIEWER')
+      setMembers(list)
+      const owner = (item.owner ?? '').toLowerCase()
+      const first = owner.split(' ')[0]
+      const hit = owner ? list.find((m) => m.name.toLowerCase() === owner) ?? list.find((m) => first && m.name.toLowerCase().split(' ')[0] === first) : undefined
+      setAssignee(hit?.userId ?? '')
+    }).catch(() => setMembers([]))
+  }, [key, item.owner])
+
+  async function create() {
+    if (!key || !title.trim()) return
+    setBusy(true)
+    try {
+      const r = await projectsApi.createTask(key, {
+        title: title.trim().slice(0, 200),
+        description: `From the meeting notes of "${meetingTitle}".`,
+        assigneeIds: assignee ? [assignee] : [],
+        dueAt: due ? new Date(`${due}T18:00:00`).toISOString() : null,
+      })
+      await callsApi.linkActionItem(callId, index, r.task.code)
+      addToast({ type: 'success', message: `Task ${r.task.code} created` })
+      onDone()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not create the task') })
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Make this a task" size="sm" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={create} disabled={busy || !key || !title.trim()}>{busy ? 'Creating…' : 'Create task'}</Button></>}>
+      <div className="space-y-3 text-body-sm">
+        <label className="block"><span className="mb-1 block font-semibold text-ink">Task</span>
+          <textarea value={title} onChange={(e) => setTitle(e.target.value)} rows={2} className="w-full rounded-btn border border-line px-2 py-1.5 text-body-md focus:border-primary focus:outline-none" />
+        </label>
+        <label className="block"><span className="mb-1 block font-semibold text-ink">Project</span>
+          <select value={key} onChange={(e) => setKey(e.target.value)} className="h-9 w-full rounded-btn border border-line bg-card px-2">
+            {projects.length === 0 && <option value="">No projects you can add tasks to</option>}
+            {projects.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="mb-1 block font-semibold text-ink">Assign to {item.owner ? <span className="font-normal text-ink-muted">(notes say: {item.owner})</span> : null}</span>
+          <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="h-9 w-full rounded-btn border border-line bg-card px-2">
+            <option value="">Nobody yet</option>
+            {members.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="mb-1 block font-semibold text-ink">Due date {item.due ? <span className="font-normal text-ink-muted">(notes say: {item.due})</span> : null}</span>
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="h-9 w-full rounded-btn border border-line px-2" />
+        </label>
+      </div>
     </Modal>
   )
 }

@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { callsApi, leaveOnUnload, type ActiveCall } from '../../lib/callsApi'
 import { CallEngine, type CallSnapshot, type Reaction } from '../../lib/callEngine'
 import { CallRecorder, type RecorderState } from '../../lib/callRecorder'
-import { Transcriber, getSpeechLang, setSpeechLang as saveSpeechLang, type TranscriberState } from '../../lib/transcriber'
+import { Transcriber, getSpeechLang, setSpeechLang as saveSpeechLang, speechSupported, type TranscriberState } from '../../lib/transcriber'
+import { SpeechRecorder, serverSpeechSupported, type SpeechMode } from '../../lib/speechRecorder'
 import { chatApi } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import * as desktop from '../../lib/desktopAlerts'
@@ -75,6 +76,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
   const recorder = useRef<CallRecorder | null>(null)
   const [recState, setRecState] = useState<RecorderState>('idle')
   const transcriber = useRef<Transcriber | null>(null)
+  const speechRec = useRef<SpeechRecorder | null>(null)
   const [transcriberState, setTranscriberState] = useState<TranscriberState>('off')
   const [speechLang, setSpeechLangState] = useState(getSpeechLang)
   const [captionsOn, setCaptionsOn] = useState(true)
@@ -169,6 +171,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     // A running recording keeps saving in the background after you leave.
     if (recorder.current?.recording) stopRecording()
     transcriber.current?.stop()
+    void speechRec.current?.stop() // sends my last words for the notes
     void e.leave().then(() => refreshActive())
   }, [refreshActive, stopRecording])
 
@@ -204,17 +207,38 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not add them') }) }
   }, [addToast])
 
-  // The note taker: my browser writes down what I say while it is on (and my mic is on).
+  // The note taker. Server mode (Groq): my microphone is sent in short pieces and turned
+  // into text on the server; the browser's own recognition only adds fast live captions.
+  // Browser mode: the browser's recognition writes the notes itself.
   const noteOn = !!call && call.status === 'live' && call.noteTaker
   const micOn = !!call?.mic
+  const serverStt = call?.sttMode === 'server'
   useEffect(() => {
     const e = engine.current
-    if (!noteOn || !micOn || !e) { transcriber.current?.stop(); transcriber.current = null; return }
-    const t = new Transcriber(e.snapshot.callId, speechLang, setTranscriberState)
-    transcriber.current = t
-    t.start()
-    return () => { t.stop(); if (transcriber.current === t) transcriber.current = null }
-  }, [noteOn, micOn, speechLang, call?.callId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!noteOn || !micOn || !e) return
+    const callId = e.snapshot.callId
+    let t: Transcriber | null = null
+    if (speechSupported()) {
+      t = new Transcriber(callId, speechLang, serverStt ? (st) => { if (st !== 'unsupported') setTranscriberState(st === 'error' ? 'listening' : st) } : setTranscriberState, serverStt)
+      transcriber.current = t
+      t.start()
+    } else if (!serverStt) {
+      setTranscriberState('unsupported')
+    }
+    let r: SpeechRecorder | null = null
+    if (serverStt && e.micTrack && serverSpeechSupported()) {
+      r = new SpeechRecorder(callId, e.micTrack, speechLang as SpeechMode, (msg) => addToast({ type: 'warning', message: msg }))
+      speechRec.current = r
+      r.start()
+      setTranscriberState('listening')
+    }
+    return () => {
+      t?.stop()
+      if (transcriber.current === t) transcriber.current = null
+      void r?.stop()
+      if (speechRec.current === r) speechRec.current = null
+    }
+  }, [noteOn, micOn, speechLang, serverStt, call?.callId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!noteOn) setTranscriberState('off') }, [noteOn])
 
   // Tell me when someone raises a hand, starts recording, or turns the note taker on.

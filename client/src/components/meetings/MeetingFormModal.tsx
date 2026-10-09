@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Repeat, Search, Users, X } from 'lucide-react'
+import { CalendarDays, Repeat, Search, Sparkles, Users, X } from 'lucide-react'
 import { chatApi, type ChatUser } from '../../lib/chatApi'
 import { meetingsApi, type Meeting, type RepeatKind } from '../../lib/meetingsApi'
 import { projectsApi, errMsg, type ProjectListItem } from '../../lib/projectsApi'
@@ -45,6 +45,7 @@ export function MeetingFormModal({ meeting, initialStart, initialAttendees, onCl
   const [count, setCount] = useState(4)
   const [projectKey, setProjectKey] = useState<string>(meeting?.project?.key ?? '')
   const [series, setSeries] = useState(false)
+  const [autoNotes, setAutoNotes] = useState(meeting?.autoNotes ?? true)
   const [users, setUsers] = useState<ChatUser[]>([])
   const [projects, setProjects] = useState<ProjectListItem[]>([])
   const [q, setQ] = useState('')
@@ -87,11 +88,11 @@ export function MeetingFormModal({ meeting, initialStart, initialAttendees, onCl
     setSaving(true)
     try {
       if (meeting) {
-        const r = await meetingsApi.update(meeting.id, { title: title.trim(), agenda, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), attendeeIds: people, series })
+        const r = await meetingsApi.update(meeting.id, { title: title.trim(), agenda, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), attendeeIds: people, series, autoNotes })
         addToast({ type: 'success', message: 'Meeting updated. Everyone has been told.' })
         onSaved(r.meeting)
       } else {
-        const r = await meetingsApi.create({ title: title.trim(), agenda, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), attendeeIds: people, projectKey: projectKey || null, repeat, repeatCount: repeat === 'none' ? 1 : count })
+        const r = await meetingsApi.create({ title: title.trim(), agenda, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), attendeeIds: people, projectKey: projectKey || null, repeat, repeatCount: repeat === 'none' ? 1 : count, autoNotes })
         addToast({ type: 'success', message: people.length ? `Meeting scheduled. ${people.length} ${people.length === 1 ? 'person has' : 'people have'} been invited.` : 'Meeting scheduled.' })
         onSaved(r.meeting)
       }
@@ -190,6 +191,11 @@ export function MeetingFormModal({ meeting, initialStart, initialAttendees, onCl
             <label className="inline-flex items-center gap-1.5"><input type="radio" checked={series} onChange={() => setSeries(true)} /> This and all after it</label>
           </div>
         ) : null}
+
+        <label className="flex items-start gap-2.5 rounded-btn border border-line p-3 text-body-sm">
+          <input type="checkbox" checked={autoNotes} onChange={(e) => setAutoNotes(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+          <span><span className="flex items-center gap-1.5 font-semibold text-ink"><Sparkles size={14} className="text-primary" /> Take AI notes automatically</span><span className="text-ink-muted">When the meeting starts, the note taker turns on by itself. Afterwards everyone gets the summary, decisions and action items in the meeting chat.</span></span>
+        </label>
 
         <TextArea label="Agenda (optional)" value={agenda} onChange={(e) => setAgenda(e.target.value)} rows={4} maxLength={5000} placeholder={'What do you want to cover?\n1. …\n2. …'} />
         {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{error}</p>}

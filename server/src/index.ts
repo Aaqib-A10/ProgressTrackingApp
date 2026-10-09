@@ -8,7 +8,7 @@ import { startTaskReminders } from './lib/taskReminders'
 import { startPmDeadlines } from './lib/pm/deadlines'
 import { startCallSweeper, setOnCallEnded } from './lib/pm/calls'
 import { startMeetingReminders } from './lib/pm/meetings'
-import { generateNotes } from './lib/pm/notes'
+import { scheduleNotes } from './controllers/chatController'
 
 const PORT = Number(process.env.PORT) || 4000
 
@@ -40,8 +40,5 @@ app.listen(PORT, () => {
   startCallSweeper()
   startMeetingReminders()
   // When a call with the AI note taker on ends, write its notes.
-  setOnCallEnded((c) => {
-    // eslint-disable-next-line no-console
-    if (c.noteTaker) void generateNotes(c.callId).catch((e) => console.error('[notes]', e))
-  })
+  setOnCallEnded((c) => { if (c.noteTaker) scheduleNotes(c.callId) })
 })

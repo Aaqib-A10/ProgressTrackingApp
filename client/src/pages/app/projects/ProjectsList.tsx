@@ -10,6 +10,7 @@ import { useAuth } from '../../../lib/auth'
 import { errMsg, projectsApi, type PickUser, type PmRole, type ProjectListItem } from '../../../lib/projectsApi'
 import { AvatarStack, ROLE_META, SWATCHES, fieldCls } from '../../../components/projects/pmUi'
 import { cn } from '../../../lib/cn'
+import { ProjectPicture } from '../../../components/ui/Pictures'
 import { NotificationPrefsModal } from '../../../components/projects/NotificationPrefsModal'
 
 /** /app/projects — every project I'm a member of (all of them for a Super Admin). */
@@ -86,7 +87,7 @@ export default function ProjectsList() {
               className="group flex flex-col rounded-card border border-line bg-card p-5 text-left shadow-card transition-shadow hover:shadow-overlay focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
             >
               <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn text-body-sm font-bold text-white" style={{ backgroundColor: p.color }}>{p.key.slice(0, 3)}</span>
+                <ProjectPicture project={p} size={40} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-body-lg font-semibold text-ink group-hover:text-primary">{p.name}</h2>

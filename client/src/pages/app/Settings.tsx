@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { TextField, PasswordField } from '../../components/ui/Input'
 import { Toggle } from '../../components/ui/Toggle'
 import { Avatar } from '../../components/layout/Sidebar'
+import { PictureEditor } from '../../components/ui/Pictures'
 import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
 import { api, ApiError } from '../../lib/api'
@@ -82,8 +83,8 @@ export default function Settings() {
 
       {/* Profile */}
       <Card title="Profile">
-        <div className="mb-5 flex items-center gap-4">
-          <Avatar user={user} size={56} />
+        <div className="mb-5 flex flex-wrap items-center gap-6">
+          <PictureEditor kind="user" id={user.id} label="Profile picture" preview={<Avatar user={user} size={72} />} />
           <div>
             <div className="text-headline-md text-ink">{user.name}</div>
             <div className="text-body-sm text-ink-muted">{user.email}</div>

@@ -12,6 +12,7 @@ import { BoardView } from './BoardView'
 import { ListView } from './ListView'
 import { ReviewsView } from './ReviewsView'
 import { CreateTaskModal } from './CreateTaskModal'
+import { ProjectPicture } from '../../../components/ui/Pictures'
 import { TaskDrawer } from './TaskDrawer'
 
 /**
@@ -167,7 +168,7 @@ export default function ProjectBoard() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn text-body-sm font-bold text-white" style={{ backgroundColor: project.color }}>{project.key.slice(0, 3)}</span>
+        <ProjectPicture project={project} size={40} />
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-body-sm text-ink-muted"><Link to="/app/projects" className="hover:text-ink">Projects</Link><span>/</span><span>{project.key}</span></div>
           <h1 className="truncate text-headline-lg leading-tight text-ink">{project.name}{project.status === 'ARCHIVED' && <span className="ml-2 align-middle text-body-sm font-medium text-ink-muted">(archived)</span>}</h1>

@@ -1,29 +1,87 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
+import { chatJson, groqEnabled } from './groq'
+import * as Stt from './stt'
 
 /**
  * AI meeting notes.
  *
- * While the note taker is on, each person's browser turns their own microphone into
- * text and sends finished sentences here (CallTranscriptLine), so every line already
- * has the right speaker name. When the call ends (or someone presses "Stop notes"),
- * the transcript is summarised with the Claude API into: summary, key points,
- * decisions, action items (owner, task, due) and open questions.
+ * While the note taker is on, each person's own microphone is turned into text with the
+ * right speaker name (CallTranscriptLine): with GROQ_API_KEY set, on the server with Groq
+ * Whisper (see stt.ts); otherwise by the browser's built-in speech recognition. When the
+ * call ends (or someone presses "Stop notes"), the transcript is summarised into:
+ * summary, key points, decisions, action items (owner, task, due) and open questions.
  *
- * Needs ANTHROPIC_API_KEY in server/.env. Without it the transcript is still kept and
- * shown, the summary part just says it is not set up. ANTHROPIC_MODEL picks the model.
+ * Writer: Groq (GROQ_API_KEY, free tier) first, else Claude (ANTHROPIC_API_KEY). With
+ * neither, the transcript is still kept and shown. Long meetings are summarised in parts
+ * and then combined, so they fit the free tier's per-minute token limit.
  */
+
+export interface ActionItem { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }
 
 export interface MeetingNotes {
   summary: string
   keyPoints: string[]
   decisions: string[]
-  actionItems: { owner: string | null; task: string; due: string | null }[]
+  actionItems: ActionItem[]
   openQuestions: string[]
 }
 
+/** Which AI writes the notes (null = none set up). */
+export function notesProvider(): 'groq' | 'anthropic' | null {
+  if (groqEnabled()) return 'groq'
+  if (process.env.ANTHROPIC_API_KEY) return 'anthropic'
+  return null
+}
+
 const DEFAULT_MODEL = 'claude-sonnet-5-5'
-const MAX_TRANSCRIPT_CHARS = 180_000
+const MAX_TRANSCRIPT_CHARS = 400_000
+
+const SYSTEM =
+  'You write meeting notes for a busy team. Be accurate: only include what was actually said in the transcript. ' +
+  'The transcript was produced by speech recognition, so fix obvious recognition mistakes silently. ' +
+  'People may speak English, Urdu or a mix; always write the notes in clear, simple English. ' +
+  'Answer with one JSON object and nothing else.'
+
+const KEYS_SPEC = `Return JSON with exactly these keys:
+{
+  "summary": "3 to 6 sentences: what the meeting was about and where things landed",
+  "keyPoints": ["the main points discussed, one short sentence each"],
+  "decisions": ["each decision that was clearly made"],
+  "actionItems": [{ "owner": "person's name or null", "task": "what they will do", "due": "when, as said in the meeting, or null", "dueDate": "that day as YYYY-MM-DD worked out from the meeting date, or null" }],
+  "openQuestions": ["questions left unanswered or things to follow up"]
+}
+Use empty arrays when there is nothing for a key.`
+
+/** Split a long transcript at line breaks into parts of about `size` characters. */
+export function splitTranscript(text: string, size: number): string[] {
+  if (text.length <= size) return [text]
+  const parts: string[] = []
+  let cur = ''
+  for (const line of text.split('\n')) {
+    if (cur && cur.length + line.length + 1 > size) { parts.push(cur); cur = '' }
+    cur += (cur ? '\n' : '') + line
+  }
+  if (cur) parts.push(cur)
+  return parts
+}
+
+async function ask(system: string, prompt: string): Promise<string> {
+  return notesProvider() === 'groq' ? chatJson(system, prompt) : askClaude(prompt)
+}
+
+/** Write the notes: in one go, or part by part and then combined for long meetings. */
+async function writeNotes(ctx: { title: string; agenda: string; people: string[]; transcript: string; date?: string }): Promise<MeetingNotes> {
+  const size = Number(process.env.NOTES_CHUNK_CHARS ?? (notesProvider() === 'groq' ? 14_000 : 150_000))
+  const parts = splitTranscript(ctx.transcript, size)
+  if (parts.length === 1) return parseNotes(await ask(SYSTEM, buildPrompt(ctx)))
+  const partial: MeetingNotes[] = []
+  for (let i = 0; i < parts.length; i++) {
+    partial.push(parseNotes(await ask(SYSTEM, buildPrompt({ ...ctx, transcript: parts[i] }, `This is part ${i + 1} of ${parts.length} of the transcript. Write notes for this part only.`))))
+  }
+  const merge = `Meeting: ${ctx.title}\nThese are notes written for each part of one meeting, in order:\n${JSON.stringify(partial)}\n\nCombine them into the notes for the whole meeting. Remove repeats; keep every distinct decision and action item.\n${KEYS_SPEC}`
+  return parseNotes(await ask(SYSTEM, merge))
+}
 
 function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -56,7 +114,8 @@ export function parseNotes(text: string): MeetingNotes {
     decisions: asStrings(j.decisions),
     actionItems: items.slice(0, 40).map((a) => {
       const o = (a ?? {}) as Record<string, unknown>
-      return { owner: o.owner ? String(o.owner) : null, task: String(o.task ?? '').trim(), due: o.due ? String(o.due) : null }
+      const dueDate = typeof o.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.dueDate) ? o.dueDate : null
+      return { owner: o.owner ? String(o.owner) : null, task: String(o.task ?? '').trim(), due: o.due ? String(o.due) : null, dueDate }
     }).filter((a) => a.task),
     openQuestions: asStrings(j.openQuestions),
   }
@@ -71,11 +130,7 @@ async function askClaude(prompt: string): Promise<string> {
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
       max_tokens: 4000,
-      system:
-        'You write meeting notes for a busy team. Be accurate: only include what was actually said in the transcript. ' +
-        'The transcript was produced by speech recognition, so fix obvious recognition mistakes silently. ' +
-        'People may speak English, Urdu or a mix; always write the notes in clear, simple English. ' +
-        'Answer with one JSON object and nothing else.',
+      system: SYSTEM,
       messages: [{ role: 'user', content: prompt }],
     }),
   })
@@ -84,22 +139,14 @@ async function askClaude(prompt: string): Promise<string> {
   return (j.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('')
 }
 
-function buildPrompt(ctx: { title: string; agenda: string; people: string[]; transcript: string }): string {
-  return `Meeting: ${ctx.title}
+function buildPrompt(ctx: { title: string; agenda: string; people: string[]; transcript: string; date?: string }, note = ''): string {
+  return `Meeting: ${ctx.title}${ctx.date ? ` (held on ${ctx.date})` : ''}
 ${ctx.agenda ? `Agenda:\n${ctx.agenda}\n` : ''}People in the call: ${ctx.people.join(', ') || 'unknown'}
-
+${note}
 Transcript (time from the start of the call, speaker, words):
 ${ctx.transcript}
 
-Return JSON with exactly these keys:
-{
-  "summary": "3 to 6 sentences: what the meeting was about and where things landed",
-  "keyPoints": ["the main points discussed, one short sentence each"],
-  "decisions": ["each decision that was clearly made"],
-  "actionItems": [{ "owner": "person's name or null", "task": "what they will do", "due": "when, as said in the meeting, or null" }],
-  "openQuestions": ["questions left unanswered or things to follow up"]
-}
-Use empty arrays when there is nothing for a key.`
+${KEYS_SPEC}`
 }
 
 /**
@@ -112,6 +159,8 @@ export async function generateNotes(callId: string, opts: { force?: boolean } = 
     data: { notesStatus: 'pending' },
   })
   if (!claim.count) return
+  // Pieces of speech may still be on their way to text: wait for them first.
+  await Stt.waitForCall(callId)
   const call = await prisma.chatCall.findUnique({
     where: { id: callId },
     include: {
@@ -130,8 +179,9 @@ export async function generateNotes(callId: string, opts: { force?: boolean } = 
   let status = 'ready'
   let notes: MeetingNotes | { error: string } | null = null
   try {
-    const answer = await askClaude(buildPrompt({ title, agenda: call.meeting?.agenda ?? '', people, transcript: transcriptText(call.startedAt, call.transcript) }))
-    notes = parseNotes(answer)
+    if (!notesProvider()) throw new Error('no-key')
+    const date = call.startedAt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: process.env.APP_TIMEZONE || 'Asia/Karachi' })
+    notes = await writeNotes({ title, agenda: call.meeting?.agenda ?? '', people, transcript: transcriptText(call.startedAt, call.transcript), date })
   } catch (e) {
     const msg = (e as Error).message
     status = msg === 'no-key' ? 'no-ai' : 'failed'
@@ -140,6 +190,14 @@ export async function generateNotes(callId: string, opts: { force?: boolean } = 
       // eslint-disable-next-line no-console
       console.error('[notes] summary failed:', msg)
     }
+  }
+  // Written again ("Try again"): keep the tasks already made from action items.
+  const old = call.notes as unknown as MeetingNotes | null
+  if (notes && 'actionItems' in notes && old?.actionItems?.length) {
+    const made = new Map(old.actionItems.filter((x) => x.taskCode).map((x) => [x.task.trim().toLowerCase(), x.taskCode]))
+    notes.actionItems = notes.actionItems.map((x) => ({ ...x, taskCode: made.get(x.task.trim().toLowerCase()) ?? null }))
+    const leftover = old.actionItems.filter((x) => x.taskCode && !notes!.actionItems.some((y) => y.taskCode === x.taskCode))
+    notes.actionItems.push(...(leftover as ActionItem[]))
   }
   await prisma.chatCall.update({ where: { id: callId }, data: { notesStatus: status, notes: notes ? (notes as unknown as Prisma.InputJsonValue) : Prisma.DbNull } })
   // Post the notes card in the chat once (not again on "Try again").

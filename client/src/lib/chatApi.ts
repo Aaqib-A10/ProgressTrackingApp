@@ -26,6 +26,7 @@ export interface ConversationDetail {
   name: string | null
   project: { key: string; name: string; color: string } | null
   canManage: boolean
+  canChangePicture?: boolean
   muted: boolean
   mutedUntil: string | null
   members: { id: string; name: string; email: string; isAdmin: boolean; presence: Presence; lastReadSeq: number }[]

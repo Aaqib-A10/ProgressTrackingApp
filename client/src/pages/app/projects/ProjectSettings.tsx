@@ -10,6 +10,7 @@ import { useToast } from '../../../components/ui/Toast'
 import { CATEGORY_LABEL, PersonAvatar, ROLE_META, SWATCHES, fieldCls } from '../../../components/projects/pmUi'
 import { LabelChip } from '../../../components/projects/Pickers'
 import { errMsg, projectsApi, type BoardColumn, type BoardData, type ColumnCategory, type PickUser, type PmRole } from '../../../lib/projectsApi'
+import { PictureEditor, ProjectPicture } from '../../../components/ui/Pictures'
 import { cn } from '../../../lib/cn'
 
 type Tab = 'general' | 'members' | 'columns' | 'labels' | 'notifications'
@@ -78,6 +79,7 @@ function General({ data, onSaved }: { data: BoardData; onSaved: () => void }) {
     <div className="space-y-5">
       <Card>
         <div className="space-y-4">
+          <PictureEditor kind="project" id={p.key} label="Project picture" preview={<ProjectPicture project={{ key: p.key, color }} size={72} />} />
           <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
             <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} />
             <TextField label="Key" value={key} disabled={keyLocked} onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))} />

@@ -26,6 +26,7 @@ import { inventoryRouter } from './routes/inventory'
 import { projectsRouter } from './routes/projects'
 import { chatRouter } from './routes/chat'
 import { meetingsRouter } from './routes/meetings'
+import { avatarsRouter } from './routes/avatars'
 
 /**
  * Builds the Express app. Kept separate from index.ts so tests can import
@@ -89,6 +90,7 @@ export function createApp(): Express {
   app.use('/api/projects', projectsRouter)
   app.use('/api/chat', chatRouter)
   app.use('/api/meetings', meetingsRouter)
+  app.use('/api/avatars', avatarsRouter)
 
   // Fallback 404 for unknown API paths.
   app.use((_req, res) => {

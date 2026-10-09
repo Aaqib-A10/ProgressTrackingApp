@@ -32,16 +32,21 @@ export function speechSupported(): boolean {
   return typeof window !== 'undefined' && !!ctor()
 }
 
+/** What people speak in the call. "mixed" = Urdu, English or both, written in English. */
 export const SPEECH_LANGS = [
-  { code: 'en-US', label: 'English (US)' },
-  { code: 'en-GB', label: 'English (UK)' },
-  { code: 'en-IN', label: 'English (South Asia)' },
-  { code: 'ur-PK', label: 'Urdu' },
+  { code: 'mixed', label: 'Urdu and English mixed (notes in English)', browser: 'en-IN' },
+  { code: 'en', label: 'English only', browser: 'en-US' },
+  { code: 'ur', label: 'Urdu (keep Urdu script)', browser: 'ur-PK' },
 ]
 
-const LANG_KEY = 'pt-speech-lang'
+/** Language code for the browser's own speech recognition (live captions). */
+export function browserLang(code: string): string {
+  return SPEECH_LANGS.find((l) => l.code === code)?.browser ?? 'en-US'
+}
+
+const LANG_KEY = 'pt-speech-mode'
 export function getSpeechLang(): string {
-  try { return localStorage.getItem(LANG_KEY) || 'en-US' } catch { return 'en-US' }
+  try { const v = localStorage.getItem(LANG_KEY); return SPEECH_LANGS.some((l) => l.code === v) ? v! : 'mixed' } catch { return 'mixed' }
 }
 export function setSpeechLang(code: string): void {
   try { localStorage.setItem(LANG_KEY, code) } catch { /* ignore */ }
@@ -55,7 +60,8 @@ export class Transcriber {
   private lastInterim = 0
   private restartTimer: number | undefined
 
-  constructor(private callId: string, private lang: string, private onState: (s: TranscriberState) => void) {}
+  /** captionsOnly: the server writes the notes from audio, so finished sentences here are only live captions. */
+  constructor(private callId: string, private lang: string, private onState: (s: TranscriberState) => void, private captionsOnly = false) {}
 
   start(): void {
     const C = ctor()
@@ -67,7 +73,7 @@ export class Transcriber {
 
   private open(C: Ctor) {
     const r = new C()
-    r.lang = this.lang
+    r.lang = browserLang(this.lang)
     r.continuous = true
     r.interimResults = true
     r.onresult = (e) => {
@@ -76,7 +82,7 @@ export class Transcriber {
         const res = e.results[i]
         const text = res[0].transcript.trim()
         if (!text) continue
-        if (res.isFinal) void callsApi.transcript(this.callId, text, true).catch(() => undefined)
+        if (res.isFinal) void callsApi.transcript(this.callId, text, !this.captionsOnly).catch(() => undefined)
         else interim += (interim ? ' ' : '') + text
       }
       // Live captions: at most about once a second.

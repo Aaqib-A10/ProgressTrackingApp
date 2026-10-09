@@ -126,7 +126,7 @@ export default function MeetingPage() {
           {data.isAttendee && (
             <section className="rounded-card border border-line bg-card p-5">
               <h2 className="mb-1 flex items-center gap-1.5 text-body-lg font-semibold text-ink"><Sparkles size={17} className="text-primary" /> Notes and recordings</h2>
-              <p className="mb-3 text-body-sm text-ink-muted">Turn on AI notes in the call (sparkle button) to get a summary, decisions and action items here.</p>
+              <p className="mb-3 text-body-sm text-ink-muted">{m.autoNotes ? 'AI notes start by themselves when this meeting starts.' : 'Turn on AI notes in the call (sparkle button) to get a summary, decisions and action items here.'}</p>
               {data.calls.length === 0 ? <p className="text-body-md text-ink-muted">Nothing yet. They show up here after the meeting.</p> : (
                 <ul className="space-y-3">
                   {data.calls.map((c) => (

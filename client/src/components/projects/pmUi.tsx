@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronsUp, Minus } from 'lucide-react'
 import type { ColumnCategory, PersonRef, PmPriority, PmRole } from '../../lib/projectsApi'
 import { cn } from '../../lib/cn'
+import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
 
 // Small shared pieces for the Projects screens (cards, drawer, lists).
 
@@ -38,14 +39,19 @@ export const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).map((p) 
 
 export function PersonAvatar({ person, size = 24, ring, presence }: { person: PersonRef; size?: number; ring?: boolean; presence?: 'online' | 'away' | 'offline' | 'busy' }) {
   const c = colorFor(person.id)
+  const url = avatarUrl(useAvatarIndex(), 'user', person.id)
   return (
     <span className="relative inline-flex shrink-0" title={person.name}>
-      <span
-        className={cn('inline-flex items-center justify-center rounded-full font-semibold text-white', ring && 'ring-2 ring-card')}
-        style={{ width: size, height: size, backgroundColor: c, fontSize: Math.max(9, Math.round(size * 0.4)) }}
-      >
-        {initialsOf(person.name)}
-      </span>
+      {url ? (
+        <img src={url} alt={person.name} loading="lazy" className={cn('rounded-full bg-slate-100 object-cover', ring && 'ring-2 ring-card')} style={{ width: size, height: size }} />
+      ) : (
+        <span
+          className={cn('inline-flex items-center justify-center rounded-full font-semibold text-white', ring && 'ring-2 ring-card')}
+          style={{ width: size, height: size, backgroundColor: c, fontSize: Math.max(9, Math.round(size * 0.4)) }}
+        >
+          {initialsOf(person.name)}
+        </span>
+      )}
       {presence && (
         <span
           className={cn('absolute -bottom-0 -right-0 rounded-full ring-2 ring-card', presence === 'online' ? 'bg-success' : presence === 'busy' ? 'bg-danger' : presence === 'away' ? 'bg-warning' : 'bg-slate-300')}

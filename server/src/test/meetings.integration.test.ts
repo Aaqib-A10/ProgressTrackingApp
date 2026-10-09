@@ -4,6 +4,9 @@ import { app, prisma, auth, seedWorld, type SeededWorld } from './helpers'
 import { resetCalls } from '../lib/pm/calls'
 import { generateNotes, parseNotes } from '../lib/pm/notes'
 import { occurrences, runMeetingReminders } from '../lib/pm/meetings'
+import { splitTranscript } from '../lib/pm/notes'
+import { waitForCall, resetStt } from '../lib/pm/stt'
+import { transcribeAudio } from '../lib/pm/groq'
 
 // Meetings + calendar, and the in-call extras: add people, reactions, captions,
 // AI note taker, chunked recordings, chat message reactions, "In a call" presence.
@@ -12,6 +15,9 @@ let w: SeededWorld
 beforeAll(async () => {
   w = await seedWorld()
   resetCalls()
+  delete process.env.GROQ_API_KEY // never call the real Groq from tests
+  process.env.NOTES_DELAY_MS = '0'
+  process.env.GROQ_STT_MIN_GAP_MS = '0'
 })
 afterAll(async () => {
   vi.unstubAllGlobals()
@@ -202,7 +208,7 @@ describe('in-call extras', () => {
     await request(app).post(`/api/chat/calls/${callId}/notes/retry`).set(...auth(w.itadLead)).expect(200)
     const n = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
     expect(n.body.status).toBe('ready')
-    expect(n.body.notes.actionItems[0]).toEqual({ owner: 'Leadgen Lead', task: 'Send county list', due: 'tomorrow' })
+    expect(n.body.notes.actionItems[0]).toMatchObject({ owner: 'Leadgen Lead', task: 'Send county list', due: 'tomorrow' })
     const sent = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body)
     expect(sent.messages[0].content).toContain('I will send the county list tomorrow.')
     // only one notes card in the chat even after "Try again"
@@ -247,5 +253,146 @@ describe('in-call extras', () => {
     const r2 = await request(app).post(`/api/chat/messages/${m.body.message.id}/react`).set(...auth(w.itadLead)).send({ emoji: '🎉' }).expect(200)
     expect(r2.body.message.reactions).toEqual([])
     await request(app).post(`/api/chat/messages/${m.body.message.id}/react`).set(...auth(w.inventoryMember)).send({ emoji: '🎉' }).expect(404)
+  })
+})
+
+describe('note taker with Groq (mocked)', () => {
+  type Req = { url: string; body: unknown }
+  const calls: Req[] = []
+  function mockGroq(opts: { sttText?: string; notes?: object; segments?: { text: string; no_speech_prob: number; avg_logprob: number }[] } = {}) {
+    calls.length = 0
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: { body: unknown }) => {
+      calls.push({ url: String(url), body: init?.body })
+      if (String(url).includes('/audio/')) return new Response(JSON.stringify({ text: opts.sttText ?? '', segments: opts.segments ?? [{ text: opts.sttText ?? '', no_speech_prob: 0.01, avg_logprob: -0.2 }] }), { status: 200 })
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(opts.notes ?? { summary: 'S', keyPoints: [], decisions: [], actionItems: [], openQuestions: [] }) } }] }), { status: 200 })
+    }))
+  }
+  let convId = ''
+  let callId = ''
+
+  it('a scheduled meeting with auto notes starts its call with the note taker on', async () => {
+    resetCalls(); resetStt()
+    process.env.GROQ_API_KEY = 'gsk_test'
+    const r = await request(app).post('/api/meetings').set(...auth(w.itadLead)).send({ title: 'RTI sync', startsAt: new Date(Date.now() + 60_000).toISOString(), endsAt: inHours(1), attendeeIds: [w.itadMember.id] }).expect(201)
+    expect(r.body.meeting.autoNotes).toBe(true)
+    convId = r.body.meeting.conversationId
+    const s = await request(app).post(`/api/chat/conversations/${convId}/calls`).set(...auth(w.itadLead)).send({ video: true }).expect(201)
+    callId = s.body.call.id
+    const j = await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.itadLead)).send({}).expect(200)
+    expect(j.body.noteTaker).toBe(true)
+    expect(j.body.sttMode).toBe('server')
+    await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.itadMember)).send({}).expect(200)
+  })
+
+  it('pieces of each person\'s speech are transcribed on the server with their name (Urdu/mixed -> English)', async () => {
+    mockGroq({ sttText: 'We will ship the county pages on Friday.' })
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'mixed', durationMs: 20000 }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 1)).expect(200)
+    await waitForCall(callId, 5000)
+    expect(calls[0].url).toContain('/audio/translations') // mixed language is written in English
+    const form = calls[0].body as FormData
+    expect(form.get('model')).toBe('whisper-large-v3')
+    expect(String(form.get('prompt'))).toContain('RTI sync')
+    mockGroq({ sttText: 'I will send the list tomorrow.' })
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en' }).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(200)
+    await waitForCall(callId, 5000)
+    expect(calls[0].url).toContain('/audio/transcriptions')
+    expect((calls[0].body as FormData).get('language')).toBe('en')
+    const lines = await prisma.callTranscriptLine.findMany({ where: { callId }, orderBy: { at: 'asc' } })
+    expect(lines.map((l) => [l.speakerName, l.text])).toEqual([['itad lead', 'We will ship the county pages on Friday.'], ['itad member', 'I will send the list tomorrow.']])
+    // and they show as captions
+    const p = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadMember)).expect(200)
+    expect(p.body.captions.some((c: { text: string; final: boolean }) => c.final && c.text.includes('county pages'))).toBe(true)
+  })
+
+  it('in Groq mode, the browser\'s own recognition is only used for captions (no duplicate lines)', async () => {
+    await request(app).post(`/api/chat/calls/${callId}/transcript`).set(...auth(w.itadLead)).send({ text: 'browser words', final: true }).expect(200)
+    expect(await prisma.callTranscriptLine.count({ where: { callId, text: 'browser words' } })).toBe(0)
+  })
+
+  it('silence and Whisper "hallucinations" are dropped', async () => {
+    mockGroq({ segments: [{ text: 'Thank you.', no_speech_prob: 0.1, avg_logprob: -0.3 }, { text: 'random noise words', no_speech_prob: 0.9, avg_logprob: -1.2 }] })
+    expect(await transcribeAudio(Buffer.alloc(100), { mode: 'en' })).toBe('')
+  })
+
+  it('outsiders cannot send audio; the last piece is still taken shortly after the call ends', async () => {
+    await request(app).post(`/api/chat/calls/${callId}/audio`).set(...auth(w.leadgenLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 1)).expect(410)
+    const notes = { summary: 'Pages ship Friday.', keyPoints: [], decisions: ['Ship Friday'], actionItems: [{ owner: 'ITAD Member', task: 'Send the list', due: 'tomorrow' }], openQuestions: [] }
+    mockGroq({ sttText: 'Last words before leaving.', notes })
+    await request(app).post(`/api/chat/calls/${callId}/leave`).set(...auth(w.itadMember)).expect(200)
+    await request(app).post(`/api/chat/calls/${callId}/leave`).set(...auth(w.itadLead)).expect(200) // call ends
+    await request(app).post(`/api/chat/calls/${callId}/audio`).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 3)).expect(200)
+    await waitForCall(callId, 5000)
+    expect(await prisma.callTranscriptLine.count({ where: { callId } })).toBe(3)
+  })
+
+  it('notes are written with the Groq model after the last pieces are in; action items link to tasks', async () => {
+    const { generateNotes } = await import('../lib/pm/notes')
+    await generateNotes(callId)
+    const chat = calls.find((c) => c.url.includes('/chat/completions'))!
+    const body = JSON.parse(String(chat.body))
+    expect(body.model).toBe('openai/gpt-oss-120b')
+    expect(body.messages[1].content).toContain('Last words before leaving.')
+    const n = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
+    expect(n.body.status).toBe('ready')
+    expect(n.body.provider).toBe('groq')
+    // turn the action item into a task and remember it
+    await request(app).post('/api/projects').set(...auth(w.superAdmin)).send({ name: 'RTI', key: 'rti', members: [{ userId: w.itadLead.id, role: 'ADMIN' }, { userId: w.itadMember.id, role: 'MEMBER' }] }).expect(201)
+    const task = await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadLead)).send({ title: 'Send the list', assigneeIds: [w.itadMember.id] }).expect(201)
+    const code = task.body.task.code
+    await request(app).patch(`/api/chat/calls/${callId}/notes/action-items/0`).set(...auth(w.itadMember)).send({ taskCode: code }).expect(200)
+    const again = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
+    expect(again.body.notes.actionItems[0].taskCode).toBe(code)
+    await request(app).patch(`/api/chat/calls/${callId}/notes/action-items/0`).set(...auth(w.itadMember)).send({ taskCode: 'NOPE-1' }).expect(422)
+    // "Try again" keeps the task already made from that action item
+    await generateNotes(callId, { force: true })
+    const third = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
+    expect(third.body.notes.actionItems[0].taskCode).toBe(code)
+    vi.unstubAllGlobals()
+  })
+
+  it('long transcripts are split at line breaks for the free tier', () => {
+    const text = Array.from({ length: 100 }, (_, i) => `[0:${i}] A: ${'word '.repeat(40)}`).join('\n')
+    const parts = splitTranscript(text, 2000)
+    expect(parts.length).toBeGreaterThan(5)
+    expect(parts.every((p) => p.length <= 2000)).toBe(true)
+    expect(parts.join('\n')).toBe(text)
+  })
+})
+
+
+describe('profile pictures', () => {
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(400, 7)])
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(400, 7)])
+
+  it('people change their own picture (not someone else\'s); everyone can see it', async () => {
+    await request(app).post(`/api/avatars/user/${w.itadMember.id}`).set(...auth(w.itadMember)).set('Content-Type', 'image/jpeg').send(jpeg).expect(200)
+    await request(app).post(`/api/avatars/user/${w.itadMember.id}`).set(...auth(w.itadLead)).set('Content-Type', 'image/jpeg').send(jpeg).expect(403)
+    await request(app).post(`/api/avatars/user/${w.itadMember.id}`).set(...auth(w.itadMember)).set('Content-Type', 'image/png').send(png).expect(415)
+    const idx = await request(app).get('/api/avatars').set(...auth(w.leadgenLead)).expect(200)
+    expect(idx.body.users[w.itadMember.id]).toBeGreaterThan(0)
+    const f = await request(app).get(`/api/avatars/user/${w.itadMember.id}`).set(...auth(w.leadgenLead)).expect(200)
+    expect(f.headers['content-type']).toContain('image/jpeg')
+    await request(app).delete(`/api/avatars/user/${w.itadMember.id}`).set(...auth(w.itadMember)).expect(204)
+    await request(app).get(`/api/avatars/user/${w.itadMember.id}`).set(...auth(w.leadgenLead)).expect(404)
+  })
+
+  it('project pictures: project admins only; shown for the project channel too', async () => {
+    await request(app).post('/api/avatars/project/rti').set(...auth(w.itadMember)).set('Content-Type', 'image/jpeg').send(jpeg).expect(403)
+    await request(app).post('/api/avatars/project/rti').set(...auth(w.itadLead)).set('Content-Type', 'image/jpeg').send(jpeg).expect(200)
+    const idx = await request(app).get('/api/avatars').set(...auth(w.itadMember)).expect(200)
+    expect(idx.body.projects.RTI).toBeGreaterThan(0)
+    const ch = await request(app).get('/api/chat/projects/RTI').set(...auth(w.itadLead)).expect(200)
+    const c = await request(app).get(`/api/chat/conversations/${ch.body.conversation.id}`).set(...auth(w.itadLead)).expect(200)
+    expect(c.body.conversation.canChangePicture).toBe(true)
+    const c2 = await request(app).get(`/api/chat/conversations/${ch.body.conversation.id}`).set(...auth(w.itadMember)).expect(200)
+    expect(c2.body.conversation.canChangePicture).toBe(false)
+  })
+
+  it('group pictures: group admins only', async () => {
+    const g = await request(app).post('/api/chat/conversations').set(...auth(w.itadLead)).send({ type: 'GROUP', name: 'Web team', userIds: [w.itadMember.id] }).expect(201)
+    await request(app).post(`/api/avatars/chat/${g.body.conversation.id}`).set(...auth(w.itadMember)).set('Content-Type', 'image/jpeg').send(jpeg).expect(403)
+    await request(app).post(`/api/avatars/chat/${g.body.conversation.id}`).set(...auth(w.itadLead)).set('Content-Type', 'image/jpeg').send(jpeg).expect(200)
+    const idx = await request(app).get('/api/avatars').set(...auth(w.itadMember)).expect(200)
+    expect(idx.body.chats[g.body.conversation.id]).toBeGreaterThan(0)
   })
 })

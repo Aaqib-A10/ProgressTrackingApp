@@ -18,6 +18,7 @@ export interface Meeting {
   project: { key: string; name: string; color: string } | null
   seriesId: string | null
   repeat: string | null
+  autoNotes: boolean
   cancelled: boolean
   link: string
   live: { callId: string; video: boolean; participants: { userId: string; name: string }[] } | null
@@ -42,6 +43,7 @@ export interface MeetingInput {
   projectKey?: string | null
   repeat?: RepeatKind
   repeatCount?: number
+  autoNotes?: boolean
 }
 
 export const meetingsApi = {
