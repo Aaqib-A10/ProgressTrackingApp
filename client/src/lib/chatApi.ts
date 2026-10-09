@@ -1,4 +1,4 @@
-import { api } from './api'
+import { api, ApiError } from './api'
 
 export type Presence = 'online' | 'away' | 'offline' | 'busy'
 export type ConversationType = 'DIRECT' | 'GROUP' | 'PROJECT'
@@ -86,6 +86,69 @@ export const chatApi = {
   unread: () => api.get<{ total: number; conversations: number; latest?: { id: string; conversationId: string; from: string; text: string; where: string | null; isDirect: boolean; isCall?: boolean } | null }>('/chat/unread'),
   users: (q = '') => api.get<{ users: ChatUser[] }>(`/chat/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   search: (q: string, conversationId?: string) => api.get<{ results: { id: string; seq: number; conversationId: string; conversationName: string | null; userName: string; body: string; createdAt: string }[] }>(`/chat/search?q=${encodeURIComponent(q)}${conversationId ? `&conversationId=${conversationId}` : ''}`),
+}
+
+export const MAX_FILE_BYTES = 500 * 1024 * 1024
+
+/**
+ * Send one file to a chat in pieces (big videos too). Calls onProgress with 0..1.
+ * A piece that fails is tried again a few times; if the network refuses big pieces
+ * (413), it starts again with small (512 KB) pieces. Stop it with the returned cancel().
+ */
+export function uploadChatFile(conversationId: string, file: File, caption: string, onProgress: (p: number) => void): { done: Promise<ChatMessage>; cancel: () => void } {
+  let cancelled = false
+  let uploadId: string | null = null
+  const done = (async () => {
+    const start = await api.post<{ uploadId: string; pieceSize: number }>(`/chat/conversations/${conversationId}/uploads`, { name: file.name, mime: file.type, size: file.size })
+    uploadId = start.uploadId
+    const piece = start.pieceSize
+    let offset = 0
+    let index = 0
+    onProgress(0)
+    while (offset < file.size) {
+      if (cancelled) throw new Error('cancelled')
+      const blob = file.slice(offset, offset + piece)
+      let attempt = 0
+      for (;;) {
+        try {
+          await api.postRaw(`/chat/uploads/${uploadId}/piece?index=${index}`, blob)
+          break
+        } catch (e) {
+          if (cancelled) throw new Error('cancelled')
+          if (e instanceof ApiError && e.status === 413) throw Object.assign(new Error('smaller'), { smaller: true })
+          if (e instanceof ApiError && e.status < 500 && e.status !== 408 && e.status !== 429) throw e
+          if (++attempt >= 4) throw e
+          await new Promise((ok) => setTimeout(ok, 1500 * attempt))
+        }
+      }
+      offset += blob.size
+      index++
+      onProgress(offset / file.size)
+    }
+    const r = await api.post<{ message: ChatMessage }>(`/chat/uploads/${uploadId}/finish`, { caption })
+    return r.message
+  })()
+  // A piece was too big for the network: start again with small pieces.
+  const run: Promise<ChatMessage> = done.catch(async (e) => {
+    if (!(e as { smaller?: boolean }).smaller) throw e
+    if (uploadId) void api.del(`/chat/uploads/${uploadId}`).catch(() => undefined)
+    return smallPieces(conversationId, file, caption, onProgress, () => cancelled)
+  })
+  return {
+    done: run,
+    cancel: () => { cancelled = true; if (uploadId) void api.del(`/chat/uploads/${uploadId}`).catch(() => undefined) },
+  }
+}
+
+async function smallPieces(conversationId: string, file: File, caption: string, onProgress: (p: number) => void, isCancelled: () => boolean): Promise<ChatMessage> {
+  const piece = 512 * 1024
+  const start = await api.post<{ uploadId: string }>(`/chat/conversations/${conversationId}/uploads`, { name: file.name, mime: file.type, size: file.size })
+  for (let offset = 0, index = 0; offset < file.size; offset += piece, index++) {
+    if (isCancelled()) { void api.del(`/chat/uploads/${start.uploadId}`).catch(() => undefined); throw new Error('cancelled') }
+    await api.postRaw(`/chat/uploads/${start.uploadId}/piece?index=${index}`, file.slice(offset, offset + piece))
+    onProgress(Math.min(1, (offset + piece) / file.size))
+  }
+  return (await api.post<{ message: ChatMessage }>(`/chat/uploads/${start.uploadId}/finish`, { caption })).message
 }
 
 /** Fire a callback on an interval while the tab is visible (and once on focus). */

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, Expand, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Trash2, Users, Video, X } from 'lucide-react'
-import { chatApi, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
+import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, Expand, FileText, Film, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Trash2, Users, Video, X } from 'lucide-react'
+import { chatApi, uploadChatFile, MAX_FILE_BYTES, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { useToast } from '../ui/Toast'
 import { PersonAvatar, fmtBytes, fmtDateTime } from '../projects/pmUi'
@@ -40,6 +40,12 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [editing, setEditing] = useState<ChatMessage | null>(null)
   const [sending, setSending] = useState(false)
+  // Files picked, pasted or dropped: shown above the message box until Send is pressed.
+  const [pending, setPending] = useState<PendingFile[]>([])
+  const pendingRef = useRef<PendingFile[]>([])
+  pendingRef.current = pending
+  const cancelUpload = useRef<(() => void) | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [reactFor, setReactFor] = useState<string | null>(null)
@@ -60,6 +66,9 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     if (document.visibilityState !== 'visible' || !atBottom.current) return
     chatApi.read(conversationId, seq).then(() => refreshChatUnread()).catch(() => undefined)
   }, [conversationId])
+
+  // Picked files belong to one chat: drop them (and their previews) when switching chats or leaving.
+  useEffect(() => () => { pendingRef.current.forEach((p) => p.url && URL.revokeObjectURL(p.url)); setPending([]) }, [conversationId])
 
   // Initial load
   useEffect(() => {
@@ -162,7 +171,9 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
 
   async function send() {
     const body = text.trim()
-    if (!body || sending) return
+    if (sending) return
+    if (pending.length && !editing) { await sendPending(body); return }
+    if (!body) return
     if (body.length > 5000) { addToast({ type: 'error', message: 'Messages are limited to 5000 characters' }); return }
     setSending(true)
     try {
@@ -190,16 +201,59 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     }
   }
 
-  async function sendFile(f: File) {
-    if (f.size > 25 * 1024 * 1024) { addToast({ type: 'error', message: 'Files are limited to 25 MB' }); return }
+  function addFiles(list: FileList | File[] | null | undefined) {
+    const files = Array.from(list ?? [])
+    if (!files.length) return
+    const tooBig = files.filter((f) => f.size > MAX_FILE_BYTES)
+    if (tooBig.length) addToast({ type: 'error', message: `${tooBig.map((f) => f.name).join(', ')}: files are limited to 500 MB` })
+    const ok = files.filter((f) => f.size <= MAX_FILE_BYTES && f.size > 0)
+    setPending((cur) => {
+      const room = Math.max(0, 10 - cur.length)
+      if (ok.length > room) addToast({ type: 'warning', message: 'Up to 10 files at a time' })
+      return [...cur, ...ok.slice(0, room).map((file) => ({ key: `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`, file, kind: fileKind(file), url: fileKind(file) === 'file' ? null : URL.createObjectURL(file), progress: null, error: null }))]
+    })
+    inputRef.current?.focus()
+  }
+
+  function removePending(key: string) {
+    setPending((cur) => {
+      const p = cur.find((x) => x.key === key)
+      if (p?.url) URL.revokeObjectURL(p.url)
+      return cur.filter((x) => x.key !== key)
+    })
+  }
+
+  /** Send the picked files one by one (the typed text goes with the first one). */
+  async function sendPending(caption: string) {
     setSending(true)
+    let first = true
     try {
-      const r = await chatApi.sendFile(conversationId, f, text.trim())
-      atBottom.current = true
-      setMsgs((cur) => [...cur, r.message]); lastSeq.current = Math.max(lastSeq.current, r.message.seq)
-      setText('')
+      for (const p of [...pendingRef.current]) {
+        setPending((cur) => cur.map((x) => (x.key === p.key ? { ...x, progress: 0, error: null } : x)))
+        const up = uploadChatFile(conversationId, p.file, first ? caption : '', (v) => setPending((cur) => cur.map((x) => (x.key === p.key ? { ...x, progress: v } : x))))
+        cancelUpload.current = up.cancel
+        try {
+          const msg = await up.done
+          atBottom.current = true
+          setMsgs((cur) => (cur.some((m) => m.id === msg.id) ? cur : [...cur, msg]))
+          lastSeq.current = Math.max(lastSeq.current, msg.seq)
+          removePending(p.key)
+          if (first) { setText(''); setMentionIds([]) }
+          first = false
+        } catch (e) {
+          if ((e as Error).message === 'cancelled') { removePending(p.key); continue }
+          setPending((cur) => cur.map((x) => (x.key === p.key ? { ...x, progress: null, error: errMsg(e, 'Could not send') } : x)))
+          addToast({ type: 'error', message: `${p.file.name}: ${errMsg(e, 'could not be sent')}` })
+          break
+        }
+      }
+      refreshChatUnread()
       onSent?.()
-    } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Upload failed') }) } finally { setSending(false) }
+    } finally {
+      cancelUpload.current = null
+      setSending(false)
+      inputRef.current?.focus()
+    }
   }
 
   async function react(m: ChatMessage, emoji: string) {
@@ -307,7 +361,13 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
 
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="relative flex h-full min-h-0 flex-col"
+      onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragOver(true) } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false) }}
+      onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) } }}
+    >
+      {dragOver && <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-card border-2 border-dashed border-primary bg-primary/5 text-body-md font-semibold text-primary">Drop files to add them</div>}
       {notesFor && <NotesModal callId={notesFor} onClose={() => setNotesFor(null)} />}
       {/* Header */}
       <div className={cn('flex shrink-0 items-center gap-3 border-b border-line', compact ? 'px-3 py-2' : 'px-4 py-3')}>
@@ -373,9 +433,14 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             {EMOJI.map((e) => <button key={e} type="button" className="rounded p-1 text-lg hover:bg-slate-100" onClick={() => { setText((t) => t + e); setShowEmoji(false); inputRef.current?.focus() }}>{e}</button>)}
           </div>
         )}
+        {pending.length > 0 && (
+          <div className="mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="Files to send">
+            {pending.map((p) => <PendingTile key={p.key} p={p} onRemove={() => (p.progress !== null && cancelUpload.current ? cancelUpload.current() : removePending(p.key))} />)}
+          </div>
+        )}
         <div className="flex items-end gap-1.5 rounded-btn border border-line bg-card px-2 py-1.5 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
           <button type="button" onClick={() => fileRef.current?.click()} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Attach a file" title="Attach a file"><Paperclip size={18} /></button>
-          <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendFile(f); e.target.value = '' }} />
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
           <textarea
             ref={inputRef}
             value={text}
@@ -386,16 +451,16 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
               if (e.key === 'Escape') { setSuggest(null); setShowEmoji(false); if (editing) { setEditing(null); setText('') } }
               if (e.key === 'ArrowUp' && !text && lastMine && !lastMine.file) { e.preventDefault(); setEditing(lastMine); setText(lastMine.body) }
             }}
-            onPaste={(e) => { const f = e.clipboardData.files?.[0]; if (f) { e.preventDefault(); sendFile(f) } }}
+            onPaste={(e) => { if (e.clipboardData.files?.length) { e.preventDefault(); addFiles(e.clipboardData.files) } }}
             rows={1}
             maxLength={5000}
-            placeholder={conv ? `Message ${conv.title}` : 'Message'}
+            placeholder={pending.length ? 'Add a message (optional), then press Enter to send' : conv ? `Message ${conv.title}` : 'Message'}
             aria-label="Message"
             className="max-h-40 min-h-[34px] flex-1 resize-none bg-transparent py-1.5 text-body-md text-ink placeholder:text-ink-muted focus:outline-none"
             style={{ height: Math.min(160, 34 + (text.split('\n').length - 1) * 20) }}
           />
           <button type="button" onClick={() => setShowEmoji((s) => !s)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Emoji"><Smile size={18} /></button>
-          <button type="button" onClick={send} disabled={!text.trim() || sending} className="rounded-btn bg-primary p-1.5 text-white disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button>
+          <button type="button" onClick={send} disabled={(!text.trim() && !pending.length) || sending} className="rounded-btn bg-primary p-1.5 text-white disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button>
         </div>
         {!compact && <p className="mt-1 text-[11px] text-ink-muted">Enter to send, Shift+Enter for a new line, @ to mention, paste a task code like RTI-12 to share it.</p>}
       </div>
@@ -459,19 +524,51 @@ function renderBody(body: string, members: { id: string; name: string }[], menti
   return out
 }
 
+interface PendingFile { key: string; file: File; kind: 'image' | 'video' | 'file'; url: string | null; progress: number | null; error: string | null }
+
+function fileKind(f: File): PendingFile['kind'] {
+  if (/^image\/(png|jpe?g|gif|webp)$/i.test(f.type)) return 'image'
+  if (/^video\//i.test(f.type)) return 'video'
+  return 'file'
+}
+
+/** One picked file waiting above the message box: preview, name, size, progress, remove. */
+function PendingTile({ p, onRemove }: { p: PendingFile; onRemove: () => void }) {
+  const busy = p.progress !== null
+  return (
+    <div className={cn('relative w-28 shrink-0 overflow-hidden rounded-btn border bg-card', p.error ? 'border-danger' : 'border-line')} title={p.error ?? p.file.name}>
+      <div className="flex h-20 items-center justify-center bg-slate-100">
+        {p.kind === 'image' && p.url ? <img src={p.url} alt={p.file.name} className="h-full w-full object-cover" />
+          : p.kind === 'video' && p.url ? <video src={p.url} muted preload="metadata" className="h-full w-full bg-black object-cover" />
+          : <FileText size={26} className="text-primary" />}
+        {p.kind === 'video' && <span className="absolute left-1 top-1 rounded bg-slate-900/70 p-0.5 text-white"><Film size={12} /></span>}
+      </div>
+      <div className="px-1.5 py-1">
+        <p className="truncate text-[11px] font-medium text-ink">{p.file.name}</p>
+        <p className={cn('text-[10px]', p.error ? 'text-danger' : 'text-ink-muted')}>{p.error ? 'Not sent' : busy ? `Sending ${Math.round((p.progress ?? 0) * 100)}%` : fmtBytes(p.file.size)}</p>
+      </div>
+      {busy && <div className="absolute bottom-0 left-0 h-1 bg-primary transition-[width]" style={{ width: `${Math.round((p.progress ?? 0) * 100)}%` }} />}
+      <button type="button" onClick={onRemove} className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/70 text-white hover:bg-slate-900" aria-label={busy ? `Stop sending ${p.file.name}` : `Remove ${p.file.name}`} title={busy ? 'Stop sending' : 'Remove'}>
+        <X size={12} />
+      </button>
+    </div>
+  )
+}
+
 function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
   const href = API + file.url.replace(/^\/api/, '')
   const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(file.mime ?? '')
-  const isVideo = /^video\/(webm|mp4)$/i.test(file.mime ?? '')
+  const isVideo = /^video\/(webm|mp4|quicktime|ogg|x-m4v)$/i.test(file.mime ?? '')
   const [open, setOpen] = useState(false)
   const [missing, setMissing] = useState(false)
+  const [noPlay, setNoPlay] = useState(false) // a video this browser cannot play: offer the download
   const name = file.name ?? (isImage ? 'image' : 'video')
   if (missing) return <p className="mt-1 inline-flex items-center gap-1.5 rounded-btn border border-dashed border-line px-3 py-2 text-body-sm text-ink-muted"><FileText size={15} /> {name}: this file is no longer on the server</p>
   return (
     <div className="mt-1">
-      {isVideo ? (
+      {isVideo && !noPlay ? (
         <div className="w-[min(420px,100%)]">
-          <video controls preload="metadata" src={`${href}?inline=1`} onError={() => setMissing(true)} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />
+          <video controls preload="metadata" src={`${href}?inline=1`} onError={() => setNoPlay(true)} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />
           <div className="mt-1 flex items-center gap-3 text-[12px] text-ink-muted">
             <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 hover:text-ink"><Expand size={12} /> Open</button>
             <a href={href} className="inline-flex items-center gap-1 hover:text-ink"><Download size={12} /> Download ({fmtBytes(file.size ?? 0)})</a>

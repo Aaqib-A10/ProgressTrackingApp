@@ -278,7 +278,7 @@ describe('chat', () => {
   it('project channel exists and mirrors membership', async () => {
     const res = await request(app).get('/api/chat/conversations').set(...auth(w.itadMember)).expect(200)
     const ch = res.body.conversations.find((c: { type: string }) => c.type === 'PROJECT')
-    expect(ch.title).toBe('# RTI')
+    expect(ch.title).toBe('RTI')
     await request(app).delete(`/api/projects/RTI/members/${w.inventoryMember.id}`).set(...auth(w.itadLead)).expect(204)
     const viewerList = await request(app).get('/api/chat/conversations').set(...auth(w.inventoryMember)).expect(200)
     expect(viewerList.body.conversations.find((c: { type: string }) => c.type === 'PROJECT')).toBeUndefined()

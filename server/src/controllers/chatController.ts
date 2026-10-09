@@ -139,7 +139,7 @@ export async function listConversations(req: AuthedRequest, res: Response): Prom
     const c = m.conversation
     const others = c.members.filter((x) => x.userId !== me.id)
     const last = c.messages[0]
-    const title = c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.type === 'PROJECT' ? `# ${c.name ?? c.project?.key ?? 'project'}` : c.name ?? 'Group'
+    const title = c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.type === 'PROJECT' ? (c.name ?? c.project?.key ?? 'project') : c.name ?? 'Group'
     return {
       id: c.id,
       type: c.type,
@@ -227,7 +227,7 @@ export async function getConversation(req: AuthedRequest, res: Response): Promis
       id: c.id,
       type: c.type,
       canChangePicture,
-      title: c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.type === 'PROJECT' ? `# ${c.name}` : c.name,
+      title: c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.name,
       name: c.name,
       project: c.project,
       canManage: c.type === 'GROUP' && m.isAdmin,
@@ -367,7 +367,7 @@ async function afterSend(convId: string, senderId: string, senderName: string, b
 
 function convTitleFor(c: { type: string; name: string | null }, senderName: string): string {
   if (c.type === 'DIRECT') return `a message from ${senderName}`
-  if (c.type === 'PROJECT') return `# ${c.name}`
+  if (c.type === 'PROJECT') return c.name ?? 'Project'
   return c.name ?? 'a group chat'
 }
 
@@ -437,6 +437,102 @@ export async function sendFile(req: AuthedRequest, res: Response): Promise<void>
   res.status(201).json({ message: serializeMessage(msg, visible) })
 }
 
+// ---------- large files (videos) in pieces ----------
+// A file is sent as several small pieces, so big videos get past the proxy's request
+// size limit and a dropped connection only repeats one piece. Upload state lives in
+// memory; an unfinished upload is thrown away after an hour.
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+const UPLOAD_PIECE_BYTES = 5 * 1024 * 1024
+interface PendingUpload { id: string; userId: string; conversationId: string; memberId: string; name: string; mime: string; size: number; received: number; pieces: number; tmp: string; ext: string; startedAt: number }
+const uploads = new Map<string, PendingUpload>()
+const UPLOAD_TTL_MS = 60 * 60_000
+setInterval(() => {
+  const cutoff = Date.now() - UPLOAD_TTL_MS
+  for (const u of uploads.values()) if (u.startedAt < cutoff) { uploads.delete(u.id); void fs.rm(u.tmp, { force: true }) }
+}, 10 * 60_000).unref()
+
+function cleanName(raw: unknown): string {
+  return String(raw || 'file').slice(0, 200).replace(/[\r\n"\\/]/g, '').trim() || 'file'
+}
+
+/** POST /api/chat/conversations/:id/uploads { name, mime, size } — start sending a file. */
+export async function startUpload(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const m = await membership(req.params.id, me.id)
+  const b = parse(z.object({ name: z.string().max(300), mime: z.string().max(120).default(''), size: z.number().int().positive() }), req.body ?? {})
+  if (b.size > MAX_UPLOAD_BYTES) throw new HttpError(413, 'Files are limited to 500 MB')
+  const name = cleanName(b.name)
+  const ext = path.extname(name).replace('.', '').toLowerCase()
+  if (BLOCKED_EXT.has(ext)) throw new HttpError(415, 'That file type is not allowed')
+  const mine = [...uploads.values()].filter((u) => u.userId === me.id)
+  if (mine.length >= 10) throw new HttpError(429, 'Too many files being sent at once')
+  await fs.mkdir(UPLOAD_DIR, { recursive: true })
+  const id = randomUUID()
+  const tmp = path.join(UPLOAD_DIR, `part-${id}`)
+  await fs.writeFile(tmp, Buffer.alloc(0))
+  uploads.set(id, { id, userId: me.id, conversationId: m.conversationId, memberId: m.id, name, mime: (b.mime || 'application/octet-stream').slice(0, 120), size: b.size, received: 0, pieces: 0, tmp, ext, startedAt: Date.now() })
+  res.status(201).json({ uploadId: id, pieceSize: UPLOAD_PIECE_BYTES })
+}
+
+function ownUpload(req: AuthedRequest): PendingUpload {
+  const me = viewer(req)
+  const u = uploads.get(req.params.uploadId)
+  if (!u || u.userId !== me.id) throw new HttpError(404, 'This upload has expired. Please send the file again.')
+  return u
+}
+
+/** POST /api/chat/uploads/:uploadId/piece?index=n — raw bytes, in order. */
+export async function uploadPiece(req: AuthedRequest, res: Response): Promise<void> {
+  const u = ownUpload(req)
+  const index = Number(req.query.index)
+  const buf = req.body as Buffer
+  if (!Buffer.isBuffer(buf) || !buf.length) throw new HttpError(400, 'Empty piece')
+  if (index < u.pieces) { res.json({ ok: true, received: u.received }); return } // a retry of a piece we already have
+  if (index !== u.pieces) throw new HttpError(409, `Expected piece ${u.pieces}`)
+  if (u.received + buf.length > u.size) throw new HttpError(400, 'More data than the file size')
+  await fs.appendFile(u.tmp, buf)
+  u.pieces++
+  u.received += buf.length
+  res.json({ ok: true, received: u.received })
+}
+
+/** POST /api/chat/uploads/:uploadId/finish { caption } — the file is complete: post it. */
+export async function finishUpload(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const u = ownUpload(req)
+  if (u.received !== u.size) throw new HttpError(409, 'The file did not arrive completely. Please send it again.')
+  rateLimitSend(me.id)
+  const caption = parse(z.object({ caption: z.string().max(MAX_BODY).default('') }), req.body ?? {}).caption.trim()
+  uploads.delete(u.id)
+  const storedName = `${randomUUID()}${u.ext ? `.${u.ext}` : ''}`
+  await fs.rename(u.tmp, path.join(UPLOAD_DIR, storedName))
+  const msg = await prisma.chatMessage.create({
+    data: {
+      conversationId: u.conversationId,
+      userId: me.id,
+      body: caption,
+      fileStoredName: storedName,
+      fileName: u.name,
+      fileMime: u.mime,
+      fileSize: u.size,
+      taskRefId: caption ? await resolveTaskRef(caption) : null,
+    },
+    include: MESSAGE_INCLUDE,
+  })
+  await prisma.chatMember.update({ where: { id: u.memberId }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
+  await prisma.chatConversation.update({ where: { id: u.conversationId }, data: { lastMessageAt: new Date() } })
+  const visible = new Set(await visibleProjectIds(me, true))
+  res.status(201).json({ message: serializeMessage(msg, visible) })
+}
+
+/** DELETE /api/chat/uploads/:uploadId — stop sending. */
+export async function cancelUpload(req: AuthedRequest, res: Response): Promise<void> {
+  const u = ownUpload(req)
+  uploads.delete(u.id)
+  await fs.rm(u.tmp, { force: true })
+  res.status(204).end()
+}
+
 /** GET /api/chat/files/:messageId — members of that conversation only. */
 export async function downloadFile(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
@@ -446,7 +542,7 @@ export async function downloadFile(req: AuthedRequest, res: Response): Promise<v
   const filePath = path.join(UPLOAD_DIR, msg.fileStoredName)
   try { await fs.access(filePath) } catch { throw new HttpError(404, 'File missing on server') }
   // Raster images and videos (call recordings) may play inline; everything else is forced to download.
-  const isMedia = /^(image\/(png|jpe?g|gif|webp)|video\/(webm|mp4))$/i.test(msg.fileMime ?? '')
+  const isMedia = /^(image\/(png|jpe?g|gif|webp)|video\/(webm|mp4|quicktime|ogg|x-m4v))$/i.test(msg.fileMime ?? '')
   res.setHeader('X-Content-Type-Options', 'nosniff')
   // A sent file never changes: let the browser keep it instead of fetching it on every view.
   res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
@@ -542,7 +638,7 @@ export async function unreadSummary(req: AuthedRequest, res: Response): Promise<
         conversationId: r.conversationId,
         from: r.from,
         text: trunc(r.body || (r.hasFile ? 'Sent a file' : ''), 120),
-        where: r.type === 'DIRECT' ? null : r.type === 'PROJECT' ? `# ${r.name ?? ''}` : r.name,
+        where: r.type === 'DIRECT' ? null : r.type === 'PROJECT' ? (r.name ?? '') : r.name,
         isDirect: r.type === 'DIRECT',
         isCall: r.isCall,
       }
@@ -639,7 +735,7 @@ export async function activeCalls(req: AuthedRequest, res: Response): Promise<vo
   res.json({
     calls: lives.filter((c) => byConv.has(c.conversationId) || c.invited.has(me.id) || c.participants.has(me.id)).map((c) => {
       const conv = byConv.get(c.conversationId)
-      const title = !conv ? `${c.startedByName}'s call` : conv.type === 'DIRECT' ? (conv.members.find((x) => x.user.id !== me.id)?.user.name ?? 'Direct message') : conv.type === 'PROJECT' ? `# ${conv.name ?? ''}` : (conv.name ?? 'Group')
+      const title = !conv ? `${c.startedByName}'s call` : conv.type === 'DIRECT' ? (conv.members.find((x) => x.user.id !== me.id)?.user.name ?? 'Direct message') : (conv.name ?? (conv.type === 'PROJECT' ? '' : 'Group'))
       return {
         id: c.callId,
         conversationId: c.conversationId,
