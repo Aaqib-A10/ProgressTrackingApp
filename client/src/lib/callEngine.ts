@@ -1,5 +1,5 @@
 import { callsApi, type Caption, type CallParticipant, type CallSignal } from './callsApi'
-import { createNoiseFilter, noiseFilterPref, setNoiseFilterPref, type NoiseFilter } from './noiseFilter'
+import { createNoiseFilter, type NoiseFilter } from './noiseFilter'
 
 /**
  * One voice/video call from this browser's point of view.
@@ -134,7 +134,21 @@ export class CallEngine {
       })),
     }
     if (this.snap.peers.length && !this.snap.hadPeers) { this.snap.hadPeers = true; this.snap.connectedAt = Date.now() }
+    // The poll runs every second; only tell the screen when something it shows changed.
+    const sig = this.signature()
+    if (sig === this.lastSig) return
+    this.lastSig = sig
     this.onChange(this.snap)
+  }
+
+  private lastSig = ''
+  private signature(): string {
+    const tracks = (st: MediaStream | null) => (st ? st.getTracks().map((t) => `${t.id}:${t.enabled ? 1 : 0}:${t.readyState}`).join(',') : '')
+    return JSON.stringify({
+      ...this.snap,
+      localStream: tracks(this.snap.localStream),
+      peers: this.snap.peers.map((p) => ({ ...p, stream: tracks(p.stream) })),
+    })
   }
 
   /** Ask for mic (and camera for video calls), join, and call everyone already there. */
@@ -159,10 +173,10 @@ export class CallEngine {
       if (this.rawMic) {
         this.filter = await createNoiseFilter(this.rawMic)
         if (this.filter) {
+          // Always on for everyone: there is no switch for it in the call.
           this.audioTrack = this.filter.track
-          const on = noiseFilterPref()
-          this.filter.setEnabled(on)
-          noise = on ? 'on' : 'off'
+          this.filter.setEnabled(true)
+          noise = 'on'
         }
       }
       // Joining a busy call: start muted so nobody's background noise interrupts.
@@ -413,15 +427,6 @@ export class CallEngine {
     this.tuneBitrate()
     void callsApi.state(this.snap.callId, { screen: !!this.screenTrack }).catch(() => undefined)
     this.emit({ screen: !!this.screenTrack })
-  }
-
-  /** Background-noise removal on or off (remembered on this computer). */
-  toggleNoise(): void {
-    if (!this.filter) return
-    const on = this.snap.noise !== 'on'
-    this.filter.setEnabled(on)
-    setNoiseFilterPref(on)
-    this.emit({ noise: on ? 'on' : 'off' })
   }
 
   /** Ask everyone else (or one person) to mute. */

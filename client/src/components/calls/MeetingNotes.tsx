@@ -56,6 +56,11 @@ export function NotesContent({ callId }: { callId: string }) {
   if (!d) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-ink-muted" /></div>
   const n = d.notes
   const speakers = [...new Set(d.transcript.map((l) => l.userId))]
+  const rtl = n?.language === 'ur'
+  const rewrite = async (lang: 'en' | 'ur') => {
+    setRetrying(true)
+    try { await callsApi.retryNotes(callId, lang); await load() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setRetrying(false) }
+  }
 
   return (
     <div className="space-y-5">
@@ -87,14 +92,28 @@ export function NotesContent({ callId }: { callId: string }) {
         </button>
       )}
 
+      {n && d.status === 'ready' && (
+        <div className="flex flex-wrap items-center gap-2 text-body-sm text-ink-muted">
+          <span>Notes in</span>
+          <div className="inline-flex overflow-hidden rounded-btn border border-line">
+            {(['en', 'ur'] as const).map((l) => (
+              <button key={l} type="button" disabled={retrying || (n.language ?? 'en') === l} onClick={() => void rewrite(l)} className={cn('px-2.5 py-1 font-semibold', (n.language ?? 'en') === l ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50 disabled:opacity-50')}>
+                {l === 'en' ? 'English' : 'اردو'}
+              </button>
+            ))}
+          </div>
+          {retrying && <span className="inline-flex items-center gap-1"><Loader2 size={13} className="animate-spin" /> Writing again…</span>}
+        </div>
+      )}
+
       {n && (
         <>
           <section>
             <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink"><Sparkles size={15} className="text-primary" /> Summary</h3>
-            <p className="whitespace-pre-wrap text-body-md leading-relaxed text-ink">{n.summary}</p>
+            <p dir={rtl ? 'rtl' : 'auto'} className={cn('whitespace-pre-wrap text-body-md text-ink', rtl ? 'leading-loose' : 'leading-relaxed')}>{n.summary}</p>
           </section>
-          {n.keyPoints.length > 0 && <Bullets title="Key points" items={n.keyPoints} />}
-          {n.decisions.length > 0 && <Bullets title="Decisions" items={n.decisions} icon={<CheckCircle2 size={15} className="text-success" />} />}
+          {n.keyPoints.length > 0 && <Bullets title="Key points" items={n.keyPoints} rtl={rtl} />}
+          {n.decisions.length > 0 && <Bullets title="Decisions" items={n.decisions} rtl={rtl} icon={<CheckCircle2 size={15} className="text-success" />} />}
           {n.actionItems.length > 0 && (
             <section>
               <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink"><ListChecks size={15} className="text-warning" /> Action items</h3>
@@ -105,8 +124,8 @@ export function NotesContent({ callId }: { callId: string }) {
                     {n.actionItems.map((a, i) => (
                       <tr key={i} className="border-t border-line align-top">
                         <td className="whitespace-nowrap px-3 py-1.5 font-medium text-ink">{a.owner ?? '·'}</td>
-                        <td className="px-3 py-1.5 text-ink">{a.task}</td>
-                        <td className="whitespace-nowrap px-3 py-1.5 text-ink-muted">{a.due ?? ''}</td>
+                        <td dir="auto" className="px-3 py-1.5 text-ink">{a.task}</td>
+                        <td dir="auto" className="whitespace-nowrap px-3 py-1.5 text-ink-muted">{a.due ?? ''}</td>
                         <td className="whitespace-nowrap px-3 py-1.5 text-right">
                           {a.taskCode
                             ? <Link to={`/app/projects/${encodeURIComponent(a.taskCode.replace(/-\d+$/, ''))}?task=${encodeURIComponent(a.taskCode)}`} className="font-mono text-[12px] font-semibold text-primary hover:underline">{a.taskCode}</Link>
@@ -119,7 +138,7 @@ export function NotesContent({ callId }: { callId: string }) {
               </div>
             </section>
           )}
-          {n.openQuestions.length > 0 && <Bullets title="Open questions" items={n.openQuestions} icon={<HelpCircle size={15} className="text-ink-muted" />} />}
+          {n.openQuestions.length > 0 && <Bullets title="Open questions" items={n.openQuestions} rtl={rtl} icon={<HelpCircle size={15} className="text-ink-muted" />} />}
         </>
       )}
 
@@ -147,7 +166,7 @@ export function NotesContent({ callId }: { callId: string }) {
                 <p key={l.id} className="text-body-sm leading-relaxed">
                   <span className="mr-2 font-mono text-[11px] text-ink-muted">{fmtClock(l.offsetSec)}</span>
                   <b className={cn('mr-1', SPEAKER_COLORS[speakers.indexOf(l.userId) % SPEAKER_COLORS.length])}>{l.speaker}:</b>
-                  <span className="text-ink">{l.text}</span>
+                  <span dir="auto" className="text-ink">{l.text}</span>
                 </p>
               ))}
             </div>
@@ -158,11 +177,11 @@ export function NotesContent({ callId }: { callId: string }) {
   )
 }
 
-function Bullets({ title, items, icon }: { title: string; items: string[]; icon?: React.ReactNode }) {
+function Bullets({ title, items, icon, rtl }: { title: string; items: string[]; icon?: React.ReactNode; rtl?: boolean }) {
   return (
     <section>
       <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink">{icon}{title}</h3>
-      <ul className="list-disc space-y-1 pl-5 text-body-md text-ink">{items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+      <ul dir={rtl ? 'rtl' : undefined} className={cn('list-disc space-y-1 text-body-md text-ink', rtl ? 'pr-5 leading-loose' : 'pl-5')}>{items.map((x, i) => <li key={i} dir={rtl ? undefined : 'auto'}>{x}</li>)}</ul>
     </section>
   )
 }

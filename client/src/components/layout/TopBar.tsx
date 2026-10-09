@@ -68,7 +68,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
       getNotifications()
         .then((r) => {
           if (!active) return
-          setNotifs(r.notifications)
+          setNotifs((cur) => (JSON.stringify(cur) === JSON.stringify(r.notifications) ? cur : r.notifications))
           // Pop up stored alerts that arrived since the last check (never the ones already there on load).
           const stored = r.notifications.filter((n) => n.persistent)
           if (seenIds.current) {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AudioLines, Captions, CircleDot, Hand, Link2, Loader2, WifiOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, PhoneOff, Search,
+  Captions, CircleDot, Hand, Link2, Loader2, WifiOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, PhoneOff, Search,
   Smile, Sparkles, Square, UserPlus, Users, Video, VideoOff, X,
 } from 'lucide-react'
 import type { PeerView } from '../../lib/callEngine'
@@ -17,11 +17,9 @@ const REACTIONS = ['👍', '👏', '❤️', '😂', '😮', '🎉', '🙏']
 /** The call itself: a full-screen meeting view, or a small floating card while you keep working. */
 export function CallWindow() {
   const ctx = useCalls()
-  const [now, setNow] = useState(Date.now())
   const [dismissErr, setDismissErr] = useState<string | null>(null)
   const [reactOpen, setReactOpen] = useState(false)
   const speaking = useSpeaking(ctx?.call ? [{ id: ctx.meId, stream: ctx.call.localStream, on: ctx.call.mic }, ...ctx.call.peers.map((p) => ({ id: p.userId, stream: p.stream, on: p.mic }))] : [])
-  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(t) }, [])
   // Esc closes a side panel, then shrinks the meeting to the corner (never hangs up).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -38,7 +36,7 @@ export function CallWindow() {
   const { call, meta, minimized } = ctx
 
   const title = meta?.title ?? 'Call'
-  const timer = fmtTimer(now - (call.connectedAt ?? now))
+  const timer = <CallTimer since={call.connectedAt} />
   const connecting = call.status === 'connecting'
   const alone = call.status === 'live' && call.peers.length === 0
   const declinedNames = call.declined.map((id) => meta?.members.find((m) => m.id === id)?.name).filter(Boolean) as string[]
@@ -81,7 +79,7 @@ export function CallWindow() {
           <div className="flex items-center gap-2 px-3 py-2">
             <div className="min-w-0 flex-1">
               <p className="truncate text-body-sm font-semibold">{title}</p>
-              <p className="text-[11px] text-slate-300">{alone || connecting ? waitingText : `${timer} · ${call.peers.length + 1} in call`}</p>
+              <p className="text-[11px] text-slate-300">{alone || connecting ? waitingText : <>{timer} · {call.peers.length + 1} in call</>}</p>
             </div>
             <CtrlButton small on={call.mic} onClick={ctx.toggleMic} label={call.mic ? 'Mute microphone' : 'Unmute microphone'} icon={call.mic ? <Mic size={16} /> : <MicOff size={16} />} />
             <LeaveButton small onClick={ctx.leave} />
@@ -153,7 +151,7 @@ export function CallWindow() {
                 <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-1 px-6">
                   {call.captions.slice(-3).map((c) => (
                     <p key={c.id} className="max-w-3xl rounded bg-black/75 px-3 py-1 text-center text-body-md leading-snug">
-                      <b className="text-sky-300">{c.userId === ctx.meId ? 'You' : c.name}:</b> {c.text}
+                      <b className="text-sky-300">{c.userId === ctx.meId ? 'You' : c.name}:</b> <span dir="auto">{c.text}</span>
                     </p>
                   ))}
                 </div>
@@ -191,7 +189,6 @@ export function CallWindow() {
           <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-2 px-4 pb-5 pt-2 sm:gap-3">
             <CtrlButton on={call.mic} onClick={ctx.toggleMic} label={call.mic ? 'Mute microphone' : 'Unmute microphone'} icon={call.mic ? <Mic size={20} /> : <MicOff size={20} />} />
             <CtrlButton on={call.cam} onClick={ctx.toggleCam} label={call.cam ? 'Turn camera off' : 'Turn camera on'} icon={call.cam ? <Video size={20} /> : <VideoOff size={20} />} />
-            {call.noise !== 'unavailable' && <CtrlButton on active={call.noise === 'on'} onClick={ctx.toggleNoise} label={call.noise === 'on' ? 'Background noise removal is on (click to turn off)' : 'Background noise removal is off (click to turn on)'} icon={<AudioLines size={20} />} />}
             {canShare && <CtrlButton on={!call.screen} active={call.screen} onClick={ctx.toggleScreen} label={call.screen ? 'Stop sharing your screen' : 'Share your screen'} icon={call.screen ? <MonitorOff size={20} /> : <MonitorUp size={20} />} />}
             <CtrlButton on active={call.hand} onClick={ctx.toggleHand} label={call.hand ? 'Lower your hand' : 'Raise your hand'} icon={<Hand size={20} />} />
             <div className="relative">
@@ -336,7 +333,7 @@ function NotesPanel() {
       {!call.noteTaker ? (
         <div className="space-y-3">
           <p className="flex items-start gap-2 text-ink"><Sparkles size={16} className="mt-0.5 shrink-0 text-primary" /> The AI note taker writes down what everyone says. When you stop it or the call ends, you get a summary, decisions and action items in the chat.</p>
-          <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Each person's microphone is turned into text with their name, and Urdu or mixed speech is written in English." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
+          <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Each person's microphone is turned into text with their name, written the way it was said (Urdu in Urdu script, English in English). The notes come in the language the meeting was in, and you can switch them to English or Urdu." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
           <LangPicker />
           <button type="button" disabled={busy} onClick={() => void toggle(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-btn bg-primary px-3 py-2 font-semibold text-white hover:bg-primary/90 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Start AI notes
@@ -351,7 +348,7 @@ function NotesPanel() {
           </div>
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto rounded-btn bg-slate-50 p-2">
             {lines.length === 0 && <p className="py-6 text-center text-ink-muted">Listening… speech appears here.</p>}
-            {lines.map((l) => <p key={l.id}><b className="text-primary">{l.name}:</b> {l.text}</p>)}
+            {lines.map((l) => <p key={l.id}><b className="text-primary">{l.name}:</b> <span dir="auto">{l.text}</span></p>)}
             <div ref={endRef} />
           </div>
           <button type="button" disabled={busy} onClick={() => void toggle(false)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-btn border border-line px-3 py-2 font-semibold text-ink hover:bg-slate-50 disabled:opacity-60">
@@ -467,6 +464,13 @@ function gridFor(n: number): string {
   if (n <= 4) return 'grid-cols-2 grid-rows-2'
   if (n <= 6) return 'grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2'
   return 'grid-cols-3 grid-rows-3'
+}
+
+/** The running call time. Its own little component, so only this text redraws every second. */
+function CallTimer({ since }: { since: number | null }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(t) }, [])
+  return <>{fmtTimer(now - (since ?? now))}</>
 }
 
 function fmtTimer(ms: number): string {

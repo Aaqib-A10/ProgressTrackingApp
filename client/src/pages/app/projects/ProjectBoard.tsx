@@ -56,7 +56,8 @@ export default function ProjectBoard() {
     try {
       const d = await projectsApi.board(key, showOld)
       if (dragging.current || pending.current > 0) return
-      setData(d)
+      // Nothing new (the usual case): keep the same data so the board is not redrawn.
+      setData((cur) => (cur && JSON.stringify(cur) === JSON.stringify(d) ? cur : d))
       setNotFound(false)
     } catch (e) {
       if (!quiet) {

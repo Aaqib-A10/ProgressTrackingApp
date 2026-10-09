@@ -97,3 +97,31 @@ describe('repair of check-ins the old rule filed a day early', () => {
     ])
   })
 })
+
+describe('repair: checked in twice the same evening', () => {
+  const day = (d: string) => new Date(`${d}T00:00:00Z`)
+  it('keeps the earlier check-in on the right day and gives the night before its own hours back', async () => {
+    const uid = w.inventoryMember.id
+    await prisma.attendanceShift.create({ data: { userId: uid, startTime: '19:00', endTime: '04:00', graceMin: 10, requiredMinutes: 480, workingDays: [1, 2, 3, 4, 5], timeZone: null } })
+    await prisma.attendanceDay.createMany({
+      data: [
+        // Tue 18:45 check-in sat on Mon, with Monday night's 04:14 check-out.
+        { userId: uid, date: day('2026-10-05'), checkInAt: pk('2026-10-05T18:50'), checkOutAt: pk('2026-10-06T04:14') },
+        { userId: uid, date: day('2026-10-06'), checkInAt: pk('2026-10-07T18:45'), checkOutAt: pk('2026-10-07T04:14') },
+        // Thu 18:28 went to Wed; Thu was then checked in again at 19:01.
+        { userId: uid, date: day('2026-10-07'), checkInAt: pk('2026-10-08T18:28'), checkOutAt: pk('2026-10-08T04:14') },
+        { userId: uid, date: day('2026-10-08'), checkInAt: pk('2026-10-08T19:01'), checkOutAt: pk('2026-10-09T04:16') },
+      ],
+    })
+    const r = await repairNightShiftDays({ apply: true, since: '2026-10-01' })
+    expect(r.manual).toEqual([])
+    const rows = await prisma.attendanceDay.findMany({ where: { userId: uid }, orderBy: { date: 'asc' } })
+    const view = rows.map((x) => [x.date.toISOString().slice(0, 10), x.checkInAt?.toISOString() ?? null, x.checkOutAt?.toISOString() ?? null])
+    expect(view).toEqual([
+      ['2026-10-05', pk('2026-10-05T18:50').toISOString(), pk('2026-10-06T04:14').toISOString()],
+      ['2026-10-06', null, pk('2026-10-07T04:14').toISOString()],
+      ['2026-10-07', pk('2026-10-07T18:45').toISOString(), pk('2026-10-08T04:14').toISOString()],
+      ['2026-10-08', pk('2026-10-08T18:28').toISOString(), pk('2026-10-09T04:16').toISOString()],
+    ])
+  })
+})

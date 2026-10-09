@@ -65,7 +65,18 @@ export async function repairNightShiftDays(opts: { apply: boolean; since: string
               const to = misfiledTo(shift, r.checkInAt, filed)
               if (to) {
                 const target = await dayAt(to)
-                if (target?.checkInAt) {
+                const sameEvening = !!target?.checkInAt && Math.abs(target.checkInAt.getTime() - r.checkInAt.getTime()) < 6 * 3600_000
+                if (target?.checkInAt && sameEvening) {
+                  // Checked in twice the same evening (the early one went to the day before, so
+                  // the app let them check in again): keep the earlier time on the right day.
+                  if (r.checkInAt < target.checkInAt) {
+                    await tx.attendanceDay.update({ where: { id: target.id }, data: { checkInAt: r.checkInAt, checkInIp: r.checkInIp, checkInUa: r.checkInUa, checkInMobile: r.checkInMobile } })
+                  }
+                  await tx.attendanceDay.update({ where: { id: r.id }, data: { checkInAt: null, checkInIp: null, checkInUa: null, checkInMobile: null } })
+                  for (const b of r.breaks) if (b.startAt >= r.checkInAt) await tx.breakEntry.update({ where: { id: b.id }, data: { dayId: target.id } })
+                  lines.push(`${u.name}: check-in ${label(r.checkInAt)}  ${filed} -> ${to} (joined with the second check-in that evening)`)
+                  moved++
+                } else if (target?.checkInAt) {
                   manual.push(`${u.name}: check-in ${label(r.checkInAt)} is filed under ${filed}, but ${to} already has a check-in`)
                 } else {
                   const tid = await ensure(to)

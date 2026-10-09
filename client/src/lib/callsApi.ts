@@ -22,7 +22,7 @@ export interface CallSignal { id: number; from: string; kind: 'offer' | 'answer'
 export interface JoinResponse { callId: string; video: boolean; conversationId: string; me: string; others: CallParticipant[]; iceServers: RTCIceServer[]; guest?: boolean; noteTaker?: boolean; meetingId?: string | null; isDirect?: boolean; sttMode?: 'server' | 'browser'; relay?: boolean }
 export interface PollResponse { ended: boolean; removed?: boolean; participants: CallParticipant[]; signals: CallSignal[]; declined?: string[]; noteTaker?: boolean; captions?: Caption[]; invited?: string[] }
 
-export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }[]; openQuestions: string[] }
+export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }[]; openQuestions: string[]; language?: 'en' | 'ur' }
 export interface CallNotesResponse {
   call: { id: string; startedAt: string; endedAt: string | null; video: boolean; title: string; meetingId: string | null; conversationId: string }
   status: 'none' | 'recording' | 'pending' | 'ready' | 'failed' | 'empty' | 'no-ai'
@@ -47,7 +47,7 @@ export const callsApi = {
   mute: (callId: string, userId: string) => api.post(`/chat/calls/${callId}/mute`, { userId }),
   setNotes: (callId: string, on: boolean) => api.post<{ noteTaker: boolean }>(`/chat/calls/${callId}/notes`, { on }),
   notes: (callId: string) => api.get<CallNotesResponse>(`/chat/calls/${callId}/notes`),
-  retryNotes: (callId: string) => api.post(`/chat/calls/${callId}/notes/retry`),
+  retryNotes: (callId: string, lang?: 'en' | 'ur') => api.post(`/chat/calls/${callId}/notes/retry`, lang ? { lang } : {}),
   transcript: (callId: string, text: string, final: boolean) => api.post(`/chat/calls/${callId}/transcript`, { text, final }),
   audio: (callId: string, blob: Blob, mode: string, durationMs: number) => api.postRaw<{ ok: boolean }>(`/chat/calls/${callId}/audio?mode=${mode}&durationMs=${Math.round(durationMs)}`, blob, blob.type || 'audio/webm'),
   linkActionItem: (callId: string, index: number, taskCode: string) => api.patch(`/chat/calls/${callId}/notes/action-items/${index}`, { taskCode }),

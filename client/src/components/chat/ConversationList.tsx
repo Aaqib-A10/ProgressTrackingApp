@@ -15,7 +15,7 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
   const [list, setList] = useState<ConversationListItem[] | null>(null)
   const [q, setQ] = useState('')
   const [newOpen, setNewOpen] = useState(false)
-  const load = () => chatApi.conversations().then((r) => setList(r.conversations)).catch(() => undefined)
+  const load = () => chatApi.conversations().then((r) => setList((cur) => (cur && JSON.stringify(cur) === JSON.stringify(r.conversations) ? cur : r.conversations))).catch(() => undefined)
   useEffect(() => { load() }, [refreshKey])
   useEffect(() => visiblePoll(load, 8000), [])
 

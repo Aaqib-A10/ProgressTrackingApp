@@ -25,6 +25,19 @@ export interface MeetingNotes {
   decisions: string[]
   actionItems: ActionItem[]
   openQuestions: string[]
+  /** Language the notes are written in. */
+  language?: NotesLang
+}
+
+/** en = English, ur = Urdu (Urdu script). auto = the language most of the meeting was in. */
+export type NotesLang = 'en' | 'ur'
+
+/** Mostly Urdu (Urdu/Arabic or Devanagari script) or mostly English? */
+export function detectLanguage(text: string): NotesLang {
+  const letters = text.match(/\p{L}/gu)?.length ?? 0
+  if (!letters) return 'en'
+  const urdu = text.match(/[\u0600-\u06FF\u0750-\u077F\u0900-\u097F]/g)?.length ?? 0
+  return urdu / letters > 0.3 ? 'ur' : 'en'
 }
 
 /** Which AI writes the notes (null = none set up). */
@@ -37,7 +50,7 @@ export function notesProvider(): 'groq' | 'anthropic' | null {
 const DEFAULT_MODEL = 'claude-sonnet-5-5'
 const MAX_TRANSCRIPT_CHARS = 400_000
 
-const SYSTEM =
+const SYSTEM_BASE =
   'You write meeting notes for a busy team. Be accurate: only include what was actually said in the transcript, and never add anything that was not said. ' +
   'The transcript comes from speech recognition in an office: it can contain lines that are side talk from people nearby, background voices, ' +
   'misheard words or sentences that make no sense in the meeting. Leave all of those out. ' +
@@ -45,8 +58,14 @@ const SYSTEM =
   'Leave out greetings, small talk, jokes, personal or private matters (health, family, injuries) and anything said to someone outside the meeting. ' +
   'Never write that a name, product or company "was mentioned": only report what was said about it. ' +
   'If a line is unclear, skip it rather than guess. If there is little real discussion, keep the notes short and say so in the summary instead of filling them. ' +
-  'People may speak English, Urdu or a mix; always write the notes in clear, simple English. ' +
-  'Answer with one JSON object and nothing else.'
+  'People may speak English, Urdu or a mix (Urdu may appear in Urdu or Hindi script). '
+
+function systemFor(lang: NotesLang): string {
+  const write = lang === 'ur'
+    ? 'Write every value of the notes in simple, natural Urdu in Urdu script (the way the team speaks). Keep names of people, companies, products and technical words in English letters. '
+    : 'Write every value of the notes in clear, simple English. '
+  return SYSTEM_BASE + write + 'The JSON keys stay in English. Answer with one JSON object and nothing else.'
+}
 
 const KEYS_SPEC = `Return JSON with exactly these keys:
 {
@@ -72,11 +91,12 @@ export function splitTranscript(text: string, size: number): string[] {
 }
 
 async function ask(system: string, prompt: string): Promise<string> {
-  return notesProvider() === 'groq' ? chatJson(system, prompt) : askClaude(prompt)
+  return notesProvider() === 'groq' ? chatJson(system, prompt, 3500) : askClaude(prompt, system)
 }
 
 /** Write the notes: in one go, or part by part and then combined for long meetings. */
-async function writeNotes(ctx: { title: string; agenda: string; people: string[]; transcript: string; date?: string }): Promise<MeetingNotes> {
+async function writeNotes(ctx: { title: string; agenda: string; people: string[]; transcript: string; date?: string }, lang: NotesLang): Promise<MeetingNotes> {
+  const SYSTEM = systemFor(lang)
   const size = Number(process.env.NOTES_CHUNK_CHARS ?? (notesProvider() === 'groq' ? 14_000 : 150_000))
   const parts = splitTranscript(ctx.transcript, size)
   if (parts.length === 1) return parseNotes(await ask(SYSTEM, buildPrompt(ctx)))
@@ -126,7 +146,7 @@ export function parseNotes(text: string): MeetingNotes {
   }
 }
 
-async function askClaude(prompt: string): Promise<string> {
+async function askClaude(prompt: string, system: string): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new Error('no-key')
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -135,7 +155,7 @@ async function askClaude(prompt: string): Promise<string> {
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL,
       max_tokens: 4000,
-      system: SYSTEM,
+      system,
       messages: [{ role: 'user', content: prompt }],
     }),
   })
@@ -158,7 +178,7 @@ ${KEYS_SPEC}`
  * Write the notes for a call (once). Safe to call again: only runs when the call
  * has no notes yet, or when `force` is set (the "Try again" button).
  */
-export async function generateNotes(callId: string, opts: { force?: boolean } = {}): Promise<void> {
+export async function generateNotes(callId: string, opts: { force?: boolean; lang?: NotesLang | 'auto' } = {}): Promise<void> {
   const claim = await prisma.chatCall.updateMany({
     where: opts.force ? { id: callId } : { id: callId, notesStatus: null },
     data: { notesStatus: 'pending' },
@@ -186,7 +206,9 @@ export async function generateNotes(callId: string, opts: { force?: boolean } = 
   try {
     if (!notesProvider()) throw new Error('no-key')
     const date = call.startedAt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: process.env.APP_TIMEZONE || 'Asia/Karachi' })
-    notes = await writeNotes({ title, agenda: call.meeting?.agenda ?? '', people, transcript: transcriptText(call.startedAt, call.transcript), date })
+    const transcript = transcriptText(call.startedAt, call.transcript)
+    const lang: NotesLang = opts.lang && opts.lang !== 'auto' ? opts.lang : detectLanguage(call.transcript.map((l) => l.text).join(' '))
+    notes = { ...(await writeNotes({ title, agenda: call.meeting?.agenda ?? '', people, transcript, date }, lang)), language: lang }
   } catch (e) {
     const msg = (e as Error).message
     status = msg === 'no-key' ? 'no-ai' : 'failed'

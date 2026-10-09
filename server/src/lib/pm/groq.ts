@@ -43,7 +43,7 @@ async function groqFetch(path: string, init: () => RequestInit, attempts = 6): P
 
 // ---------- speech to text ----------
 
-/** mixed = any language (Urdu, English or both) written in English; en = English; ur = Urdu in Urdu script. */
+/** mixed = written as spoken (English stays English, Urdu in Urdu script); en = English only; ur = Urdu only (Urdu script). */
 export type SpeechMode = 'mixed' | 'en' | 'ur'
 
 // Whisper sometimes "hears" these in silence or noise.
@@ -52,6 +52,9 @@ const HALLUCINATIONS = [
   /^(you|bye|bye-bye|okay|ok|hmm+|uh+|um+|yeah|yes|no|so|\.|\.\.\.)[.!?]*$/i,
   /subtitles? (by|provided)/i, /please subscribe/i, /like and subscribe/i, /amara\.org/i, /transcribed by/i,
   /^\[?\(?(music|silence|blank_audio|noise|applause|laughter|inaudible)\)?\]?$/i,
+  // The same in Urdu / Hindi script.
+  /^(شکریہ|بہت شکریہ|جی|ہاں|اچھا|ٹھیک ہے|اللہ حافظ|धन्यवाद|शुक्रिया|हाँ|जी)[\s.!?۔]*$/,
+  /سبسکرائب|subscribe|सब्सक्राइब/i,
 ]
 
 export interface VerboseSegment { text: string; no_speech_prob?: number; avg_logprob?: number; compression_ratio?: number; start?: number; end?: number }
@@ -83,29 +86,54 @@ export function collapseRepeats(text: string): string {
   return out.join(' ')
 }
 
-/** One short recording -> text (empty string when nobody really spoke). */
-export async function transcribeAudio(audio: Buffer, opts: { mode: SpeechMode; prompt?: string; mime?: string }): Promise<string> {
-  const translate = opts.mode === 'mixed'
-  const model = translate ? 'whisper-large-v3' : process.env.GROQ_STT_MODEL || 'whisper-large-v3'
-  const ext = (opts.mime ?? 'audio/webm').includes('ogg') ? 'ogg' : (opts.mime ?? '').includes('mp4') ? 'm4a' : 'webm'
-  const r = await groqFetch(translate ? '/audio/translations' : '/audio/transcriptions', () => {
+interface SttResult { text: string; language?: string; segments?: VerboseSegment[] }
+
+async function sttCall(audio: Buffer, o: { model: string; language?: string; prompt?: string; mime?: string }): Promise<SttResult> {
+  const ext = (o.mime ?? 'audio/webm').includes('ogg') ? 'ogg' : (o.mime ?? '').includes('mp4') ? 'm4a' : 'webm'
+  const r = await groqFetch('/audio/transcriptions', () => {
     const form = new FormData()
-    form.append('file', new Blob([new Uint8Array(audio)], { type: opts.mime ?? 'audio/webm' }), `speech.${ext}`)
-    form.append('model', model)
+    form.append('file', new Blob([new Uint8Array(audio)], { type: o.mime ?? 'audio/webm' }), `speech.${ext}`)
+    form.append('model', o.model)
     form.append('response_format', 'verbose_json')
     form.append('temperature', '0')
-    if (!translate) form.append('language', opts.mode === 'ur' ? 'ur' : 'en')
+    if (o.language) form.append('language', o.language)
     // A prompt is only passed when explicitly given: Whisper tends to repeat prompt words
     // (names, company names) when the sound is unclear, so none is sent by default.
-    if (opts.prompt) form.append('prompt', opts.prompt.slice(0, 300))
+    if (o.prompt) form.append('prompt', o.prompt.slice(0, 300))
     return { method: 'POST', body: form }
   })
   if (!r.ok) throw new GroqError(`Groq speech-to-text ${r.status}: ${(await r.text()).slice(0, 200)}`, r.status)
-  const j = (await r.json()) as { text?: string; segments?: VerboseSegment[] }
+  return (await r.json()) as SttResult
+}
+
+function cleanText(j: SttResult): string {
   const segs = j.segments?.length
     ? j.segments.filter(keepSegment).map((s) => s.text.trim())
     : [String(j.text ?? '').trim()].filter((t) => t && !HALLUCINATIONS.some((re) => re.test(t)))
   return collapseRepeats(segs.join(' ').replace(/\s+/g, ' ').trim())
+}
+
+const DEVANAGARI = /[\u0900-\u097F]/
+
+/**
+ * One short recording -> the words as they were said (empty string when nobody really spoke).
+ *
+ * mixed: Whisper picks the language of each piece. English stays English. Urdu that it
+ * writes in Hindi letters (it often does) is written again in Urdu script.
+ */
+export async function transcribeAudio(audio: Buffer, opts: { mode: SpeechMode; prompt?: string; mime?: string }): Promise<string> {
+  const big = process.env.GROQ_STT_MODEL || 'whisper-large-v3'
+  if (opts.mode === 'en') return cleanText(await sttCall(audio, { model: big, language: 'en', prompt: opts.prompt, mime: opts.mime }))
+  if (opts.mode === 'ur') return cleanText(await sttCall(audio, { model: big, language: 'ur', prompt: opts.prompt, mime: opts.mime }))
+  // First pass on the fast model (its own free-tier limits), language chosen by Whisper.
+  const first = await sttCall(audio, { model: process.env.GROQ_STT_FAST_MODEL || 'whisper-large-v3-turbo', prompt: opts.prompt, mime: opts.mime })
+  const lang = String(first.language ?? '').toLowerCase()
+  const text = cleanText(first)
+  if (!text) return ''
+  if (DEVANAGARI.test(text) || lang === 'hindi' || lang === 'hi' || lang === 'punjabi' || lang === 'pa') {
+    return cleanText(await sttCall(audio, { model: big, language: 'ur', prompt: opts.prompt, mime: opts.mime }))
+  }
+  return text
 }
 
 // ---------- notes model ----------

@@ -34,9 +34,9 @@ export function speechSupported(): boolean {
 
 /** What people speak in the call. "mixed" = Urdu, English or both, written in English. */
 export const SPEECH_LANGS = [
-  { code: 'mixed', label: 'Urdu and English mixed (notes in English)', browser: 'en-IN' },
+  { code: 'mixed', label: 'Urdu and English, written as spoken', browser: 'en-IN' },
   { code: 'en', label: 'English only', browser: 'en-US' },
-  { code: 'ur', label: 'Urdu (keep Urdu script)', browser: 'ur-PK' },
+  { code: 'ur', label: 'Urdu only (Urdu script)', browser: 'ur-PK' },
 ]
 
 /** Language code for the browser's own speech recognition (live captions). */

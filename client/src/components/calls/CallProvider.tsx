@@ -34,7 +34,6 @@ interface CallsContextValue {
   toggleCam: () => void
   toggleScreen: () => void
   toggleHand: () => void
-  toggleNoise: () => void
   muteOthers: (userId: string | '*') => void
   react: (emoji: string) => void
   reactions: Reaction[]
@@ -87,7 +86,11 @@ export function CallProvider({ meId, children }: { meId: string; children: React
 
   // ---- calls running in my conversations (poll; slower while the tab is hidden) ----
   const refreshActive = useCallback(async () => {
-    try { setActive((await callsApi.active()).calls) } catch { /* offline for a moment */ }
+    try {
+      const calls = (await callsApi.active()).calls
+      // Same as before (the usual case): keep the old list so the app does not redraw every 3 seconds.
+      setActive((cur) => (JSON.stringify(cur) === JSON.stringify(calls) ? cur : calls))
+    } catch { /* offline for a moment */ }
   }, [])
   useEffect(() => {
     let t: number | undefined
@@ -348,7 +351,6 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     toggleCam: () => { void engine.current?.toggleCam() },
     toggleScreen: () => { void engine.current?.toggleScreen() },
     toggleHand: () => engine.current?.toggleHand(),
-    toggleNoise: () => engine.current?.toggleNoise(),
     muteOthers: (userId: string | '*') => {
       const e = engine.current
       if (!e) return

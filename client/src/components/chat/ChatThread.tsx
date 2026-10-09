@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Trash2, Users, Video, X } from 'lucide-react'
+import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, Expand, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Trash2, Users, Video, X } from 'lucide-react'
 import { chatApi, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { useToast } from '../ui/Toast'
@@ -10,6 +10,7 @@ import { cn } from '../../lib/cn'
 import { useCalls } from '../calls/CallProvider'
 import { NotesModal } from '../calls/MeetingNotes'
 import { ChatPicture } from '../ui/Pictures'
+import { MediaViewer } from '../ui/MediaViewer'
 
 const API = import.meta.env.VITE_API_URL ?? '/api'
 const EMOJI = ['👍', '🙏', '✅', '🎉', '👀', '🔥', '😂', '❤️', '🚀', '⏰', '❗', '🙂']
@@ -19,6 +20,11 @@ const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
  * One conversation: history (scroll up for older), live polling for new messages,
  * edits and deletes, typing indicator, read receipts, replies, @mentions and files.
  */
+/** Same data? (cheap deep compare for small poll answers) */
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
 export function ChatThread({ conversationId, meId, compact, prefill, onHeaderClick, actions, onSent, hideCallButtons }: { conversationId: string; meId: string; compact?: boolean; prefill?: string; onHeaderClick?: () => void; actions?: React.ReactNode; onSent?: () => void; hideCallButtons?: boolean }) {
   const { addToast } = useToast()
   const calls = useCalls()
@@ -76,8 +82,9 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     try {
       const r = await chatApi.messages(conversationId, { after: lastSeq.current, changedSince: lastSync.current ?? undefined })
       lastSync.current = r.serverTime
-      setTyping(r.typing)
-      setReads(r.reads)
+      // Only when something changed: a new array every poll re-drew the whole chat.
+      setTyping((cur) => (sameJson(cur, r.typing) ? cur : r.typing))
+      setReads((cur) => (sameJson(cur, r.reads) ? cur : r.reads))
       if (r.messages.length || r.changed.length) {
         setMsgs((cur) => {
           const map = new Map(cur.map((m) => [m.id, m]))
@@ -92,7 +99,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     } catch { /* transient */ }
   }, 2500), [conversationId, markRead])
 
-  useEffect(() => visiblePoll(() => { chatApi.conversation(conversationId).then((r) => setConv(r.conversation)).catch(() => undefined) }, 30000), [conversationId])
+  useEffect(() => visiblePoll(() => { chatApi.conversation(conversationId).then((r) => setConv((cur) => (sameJson(cur, r.conversation) ? cur : r.conversation))).catch(() => undefined) }, 30000), [conversationId])
 
   // Scroll: stick to bottom for new messages, keep position when older ones load.
   useLayoutEffect(() => {
@@ -220,6 +227,84 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const lastMine = [...msgs].reverse().find((m) => m.user.id === meId && !m.deleted && !m.call)
   const isDirect = conv?.type === 'DIRECT'
   const other = isDirect ? members[0] : null
+  // Latest handlers for the memoised message list (it only redraws when messages change).
+  const h = useRef({ react, remove, nameOrYou })
+  h.current = { react, remove, nameOrYou }
+  const messageList = useMemo(() => (
+    <>
+        {msgs.map((m, i) => {
+        const prev = msgs[i - 1]
+        const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString()
+        const grouped = !newDay && prev && prev.user.id === m.user.id && new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60000
+        const mine = m.user.id === meId
+        return (
+          <Fragment key={m.id}>
+            {newDay && <div className="my-3 flex items-center gap-3 text-body-sm text-ink-muted"><span className="h-px flex-1 bg-line" />{new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}<span className="h-px flex-1 bg-line" /></div>}
+            <div className={cn('group relative flex gap-2', mine && 'flex-row-reverse', grouped ? 'mt-0.5' : 'mt-3')}>
+              {!mine && <div className="w-8 shrink-0">{!grouped && <PersonAvatar person={m.user} size={32} />}</div>}
+              <div className={cn('flex min-w-0 flex-col', compact ? 'max-w-[85%]' : 'max-w-[72%]', mine ? 'items-end' : 'items-start')}>
+                {!grouped && (
+                  <div className={cn('mb-0.5 flex items-baseline gap-2 px-1', mine && 'flex-row-reverse')}>
+                    <span className="text-body-sm font-semibold text-ink">{mine ? 'You' : m.user.name}</span>
+                    <span className="text-[11px] text-ink-muted" title={fmtDateTime(m.createdAt)}>{new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
+                )}
+                <div className={cn(
+                  'min-w-0 max-w-full rounded-2xl px-3 py-2',
+                  mine ? 'bg-primary/10' : 'bg-slate-100',
+                  !grouped && (mine ? 'rounded-tr-md' : 'rounded-tl-md'),
+                )}>
+                  {m.replyTo && !m.deleted && (
+                    <div className="mb-1 border-l-2 border-primary/40 pl-2 text-body-sm text-ink-muted"><b className="text-ink">{m.replyTo.userName}</b>: {m.replyTo.body}</div>
+                  )}
+                  {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
+                    <>
+                      {m.notes ? <NotesCard callId={m.notes.callId} body={m.body} onOpen={() => setNotesFor(m.notes!.callId)} /> : m.call ? <CallCard call={m.call} conversationId={conversationId} mine={mine} /> : m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
+                      {m.file && <FileBubble file={m.file} />}
+                      {m.task && <TaskRefCard task={m.task} />}
+                    </>
+                  )}
+                </div>
+                {!m.deleted && m.reactions?.length > 0 && (
+                  <div className={cn('mt-0.5 flex flex-wrap gap-1 px-1', mine && 'justify-end')}>
+                    {m.reactions.map((r) => {
+                      const mineR = r.userIds.includes(meId)
+                      return (
+                        <button key={r.emoji} type="button" onClick={() => h.current.react(m, r.emoji)} title={r.userIds.map(h.current.nameOrYou).join(', ')} className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none', mineR ? 'border-primary/40 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:bg-slate-50')}>
+                          <span className="text-[14px]">{r.emoji}</span>{r.userIds.length}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
+              </div>
+              {!m.deleted && (
+                <div className={cn('absolute top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', mine ? 'left-1' : 'right-1', menuFor === m.id && 'flex')}>
+                  {MSG_REACTIONS.slice(0, compact ? 3 : 5).map((e) => (
+                    <button key={e} type="button" onClick={() => h.current.react(m, e)} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`} title={`React ${e}`}>{e}</button>
+                  ))}
+                  <button type="button" onClick={() => setReactFor(reactFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More reactions" title="More reactions"><SmilePlus size={14} /></button>
+                  {reactFor === m.id && MSG_REACTIONS.slice(compact ? 3 : 5).map((e) => (
+                    <button key={e} type="button" onClick={() => { h.current.react(m, e); setReactFor(null) }} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`}>{e}</button>
+                  ))}
+                  <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Reply" title="Reply"><CornerUpLeft size={14} /></button>
+                  {mine && (
+                    <>
+                      {!m.file && !m.call && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
+                      <button type="button" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More"><MoreHorizontal size={14} /></button>
+                      {menuFor === m.id && <button type="button" onClick={() => { setMenuFor(null); h.current.remove(m) }} className="rounded px-1.5 py-0.5 text-body-sm text-danger hover:bg-danger/10"><Trash2 size={13} className="inline" /> Delete</button>}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </Fragment>
+        )
+      })}
+    </>
+  ), [msgs, conv, meId, compact, menuFor, reactFor, isDirect, lastMine?.id, otherReadSeq, conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -250,76 +335,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         {loadingOlder && <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-ink-muted" /></div>}
         {!hasMore && msgs.length > 0 && <p className="py-3 text-center text-body-sm text-ink-muted">Start of the conversation</p>}
         {msgs.length === 0 && conv && <p className="py-10 text-center text-body-md text-ink-muted">No messages yet. Say hello 👋</p>}
-        {msgs.map((m, i) => {
-          const prev = msgs[i - 1]
-          const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString()
-          const grouped = !newDay && prev && prev.user.id === m.user.id && new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60000
-          const mine = m.user.id === meId
-          return (
-            <Fragment key={m.id}>
-              {newDay && <div className="my-3 flex items-center gap-3 text-body-sm text-ink-muted"><span className="h-px flex-1 bg-line" />{new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}<span className="h-px flex-1 bg-line" /></div>}
-              <div className={cn('group relative flex gap-2', mine && 'flex-row-reverse', grouped ? 'mt-0.5' : 'mt-3')}>
-                {!mine && <div className="w-8 shrink-0">{!grouped && <PersonAvatar person={m.user} size={32} />}</div>}
-                <div className={cn('flex min-w-0 flex-col', compact ? 'max-w-[85%]' : 'max-w-[72%]', mine ? 'items-end' : 'items-start')}>
-                  {!grouped && (
-                    <div className={cn('mb-0.5 flex items-baseline gap-2 px-1', mine && 'flex-row-reverse')}>
-                      <span className="text-body-sm font-semibold text-ink">{mine ? 'You' : m.user.name}</span>
-                      <span className="text-[11px] text-ink-muted" title={fmtDateTime(m.createdAt)}>{new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
-                    </div>
-                  )}
-                  <div className={cn(
-                    'min-w-0 max-w-full rounded-2xl px-3 py-2',
-                    mine ? 'bg-primary/10' : 'bg-slate-100',
-                    !grouped && (mine ? 'rounded-tr-md' : 'rounded-tl-md'),
-                  )}>
-                    {m.replyTo && !m.deleted && (
-                      <div className="mb-1 border-l-2 border-primary/40 pl-2 text-body-sm text-ink-muted"><b className="text-ink">{m.replyTo.userName}</b>: {m.replyTo.body}</div>
-                    )}
-                    {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
-                      <>
-                        {m.notes ? <NotesCard callId={m.notes.callId} body={m.body} onOpen={() => setNotesFor(m.notes!.callId)} /> : m.call ? <CallCard call={m.call} conversationId={conversationId} mine={mine} /> : m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
-                        {m.file && <FileBubble file={m.file} />}
-                        {m.task && <TaskRefCard task={m.task} />}
-                      </>
-                    )}
-                  </div>
-                  {!m.deleted && m.reactions?.length > 0 && (
-                    <div className={cn('mt-0.5 flex flex-wrap gap-1 px-1', mine && 'justify-end')}>
-                      {m.reactions.map((r) => {
-                        const mineR = r.userIds.includes(meId)
-                        return (
-                          <button key={r.emoji} type="button" onClick={() => react(m, r.emoji)} title={r.userIds.map(nameOrYou).join(', ')} className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none', mineR ? 'border-primary/40 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:bg-slate-50')}>
-                            <span className="text-[14px]">{r.emoji}</span>{r.userIds.length}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                  {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
-                </div>
-                {!m.deleted && (
-                  <div className={cn('absolute top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', mine ? 'left-1' : 'right-1', menuFor === m.id && 'flex')}>
-                    {MSG_REACTIONS.slice(0, compact ? 3 : 5).map((e) => (
-                      <button key={e} type="button" onClick={() => react(m, e)} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`} title={`React ${e}`}>{e}</button>
-                    ))}
-                    <button type="button" onClick={() => setReactFor(reactFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More reactions" title="More reactions"><SmilePlus size={14} /></button>
-                    {reactFor === m.id && MSG_REACTIONS.slice(compact ? 3 : 5).map((e) => (
-                      <button key={e} type="button" onClick={() => { react(m, e); setReactFor(null) }} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`}>{e}</button>
-                    ))}
-                    <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Reply" title="Reply"><CornerUpLeft size={14} /></button>
-                    {mine && (
-                      <>
-                        {!m.file && !m.call && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
-                        <button type="button" onClick={() => setMenuFor(menuFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More"><MoreHorizontal size={14} /></button>
-                        {menuFor === m.id && <button type="button" onClick={() => { setMenuFor(null); remove(m) }} className="rounded px-1.5 py-0.5 text-body-sm text-danger hover:bg-danger/10"><Trash2 size={13} className="inline" /> Delete</button>}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </Fragment>
-          )
-        })}
+        {messageList}
       </div>
 
       {/* Typing */}
@@ -447,15 +463,27 @@ function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
   const href = API + file.url.replace(/^\/api/, '')
   const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(file.mime ?? '')
   const isVideo = /^video\/(webm|mp4)$/i.test(file.mime ?? '')
+  const [open, setOpen] = useState(false)
+  const name = file.name ?? (isImage ? 'image' : 'video')
   return (
     <div className="mt-1">
       {isVideo ? (
         <div className="w-[min(420px,100%)]">
           <video controls preload="metadata" src={`${href}?inline=1`} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />
-          <a href={href} className="mt-1 inline-flex items-center gap-1 text-[12px] text-ink-muted hover:text-ink"><Download size={12} /> Download ({fmtBytes(file.size ?? 0)})</a>
+          <div className="mt-1 flex items-center gap-3 text-[12px] text-ink-muted">
+            <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 hover:text-ink"><Expand size={12} /> Open</button>
+            <a href={href} className="inline-flex items-center gap-1 hover:text-ink"><Download size={12} /> Download ({fmtBytes(file.size ?? 0)})</a>
+          </div>
         </div>
       ) : isImage ? (
-        <a href={href} target="_blank" rel="noreferrer"><img src={`${href}?inline=1`} alt={file.name ?? 'image'} className="max-h-64 max-w-full rounded-btn border border-line object-contain" loading="lazy" /></a>
+        <div className="group/img relative inline-block max-w-full">
+          <button type="button" onClick={() => setOpen(true)} className="block max-w-full cursor-zoom-in" aria-label={`Open ${name}`}>
+            <img src={`${href}?inline=1`} alt={name} className="max-h-64 max-w-full rounded-btn border border-line object-contain" loading="lazy" decoding="async" />
+          </button>
+          <a href={href} onClick={(e) => e.stopPropagation()} className="absolute right-1.5 top-1.5 hidden h-8 w-8 items-center justify-center rounded-full bg-slate-900/70 text-white hover:bg-slate-900 group-hover/img:inline-flex" aria-label="Download" title="Download">
+            <Download size={15} />
+          </a>
+        </div>
       ) : (
         <a href={href} className="inline-flex max-w-full items-center gap-2 rounded-btn border border-line bg-card px-3 py-2 text-body-sm hover:bg-slate-50">
           <FileText size={18} className="shrink-0 text-primary" />
@@ -463,6 +491,7 @@ function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
           <Download size={15} className="shrink-0 text-ink-muted" />
         </a>
       )}
+      {open && (isImage || isVideo) && <MediaViewer item={{ href, name, kind: isImage ? 'image' : 'video', size: fmtBytes(file.size ?? 0) }} onClose={() => setOpen(false)} />}
     </div>
   )
 }

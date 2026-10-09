@@ -259,11 +259,15 @@ describe('in-call extras', () => {
 describe('note taker with Groq (mocked)', () => {
   type Req = { url: string; body: unknown }
   const calls: Req[] = []
-  function mockGroq(opts: { sttText?: string; notes?: object; segments?: { text: string; no_speech_prob: number; avg_logprob: number }[] } = {}) {
+  function mockGroq(opts: { sttText?: string; sttLang?: string; urduText?: string; notes?: object; segments?: { text: string; no_speech_prob: number; avg_logprob: number }[] } = {}) {
     calls.length = 0
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: { body: unknown }) => {
       calls.push({ url: String(url), body: init?.body })
-      if (String(url).includes('/audio/')) return new Response(JSON.stringify({ text: opts.sttText ?? '', segments: opts.segments ?? [{ text: opts.sttText ?? '', no_speech_prob: 0.01, avg_logprob: -0.2 }] }), { status: 200 })
+      if (String(url).includes('/audio/')) {
+        const asUrdu = (init?.body as FormData).get('language') === 'ur' && opts.urduText
+        const text = asUrdu ? opts.urduText! : opts.sttText ?? ''
+        return new Response(JSON.stringify({ text, language: asUrdu ? 'urdu' : opts.sttLang ?? 'english', segments: opts.segments ?? [{ text, no_speech_prob: 0.01, avg_logprob: -0.2 }] }), { status: 200 })
+      }
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(opts.notes ?? { summary: 'S', keyPoints: [], decisions: [], actionItems: [], openQuestions: [] }) } }] }), { status: 200 })
     }))
   }
@@ -284,13 +288,15 @@ describe('note taker with Groq (mocked)', () => {
     await request(app).post(`/api/chat/calls/${callId}/join`).set(...auth(w.itadMember)).send({}).expect(200)
   })
 
-  it('pieces of each person\'s speech are transcribed on the server with their name (Urdu/mixed -> English)', async () => {
+  it('pieces of each person\'s speech are transcribed on the server with their name, as spoken', async () => {
     mockGroq({ sttText: 'We will ship the county pages on Friday.' })
     await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'mixed', durationMs: 20000 }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 1)).expect(200)
     await waitForCall(callId, 5000)
-    expect(calls[0].url).toContain('/audio/translations') // mixed language is written in English
+    expect(calls).toHaveLength(1) // English: one pass, nothing translated
+    expect(calls[0].url).toContain('/audio/transcriptions')
     const form = calls[0].body as FormData
-    expect(form.get('model')).toBe('whisper-large-v3')
+    expect(form.get('model')).toBe('whisper-large-v3-turbo')
+    expect(form.get('language')).toBeNull() // Whisper picks the language
     expect(form.get('prompt')).toBeNull() // no vocabulary prompt: Whisper parrots it on unclear sound
     mockGroq({ sttText: 'I will send the list tomorrow.' })
     await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en' }).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(200)
@@ -302,6 +308,15 @@ describe('note taker with Groq (mocked)', () => {
     // and they show as captions
     const p = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadMember)).expect(200)
     expect(p.body.captions.some((c: { text: string; final: boolean }) => c.final && c.text.includes('county pages'))).toBe(true)
+  })
+
+  it('Urdu that Whisper writes in Hindi letters is written again in Urdu script', async () => {
+    mockGroq({ sttText: 'हम शुक्रवार को पेज भेज देंगे', sttLang: 'hindi', urduText: 'ہم جمعہ کو پیجز بھیج دیں گے' })
+    expect(await transcribeAudio(Buffer.alloc(100), { mode: 'mixed' })).toBe('ہم جمعہ کو پیجز بھیج دیں گے')
+    expect(calls).toHaveLength(2)
+    expect((calls[1].body as FormData).get('model')).toBe('whisper-large-v3')
+    expect((calls[1].body as FormData).get('language')).toBe('ur')
+    vi.unstubAllGlobals()
   })
 
   it('in Groq mode, the browser\'s own recognition is only used for captions (no duplicate lines)', async () => {
@@ -343,11 +358,23 @@ describe('note taker with Groq (mocked)', () => {
     const again = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
     expect(again.body.notes.actionItems[0].taskCode).toBe(code)
     await request(app).patch(`/api/chat/calls/${callId}/notes/action-items/0`).set(...auth(w.itadMember)).send({ taskCode: 'NOPE-1' }).expect(422)
-    // "Try again" keeps the task already made from that action item
-    await generateNotes(callId, { force: true })
+    expect(n.body.notes.language).toBe('en') // the meeting was in English
+    expect(JSON.parse(String(chat.body)).messages[0].content).toContain('clear, simple English')
+    // "Try again" in Urdu keeps the task already made from that action item
+    mockGroq({ notes: { summary: 'پیجز جمعہ کو جائیں گے۔', keyPoints: [], decisions: [], actionItems: [{ owner: 'ITAD Member', task: 'Send the list', due: 'tomorrow' }], openQuestions: [] } })
+    await request(app).post(`/api/chat/calls/${callId}/notes/retry`).set(...auth(w.itadMember)).send({ lang: 'ur' }).expect(200)
+    const sys = JSON.parse(String(calls.find((c) => c.url.includes('/chat/completions'))!.body)).messages[0].content
+    expect(sys).toContain('Urdu script')
     const third = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
+    expect(third.body.notes.language).toBe('ur')
     expect(third.body.notes.actionItems[0].taskCode).toBe(code)
     vi.unstubAllGlobals()
+  })
+
+  it('notes language follows the meeting', async () => {
+    const { detectLanguage } = await import('../lib/pm/notes')
+    expect(detectLanguage('ہم جمعہ کو پیجز بھیج دیں گے۔ RTI کی لسٹ کل تک')).toBe('ur')
+    expect(detectLanguage('We will ship the pages, theek hai')).toBe('en')
   })
 
   it('long transcripts are split at line breaks for the free tier', () => {

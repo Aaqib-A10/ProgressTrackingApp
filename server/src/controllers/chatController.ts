@@ -448,6 +448,8 @@ export async function downloadFile(req: AuthedRequest, res: Response): Promise<v
   // Raster images and videos (call recordings) may play inline; everything else is forced to download.
   const isMedia = /^(image\/(png|jpe?g|gif|webp)|video\/(webm|mp4))$/i.test(msg.fileMime ?? '')
   res.setHeader('X-Content-Type-Options', 'nosniff')
+  // A sent file never changes: let the browser keep it instead of fetching it on every view.
+  res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
   res.setHeader('Content-Type', isMedia ? msg.fileMime! : 'application/octet-stream')
   res.setHeader('Content-Disposition', `${isMedia && req.query.inline === '1' ? 'inline' : 'attachment'}; filename="${encodeURIComponent(msg.fileName ?? 'file')}"`)
   res.sendFile(filePath)
@@ -832,7 +834,9 @@ export async function retryNotes(req: AuthedRequest, res: Response): Promise<voi
   const me = viewer(req)
   const call = await callForReader(req.params.callId, me.id)
   if (Calls.getLive(call.id)?.noteTaker) throw new HttpError(409, 'The note taker is still on. Stop it first.')
-  await generateNotes(call.id, { force: true })
+  // Optional { lang: 'en' | 'ur' }: write the notes again in that language.
+  const { lang } = parse(z.object({ lang: z.enum(['auto', 'en', 'ur']).default('auto') }), req.body ?? {})
+  await generateNotes(call.id, { force: true, lang })
   res.json({ ok: true })
 }
 

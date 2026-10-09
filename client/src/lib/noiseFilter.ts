@@ -10,14 +10,6 @@ import rnnoiseSimdWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise_simd.w
  * to the plain microphone, so a call never ends up silent because of it.
  */
 
-const KEY = 'pt-noise-filter'
-export function noiseFilterPref(): boolean {
-  try { return localStorage.getItem(KEY) !== 'off' } catch { return true }
-}
-export function setNoiseFilterPref(on: boolean): void {
-  try { localStorage.setItem(KEY, on ? 'on' : 'off') } catch { /* ignore */ }
-}
-
 let wasm: Promise<ArrayBuffer> | null = null
 
 export interface NoiseFilter {
