@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { callsApi, leaveOnUnload, type ActiveCall } from '../../lib/callsApi'
-import { CallEngine, type CallSnapshot } from '../../lib/callEngine'
+import { CallEngine, type CallSnapshot, type Reaction } from '../../lib/callEngine'
+import { CallRecorder, type RecorderState } from '../../lib/callRecorder'
+import { Transcriber, getSpeechLang, setSpeechLang as saveSpeechLang, type TranscriberState } from '../../lib/transcriber'
 import { chatApi } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import * as desktop from '../../lib/desktopAlerts'
@@ -30,7 +32,26 @@ interface CallsContextValue {
   toggleMic: () => void
   toggleCam: () => void
   toggleScreen: () => void
+  toggleHand: () => void
+  react: (emoji: string) => void
+  reactions: Reaction[]
+  invite: (userIds: string[]) => Promise<void>
+  /** Recording */
+  recState: RecorderState
+  startRecording: () => void
+  stopRecording: () => void
+  /** AI note taker + captions */
+  setNoteTaker: (on: boolean) => Promise<void>
+  transcriber: TranscriberState
+  speechLang: string
+  setSpeechLang: (code: string) => void
+  captionsOn: boolean
+  setCaptionsOn: (v: boolean) => void
+  panel: CallPanel
+  setPanel: (p: CallPanel) => void
 }
+
+export type CallPanel = 'people' | 'chat' | 'notes' | null
 
 const CallsContext = createContext<CallsContextValue | null>(null)
 
@@ -50,6 +71,15 @@ export function CallProvider({ meId, children }: { meId: string; children: React
   const [minimized, setMinimized] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const busy = useRef(false)
+  const [reactions, setReactions] = useState<Reaction[]>([])
+  const recorder = useRef<CallRecorder | null>(null)
+  const [recState, setRecState] = useState<RecorderState>('idle')
+  const transcriber = useRef<Transcriber | null>(null)
+  const [transcriberState, setTranscriberState] = useState<TranscriberState>('off')
+  const [speechLang, setSpeechLangState] = useState(getSpeechLang)
+  const [captionsOn, setCaptionsOn] = useState(true)
+  const [panel, setPanel] = useState<CallPanel>(null)
+  const titleHint = useRef<string | null>(null)
 
   // ---- calls running in my conversations (poll; slower while the tab is hidden) ----
   const refreshActive = useCallback(async () => {
@@ -71,12 +101,17 @@ export function CallProvider({ meId, children }: { meId: string; children: React
   const loadMeta = useCallback((conversationId: string) => {
     chatApi.conversation(conversationId).then((r) => {
       setMeta({ title: r.conversation.title, isDirect: r.conversation.type === 'DIRECT', members: r.conversation.members.map((m) => ({ id: m.id, name: m.name })) })
-    }).catch(() => undefined)
+    }).catch(() => {
+      // Added to someone else's call (not in its chat): use the title from the ringing card.
+      setMeta({ title: titleHint.current ?? 'Call', isDirect: false, members: [] })
+    })
   }, [])
 
   const begin = useCallback(async (callId: string, conversationId: string, video: boolean) => {
     const e: CallEngine = new CallEngine(callId, conversationId, video, (s) => { if (engine.current === e) setCall(s) })
+    e.onReaction = (r) => showReaction(r)
     engine.current = e
+    setPanel(null)
     setCall(e.snapshot)
     setMinimized(false)
     setMeta(null)
@@ -109,15 +144,93 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     try {
       // Answering another call hangs up the current one first.
       if (engine.current) await engine.current.leave()
+      titleHint.current = active.find((c) => c.id === callId)?.title ?? null
       await begin(callId, conversationId, video)
     } finally { busy.current = false }
-  }, [begin])
+  }, [begin, active])
+
+  const showReaction = useCallback((r: Reaction) => {
+    const key = r.at + Math.random()
+    const item = { ...r, at: key }
+    setReactions((cur) => [...cur.slice(-14), item])
+    window.setTimeout(() => setReactions((cur) => cur.filter((x) => x !== item)), 3500)
+  }, [])
+
+  const stopRecording = useCallback(() => {
+    const r = recorder.current
+    if (!r) return
+    engine.current?.setRecording(false)
+    void r.stop()
+  }, [])
 
   const leave = useCallback(() => {
     const e = engine.current
     if (!e) return
+    // A running recording keeps saving in the background after you leave.
+    if (recorder.current?.recording) stopRecording()
+    transcriber.current?.stop()
     void e.leave().then(() => refreshActive())
-  }, [refreshActive])
+  }, [refreshActive, stopRecording])
+
+  const startRecording = useCallback(() => {
+    const e = engine.current
+    if (!e || recorder.current?.recording) return
+    const r = new CallRecorder(e.snapshot.callId, () => ({ mic: e.micTrack, remotes: e.remoteAudioTracks() }), (st, info) => {
+      setRecState(st)
+      if (st === 'recording') e.setRecording(true)
+      if (st === 'idle' && info === 'saved') addToast({ type: 'success', message: 'Recording saved. Everyone in the chat can watch it.' })
+      if (st === 'error') { addToast({ type: 'error', message: info ?? 'Recording failed' }); if (engine.current === e) e.setRecording(false) }
+      if (st === 'idle' || st === 'error') { if (recorder.current === r) recorder.current = null }
+    })
+    recorder.current = r
+    void r.start()
+  }, [addToast])
+
+  const setNoteTaker = useCallback(async (on: boolean) => {
+    const e = engine.current
+    if (!e) return
+    try {
+      await callsApi.setNotes(e.snapshot.callId, on)
+      if (!on) addToast({ type: 'success', message: 'Writing the meeting notes. They will appear in the chat in a minute.' })
+    } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not change the note taker') }) }
+  }, [addToast])
+
+  const invite = useCallback(async (userIds: string[]) => {
+    const e = engine.current
+    if (!e) return
+    try {
+      const r = await callsApi.invite(e.snapshot.callId, userIds)
+      addToast({ type: 'success', message: `Calling ${r.invited.map((u) => u.name.split(' ')[0]).join(', ')}…` })
+    } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not add them') }) }
+  }, [addToast])
+
+  // The note taker: my browser writes down what I say while it is on (and my mic is on).
+  const noteOn = !!call && call.status === 'live' && call.noteTaker
+  const micOn = !!call?.mic
+  useEffect(() => {
+    const e = engine.current
+    if (!noteOn || !micOn || !e) { transcriber.current?.stop(); transcriber.current = null; return }
+    const t = new Transcriber(e.snapshot.callId, speechLang, setTranscriberState)
+    transcriber.current = t
+    t.start()
+    return () => { t.stop(); if (transcriber.current === t) transcriber.current = null }
+  }, [noteOn, micOn, speechLang, call?.callId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!noteOn) setTranscriberState('off') }, [noteOn])
+
+  // Tell me when someone raises a hand, starts recording, or turns the note taker on.
+  const prev = useRef<{ hands: Set<string>; recs: Set<string>; notes: boolean } | null>(null)
+  useEffect(() => {
+    if (!call || call.status !== 'live') { prev.current = null; return }
+    const hands = new Set(call.peers.filter((p) => p.hand).map((p) => p.userId))
+    const recs = new Set(call.peers.filter((p) => p.rec).map((p) => p.userId))
+    const p0 = prev.current
+    if (p0) {
+      for (const id of hands) if (!p0.hands.has(id)) addToast({ type: 'info', message: `✋ ${call.peers.find((x) => x.userId === id)?.name ?? 'Someone'} raised their hand` })
+      for (const id of recs) if (!p0.recs.has(id)) addToast({ type: 'warning', message: `${call.peers.find((x) => x.userId === id)?.name ?? 'Someone'} started recording this call` })
+      if (call.noteTaker && !p0.notes) addToast({ type: 'info', message: 'AI notes are on: what people say is being written down.' })
+    }
+    prev.current = { hands, recs, notes: call.noteTaker }
+  }, [call, addToast])
 
   const decline = useCallback((c: ActiveCall) => {
     setDismissed((d) => new Set(d).add(c.id))
@@ -204,6 +317,24 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     toggleMic: () => engine.current?.toggleMic(),
     toggleCam: () => { void engine.current?.toggleCam() },
     toggleScreen: () => { void engine.current?.toggleScreen() },
+    toggleHand: () => engine.current?.toggleHand(),
+    react: (emoji: string) => {
+      engine.current?.react(emoji)
+      showReaction({ emoji, name: 'You', from: meId, at: Date.now() })
+    },
+    reactions,
+    invite,
+    recState,
+    startRecording,
+    stopRecording,
+    setNoteTaker,
+    transcriber: transcriberState,
+    speechLang,
+    setSpeechLang: (code: string) => { saveSpeechLang(code); setSpeechLangState(code) },
+    captionsOn,
+    setCaptionsOn,
+    panel,
+    setPanel,
   }
 
   return (

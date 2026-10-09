@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, AtSign, Bell, Settings, CalendarClock, CheckCheck, CheckCircle2, ClipboardCheck, ClipboardList, MessageSquare, UserPlus } from 'lucide-react'
+import { AlertTriangle, AtSign, Bell, Settings, CalendarClock, CalendarDays, CheckCheck, CheckCircle2, ClipboardCheck, ClipboardList, MessageSquare, UserPlus } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { fmtAgo, fmtDateTime } from '../../components/projects/pmUi'
 import { getNotificationHistory, markAllNotificationsRead, markNotificationRead, type StoredNotification } from '../../lib/notificationsApi'
@@ -17,6 +17,8 @@ const ICON: Record<string, JSX.Element> = {
   PROJECT_MEMBER_ADDED: <UserPlus size={16} className="text-accent" />,
   EXTENSION_REQUESTED: <CalendarClock size={16} className="text-warning" />,
   TASK_REVIEW: <ClipboardCheck size={16} className="text-accent" />,
+  MEETING: <CalendarDays size={16} className="text-primary" />,
+  CHAT_MESSAGE: <MessageSquare size={16} className="text-primary" />,
 }
 
 /** /app/notifications — full history of stored notifications (read and unread). */

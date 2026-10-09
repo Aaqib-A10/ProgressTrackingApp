@@ -1,4 +1,4 @@
-import { callsApi, type CallParticipant, type CallSignal } from './callsApi'
+import { callsApi, type Caption, type CallParticipant, type CallSignal } from './callsApi'
 
 /**
  * One voice/video call from this browser's point of view.
@@ -17,6 +17,8 @@ export interface PeerView {
   mic: boolean
   cam: boolean
   screen: boolean
+  hand: boolean
+  rec: boolean
   state: RTCPeerConnectionState | 'new'
 }
 
@@ -38,7 +40,21 @@ export interface CallSnapshot {
   hadPeers: boolean
   /** When the first other person connected (the call timer starts here). */
   connectedAt: number | null
+  hand: boolean
+  /** I am recording. */
+  rec: boolean
+  /** I was added to this call but am not in its chat. */
+  guest: boolean
+  isDirect: boolean
+  meetingId: string | null
+  /** AI note taker on for this call. */
+  noteTaker: boolean
+  captions: Caption[]
+  /** People added who have not joined yet (still ringing). */
+  invited: string[]
 }
+
+export interface Reaction { emoji: string; name: string; from: string; at: number }
 
 interface Peer {
   userId: string
@@ -66,10 +82,21 @@ export class CallEngine {
   private snap: CallSnapshot
 
   constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void) {
-    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null }
+    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, captions: [], invited: [] }
   }
 
   get snapshot(): CallSnapshot { return this.snap }
+
+  /** Floating emoji reactions from others (set by the UI). */
+  onReaction: ((r: Reaction) => void) | null = null
+
+  /** My microphone track (for recording and the note taker). */
+  get micTrack(): MediaStreamTrack | null { return this.audioTrack }
+
+  /** Everyone else's sound (for recording). */
+  remoteAudioTracks(): MediaStreamTrack[] {
+    return [...this.peers.values()].flatMap((p) => p.stream.getAudioTracks())
+  }
 
   private emit(patch: Partial<CallSnapshot> = {}) {
     this.snap = {
@@ -83,6 +110,8 @@ export class CallEngine {
         mic: p.info?.mic ?? true,
         cam: p.info?.cam ?? false,
         screen: p.info?.screen ?? false,
+        hand: p.info?.hand ?? false,
+        rec: p.info?.rec ?? false,
         state: p.pc.connectionState,
       })),
     }
@@ -110,7 +139,7 @@ export class CallEngine {
       const j = await callsApi.join(this.snap.callId, { mic: !!this.audioTrack, cam: !!this.camTrack })
       this.me = j.me
       this.iceServers = j.iceServers
-      this.emit({ mic: !!this.audioTrack, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.' })
+      this.emit({ mic: !!this.audioTrack, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker })
       // The newcomer calls everyone who is already in the call.
       for (const o of j.others) await this.createPeer(o.userId, o.name, true, o)
       this.timer = window.setInterval(() => { void this.poll() }, POLL_MS)
@@ -167,6 +196,11 @@ export class CallEngine {
 
   private async onSignal(s: CallSignal) {
     if (s.kind === 'bye') { this.dropPeer(s.from); return }
+    if (s.kind === 'react') {
+      const d = s.data as { emoji?: string; name?: string }
+      if (d?.emoji) this.onReaction?.({ emoji: d.emoji, name: d.name ?? 'Someone', from: s.from, at: Date.now() })
+      return
+    }
     if (s.kind === 'offer') {
       let peer = this.peers.get(s.from)
       // Both sides called each other at the same moment: the one with the "smaller" id gives way.
@@ -223,7 +257,8 @@ export class CallEngine {
         if (!info) this.dropPeer(id)
         else { p.info = info; p.name = info.name }
       }
-      this.emit({ declined: r.declined ?? [] })
+      this.tuneBitrate()
+      this.emit({ declined: r.declined ?? [], noteTaker: !!r.noteTaker, captions: r.captions ?? [], invited: r.invited ?? [] })
     } catch {
       /* temporary network hiccup: keep polling */
     } finally {
@@ -237,6 +272,39 @@ export class CallEngine {
       if (t) await t.sender.replaceTrack(track).catch(() => undefined)
     }
     this.rebuildLocal()
+  }
+
+  /** Fewer pixels per person as the call grows, so everyone's upload keeps up (mesh). */
+  private lastTune = ''
+  private tuneBitrate() {
+    const n = this.peers.size
+    const kbps = this.screenTrack ? (n > 3 ? 600 : 1500) : n > 5 ? 250 : n > 3 ? 400 : 900
+    const key = `${n}:${kbps}`
+    if (key === this.lastTune) return
+    this.lastTune = key
+    for (const p of this.peers.values()) {
+      const sender = p.pc.getTransceivers().find((x) => x.receiver.track?.kind === 'video')?.sender
+      if (!sender) continue
+      const params = sender.getParameters()
+      if (!params.encodings?.length) continue
+      params.encodings[0].maxBitrate = kbps * 1000
+      void sender.setParameters(params).catch(() => undefined)
+    }
+  }
+
+  toggleHand(): void {
+    const hand = !this.snap.hand
+    void callsApi.state(this.snap.callId, { hand }).catch(() => undefined)
+    this.emit({ hand })
+  }
+
+  setRecording(rec: boolean): void {
+    void callsApi.state(this.snap.callId, { rec }).catch(() => undefined)
+    this.emit({ rec })
+  }
+
+  react(emoji: string): void {
+    void callsApi.react(this.snap.callId, emoji).catch(() => undefined)
   }
 
   toggleMic(): void {
@@ -282,6 +350,8 @@ export class CallEngine {
         return // user cancelled the picker
       }
     }
+    this.lastTune = ''
+    this.tuneBitrate()
     void callsApi.state(this.snap.callId, { screen: !!this.screenTrack }).catch(() => undefined)
     this.emit({ screen: !!this.screenTrack })
   }

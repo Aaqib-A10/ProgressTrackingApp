@@ -8,10 +8,17 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError, TASK_CODE_RE, loadProjectCtx, visibleProjectIds } from '../lib/pm/access'
 import { parse, viewer } from '../lib/pm/http'
-import { presenceOf, setTyping, touch, typingIn } from '../lib/pm/presence'
+import { presenceOf as basePresence, setTyping, touch, typingIn } from '../lib/pm/presence'
 import { pmNotify, trunc } from '../lib/pm/pmNotify'
 import { syncProjectChannel } from '../lib/pm/tasks'
 import * as Calls from '../lib/pm/calls'
+import { generateNotes, transcriptText, type MeetingNotes } from '../lib/pm/notes'
+import { meetingFor } from '../lib/pm/meetings'
+
+/** Presence with "busy" while the person is in a call. */
+function presenceOf(userId: string): 'online' | 'away' | 'offline' | 'busy' {
+  return Calls.isInCall(userId) ? 'busy' : basePresence(userId)
+}
 
 /**
  * Team chat: direct messages, named group chats and one # channel per project
@@ -42,6 +49,7 @@ const MESSAGE_INCLUDE = {
   replyTo: { select: { id: true, body: true, deletedAt: true, user: { select: { name: true } } } },
   taskRef: { select: { id: true, code: true, title: true, projectId: true, dueAt: true, deletedAt: true, project: { select: { key: true, name: true, color: true } }, column: { select: { name: true, category: true } } } },
   call: { select: { id: true, video: true, startedAt: true, endedAt: true, joinedIds: true } },
+  reactions: { select: { emoji: true, userId: true }, orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.ChatMessageInclude
 
 type MessageRow = Prisma.ChatMessageGetPayload<{ include: typeof MESSAGE_INCLUDE }>
@@ -75,9 +83,17 @@ function serializeMessage(m: MessageRow, visibleProjects: Set<string>) {
           joinedCount: m.call.joinedIds.length,
         }
       : null,
+    notes: m.notesCallId && !deleted ? { callId: m.notesCallId } : null,
+    reactions: groupReactions(m.reactions),
     editedAt: m.editedAt?.toISOString() ?? null,
     createdAt: m.createdAt.toISOString(),
   }
+}
+
+function groupReactions(rows: { emoji: string; userId: string }[]): { emoji: string; userIds: string[] }[] {
+  const map = new Map<string, string[]>()
+  for (const r of rows) map.set(r.emoji, [...(map.get(r.emoji) ?? []), r.userId])
+  return [...map].map(([emoji, userIds]) => ({ emoji, userIds }))
 }
 
 async function membership(conversationId: string, userId: string) {
@@ -297,7 +313,7 @@ export async function listMessages(req: AuthedRequest, res: Response): Promise<v
   let changed: MessageRow[] = []
   if (changedSince && !Number.isNaN(changedSince.getTime())) {
     changed = await prisma.chatMessage.findMany({
-      where: { conversationId: m.conversationId, OR: [{ editedAt: { gt: changedSince } }, { deletedAt: { gt: changedSince } }, { call: { is: { endedAt: { gt: changedSince } } } }] },
+      where: { conversationId: m.conversationId, OR: [{ editedAt: { gt: changedSince } }, { deletedAt: { gt: changedSince } }, { call: { is: { endedAt: { gt: changedSince } } } }, { reactedAt: { gt: changedSince } }] },
       include: MESSAGE_INCLUDE,
       take: 100,
     })
@@ -422,11 +438,11 @@ export async function downloadFile(req: AuthedRequest, res: Response): Promise<v
   await membership(msg.conversationId, me.id)
   const filePath = path.join(UPLOAD_DIR, msg.fileStoredName)
   try { await fs.access(filePath) } catch { throw new HttpError(404, 'File missing on server') }
-  const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(msg.fileMime ?? '')
+  // Raster images and videos (call recordings) may play inline; everything else is forced to download.
+  const isMedia = /^(image\/(png|jpe?g|gif|webp)|video\/(webm|mp4))$/i.test(msg.fileMime ?? '')
   res.setHeader('X-Content-Type-Options', 'nosniff')
-  // Raster images may render inline (previews); everything else is forced to download.
-  res.setHeader('Content-Type', isImage ? msg.fileMime! : 'application/octet-stream')
-  res.setHeader('Content-Disposition', `${isImage && req.query.inline === '1' ? 'inline' : 'attachment'}; filename="${encodeURIComponent(msg.fileName ?? 'file')}"`)
+  res.setHeader('Content-Type', isMedia ? msg.fileMime! : 'application/octet-stream')
+  res.setHeader('Content-Disposition', `${isMedia && req.query.inline === '1' ? 'inline' : 'attachment'}; filename="${encodeURIComponent(msg.fileName ?? 'file')}"`)
   res.sendFile(filePath)
 }
 
@@ -567,7 +583,8 @@ async function liveCallFor(req: AuthedRequest) {
   const me = viewer(req)
   const call = Calls.getLive(req.params.callId)
   if (!call) throw new HttpError(410, 'This call has ended')
-  await membership(call.conversationId, me.id) // 404 for non-members
+  // Members of the conversation, plus people added to this call ("Add people").
+  if (!call.invited.has(me.id) && !call.participants.has(me.id)) await membership(call.conversationId, me.id) // 404 for others
   return { me, call }
 }
 
@@ -586,9 +603,10 @@ export async function startCall(req: AuthedRequest, res: Response): Promise<void
     return
   }
   const name = await displayName(me.id)
-  const call = await prisma.chatCall.create({ data: { conversationId: m.conversationId, startedById: me.id, video, joinedIds: [me.id] } })
+  const meetingId = await meetingFor(m.conversationId)
+  const call = await prisma.chatCall.create({ data: { conversationId: m.conversationId, startedById: me.id, video, joinedIds: [me.id], meetingId } })
   // People are told by the in-app ringing banner (+ desktop pop-up); a missed one-to-one call leaves an alert.
-  Calls.registerLive({ callId: call.id, conversationId: m.conversationId, video, startedById: me.id, startedByName: name, startedAt: Date.now(), isDirect: m.conversation.type === 'DIRECT' })
+  Calls.registerLive({ callId: call.id, conversationId: m.conversationId, video, startedById: me.id, startedByName: name, startedAt: Date.now(), isDirect: m.conversation.type === 'DIRECT', meetingId })
   await prisma.chatMessage.create({ data: { conversationId: m.conversationId, userId: me.id, body: `Started a ${video ? 'video' : 'voice'} call`, callId: call.id, mentions: [] } })
   await prisma.chatConversation.update({ where: { id: m.conversationId }, data: { lastMessageAt: new Date() } })
   res.status(201).json({ call: { id: call.id, video, conversationId: m.conversationId }, existing: false })
@@ -597,6 +615,7 @@ export async function startCall(req: AuthedRequest, res: Response): Promise<void
 /** GET /api/chat/calls/active — calls running in my conversations (ringing = I have not joined or declined yet). */
 export async function activeCalls(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
+  touch(me.id)
   const lives = Calls.allLive()
   if (!lives.length) { res.json({ calls: [] }); return }
   const mine = await prisma.chatMember.findMany({
@@ -606,14 +625,14 @@ export async function activeCalls(req: AuthedRequest, res: Response): Promise<vo
   const byConv = new Map(mine.map((x) => [x.conversationId, x.conversation]))
   const now = Date.now()
   res.json({
-    calls: lives.filter((c) => byConv.has(c.conversationId)).map((c) => {
-      const conv = byConv.get(c.conversationId)!
-      const title = conv.type === 'DIRECT' ? (conv.members.find((x) => x.user.id !== me.id)?.user.name ?? 'Direct message') : conv.type === 'PROJECT' ? `# ${conv.name ?? ''}` : (conv.name ?? 'Group')
+    calls: lives.filter((c) => byConv.has(c.conversationId) || c.invited.has(me.id) || c.participants.has(me.id)).map((c) => {
+      const conv = byConv.get(c.conversationId)
+      const title = !conv ? `${c.startedByName}'s call` : conv.type === 'DIRECT' ? (conv.members.find((x) => x.user.id !== me.id)?.user.name ?? 'Direct message') : conv.type === 'PROJECT' ? `# ${conv.name ?? ''}` : (conv.name ?? 'Group')
       return {
         id: c.callId,
         conversationId: c.conversationId,
         title,
-        isDirect: conv.type === 'DIRECT',
+        isDirect: !!conv && conv.type === 'DIRECT' && !c.invited.has(me.id),
         video: c.video,
         startedBy: { id: c.startedById, name: c.startedByName },
         startedAt: new Date(c.startedAt).toISOString(),
@@ -621,6 +640,9 @@ export async function activeCalls(req: AuthedRequest, res: Response): Promise<vo
         joined: c.participants.has(me.id),
         ringing: Calls.isRinging(c, me.id, now),
         full: c.participants.size >= Calls.MAX_PARTICIPANTS,
+        invitedBy: c.invitedBy.get(me.id) ?? null,
+        guest: !conv,
+        meetingId: c.meetingId,
       }
     }),
   })
@@ -636,7 +658,7 @@ export async function joinCall(req: AuthedRequest, res: Response): Promise<void>
   const others = Calls.participantList(call).filter((p) => p.userId !== me.id)
   Calls.join(call, me.id, await displayName(me.id), body)
   await prisma.chatCall.update({ where: { id: call.callId }, data: { joinedIds: [...call.joinedIds] } }).catch(() => undefined)
-  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers() })
+  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, meetingId: call.meetingId, isDirect: call.isDirect })
 }
 
 const signalSchema = z.object({ to: z.string(), kind: z.enum(['offer', 'answer', 'ice']), data: z.unknown() })
@@ -653,7 +675,7 @@ export async function callSignal(req: AuthedRequest, res: Response): Promise<voi
   res.json({ ok: true })
 }
 
-const stateSchema = z.object({ mic: z.boolean().optional(), cam: z.boolean().optional(), screen: z.boolean().optional() })
+const stateSchema = z.object({ mic: z.boolean().optional(), cam: z.boolean().optional(), screen: z.boolean().optional(), hand: z.boolean().optional(), rec: z.boolean().optional() })
 
 /** GET /api/chat/calls/:callId/poll — my pending signals + who is in the call. Also keeps me "present". */
 export async function pollCall(req: AuthedRequest, res: Response): Promise<void> {
@@ -665,7 +687,7 @@ export async function pollCall(req: AuthedRequest, res: Response): Promise<void>
   p.lastSeen = Date.now()
   const signals = call.inbox.get(me.id) ?? []
   call.inbox.set(me.id, [])
-  res.json({ ended: false, participants: Calls.participantList(call), signals, declined: [...call.declined] })
+  res.json({ ended: false, participants: Calls.participantList(call), signals, declined: [...call.declined], noteTaker: call.noteTaker, captions: Calls.recentCaptions(call), invited: [...call.invited.keys()].filter((id) => !call.participants.has(id)) })
 }
 
 /** POST /api/chat/calls/:callId/state — mic / camera / screen share on or off (shown to others). */
@@ -695,4 +717,198 @@ export async function declineCall(req: AuthedRequest, res: Response): Promise<vo
   const { me, call } = await liveCallFor(req)
   Calls.decline(call, me.id)
   res.json({ ok: true })
+}
+
+// ---------- In-call extras: add people, reactions, captions, AI notes, recordings ----------
+
+const inviteSchema = z.object({ userIds: z.array(z.string()).min(1).max(20) })
+
+/** POST /api/chat/calls/:callId/invite { userIds } — ring more people into a running call. */
+export async function inviteToCall(req: AuthedRequest, res: Response): Promise<void> {
+  const { me, call } = await liveCallFor(req)
+  if (!call.participants.has(me.id)) throw new HttpError(409, 'Join the call first')
+  const { userIds } = parse(inviteSchema, req.body)
+  const users = await prisma.user.findMany({ where: { id: { in: userIds.filter((id) => id !== me.id) }, isActive: true, status: 'ACTIVE' }, select: { id: true, name: true } })
+  if (!users.length) throw new HttpError(422, 'Pick people who use PulseTrack')
+  const conv = await prisma.chatConversation.findUniqueOrThrow({ where: { id: call.conversationId }, select: { type: true } })
+  const members = new Set((await prisma.chatMember.findMany({ where: { conversationId: call.conversationId }, select: { userId: true } })).map((x) => x.userId))
+  const myName = await displayName(me.id)
+  for (const u of users) {
+    let guest = !members.has(u.id)
+    // Group chats (and meeting chats) take them in as members, so they also get the chat.
+    if (guest && conv.type === 'GROUP') {
+      await prisma.chatMember.create({ data: { conversationId: call.conversationId, userId: u.id } }).catch(() => undefined)
+      if (call.meetingId) await prisma.meetingAttendee.create({ data: { meetingId: call.meetingId, userId: u.id, response: 'ACCEPTED' } }).catch(() => undefined)
+      guest = false
+    }
+    Calls.invite(call, u.id, guest, myName)
+  }
+  res.json({ invited: users.map((u) => ({ id: u.id, name: u.name })) })
+}
+
+const REACTIONS = ['👍', '👏', '❤️', '😂', '😮', '🎉', '✋', '🙏']
+
+/** POST /api/chat/calls/:callId/react { emoji } — a floating reaction everyone sees. */
+export async function reactInCall(req: AuthedRequest, res: Response): Promise<void> {
+  const { me, call } = await liveCallFor(req)
+  const p = call.participants.get(me.id)
+  if (!p) throw new HttpError(409, 'Join the call first')
+  const { emoji } = parse(z.object({ emoji: z.string().refine((e) => REACTIONS.includes(e), 'Unknown reaction') }), req.body)
+  Calls.broadcast(call, me.id, 'react', { emoji, name: p.name })
+  res.json({ ok: true })
+}
+
+/** POST /api/chat/calls/:callId/notes { on } — switch the AI note taker on or off. */
+export async function setNoteTaker(req: AuthedRequest, res: Response): Promise<void> {
+  const { me, call } = await liveCallFor(req)
+  if (!call.participants.has(me.id)) throw new HttpError(409, 'Join the call first')
+  const { on } = parse(z.object({ on: z.boolean() }), req.body)
+  if (call.noteTaker === on) { res.json({ noteTaker: on }); return }
+  call.noteTaker = on
+  if (on) {
+    await prisma.chatCall.update({ where: { id: call.callId }, data: { noteTaker: true, notesStatus: null } })
+  } else {
+    // Stopped by hand: write the notes now rather than waiting for the call to end.
+    void generateNotes(call.callId).catch((e) => console.error('[notes]', e)) // eslint-disable-line no-console
+  }
+  res.json({ noteTaker: on })
+}
+
+const transcriptSchema = z.object({ text: z.string().trim().min(1).max(2000), final: z.boolean().default(true) })
+
+/** POST /api/chat/calls/:callId/transcript { text, final } — my own speech, from my browser. */
+export async function postTranscript(req: AuthedRequest, res: Response): Promise<void> {
+  const { me, call } = await liveCallFor(req)
+  const p = call.participants.get(me.id)
+  if (!p) throw new HttpError(409, 'Join the call first')
+  const { text, final } = parse(transcriptSchema, req.body)
+  Calls.addCaption(call, me.id, p.name, text, final)
+  if (final && call.noteTaker) await prisma.callTranscriptLine.create({ data: { callId: call.callId, userId: me.id, speakerName: p.name, text } })
+  res.json({ ok: true })
+}
+
+/** Members of the conversation, and anyone who was in the call, can read its notes. */
+async function callForReader(callId: string, userId: string) {
+  const call = await prisma.chatCall.findUnique({ where: { id: callId }, include: { meeting: { select: { id: true, title: true } }, conversation: { select: { id: true, name: true, type: true } } } })
+  if (!call) throw new HttpError(404, 'Call not found')
+  if (!call.joinedIds.includes(userId)) await membership(call.conversationId, userId)
+  return call
+}
+
+/** GET /api/chat/calls/:callId/notes — AI notes + full transcript. */
+export async function callNotes(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const call = await callForReader(req.params.callId, me.id)
+  const lines = await prisma.callTranscriptLine.findMany({ where: { callId: call.id }, orderBy: { at: 'asc' } })
+  const recordings = await prisma.callRecording.findMany({ where: { callId: call.id, status: 'ready' }, orderBy: { createdAt: 'asc' } })
+  const notes = call.notes as unknown as (MeetingNotes & { error?: string }) | null
+  res.json({
+    call: { id: call.id, startedAt: call.startedAt.toISOString(), endedAt: call.endedAt?.toISOString() ?? null, video: call.video, title: call.meeting?.title ?? call.conversation.name ?? 'Call', meetingId: call.meeting?.id ?? null, conversationId: call.conversationId },
+    status: call.notesStatus ?? (call.noteTaker ? (call.endedAt ? 'pending' : 'recording') : 'none'),
+    notes: notes && !notes.error ? notes : null,
+    error: notes?.error ?? null,
+    transcript: lines.map((l) => ({ id: l.id, userId: l.userId, speaker: l.speakerName, text: l.text, at: l.at.toISOString(), offsetSec: Math.max(0, Math.round((l.at.getTime() - call.startedAt.getTime()) / 1000)) })),
+    transcriptText: transcriptText(call.startedAt, lines),
+    recordings: recordings.map((r) => ({ id: r.id, messageId: r.messageId, size: r.size, durationSec: r.durationSec, url: r.messageId ? `/api/chat/files/${r.messageId}` : null, createdAt: r.createdAt.toISOString() })),
+  })
+}
+
+/** POST /api/chat/calls/:callId/notes/retry — write the AI notes again. */
+export async function retryNotes(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const call = await callForReader(req.params.callId, me.id)
+  if (Calls.getLive(call.id)?.noteTaker) throw new HttpError(409, 'The note taker is still on. Stop it first.')
+  await generateNotes(call.id, { force: true })
+  res.json({ ok: true })
+}
+
+// Recordings are uploaded in small pieces while they are made (works behind the tunnel's size limit).
+const MAX_RECORDING_BYTES = 4 * 1024 * 1024 * 1024
+const MAX_CHUNK_BYTES = 10 * 1024 * 1024
+
+/** POST /api/chat/calls/:callId/recordings { mime } — start a recording. */
+export async function startRecording(req: AuthedRequest, res: Response): Promise<void> {
+  const { me, call } = await liveCallFor(req)
+  if (!call.participants.has(me.id)) throw new HttpError(409, 'Join the call first')
+  const { mime } = parse(z.object({ mime: z.string().max(120).default('video/webm') }), req.body ?? {})
+  if (!/^video\/(webm|mp4)/.test(mime)) throw new HttpError(415, 'Recordings must be video')
+  await fs.mkdir(UPLOAD_DIR, { recursive: true })
+  const storedName = `rec-${randomUUID()}.${mime.startsWith('video/mp4') ? 'mp4' : 'webm'}`
+  await fs.writeFile(path.join(UPLOAD_DIR, storedName), Buffer.alloc(0))
+  const rec = await prisma.callRecording.create({ data: { callId: call.callId, userId: me.id, storedName, mime: mime.split(';')[0] } })
+  res.status(201).json({ recording: { id: rec.id } })
+}
+
+async function ownRecording(req: AuthedRequest) {
+  const me = viewer(req)
+  const rec = await prisma.callRecording.findUnique({ where: { id: req.params.recId } })
+  if (!rec || rec.userId !== me.id) throw new HttpError(404, 'Recording not found')
+  if (rec.status !== 'uploading') throw new HttpError(409, 'This recording is already finished')
+  return { me, rec }
+}
+
+/** POST /api/chat/recordings/:recId/chunk?index=n — raw bytes, in order. */
+export async function recordingChunk(req: AuthedRequest, res: Response): Promise<void> {
+  const { rec } = await ownRecording(req)
+  const index = Number(req.query.index)
+  const buf = req.body as Buffer
+  if (!Buffer.isBuffer(buf) || !buf.length) throw new HttpError(400, 'Empty piece')
+  if (buf.length > MAX_CHUNK_BYTES) throw new HttpError(413, 'Piece too large')
+  if (index < rec.chunks) { res.json({ ok: true, duplicate: true }); return } // a retry of a piece we already have
+  if (index !== rec.chunks) throw new HttpError(409, `Expected piece ${rec.chunks}`)
+  if (rec.size + buf.length > MAX_RECORDING_BYTES) throw new HttpError(413, 'Recording is too large')
+  await fs.appendFile(path.join(UPLOAD_DIR, rec.storedName), buf)
+  await prisma.callRecording.update({ where: { id: rec.id }, data: { chunks: { increment: 1 }, size: { increment: buf.length } } })
+  res.json({ ok: true })
+}
+
+/** POST /api/chat/recordings/:recId/finish { durationSec } — post the video in the chat. */
+export async function finishRecording(req: AuthedRequest, res: Response): Promise<void> {
+  const { me, rec } = await ownRecording(req)
+  const { durationSec } = parse(z.object({ durationSec: z.number().int().min(0).max(24 * 3600).default(0) }), req.body ?? {})
+  if (!rec.size) {
+    await prisma.callRecording.update({ where: { id: rec.id }, data: { status: 'failed' } })
+    await fs.rm(path.join(UPLOAD_DIR, rec.storedName), { force: true }).catch(() => undefined)
+    res.json({ ok: false })
+    return
+  }
+  const call = await prisma.chatCall.findUniqueOrThrow({ where: { id: rec.callId }, include: { meeting: { select: { title: true } } } })
+  const mins = Math.max(1, Math.round(durationSec / 60))
+  const when = new Date().toISOString().slice(0, 10)
+  const name = `${(call.meeting?.title ?? 'Call recording').replace(/[\\/:*?"<>|]/g, ' ').slice(0, 80)} ${when}.${rec.storedName.split('.').pop()}`
+  const msg = await prisma.chatMessage.create({
+    data: {
+      conversationId: call.conversationId,
+      userId: me.id,
+      body: `Call recording · ${durationSec < 60 ? `${durationSec} sec` : `${mins} min`}`,
+      fileStoredName: rec.storedName,
+      fileName: name,
+      fileMime: rec.mime,
+      fileSize: rec.size,
+      callId: null,
+      mentions: [],
+    },
+  })
+  await prisma.callRecording.update({ where: { id: rec.id }, data: { status: 'ready', durationSec, messageId: msg.id } })
+  await prisma.chatConversation.update({ where: { id: call.conversationId }, data: { lastMessageAt: new Date() } })
+  res.json({ ok: true, messageId: msg.id })
+}
+
+// ---------- Emoji reactions on messages ----------
+
+const MESSAGE_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🙏', '✅']
+
+/** POST /api/chat/messages/:id/react { emoji } — toggles my reaction. */
+export async function toggleReaction(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const msg = await prisma.chatMessage.findUnique({ where: { id: req.params.id } })
+  if (!msg || msg.deletedAt) throw new HttpError(404, 'Message not found')
+  await membership(msg.conversationId, me.id)
+  const { emoji } = parse(z.object({ emoji: z.string().refine((e) => MESSAGE_REACTIONS.includes(e), 'Unknown reaction') }), req.body)
+  const existing = await prisma.chatReaction.findUnique({ where: { messageId_userId_emoji: { messageId: msg.id, userId: me.id, emoji } } })
+  if (existing) await prisma.chatReaction.delete({ where: { id: existing.id } })
+  else await prisma.chatReaction.create({ data: { messageId: msg.id, userId: me.id, emoji } })
+  const row = await prisma.chatMessage.update({ where: { id: msg.id }, data: { reactedAt: new Date() }, include: MESSAGE_INCLUDE })
+  const visible = new Set(await visibleProjectIds(me, true))
+  res.json({ message: serializeMessage(row, visible) })
 }

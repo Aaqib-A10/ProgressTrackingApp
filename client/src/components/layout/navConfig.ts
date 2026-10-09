@@ -49,6 +49,8 @@ export interface NavItem {
   icon: LucideIcon
   /** Visible only to these roles (omit = all roles). */
   roles?: Role[]
+  /** Visible only to people who administer at least one project (and Super Admins). */
+  projectAdminOnly?: boolean
   /** Visible only for these departments (omit = all departments). */
   departments?: Department[]
   /** Hidden for these roles, even Super Admin (who otherwise sees everything). */
@@ -104,7 +106,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Projects', to: '/app/projects', icon: KanbanSquare },
       { label: 'Chat', to: '/app/chat', icon: MessagesSquare },
-      { label: 'Projects Dashboard', to: '/app/projects/dashboard', icon: LayoutGrid, roles: ['SUPER_ADMIN', 'TEAM_LEAD'] },
+      { label: 'Calendar', to: '/app/calendar', icon: CalendarDays },
+      // Shown only to project admins (and Super Admins): the Sidebar checks that.
+      { label: 'Projects Dashboard', to: '/app/projects/dashboard', icon: LayoutGrid, projectAdminOnly: true },
     ],
   },
   {

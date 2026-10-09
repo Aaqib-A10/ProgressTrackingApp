@@ -36,7 +36,7 @@ export function colorFor(id: string): string {
 }
 export const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 
-export function PersonAvatar({ person, size = 24, ring, presence }: { person: PersonRef; size?: number; ring?: boolean; presence?: 'online' | 'away' | 'offline' }) {
+export function PersonAvatar({ person, size = 24, ring, presence }: { person: PersonRef; size?: number; ring?: boolean; presence?: 'online' | 'away' | 'offline' | 'busy' }) {
   const c = colorFor(person.id)
   return (
     <span className="relative inline-flex shrink-0" title={person.name}>
@@ -48,9 +48,9 @@ export function PersonAvatar({ person, size = 24, ring, presence }: { person: Pe
       </span>
       {presence && (
         <span
-          className={cn('absolute -bottom-0 -right-0 rounded-full ring-2 ring-card', presence === 'online' ? 'bg-success' : presence === 'away' ? 'bg-warning' : 'bg-slate-300')}
+          className={cn('absolute -bottom-0 -right-0 rounded-full ring-2 ring-card', presence === 'online' ? 'bg-success' : presence === 'busy' ? 'bg-danger' : presence === 'away' ? 'bg-warning' : 'bg-slate-300')}
           style={{ width: Math.max(7, size * 0.3), height: Math.max(7, size * 0.3) }}
-          aria-label={presence}
+          aria-label={presence === 'busy' ? 'In a call' : presence}
         />
       )}
     </span>

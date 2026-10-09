@@ -50,15 +50,15 @@ export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: Act
               )}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-body-md font-semibold text-ink">{c.isDirect ? c.startedBy.name : c.title}</p>
+              <p className="truncate text-body-md font-semibold text-ink">{c.isDirect && !c.invitedBy ? c.startedBy.name : c.title}</p>
               <p className="truncate text-body-sm text-ink-muted">
-                {c.isDirect ? `Incoming ${c.video ? 'video' : 'voice'} call` : `${c.startedBy.name} started a ${c.video ? 'video' : 'voice'} call · ${c.participants.length} in call`}
+                {c.invitedBy ? `${c.invitedBy} is adding you to the call · ${c.participants.length} in call` : c.isDirect ? `Incoming ${c.video ? 'video' : 'voice'} call` : `${c.startedBy.name} started a ${c.video ? 'video' : 'voice'} call · ${c.participants.length} in call`}
               </p>
             </div>
           </div>
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={() => onDecline(c)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-btn bg-danger px-3 py-2 text-body-sm font-semibold text-white hover:bg-danger/90">
-              <PhoneOff size={15} /> {c.isDirect ? 'Decline' : 'Dismiss'}
+              <PhoneOff size={15} /> {c.isDirect || c.invitedBy ? 'Decline' : 'Dismiss'}
             </button>
             {c.video && (
               <button type="button" onClick={() => onJoin(c, false)} className="inline-flex items-center justify-center gap-1.5 rounded-btn border border-line px-3 py-2 text-body-sm font-semibold text-ink hover:bg-slate-50" title="Join with microphone only">
@@ -66,7 +66,7 @@ export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: Act
               </button>
             )}
             <button type="button" onClick={() => onJoin(c, c.video)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-btn bg-success px-3 py-2 text-body-sm font-semibold text-white hover:bg-success/90">
-              {c.video ? <Video size={15} /> : <Phone size={15} />} {c.isDirect ? 'Answer' : 'Join'}
+              {c.video ? <Video size={15} /> : <Phone size={15} />} {c.isDirect || c.invitedBy ? 'Answer' : 'Join'}
             </button>
           </div>
           {inCall && <p className="mt-2 text-[11px] text-ink-muted">Joining will leave your current call first.</p>}

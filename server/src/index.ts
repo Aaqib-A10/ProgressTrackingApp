@@ -6,7 +6,9 @@ import { startAutoCheckout } from './lib/autoCheckout'
 import { startMonthlyReports } from './lib/monthlyReportCron'
 import { startTaskReminders } from './lib/taskReminders'
 import { startPmDeadlines } from './lib/pm/deadlines'
-import { startCallSweeper } from './lib/pm/calls'
+import { startCallSweeper, setOnCallEnded } from './lib/pm/calls'
+import { startMeetingReminders } from './lib/pm/meetings'
+import { generateNotes } from './lib/pm/notes'
 
 const PORT = Number(process.env.PORT) || 4000
 
@@ -36,4 +38,10 @@ app.listen(PORT, () => {
   startTaskReminders()
   startPmDeadlines()
   startCallSweeper()
+  startMeetingReminders()
+  // When a call with the AI note taker on ends, write its notes.
+  setOnCallEnded((c) => {
+    // eslint-disable-next-line no-console
+    if (c.noteTaker) void generateNotes(c.callId).catch((e) => console.error('[notes]', e))
+  })
 })

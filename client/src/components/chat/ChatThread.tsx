@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, Trash2, Users, Video, X } from 'lucide-react'
+import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Trash2, Users, Video, X } from 'lucide-react'
 import { chatApi, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { useToast } from '../ui/Toast'
@@ -8,6 +8,7 @@ import { PersonAvatar, fmtBytes, fmtDateTime } from '../projects/pmUi'
 import { refreshChatUnread } from './useChatUnread'
 import { cn } from '../../lib/cn'
 import { useCalls } from '../calls/CallProvider'
+import { NotesModal } from '../calls/MeetingNotes'
 
 const API = import.meta.env.VITE_API_URL ?? '/api'
 const EMOJI = ['👍', '🙏', '✅', '🎉', '👀', '🔥', '😂', '❤️', '🚀', '⏰', '❗', '🙂']
@@ -17,7 +18,7 @@ const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
  * One conversation: history (scroll up for older), live polling for new messages,
  * edits and deletes, typing indicator, read receipts, replies, @mentions and files.
  */
-export function ChatThread({ conversationId, meId, compact, prefill, onHeaderClick, actions, onSent }: { conversationId: string; meId: string; compact?: boolean; prefill?: string; onHeaderClick?: () => void; actions?: React.ReactNode; onSent?: () => void }) {
+export function ChatThread({ conversationId, meId, compact, prefill, onHeaderClick, actions, onSent, hideCallButtons }: { conversationId: string; meId: string; compact?: boolean; prefill?: string; onHeaderClick?: () => void; actions?: React.ReactNode; onSent?: () => void; hideCallButtons?: boolean }) {
   const { addToast } = useToast()
   const calls = useCalls()
   const [conv, setConv] = useState<ConversationDetail | null>(null)
@@ -34,6 +35,8 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const [sending, setSending] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [reactFor, setReactFor] = useState<string | null>(null)
+  const [notesFor, setNotesFor] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -191,6 +194,23 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Upload failed') }) } finally { setSending(false) }
   }
 
+  async function react(m: ChatMessage, emoji: string) {
+    // Show it straight away, then take the server's answer.
+    setMsgs((cur) => cur.map((x) => {
+      if (x.id !== m.id) return x
+      const has = x.reactions.find((r) => r.emoji === emoji)
+      const reactions = has
+        ? x.reactions.map((r) => (r.emoji === emoji ? { ...r, userIds: r.userIds.includes(meId) ? r.userIds.filter((u) => u !== meId) : [...r.userIds, meId] } : r)).filter((r) => r.userIds.length)
+        : [...x.reactions, { emoji, userIds: [meId] }]
+      return { ...x, reactions }
+    }))
+    try {
+      const r = await chatApi.react(m.id, emoji)
+      setMsgs((cur) => cur.map((x) => (x.id === r.message.id ? r.message : x)))
+    } catch (e) { addToast({ type: 'error', message: errMsg(e) }) }
+  }
+  const nameOrYou = (id: string) => (id === meId ? 'You' : nameOf(id))
+
   async function remove(m: ChatMessage) {
     try { await chatApi.remove(m.id); setMsgs((cur) => cur.map((x) => (x.id === m.id ? { ...x, deleted: true, body: '', file: null, task: null } : x))) } catch (e) { addToast({ type: 'error', message: errMsg(e) }) }
   }
@@ -202,6 +222,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {notesFor && <NotesModal callId={notesFor} onClose={() => setNotesFor(null)} />}
       {/* Header */}
       <div className={cn('flex shrink-0 items-center gap-3 border-b border-line', compact ? 'px-3 py-2' : 'px-4 py-3')}>
         {conv ? (
@@ -212,13 +233,13 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             <span className="min-w-0">
               <span className="block truncate text-body-md font-semibold text-ink">{conv.title}</span>
               <span className="block truncate text-body-sm text-ink-muted">
-                {isDirect && other ? (other.presence === 'online' ? 'Online' : other.presence === 'away' ? 'Away' : 'Offline') : `${conv.members.length} members`}
+                {isDirect && other ? (other.presence === 'busy' ? 'In a call' : other.presence === 'online' ? 'Online' : other.presence === 'away' ? 'Away' : 'Offline') : `${conv.members.length} members`}
                 {conv.muted && <> · <BellOff size={11} className="inline" /> muted</>}
               </span>
             </span>
           </button>
         ) : <span className="h-8 w-40 animate-pulse rounded bg-slate-100" />}
-        {conv && calls && <CallButtons conversationId={conversationId} compact={compact} />}
+        {conv && calls && !hideCallButtons && <CallButtons conversationId={conversationId} compact={compact} />}
         {conv?.project && !compact && <Link to={`/app/projects/${conv.project.key}`} className="shrink-0 text-body-sm font-semibold text-primary">Open board</Link>}
         {actions}
       </div>
@@ -255,16 +276,35 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                     )}
                     {m.deleted ? <p className="text-body-md italic text-ink-muted">Message deleted</p> : (
                       <>
-                        {m.call ? <CallCard call={m.call} conversationId={conversationId} mine={mine} /> : m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
+                        {m.notes ? <NotesCard callId={m.notes.callId} body={m.body} onOpen={() => setNotesFor(m.notes!.callId)} /> : m.call ? <CallCard call={m.call} conversationId={conversationId} mine={mine} /> : m.body && <p className="whitespace-pre-wrap break-words text-body-md text-ink">{renderBody(m.body, conv?.members ?? [], m.mentions, meId, !!m.task)}{m.editedAt && <span className="ml-1 text-[11px] text-ink-muted">(edited)</span>}</p>}
                         {m.file && <FileBubble file={m.file} />}
                         {m.task && <TaskRefCard task={m.task} />}
                       </>
                     )}
                   </div>
+                  {!m.deleted && m.reactions?.length > 0 && (
+                    <div className={cn('mt-0.5 flex flex-wrap gap-1 px-1', mine && 'justify-end')}>
+                      {m.reactions.map((r) => {
+                        const mineR = r.userIds.includes(meId)
+                        return (
+                          <button key={r.emoji} type="button" onClick={() => react(m, r.emoji)} title={r.userIds.map(nameOrYou).join(', ')} className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none', mineR ? 'border-primary/40 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:bg-slate-50')}>
+                            <span className="text-[14px]">{r.emoji}</span>{r.userIds.length}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                   {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
                 </div>
                 {!m.deleted && (
                   <div className={cn('absolute top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', mine ? 'left-1' : 'right-1', menuFor === m.id && 'flex')}>
+                    {MSG_REACTIONS.slice(0, compact ? 3 : 5).map((e) => (
+                      <button key={e} type="button" onClick={() => react(m, e)} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`} title={`React ${e}`}>{e}</button>
+                    ))}
+                    <button type="button" onClick={() => setReactFor(reactFor === m.id ? null : m.id)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="More reactions" title="More reactions"><SmilePlus size={14} /></button>
+                    {reactFor === m.id && MSG_REACTIONS.slice(compact ? 3 : 5).map((e) => (
+                      <button key={e} type="button" onClick={() => { react(m, e); setReactFor(null) }} className="rounded px-0.5 text-[15px] leading-none hover:scale-125" aria-label={`React ${e}`}>{e}</button>
+                    ))}
                     <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Reply" title="Reply"><CornerUpLeft size={14} /></button>
                     {mine && (
                       <>
@@ -347,6 +387,20 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
 }
 
 const ALL_ID = '__all__'
+const MSG_REACTIONS = ['👍', '❤️', '😂', '🎉', '✅', '😮', '😢', '🙏']
+
+function NotesCard({ body, onOpen }: { callId: string; body: string; onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} className="flex max-w-md items-start gap-3 rounded-btn border border-primary/20 bg-card p-2.5 text-left hover:border-primary/40 hover:shadow-card">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Sparkles size={17} /></span>
+      <span className="min-w-0">
+        <span className="block text-body-md font-semibold text-ink">Meeting notes</span>
+        <span className="line-clamp-3 block text-body-sm text-ink-muted">{body.replace(/^Meeting notes: /, '')}</span>
+        <span className="mt-1 block text-body-sm font-semibold text-primary">Open summary, action items and transcript</span>
+      </span>
+    </button>
+  )
+}
 
 function renderBody(body: string, members: { id: string; name: string }[], mentionIds: string[], meId: string, hasTask: boolean): React.ReactNode[] {
   const names = mentionIds.map((id) => members.find((m) => m.id === id)).filter((m): m is { id: string; name: string } => !!m).sort((a, b) => b.name.length - a.name.length)
@@ -391,9 +445,15 @@ function renderBody(body: string, members: { id: string; name: string }[], menti
 function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
   const href = API + file.url.replace(/^\/api/, '')
   const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(file.mime ?? '')
+  const isVideo = /^video\/(webm|mp4)$/i.test(file.mime ?? '')
   return (
     <div className="mt-1">
-      {isImage ? (
+      {isVideo ? (
+        <div className="w-[min(420px,100%)]">
+          <video controls preload="metadata" src={`${href}?inline=1`} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />
+          <a href={href} className="mt-1 inline-flex items-center gap-1 text-[12px] text-ink-muted hover:text-ink"><Download size={12} /> Download ({fmtBytes(file.size ?? 0)})</a>
+        </div>
+      ) : isImage ? (
         <a href={href} target="_blank" rel="noreferrer"><img src={`${href}?inline=1`} alt={file.name ?? 'image'} className="max-h-64 max-w-full rounded-btn border border-line object-contain" loading="lazy" /></a>
       ) : (
         <a href={href} className="inline-flex max-w-full items-center gap-2 rounded-btn border border-line bg-card px-3 py-2 text-body-sm hover:bg-slate-50">

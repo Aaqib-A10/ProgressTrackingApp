@@ -225,21 +225,23 @@ model User {
   brandProfilesOwned    BrandProfile[]       @relation("BrandProfileOwner")
 
   // Projects + chat
-  pmProjectsOwned  PmProject[]          @relation("PmProjectOwner")
-  pmMemberships    PmProjectMember[]    @relation("PmMemberships")
-  pmTasksCreated   PmTask[]             @relation("PmTaskCreator")
-  pmAssignments    PmTaskAssignee[]     @relation("PmAssignments")
-  pmWatching       PmTaskWatcher[]      @relation("PmWatching")
-  pmComments       PmComment[]          @relation("PmCommentAuthor")
-  pmReviews        PmReview[]           @relation("PmReviewer")
-  chatCallsStarted ChatCall[]           @relation("ChatCallsStarted")
-  pmAttachments    PmAttachment[]       @relation("PmAttachmentUploader")
-  pmActivity       PmActivity[]         @relation("PmActivityActor")
-  pmExtRequested   PmExtensionRequest[] @relation("PmExtRequester")
-  pmExtDecided     PmExtensionRequest[] @relation("PmExtDecider")
-  pmNotifyPref     PmNotifyPref?        @relation("PmNotifyPref")
-  chatMemberships  ChatMember[]         @relation("ChatMemberships")
-  chatMessagesSent ChatMessage[]        @relation("ChatMessagesSent")
+  pmProjectsOwned   PmProject[]          @relation("PmProjectOwner")
+  pmMemberships     PmProjectMember[]    @relation("PmMemberships")
+  pmTasksCreated    PmTask[]             @relation("PmTaskCreator")
+  pmAssignments     PmTaskAssignee[]     @relation("PmAssignments")
+  pmWatching        PmTaskWatcher[]      @relation("PmWatching")
+  pmComments        PmComment[]          @relation("PmCommentAuthor")
+  pmReviews         PmReview[]           @relation("PmReviewer")
+  chatCallsStarted  ChatCall[]           @relation("ChatCallsStarted")
+  meetingsOrganized Meeting[]            @relation("MeetingsOrganized")
+  meetingAttendance MeetingAttendee[]    @relation("MeetingAttendance")
+  pmAttachments     PmAttachment[]       @relation("PmAttachmentUploader")
+  pmActivity        PmActivity[]         @relation("PmActivityActor")
+  pmExtRequested    PmExtensionRequest[] @relation("PmExtRequester")
+  pmExtDecided      PmExtensionRequest[] @relation("PmExtDecider")
+  pmNotifyPref      PmNotifyPref?        @relation("PmNotifyPref")
+  chatMemberships   ChatMember[]         @relation("ChatMemberships")
+  chatMessagesSent  ChatMessage[]        @relation("ChatMessagesSent")
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -938,6 +940,7 @@ enum NotificationType {
   PROJECT_MEMBER_ADDED
   CHAT_MESSAGE
   TASK_REVIEW
+  MEETING
 }
 
 enum BreakType {
@@ -1871,6 +1874,7 @@ model PmProject {
   tasks        PmTask[]
   labels       PmLabel[]
   conversation ChatConversation?
+  meetings     Meeting[]
 
   @@index([status])
 }
@@ -2131,25 +2135,121 @@ model ChatConversation {
   members  ChatMember[]
   messages ChatMessage[]
   calls    ChatCall[]
+  meetings Meeting[]
 
   @@index([lastMessageAt])
 }
 
 /// A voice or video call in a conversation (media is browser to browser; the server only connects people).
 model ChatCall {
-  id             String           @id @default(cuid())
+  id             String               @id @default(cuid())
   conversationId String
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   ChatConversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   startedById    String
-  startedBy      User             @relation("ChatCallsStarted", fields: [startedById], references: [id])
-  video          Boolean          @default(true)
-  startedAt      DateTime         @default(now())
+  startedBy      User                 @relation("ChatCallsStarted", fields: [startedById], references: [id])
+  video          Boolean              @default(true)
+  startedAt      DateTime             @default(now())
   endedAt        DateTime?
   /// Everyone who joined at some point (for the "Call ended" summary).
   joinedIds      String[]
   messages       ChatMessage[]
+  meetingId      String?
+  meeting        Meeting?             @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  /// AI note taker: was it switched on, and the generated notes.
+  noteTaker      Boolean              @default(false)
+  notesStatus    String? // pending | ready | failed | empty | no-ai
+  notes          Json?
+  transcript     CallTranscriptLine[]
+  recordings     CallRecording[]
 
   @@index([conversationId, endedAt])
+  @@index([meetingId])
+}
+
+/// One spoken sentence in a call (each person's browser transcribes their own microphone).
+model CallTranscriptLine {
+  id          String   @id @default(cuid())
+  callId      String
+  call        ChatCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  userId      String
+  speakerName String
+  text        String
+  at          DateTime @default(now())
+
+  @@index([callId, at])
+}
+
+/// A recording of a call, uploaded in chunks while it is being made.
+model CallRecording {
+  id          String   @id @default(cuid())
+  callId      String
+  call        ChatCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  userId      String
+  storedName  String
+  mime        String
+  size        Int      @default(0)
+  chunks      Int      @default(0)
+  durationSec Int?
+  status      String   @default("uploading") // uploading | ready | failed
+  messageId   String?
+  createdAt   DateTime @default(now())
+
+  @@index([callId])
+}
+
+/// Emoji reaction on a chat message.
+model ChatReaction {
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+/// A scheduled meeting. Each meeting (or repeating series) has its own group chat.
+model Meeting {
+  id             String           @id @default(cuid())
+  title          String
+  agenda         String           @default("")
+  startsAt       DateTime
+  endsAt         DateTime
+  organizerId    String
+  organizer      User             @relation("MeetingsOrganized", fields: [organizerId], references: [id])
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        PmProject?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// Same id on every occurrence of a repeating meeting.
+  seriesId       String?
+  repeat         String? // daily | weekdays | weekly
+  cancelledAt    DateTime?
+  reminderSentAt DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  attendees MeetingAttendee[]
+  calls     ChatCall[]
+
+  @@index([startsAt])
+  @@index([seriesId])
+  @@index([conversationId])
+}
+
+model MeetingAttendee {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("MeetingAttendance", fields: [userId], references: [id], onDelete: Cascade)
+  response  String   @default("PENDING") // PENDING | ACCEPTED | TENTATIVE | DECLINED
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, userId])
+  @@index([userId])
 }
 
 model ChatMember {
@@ -2184,6 +2284,11 @@ model ChatMessage {
   taskRef        PmTask?          @relation(fields: [taskRefId], references: [id], onDelete: SetNull)
   callId         String?
   call           ChatCall?        @relation(fields: [callId], references: [id], onDelete: SetNull)
+  /// "Meeting notes are ready" card for this call.
+  notesCallId    String?
+  /// Bumped whenever an emoji reaction changes, so open chats refresh the message.
+  reactedAt      DateTime?
+  reactions      ChatReaction[]
   // Optional single file per message (stored like other uploads)
   fileStoredName String?
   fileName       String?

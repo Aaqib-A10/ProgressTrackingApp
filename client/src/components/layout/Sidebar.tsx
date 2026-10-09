@@ -8,6 +8,7 @@ import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
 import { getQaUnreadCount } from '../../lib/qaApi'
 import { filterNav, type NavGroup } from './navConfig'
+import { projectsApi } from '../../lib/projectsApi'
 
 const NAV_STORE = 'pt-nav-expanded'
 const matches = (to: string, path: string) => path === to || path.startsWith(to + '/')
@@ -26,8 +27,29 @@ function initials(name: string): string {
     .toUpperCase()
 }
 
+/** Does this person administer any project? (Cached for the session; Super Admins always do.) */
+let adminCache: { userId: string; value: boolean } | null = null
+function useIsProjectAdmin(user: CurrentUser): boolean {
+  const [value, setValue] = useState(() => user.role === 'SUPER_ADMIN' || (adminCache?.userId === user.id && adminCache.value))
+  useEffect(() => {
+    if (user.role === 'SUPER_ADMIN') { setValue(true); return }
+    if (adminCache?.userId === user.id) { setValue(adminCache.value); return }
+    let alive = true
+    projectsApi.list().then((r) => {
+      const v = r.projects.some((p) => p.myRole === 'ADMIN')
+      adminCache = { userId: user.id, value: v }
+      if (alive) setValue(v)
+    }).catch(() => undefined)
+    return () => { alive = false }
+  }, [user.id, user.role])
+  return value
+}
+
 export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
+  const isProjectAdmin = useIsProjectAdmin(user)
   const groups = filterNav(user.role, user.department, user.email)
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.projectAdminOnly || isProjectAdmin) }))
+    .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
   const [unreadQa, setUnreadQa] = useState(0)

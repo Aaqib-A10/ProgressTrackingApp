@@ -81,6 +81,8 @@ const ProjectBoard = lazy(() => import('../pages/app/projects/ProjectBoard'))
 const ProjectSettings = lazy(() => import('../pages/app/projects/ProjectSettings'))
 const ProjectsDashboard = lazy(() => import('../pages/app/projects/ProjectsDashboard'))
 const ChatPage = lazy(() => import('../pages/app/chat/ChatPage'))
+const CalendarPage = lazy(() => import('../pages/app/meetings/CalendarPage'))
+const MeetingPage = lazy(() => import('../pages/app/meetings/MeetingPage'))
 const Notifications = lazy(() => import('../pages/app/Notifications'))
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
@@ -162,6 +164,8 @@ export const router = createBrowserRouter([
       { path: 'projects/:key', element: <ProjectBoard /> },
       { path: 'projects/:key/settings', element: <ProjectSettings /> },
       { path: 'chat', element: <ChatPage /> },
+      { path: 'calendar', element: <CalendarPage /> },
+      { path: 'meetings/:id', element: <MeetingPage /> },
       { path: 'notifications', element: <Notifications /> },
 
       // Inventory

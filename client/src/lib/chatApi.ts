@@ -1,6 +1,6 @@
 import { api } from './api'
 
-export type Presence = 'online' | 'away' | 'offline'
+export type Presence = 'online' | 'away' | 'offline' | 'busy'
 export type ConversationType = 'DIRECT' | 'GROUP' | 'PROJECT'
 
 export interface ConversationListItem {
@@ -43,6 +43,9 @@ export interface ChatMessage {
   task: { code: string; title: string; projectKey: string; projectName: string; color: string; status: string; done: boolean; dueAt: string | null; overdue: boolean } | null
   file: { name: string | null; size: number | null; mime: string | null; url: string } | null
   call: { id: string; video: boolean; active: boolean; startedAt: string; endedAt: string | null; durationSec: number | null; joinedCount: number } | null
+  /** "Meeting notes are ready" card. */
+  notes: { callId: string } | null
+  reactions: { emoji: string; userIds: string[] }[]
   editedAt: string | null
   createdAt: string
 }
@@ -78,6 +81,7 @@ export const chatApi = {
   read: (id: string, seq: number) => api.post<{ lastReadSeq: number }>(`/chat/conversations/${id}/read`, { seq }),
   mute: (id: string, until: string | null) => api.post(`/chat/conversations/${id}/mute`, { until }),
   typing: (id: string, typing: boolean) => api.post(`/chat/conversations/${id}/typing`, { typing }),
+  react: (messageId: string, emoji: string) => api.post<{ message: ChatMessage }>(`/chat/messages/${messageId}/react`, { emoji }),
   unread: () => api.get<{ total: number; conversations: number; latest?: { id: string; conversationId: string; from: string; text: string; where: string | null; isDirect: boolean; isCall?: boolean } | null }>('/chat/unread'),
   users: (q = '') => api.get<{ users: ChatUser[] }>(`/chat/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   search: (q: string, conversationId?: string) => api.get<{ results: { id: string; seq: number; conversationId: string; conversationName: string | null; userName: string; body: string; createdAt: string }[] }>(`/chat/search?q=${encodeURIComponent(q)}${conversationId ? `&conversationId=${conversationId}` : ''}`),
