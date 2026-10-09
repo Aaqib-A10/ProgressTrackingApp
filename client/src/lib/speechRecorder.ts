@@ -31,7 +31,7 @@ export function serverSpeechSupported(): boolean {
   return typeof MediaRecorder !== 'undefined' && !!pickMime()
 }
 
-interface Piece { rec: MediaRecorder; chunks: Blob[]; started: number; speechMs: number }
+interface Piece { rec: MediaRecorder; chunks: Blob[]; started: number; speechMs: number; firstVoice: number | null }
 
 export class SpeechRecorder {
   private ctx: AudioContext | null = null
@@ -66,7 +66,7 @@ export class SpeechRecorder {
       const rms = Math.sqrt(sum / buf.length)
       // Background follows quiet moments quickly and loud moments only slowly.
       this.room = rms < this.room ? this.room * 0.8 + rms * 0.2 : this.room * 0.995 + rms * 0.005
-      if (rms > Math.max(LEVEL, this.room * ABOVE_ROOM) && this.track.enabled) { p.speechMs += 100; this.lastVoice = now }
+      if (rms > Math.max(LEVEL, this.room * ABOVE_ROOM) && this.track.enabled) { p.speechMs += 100; this.lastVoice = now; p.firstVoice ??= now }
       const age = now - p.started
       if ((age > MIN_PIECE_MS && now - this.lastVoice > PAUSE_MS) || age > MAX_PIECE_MS) this.cut()
     }, 100)
@@ -74,14 +74,15 @@ export class SpeechRecorder {
 
   private newPiece(): Piece {
     const rec = new MediaRecorder(new MediaStream([this.track]), { mimeType: this.mime, audioBitsPerSecond: 32_000 })
-    const piece: Piece = { rec, chunks: [], started: Date.now(), speechMs: 0 }
+    const piece: Piece = { rec, chunks: [], started: Date.now(), speechMs: 0, firstVoice: null }
     rec.ondataavailable = (e) => { if (e.data.size) piece.chunks.push(e.data) }
     rec.onstop = () => {
       // Nobody spoke in this piece: nothing to send.
       if (piece.speechMs < MIN_SPEECH_MS || !piece.chunks.length) return
       const blob = new Blob(piece.chunks, { type: this.mime.split(';')[0] })
       const durationMs = Date.now() - piece.started
-      this.uploads = this.uploads.then(() => this.upload(blob, durationMs))
+      const spokeAt = piece.firstVoice ?? piece.started
+      this.uploads = this.uploads.then(() => this.upload(blob, durationMs, spokeAt))
     }
     rec.start()
     return piece
@@ -94,10 +95,10 @@ export class SpeechRecorder {
     try { old?.rec.stop() } catch { /* already stopped */ }
   }
 
-  private async upload(blob: Blob, durationMs: number) {
+  private async upload(blob: Blob, durationMs: number, spokeAt: number) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await callsApi.audio(this.callId, blob, this.mode, durationMs, this.speakerId)
+        await callsApi.audio(this.callId, blob, this.mode, durationMs, this.speakerId, spokeAt)
         return
       } catch (e) {
         const msg = (e as Error).message || ''

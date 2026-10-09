@@ -235,7 +235,8 @@ export async function removeMember(req: AuthedRequest, res: Response): Promise<v
 /** GET /api/projects/users — active users to pick from when adding members (managers only). */
 export async function listPickableUsers(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
-  const managesAny = me.role === 'SUPER_ADMIN' || (await prisma.pmProjectMember.count({ where: { userId: me.id, role: 'ADMIN' } })) > 0
+  // Anyone who may create a project (Team Leads too) needs the list for their first project.
+  const managesAny = me.role === 'SUPER_ADMIN' || PROJECT_CREATOR_ROLES.includes(me.role) || (await prisma.pmProjectMember.count({ where: { userId: me.id, role: 'ADMIN' } })) > 0
   if (!managesAny) throw new HttpError(403, 'Forbidden')
   const users = await prisma.user.findMany({
     where: { isActive: true, status: 'ACTIVE' },
@@ -311,9 +312,12 @@ export async function deleteColumn(req: AuthedRequest, res: Response): Promise<v
   if (taskCount > 0) {
     const target = moveTo ? await prisma.pmColumn.findFirst({ where: { id: moveTo, projectId: ctx.project.id } }) : null
     if (!target || target.id === col.id) throw new HttpError(422, 'Pick another column to move this column\'s tasks into')
+    // Finished tasks (including ones finished long ago, which the board does not show) must
+    // not quietly become open again and start sending overdue alerts.
+    if (col.category === 'DONE' && target.category !== 'DONE') throw new HttpError(422, 'This column holds finished tasks. Move them into another Done type column.')
     await prisma.pmTask.updateMany({
       where: { columnId: col.id },
-      data: { columnId: target.id, ...(target.category === 'DONE' ? { completedAt: new Date(), isOverdue: false, overdueSince: null } : { completedAt: null }) },
+      data: { columnId: target.id, ...(target.category === col.category ? {} : target.category === 'DONE' ? { completedAt: new Date(), isOverdue: false, overdueSince: null } : { completedAt: null }) },
     })
   }
   await prisma.$transaction(async (tx) => {

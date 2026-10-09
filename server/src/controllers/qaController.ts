@@ -9,6 +9,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString, periodRange, type RangeKey } from '../lib/time'
 import { scoreEvaluation, type ScoredCategory } from '../lib/qa'
+import { contentDisposition } from '../lib/contentDisposition'
 
 const UPLOAD_DIR = path.resolve('uploads')
 const RECORDING_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -1071,6 +1072,6 @@ export async function downloadRecording(req: AuthedRequest, res: Response): Prom
     return
   }
   res.setHeader('Content-Type', att.mimeType)
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(att.originalName)}"`)
+  res.setHeader('Content-Disposition', contentDisposition('inline', att.originalName))
   res.sendFile(filePath)
 }

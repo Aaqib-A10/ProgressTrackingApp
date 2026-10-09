@@ -70,8 +70,8 @@ describe('financials are Super-Admin only (router-level guard)', () => {
   it('MEMBER is forbidden (403)', async () => {
     await request(app).get('/api/financials').set(...auth(w.itadMember)).expect(403)
   })
-  it('SUPER_ADMIN is allowed (200)', async () => {
-    await request(app).get('/api/financials').set(...auth(w.superAdmin)).expect(200)
+  it('a Super Admin who is not on the finance allowlist is still blocked (403)', async () => {
+    await request(app).get('/api/financials').set(...auth(w.superAdmin)).expect(403)
   })
 })
 

@@ -48,6 +48,7 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
   const people = members.filter((m) => m.role !== 'VIEWER' || assignees.includes(m.id)).map((m) => ({ id: m.id, name: m.name }))
 
   async function submit(again = false) {
+    if (busy) return // Enter pressed twice
     if (!title.trim()) { setError('Give the task a title'); return }
     if (start && due && new Date(due) < new Date(start)) { setError('The end date must be after the start date'); return }
     setBusy(true)

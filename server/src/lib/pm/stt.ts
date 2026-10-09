@@ -6,10 +6,10 @@ import * as Calls from './calls'
 import { transcribeAudio, type SpeechMode } from './groq'
 import * as Translate from './translate'
 
-// A translated line becomes the live caption (people see English while they talk).
+// A rewritten line becomes the live caption, in Roman Urdu (English stays English).
 Translate.setOnTranslated((l) => {
   const live = Calls.getLive(l.callId)
-  if (live) Calls.addCaption(live, l.userId, l.speakerName, l.textEn, true)
+  if (live) Calls.addCaption(live, l.userId, l.speakerName, l.textRoman, true)
 })
 
 /**

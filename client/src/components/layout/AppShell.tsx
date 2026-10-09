@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, Suspense, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, Suspense, type ReactNode } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Activity } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -49,6 +49,20 @@ export function AppShell({ user, children }: AppShellProps) {
     try { return localStorage.getItem('pt-sidebar-collapsed') === '1' } catch { return false }
   })
   const location = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
+  // Moving to another section starts at the top, with a short fade so the change feels
+  // smooth. Moving inside a section (one chat to another, a task drawer) is left alone.
+  const section = location.pathname.split('/').slice(0, 3).join('/')
+  const lastSection = useRef(section)
+  useEffect(() => {
+    if (lastSection.current === section) return
+    lastSection.current = section
+    const el = mainRef.current
+    if (!el) return
+    el.scrollTop = 0
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof el.animate !== 'function') return
+    el.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' })
+  }, [section])
 
   const setCustom = (c: CustomRange) => {
     setCustomState(c)
@@ -104,7 +118,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
-            <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
                 {children ?? <Outlet />}
               </Suspense>

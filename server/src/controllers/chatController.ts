@@ -10,7 +10,8 @@ import { HttpError, TASK_CODE_RE, loadProjectCtx, visibleProjectIds } from '../l
 import { parse, viewer } from '../lib/pm/http'
 import { presenceOf as basePresence, setTyping, touch, typingIn } from '../lib/pm/presence'
 import { pmNotify, trunc } from '../lib/pm/pmNotify'
-import { syncProjectChannel } from '../lib/pm/tasks'
+import { latestSeq, syncProjectChannel } from '../lib/pm/tasks'
+import { contentDisposition } from '../lib/contentDisposition'
 import * as Calls from '../lib/pm/calls'
 import { generateNotes, notesProvider, transcriptText, type MeetingNotes } from '../lib/pm/notes'
 import { groqEnabled } from '../lib/pm/groq'
@@ -35,6 +36,7 @@ const UPLOAD_DIR = path.resolve('uploads', 'chat')
 const MAX_BYTES = 25 * 1024 * 1024
 const BLOCKED_EXT = new Set(['exe', 'bat', 'cmd', 'com', 'msi', 'scr', 'sh', 'ps1', 'vbs', 'js', 'mjs', 'cjs', 'jar', 'apk', 'app', 'html', 'htm', 'svg'])
 const MAX_BODY = 5000
+
 
 // Simple per-user send limiter: 30 messages per rolling minute.
 const sendLog = new Map<string, number[]>()
@@ -254,7 +256,8 @@ export async function updateConversation(req: AuthedRequest, res: Response): Pro
   if (body.name) await prisma.chatConversation.update({ where: { id: m.conversationId }, data: { name: body.name } })
   if (body.addUserIds?.length) {
     const ok = await prisma.user.findMany({ where: { id: { in: body.addUserIds }, isActive: true, status: 'ACTIVE' }, select: { id: true } })
-    await prisma.chatMember.createMany({ data: ok.map((u) => ({ conversationId: m.conversationId, userId: u.id })), skipDuplicates: true })
+    const seq = await latestSeq(m.conversationId) // added people start with nothing unread
+    await prisma.chatMember.createMany({ data: ok.map((u) => ({ conversationId: m.conversationId, userId: u.id, lastReadSeq: seq })), skipDuplicates: true })
   }
   if (body.removeUserIds?.length) {
     await prisma.chatMember.deleteMany({ where: { conversationId: m.conversationId, userId: { in: body.removeUserIds.filter((id) => id !== me.id) } } })
@@ -282,7 +285,7 @@ export async function projectConversation(req: AuthedRequest, res: Response): Pr
   await syncProjectChannel(ctx.project.id)
   const conv = await prisma.chatConversation.findUniqueOrThrow({ where: { projectId: ctx.project.id } })
   if (ctx.isSuperAdmin && !ctx.pmRole) {
-    await prisma.chatMember.createMany({ data: [{ conversationId: conv.id, userId: me.id, isAdmin: true }], skipDuplicates: true })
+    await prisma.chatMember.createMany({ data: [{ conversationId: conv.id, userId: me.id, isAdmin: true, lastReadSeq: await latestSeq(conv.id) }], skipDuplicates: true })
   }
   res.json({ conversation: { id: conv.id } })
 }
@@ -295,6 +298,9 @@ export async function projectConversation(req: AuthedRequest, res: Response): Pr
  * Also returns who is typing and each member's read cursor (for "Seen").
  */
 export async function listMessages(req: AuthedRequest, res: Response): Promise<void> {
+  // Taken before reading, a few seconds early: a change saved while this request runs is
+  // picked up by the next poll (the client ignores repeats).
+  const syncFrom = new Date(Date.now() - 5000)
   const me = viewer(req)
   touch(me.id)
   const m = await membership(req.params.id, me.id)
@@ -333,7 +339,7 @@ export async function listMessages(req: AuthedRequest, res: Response): Promise<v
     hasMore,
     typing: typingIn(m.conversationId, me.id),
     reads: members.map((x) => ({ userId: x.userId, lastReadSeq: x.lastReadSeq })),
-    serverTime: new Date().toISOString(),
+    serverTime: syncFrom.toISOString(),
   })
 }
 
@@ -440,15 +446,15 @@ export async function sendFile(req: AuthedRequest, res: Response): Promise<void>
 // ---------- large files (videos) in pieces ----------
 // A file is sent as several small pieces, so big videos get past the proxy's request
 // size limit and a dropped connection only repeats one piece. Upload state lives in
-// memory; an unfinished upload is thrown away after an hour.
+// memory; an upload that gets no new piece for an hour is thrown away.
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024
 const UPLOAD_PIECE_BYTES = 5 * 1024 * 1024
-interface PendingUpload { id: string; userId: string; conversationId: string; memberId: string; name: string; mime: string; size: number; received: number; pieces: number; tmp: string; ext: string; startedAt: number }
+interface PendingUpload { id: string; userId: string; conversationId: string; name: string; mime: string; size: number; received: number; pieces: number; tmp: string; ext: string; startedAt: number; lastAt: number }
 const uploads = new Map<string, PendingUpload>()
 const UPLOAD_TTL_MS = 60 * 60_000
 setInterval(() => {
   const cutoff = Date.now() - UPLOAD_TTL_MS
-  for (const u of uploads.values()) if (u.startedAt < cutoff) { uploads.delete(u.id); void fs.rm(u.tmp, { force: true }) }
+  for (const u of uploads.values()) if (u.lastAt < cutoff) { uploads.delete(u.id); void fs.rm(u.tmp, { force: true }) }
 }, 10 * 60_000).unref()
 
 function cleanName(raw: unknown): string {
@@ -470,7 +476,7 @@ export async function startUpload(req: AuthedRequest, res: Response): Promise<vo
   const id = randomUUID()
   const tmp = path.join(UPLOAD_DIR, `part-${id}`)
   await fs.writeFile(tmp, Buffer.alloc(0))
-  uploads.set(id, { id, userId: me.id, conversationId: m.conversationId, memberId: m.id, name, mime: (b.mime || 'application/octet-stream').slice(0, 120), size: b.size, received: 0, pieces: 0, tmp, ext, startedAt: Date.now() })
+  uploads.set(id, { id, userId: me.id, conversationId: m.conversationId, name, mime: (b.mime || 'application/octet-stream').slice(0, 120), size: b.size, received: 0, pieces: 0, tmp, ext, startedAt: Date.now(), lastAt: Date.now() })
   res.status(201).json({ uploadId: id, pieceSize: UPLOAD_PIECE_BYTES })
 }
 
@@ -493,6 +499,7 @@ export async function uploadPiece(req: AuthedRequest, res: Response): Promise<vo
   await fs.appendFile(u.tmp, buf)
   u.pieces++
   u.received += buf.length
+  u.lastAt = Date.now()
   res.json({ ok: true, received: u.received })
 }
 
@@ -501,6 +508,8 @@ export async function finishUpload(req: AuthedRequest, res: Response): Promise<v
   const me = viewer(req)
   const u = ownUpload(req)
   if (u.received !== u.size) throw new HttpError(409, 'The file did not arrive completely. Please send it again.')
+  // Still in the chat? (someone may have left or been removed since the upload started)
+  const m = await membership(u.conversationId, me.id).catch(async (e) => { uploads.delete(u.id); await fs.rm(u.tmp, { force: true }); throw e })
   rateLimitSend(me.id)
   const caption = parse(z.object({ caption: z.string().max(MAX_BODY).default('') }), req.body ?? {}).caption.trim()
   uploads.delete(u.id)
@@ -519,7 +528,7 @@ export async function finishUpload(req: AuthedRequest, res: Response): Promise<v
     },
     include: MESSAGE_INCLUDE,
   })
-  await prisma.chatMember.update({ where: { id: u.memberId }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
+  await prisma.chatMember.update({ where: { id: m.id }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
   await prisma.chatConversation.update({ where: { id: u.conversationId }, data: { lastMessageAt: new Date() } })
   const visible = new Set(await visibleProjectIds(me, true))
   res.status(201).json({ message: serializeMessage(msg, visible) })
@@ -542,12 +551,12 @@ export async function downloadFile(req: AuthedRequest, res: Response): Promise<v
   const filePath = path.join(UPLOAD_DIR, msg.fileStoredName)
   try { await fs.access(filePath) } catch { throw new HttpError(404, 'File missing on server') }
   // Raster images and videos (call recordings) may play inline; everything else is forced to download.
-  const isMedia = /^(image\/(png|jpe?g|gif|webp)|video\/(webm|mp4|quicktime|ogg|x-m4v))$/i.test(msg.fileMime ?? '')
+  const isMedia = /^(image\/(png|jpe?g|gif|webp)|video\/(webm|mp4|quicktime|ogg|x-m4v)|audio\/(webm|ogg|mp4|mpeg|wav|x-m4a|aac))$/i.test(msg.fileMime ?? '')
   res.setHeader('X-Content-Type-Options', 'nosniff')
   // A sent file never changes: let the browser keep it instead of fetching it on every view.
   res.setHeader('Cache-Control', 'private, max-age=604800, immutable')
   res.setHeader('Content-Type', isMedia ? msg.fileMime! : 'application/octet-stream')
-  res.setHeader('Content-Disposition', `${isMedia && req.query.inline === '1' ? 'inline' : 'attachment'}; filename="${encodeURIComponent(msg.fileName ?? 'file')}"`)
+  res.setHeader('Content-Disposition', contentDisposition(isMedia && req.query.inline === '1' ? 'inline' : 'attachment', msg.fileName ?? 'file'))
   res.sendFile(filePath)
 }
 
@@ -698,10 +707,26 @@ async function displayName(userId: string): Promise<string> {
 }
 
 /** POST /api/chat/conversations/:id/calls { video } — start a call (or get the one already running here). */
+// Two people pressing "Call"/"Start" at the same moment must end up in ONE call: the
+// second request waits for the first one to finish creating it.
+const startingCalls = new Map<string, Promise<unknown>>()
+
 export async function startCall(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
   const m = await membership(req.params.id, me.id)
   const video = req.body?.video !== false
+  while (startingCalls.has(m.conversationId)) await startingCalls.get(m.conversationId)!.catch(() => undefined)
+  let done!: () => void
+  startingCalls.set(m.conversationId, new Promise<void>((ok) => { done = ok }))
+  try {
+    await startCallInner(me, m, video, res)
+  } finally {
+    startingCalls.delete(m.conversationId)
+    done()
+  }
+}
+
+async function startCallInner(me: { id: string; role: string }, m: Awaited<ReturnType<typeof membership>>, video: boolean, res: Response): Promise<void> {
   const existing = Calls.liveForConversation(m.conversationId)
   if (existing) {
     res.json({ call: { id: existing.callId, video: existing.video, conversationId: existing.conversationId }, existing: true })
@@ -845,7 +870,7 @@ export async function inviteToCall(req: AuthedRequest, res: Response): Promise<v
     let guest = !members.has(u.id)
     // Group chats (and meeting chats) take them in as members, so they also get the chat.
     if (guest && conv.type === 'GROUP') {
-      await prisma.chatMember.create({ data: { conversationId: call.conversationId, userId: u.id } }).catch(() => undefined)
+      await prisma.chatMember.create({ data: { conversationId: call.conversationId, userId: u.id, lastReadSeq: await latestSeq(call.conversationId) } }).catch(() => undefined)
       if (call.meetingId) await prisma.meetingAttendee.create({ data: { meetingId: call.meetingId, userId: u.id, response: 'ACCEPTED' } }).catch(() => undefined)
       guest = false
     }
@@ -873,6 +898,7 @@ export async function setNoteTaker(req: AuthedRequest, res: Response): Promise<v
   const { on } = parse(z.object({ on: z.boolean() }), req.body)
   if (call.noteTaker === on) { res.json({ noteTaker: on }); return }
   call.noteTaker = on
+  call.notesOffAt = on ? null : Date.now()
   if (on) {
     call.noteRecorder = me.id // this browser records everyone
     await prisma.chatCall.update({ where: { id: call.callId }, data: { noteTaker: true, notesStatus: null } })
@@ -915,13 +941,14 @@ export async function callNotes(req: AuthedRequest, res: Response): Promise<void
   const notes = call.notes as unknown as (MeetingNotes & { error?: string }) | null
   res.json({
     call: { id: call.id, startedAt: call.startedAt.toISOString(), endedAt: call.endedAt?.toISOString() ?? null, video: call.video, title: call.meeting?.title ?? call.conversation.name ?? 'Call', meetingId: call.meeting?.id ?? null, conversationId: call.conversationId },
-    status: call.notesStatus ?? (call.noteTaker ? (call.endedAt ? 'pending' : 'recording') : 'none'),
+    // Being written for more than 10 minutes means it got stuck: offer Try again.
+    status: call.notesStatus === 'pending' && call.notesStartedAt && Date.now() - call.notesStartedAt.getTime() > 10 * 60_000 ? 'failed' : call.notesStatus ?? (call.noteTaker ? (call.endedAt ? 'pending' : 'recording') : 'none'),
     provider: notesProvider(),
     piecesLeft: Stt.pendingFor(call.id),
     notes: notes && !notes.error ? notes : null,
     error: notes?.error ?? null,
-    transcript: lines.map((l) => ({ id: l.id, userId: l.userId, speaker: l.speakerName, text: l.text, textEn: l.textEn, at: l.at.toISOString(), offsetSec: Math.max(0, Math.round((l.at.getTime() - call.startedAt.getTime()) / 1000)) })),
-    transcriptText: transcriptText(call.startedAt, lines.map((l) => ({ ...l, text: l.textEn ?? l.text }))),
+    transcript: lines.map((l) => ({ id: l.id, userId: l.userId, speaker: l.speakerName, text: l.text, textEn: l.textEn, textRoman: l.textRoman, at: l.at.toISOString(), offsetSec: Math.max(0, Math.round((l.at.getTime() - call.startedAt.getTime()) / 1000)) })),
+    transcriptText: transcriptText(call.startedAt, lines.map((l) => ({ ...l, text: l.textRoman ?? l.textEn ?? l.text }))),
     recordings: recordings.map((r) => ({ id: r.id, messageId: r.messageId, size: r.size, durationSec: r.durationSec, url: r.messageId ? `/api/chat/files/${r.messageId}` : null, createdAt: r.createdAt.toISOString() })),
   })
 }
@@ -931,14 +958,18 @@ export async function retryNotes(req: AuthedRequest, res: Response): Promise<voi
   const me = viewer(req)
   const call = await callForReader(req.params.callId, me.id)
   if (Calls.getLive(call.id)?.noteTaker) throw new HttpError(409, 'The note taker is still on. Stop it first.')
-  // Optional { lang: 'en' | 'ur' }: write the notes again in that language.
-  const { lang } = parse(z.object({ lang: z.enum(['auto', 'en', 'ur']).default('auto') }), req.body ?? {})
-  await generateNotes(call.id, { force: true, lang })
-  res.json({ ok: true })
+  // Optional { lang: 'roman' | 'en' | 'ur' }: write the notes again in that language.
+  const { lang } = parse(z.object({ lang: z.enum(['auto', 'roman', 'en', 'ur']).default('auto') }), req.body ?? {})
+  const row = await prisma.chatCall.findUnique({ where: { id: call.id }, select: { notesStatus: true, notesStartedAt: true } })
+  // Already being written (and not stuck for more than 10 minutes): do not start a second run.
+  if (row?.notesStatus === 'pending' && row.notesStartedAt && Date.now() - row.notesStartedAt.getTime() < 10 * 60_000) { res.status(202).json({ ok: true, pending: true }); return }
+  // Written in the background; the notes window checks back every few seconds.
+  void generateNotes(call.id, { force: true, lang }).catch((e) => console.error('[notes]', e)) // eslint-disable-line no-console
+  res.status(202).json({ ok: true, pending: true })
 }
 
 // Recordings are uploaded in small pieces while they are made (works behind the tunnel's size limit).
-const MAX_RECORDING_BYTES = 4 * 1024 * 1024 * 1024
+const MAX_RECORDING_BYTES = 2_000_000_000 // the size is stored as a whole number up to ~2.1 GB
 const MAX_CHUNK_BYTES = 10 * 1024 * 1024
 
 /** POST /api/chat/calls/:callId/recordings { mime } — start a recording. */
@@ -1021,16 +1052,20 @@ export async function toggleReaction(req: AuthedRequest, res: Response): Promise
   await membership(msg.conversationId, me.id)
   const { emoji } = parse(z.object({ emoji: z.string().refine((e) => MESSAGE_REACTIONS.includes(e), 'Unknown reaction') }), req.body)
   const existing = await prisma.chatReaction.findUnique({ where: { messageId_userId_emoji: { messageId: msg.id, userId: me.id, emoji } } })
-  if (existing) await prisma.chatReaction.delete({ where: { id: existing.id } })
-  else await prisma.chatReaction.create({ data: { messageId: msg.id, userId: me.id, emoji } })
+  // deleteMany / skipDuplicates: a double click must not fail with a duplicate error.
+  if (existing) await prisma.chatReaction.deleteMany({ where: { id: existing.id } })
+  else await prisma.chatReaction.createMany({ data: [{ messageId: msg.id, userId: me.id, emoji }], skipDuplicates: true })
   const row = await prisma.chatMessage.update({ where: { id: msg.id }, data: { reactedAt: new Date() }, include: MESSAGE_INCLUDE })
   const visible = new Set(await visibleProjectIds(me, true))
   res.json({ message: serializeMessage(row, visible) })
 }
 
 /** Write the notes a few seconds after the note taker stops, so the last pieces of speech arrive. */
-export function scheduleNotes(callId: string, delayMs = Number(process.env.NOTES_DELAY_MS ?? 8000)): void {
-  setTimeout(() => { void generateNotes(callId).catch((e) => console.error('[notes]', e)) }, delayMs) // eslint-disable-line no-console
+export function scheduleNotes(callId: string, delayMs = Number(process.env.NOTES_DELAY_MS ?? 10000)): void {
+  setTimeout(() => {
+    if (Calls.getLive(callId)?.noteTaker) return // switched on again: the notes are written later
+    void generateNotes(callId).catch((e) => console.error('[notes]', e)) // eslint-disable-line no-console
+  }, delayMs)
 }
 
 const AUDIO_MAX = 6 * 1024 * 1024
@@ -1050,9 +1085,12 @@ export async function postAudio(req: AuthedRequest, res: Response): Promise<void
   let speakerName: string | null = null
   let callId: string
   if (live && live.participants.has(me.id)) {
-    if (!live.noteTaker) throw new HttpError(409, 'The note taker is off')
+    // The last piece after "Stop notes" still counts (it is sent a moment later).
+    const justStopped = !live.noteTaker && live.notesOffAt !== null && Date.now() - live.notesOffAt < 60_000
+    if (!live.noteTaker && !justStopped) throw new HttpError(409, 'The note taker is off')
     // Only the recording browser sends audio, so nobody is written down twice.
-    if (Calls.recorderOf(live) !== me.id) throw new HttpError(409, 'Another browser is recording the notes')
+    const recorder = live.noteTaker ? Calls.recorderOf(live) : live.noteRecorder
+    if (recorder !== me.id) throw new HttpError(409, 'Another browser is recording the notes')
     if (!live.joinedIds.has(speakerId)) throw new HttpError(409, 'That person is not in this call')
     speakerName = live.participants.get(speakerId)?.name ?? await displayName(speakerId)
     callId = live.callId
@@ -1071,9 +1109,12 @@ export async function postAudio(req: AuthedRequest, res: Response): Promise<void
   if (buf.length > AUDIO_MAX) throw new HttpError(413, 'Piece too large')
   const mode = (['mixed', 'en', 'ur'] as const).find((m) => m === req.query.mode) ?? 'mixed'
   const durationMs = Math.min(Math.max(Number(req.query.durationMs) || 0, 0), 120_000)
+  // When the person started talking (sent by the browser), so lines stay in the order they were said.
+  const spokeAt = Number(req.query.spokeAt)
+  const at = Number.isFinite(spokeAt) && spokeAt > Date.now() - 10 * 60_000 && spokeAt <= Date.now() + 5000 ? new Date(Math.min(spokeAt, Date.now())) : new Date(Date.now() - durationMs)
   const mime = String(req.headers['content-type'] || 'audio/webm').split(';')[0].slice(0, 40)
   // No Whisper prompt: with unclear sound it repeats prompt words (names, company names) as if they were said.
-  await Stt.enqueue({ callId, userId: speakerId, speakerName, at: new Date(Date.now() - durationMs), mime, mode, audio: buf })
+  await Stt.enqueue({ callId, userId: speakerId, speakerName, at, mime, mode, audio: buf })
   res.json({ ok: true })
 }
 

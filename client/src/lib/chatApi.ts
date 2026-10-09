@@ -125,12 +125,17 @@ export function uploadChatFile(conversationId: string, file: File, caption: stri
       index++
       onProgress(offset / file.size)
     }
+    if (cancelled) throw new Error('cancelled')
     const r = await api.post<{ message: ChatMessage }>(`/chat/uploads/${uploadId}/finish`, { caption })
     return r.message
   })()
   // A piece was too big for the network: start again with small pieces.
   const run: Promise<ChatMessage> = done.catch(async (e) => {
-    if (!(e as { smaller?: boolean }).smaller) throw e
+    if (!(e as { smaller?: boolean }).smaller) {
+      // Failed or stopped: free the half-sent file on the server straight away.
+      if (uploadId) void api.del(`/chat/uploads/${uploadId}`).catch(() => undefined)
+      throw e
+    }
     if (uploadId) void api.del(`/chat/uploads/${uploadId}`).catch(() => undefined)
     return smallPieces(conversationId, file, caption, onProgress, () => cancelled)
   })

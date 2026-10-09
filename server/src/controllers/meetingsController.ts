@@ -9,6 +9,7 @@ import { pmNotify, trunc } from '../lib/pm/pmNotify'
 import { presenceOf } from '../lib/pm/presence'
 import * as Calls from '../lib/pm/calls'
 import { buildIcs, fmtRange, meetingLink, occurrences } from '../lib/pm/meetings'
+import { contentDisposition } from '../lib/contentDisposition'
 
 /**
  * /api/meetings — schedule meetings, invite people, RSVP, calendar.
@@ -374,6 +375,6 @@ export async function meetingIcs(req: AuthedRequest, res: Response): Promise<voi
     url: `${APP_URL}${meetingLink(m.id)}`,
   })
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(m.title.slice(0, 60) || 'meeting')}.ics"`)
+  res.setHeader('Content-Disposition', contentDisposition('attachment', `${m.title.slice(0, 60) || 'meeting'}.ics`))
   res.send(ics)
 }

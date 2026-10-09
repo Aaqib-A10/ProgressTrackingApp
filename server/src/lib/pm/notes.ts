@@ -30,8 +30,8 @@ export interface MeetingNotes {
   language?: NotesLang
 }
 
-/** en = English, ur = Urdu (Urdu script). auto = the language most of the meeting was in. */
-export type NotesLang = 'en' | 'ur'
+/** roman = Roman Urdu (Urdu in English letters, the default), en = English, ur = Urdu script. */
+export type NotesLang = 'roman' | 'en' | 'ur'
 
 /** Mostly Urdu (Urdu/Arabic or Devanagari script) or mostly English? */
 export function detectLanguage(text: string): NotesLang {
@@ -64,7 +64,9 @@ const SYSTEM_BASE =
 function systemFor(lang: NotesLang): string {
   const write = lang === 'ur'
     ? 'Write every value of the notes in simple, natural Urdu in Urdu script (the way the team speaks). Keep names of people, companies, products and technical words in English letters. '
-    : 'Write every value of the notes in clear, simple English. '
+    : lang === 'roman'
+      ? 'Write every value of the notes in simple Roman Urdu: Urdu written in English letters, the way the team types on WhatsApp (for example "Rizwan kal tak county pages bhej dega"). Keep work words, names, products and numbers in English. '
+      : 'Write every value of the notes in clear, simple English. '
   return SYSTEM_BASE + write + 'The JSON keys stay in English. Answer with one JSON object and nothing else.'
 }
 
@@ -182,9 +184,35 @@ ${KEYS_SPEC}`
 export async function generateNotes(callId: string, opts: { force?: boolean; lang?: NotesLang | 'auto' } = {}): Promise<void> {
   const claim = await prisma.chatCall.updateMany({
     where: opts.force ? { id: callId } : { id: callId, notesStatus: null },
-    data: { notesStatus: 'pending' },
+    data: { notesStatus: 'pending', notesStartedAt: new Date() },
   })
   if (!claim.count) return
+  try {
+    await writeNotesFor(callId, opts)
+  } catch (e) {
+    // Never leave the notes "being written" forever: show the error and the Try again button.
+    // eslint-disable-next-line no-console
+    console.error('[notes] could not finish:', (e as Error).message)
+    await prisma.chatCall.updateMany({ where: { id: callId, notesStatus: 'pending' }, data: { notesStatus: 'failed', notes: { error: (e as Error).message.slice(0, 300) } as Prisma.InputJsonValue } })
+  }
+}
+
+/**
+ * After a restart (a deploy ends every call without the usual "call ended" step), write
+ * the notes that were never written, and unstick notes left "being written".
+ */
+export async function recoverNotes(): Promise<void> {
+  const since = new Date(Date.now() - 2 * 86400_000)
+  const stuck = new Date(Date.now() - 10 * 60_000)
+  const calls = await prisma.chatCall.findMany({
+    where: { noteTaker: true, endedAt: { not: null, gte: since }, OR: [{ notesStatus: null }, { notesStatus: 'pending', OR: [{ notesStartedAt: null }, { notesStartedAt: { lt: stuck } }] }] },
+    select: { id: true },
+    take: 20,
+  })
+  for (const c of calls) await generateNotes(c.id, { force: true }).catch(() => undefined)
+}
+
+async function writeNotesFor(callId: string, opts: { lang?: NotesLang | 'auto' }): Promise<void> {
   // Pieces of speech may still be on their way to text, then to English: wait for them first.
   await Stt.waitForCall(callId)
   await Translate.waitForCall(callId)
@@ -209,10 +237,10 @@ export async function generateNotes(callId: string, opts: { force?: boolean; lan
   try {
     if (!notesProvider()) throw new Error('no-key')
     const date = call.startedAt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: process.env.APP_TIMEZONE || 'Asia/Karachi' })
-    // Written from the English lines (the original when a line has no English yet).
-    const transcript = transcriptText(call.startedAt, call.transcript.map((l) => ({ ...l, text: l.textEn ?? l.text })))
-    // English unless someone asks for Urdu with the switch.
-    const lang: NotesLang = opts.lang && opts.lang !== 'auto' ? opts.lang : 'en'
+    // Roman Urdu unless someone picks English or Urdu script with the switch.
+    const lang: NotesLang = opts.lang && opts.lang !== 'auto' ? opts.lang : 'roman'
+    // English notes are written from the English lines, the others from Roman Urdu (the original when not rewritten yet).
+    const transcript = transcriptText(call.startedAt, call.transcript.map((l) => ({ ...l, text: (lang === 'en' ? l.textEn : l.textRoman) ?? l.text })))
     notes = { ...(await writeNotes({ title, agenda: call.meeting?.agenda ?? '', people, transcript, date }, lang)), language: lang }
   } catch (e) {
     const msg = (e as Error).message

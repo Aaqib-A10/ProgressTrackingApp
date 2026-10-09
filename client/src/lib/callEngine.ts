@@ -96,6 +96,8 @@ export class CallEngine {
   private timer: number | undefined
   private polling = false
   private closed = false
+  /** ICE candidates that arrived before their offer (the requests can overtake each other). */
+  private earlyIce = new Map<string, RTCIceCandidateInit[]>()
   private snap: CallSnapshot
 
   constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void, private opts: { muteOnJoin?: boolean } = {}) {
@@ -181,17 +183,21 @@ export class CallEngine {
           noise = 'on'
         }
       }
+      // Hung up while the browser was still asking for the microphone/camera: let go of them.
+      if (this.closed) { this.stopLocal(); return }
       // Joining a busy call: start muted so nobody's background noise interrupts.
       const startMuted = !!this.opts.muteOnJoin && !!this.audioTrack
       if (startMuted) this.audioTrack!.enabled = false
       this.rebuildLocal()
       const j = await callsApi.join(this.snap.callId, { mic: !!this.audioTrack && !startMuted, cam: !!this.camTrack })
+      if (this.closed) { this.stopLocal(); void callsApi.leave(this.snap.callId).catch(() => undefined); return }
       this.me = j.me
       this.iceServers = j.iceServers
       this.emit({ noise, relay: j.relay !== false })
       this.emit({ mic: !!this.audioTrack && !startMuted, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker, noteRecorder: j.noteRecorder ?? null, sttMode: j.sttMode ?? 'browser' })
       // The newcomer calls everyone who is already in the call.
       for (const o of j.others) await this.createPeer(o.userId, o.name, true, o)
+      if (this.closed) return
       this.timer = window.setInterval(() => { void this.poll() }, POLL_MS)
       void this.poll()
     } catch (e) {
@@ -276,7 +282,14 @@ export class CallEngine {
       let peer = this.peers.get(s.from)
       // Both sides called each other at the same moment: the one with the "smaller" id gives way.
       if (peer?.initiator && peer.pc.signalingState === 'have-local-offer' && this.me > s.from) return
-      if (!peer || peer.initiator) peer = await this.createPeer(s.from, peer?.name ?? 'Someone', false, peer?.info ?? null)
+      if (!peer || peer.initiator) {
+        // A replaced connection keeps the candidates it had waiting.
+        const carried = peer?.pendingIce.splice(0) ?? []
+        peer = await this.createPeer(s.from, peer?.name ?? 'Someone', false, peer?.info ?? null)
+        peer.pendingIce.push(...carried)
+      }
+      const early = this.earlyIce.get(s.from)
+      if (early) { peer.pendingIce.push(...early); this.earlyIce.delete(s.from) }
       await peer.pc.setRemoteDescription(s.data as RTCSessionDescriptionInit)
       // Answer with our own media in the slots the caller created.
       for (const t of peer.pc.getTransceivers()) {
@@ -292,7 +305,15 @@ export class CallEngine {
       return
     }
     const peer = this.peers.get(s.from)
-    if (!peer) return
+    if (!peer) {
+      // Its offer is still on the way: keep the candidate for when it arrives.
+      if (s.kind === 'ice') {
+        const list = this.earlyIce.get(s.from) ?? []
+        if (list.length < 100) list.push(s.data as RTCIceCandidateInit)
+        this.earlyIce.set(s.from, list)
+      }
+      return
+    }
     if (s.kind === 'answer') {
       if (peer.pc.signalingState === 'have-local-offer') await peer.pc.setRemoteDescription(s.data as RTCSessionDescriptionInit)
       await this.flushIce(peer)
@@ -331,7 +352,9 @@ export class CallEngine {
       this.tuneBitrate()
       // A connection that keeps dropping (or never came up): try a fresh path.
       for (const p of this.peers.values()) {
-        if (p.downSince !== null && Date.now() - p.downSince > 8000 && p.pc.connectionState !== 'connecting') this.reconnect(p)
+        if (p.downSince === null) continue
+        const down = Date.now() - p.downSince
+        if ((down > 8000 && p.pc.connectionState !== 'connecting') || down > 15_000) this.reconnect(p)
       }
       this.emit({ declined: r.declined ?? [], noteTaker: !!r.noteTaker, noteRecorder: r.noteRecorder ?? null, captions: r.captions ?? [], invited: r.invited ?? [] })
     } catch {

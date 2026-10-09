@@ -22,7 +22,7 @@ export interface CallSignal { id: number; from: string; kind: 'offer' | 'answer'
 export interface JoinResponse { callId: string; video: boolean; conversationId: string; me: string; others: CallParticipant[]; iceServers: RTCIceServer[]; guest?: boolean; noteTaker?: boolean; noteRecorder?: string | null; meetingId?: string | null; isDirect?: boolean; sttMode?: 'server' | 'browser'; relay?: boolean }
 export interface PollResponse { ended: boolean; removed?: boolean; participants: CallParticipant[]; signals: CallSignal[]; declined?: string[]; noteTaker?: boolean; noteRecorder?: string | null; captions?: Caption[]; invited?: string[] }
 
-export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }[]; openQuestions: string[]; language?: 'en' | 'ur' }
+export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }[]; openQuestions: string[]; language?: 'roman' | 'en' | 'ur' }
 export interface CallNotesResponse {
   call: { id: string; startedAt: string; endedAt: string | null; video: boolean; title: string; meetingId: string | null; conversationId: string }
   status: 'none' | 'recording' | 'pending' | 'ready' | 'failed' | 'empty' | 'no-ai'
@@ -30,7 +30,7 @@ export interface CallNotesResponse {
   error: string | null
   provider: 'groq' | 'anthropic' | null
   piecesLeft: number
-  transcript: { id: string; userId: string; speaker: string; text: string; textEn?: string | null; at: string; offsetSec: number }[]
+  transcript: { id: string; userId: string; speaker: string; text: string; textEn?: string | null; textRoman?: string | null; at: string; offsetSec: number }[]
   transcriptText: string
   recordings: { id: string; messageId: string | null; size: number; durationSec: number | null; url: string | null; createdAt: string }[]
 }
@@ -47,9 +47,9 @@ export const callsApi = {
   mute: (callId: string, userId: string) => api.post(`/chat/calls/${callId}/mute`, { userId }),
   setNotes: (callId: string, on: boolean) => api.post<{ noteTaker: boolean }>(`/chat/calls/${callId}/notes`, { on }),
   notes: (callId: string) => api.get<CallNotesResponse>(`/chat/calls/${callId}/notes`),
-  retryNotes: (callId: string, lang?: 'en' | 'ur') => api.post(`/chat/calls/${callId}/notes/retry`, lang ? { lang } : {}),
+  retryNotes: (callId: string, lang?: 'roman' | 'en' | 'ur') => api.post(`/chat/calls/${callId}/notes/retry`, lang ? { lang } : {}),
   transcript: (callId: string, text: string, final: boolean) => api.post(`/chat/calls/${callId}/transcript`, { text, final }),
-  audio: (callId: string, blob: Blob, mode: string, durationMs: number, speaker: string) => api.postRaw<{ ok: boolean }>(`/chat/calls/${callId}/audio?mode=${mode}&durationMs=${Math.round(durationMs)}&speaker=${encodeURIComponent(speaker)}`, blob, blob.type || 'audio/webm'),
+  audio: (callId: string, blob: Blob, mode: string, durationMs: number, speaker: string, spokeAt: number) => api.postRaw<{ ok: boolean }>(`/chat/calls/${callId}/audio?mode=${mode}&durationMs=${Math.round(durationMs)}&speaker=${encodeURIComponent(speaker)}&spokeAt=${Math.round(spokeAt)}`, blob, blob.type || 'audio/webm'),
   linkActionItem: (callId: string, index: number, taskCode: string) => api.patch(`/chat/calls/${callId}/notes/action-items/${index}`, { taskCode }),
   startRecording: (callId: string, mime: string) => api.post<{ recording: { id: string } }>(`/chat/calls/${callId}/recordings`, { mime }),
   recordingChunk: (recId: string, index: number, blob: Blob) => api.postRaw<{ ok: boolean }>(`/chat/recordings/${recId}/chunk?index=${index}`, blob, 'application/octet-stream'),

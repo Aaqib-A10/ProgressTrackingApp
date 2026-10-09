@@ -21,8 +21,9 @@ export interface NoiseFilter {
 
 export async function createNoiseFilter(mic: MediaStreamTrack): Promise<NoiseFilter | null> {
   if (typeof AudioWorkletNode === 'undefined') return null
+  let ctx: AudioContext | null = null
   try {
-    const ctx = new AudioContext({ sampleRate: 48000 })
+    ctx = new AudioContext({ sampleRate: 48000 })
     wasm = wasm ?? loadRnnoise({ url: rnnoiseWasmPath, simdUrl: rnnoiseSimdWasmPath })
     const [binary] = await Promise.all([wasm, ctx.audioWorklet.addModule(rnnoiseWorkletPath)])
     await ctx.resume().catch(() => undefined)
@@ -38,6 +39,7 @@ export async function createNoiseFilter(mic: MediaStreamTrack): Promise<NoiseFil
     rnnoise.connect(dest)
     let on = true
     const track = dest.stream.getAudioTracks()[0]
+    const audio = ctx
     return {
       track,
       setEnabled(next: boolean) {
@@ -52,10 +54,11 @@ export async function createNoiseFilter(mic: MediaStreamTrack): Promise<NoiseFil
       destroy() {
         try { rnnoise.destroy() } catch { /* ignore */ }
         track.stop()
-        void ctx.close().catch(() => undefined)
+        void audio.close().catch(() => undefined)
       },
     }
   } catch {
+    void ctx?.close().catch(() => undefined) // do not leave a sound engine running
     return null
   }
 }

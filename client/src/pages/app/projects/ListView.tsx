@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/Toast'
@@ -39,6 +39,14 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
     return [...tasks].sort((a, b) => (v(a) < v(b) ? -1 : v(a) > v(b) ? 1 : 0) * sort.dir)
   }, [tasks, sort, colPos])
 
+  // Only rows still on screen stay selected (a filter can hide selected tasks).
+  useEffect(() => {
+    setSel((s) => {
+      const visible = new Set(rows.map((r) => r.id))
+      const keep = [...s].filter((id) => visible.has(id))
+      return keep.length === s.size ? s : new Set(keep)
+    })
+  }, [rows])
   const toggleAll = () => setSel((s) => (s.size === rows.length ? new Set() : new Set(rows.map((r) => r.id))))
   async function bulk(body: { columnId?: string; priority?: PmPriority; assigneeId?: string | null; delete?: boolean }) {
     try {

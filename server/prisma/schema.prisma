@@ -2164,6 +2164,7 @@ model ChatCall {
   /// AI note taker: was it switched on, and the generated notes.
   noteTaker      Boolean              @default(false)
   notesStatus    String? // pending | ready | failed | empty | no-ai
+  notesStartedAt DateTime? // when the notes started being written (a stuck run can be retried)
   notes          Json?
   transcript     CallTranscriptLine[]
   recordings     CallRecording[]
@@ -2180,8 +2181,10 @@ model CallTranscriptLine {
   userId      String
   speakerName String
   text        String
-  /// The same words in English (the line is shown and summarised in English). Null until translated.
+  /// The same words in English. Null until translated.
   textEn      String?
+  /// The same words in Roman Urdu (Urdu in English letters, as people type it). Shown by default.
+  textRoman   String?
   at          DateTime @default(now())
 
   @@index([callId, at])

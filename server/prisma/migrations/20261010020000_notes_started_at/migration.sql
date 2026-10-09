@@ -1,0 +1,1 @@
+ALTER TABLE "ChatCall" ADD COLUMN "notesStartedAt" TIMESTAMP(3);

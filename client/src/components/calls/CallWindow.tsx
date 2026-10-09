@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Captions, CircleDot, Hand, Link2, Loader2, WifiOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, PhoneOff, Search,
+  Captions, CircleDot, Hand, Link2, Loader2, WifiOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, PhoneOff, Pin, PinOff, Search,
   Smile, Sparkles, Square, UserPlus, Users, Video, VideoOff, X,
 } from 'lucide-react'
 import type { PeerView } from '../../lib/callEngine'
@@ -19,15 +19,25 @@ export function CallWindow() {
   const ctx = useCalls()
   const [dismissErr, setDismissErr] = useState<string | null>(null)
   const [reactOpen, setReactOpen] = useState(false)
+  // A person pinned to the big view (click a tile). Screen shares are shown big on their own.
+  const [pinned, setPinned] = useState<string | null>(null)
   const speaking = useSpeaking(ctx?.call ? [{ id: ctx.meId, stream: ctx.call.localStream, on: ctx.call.mic }, ...ctx.call.peers.map((p) => ({ id: p.userId, stream: p.stream, on: p.mic }))] : [])
-  // Esc closes a side panel, then shrinks the meeting to the corner (never hangs up).
+  // Keys in the full meeting view: Esc closes a side panel, then shrinks the meeting to
+  // the corner (never hangs up). M mute, V camera, H hand. Ignored while typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || !ctx || ctx.minimized) return
+      if (!ctx?.call || ctx.minimized || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return
       const t = e.target as HTMLElement | null
-      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return
-      if (ctx.panel) ctx.setPanel(null)
-      else ctx.setMinimized(true)
+      if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return
+      const k = e.key.toLowerCase()
+      if (k === 'escape') {
+        if (ctx.panel) ctx.setPanel(null)
+        else ctx.setMinimized(true)
+      } else if (k === 'm') ctx.toggleMic()
+      else if (k === 'v') ctx.toggleCam()
+      else if (k === 'h') ctx.toggleHand()
+      else return
+      e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -53,6 +63,11 @@ export function CallWindow() {
   const recBusy = ctx.recState === 'starting' || ctx.recState === 'saving'
   const handsUp = call.peers.filter((p) => p.hand).length + (call.hand ? 1 : 0)
   const togglePanel = (p: CallPanel) => ctx.setPanel(ctx.panel === p ? null : p)
+  const allTiles = [...peerTiles, meTile]
+  // Big view: the pinned person if still here, else whoever shares their screen.
+  const focus = (pinned ? allTiles.find((t) => t.id === pinned) : undefined) ?? (sharer ? peerTiles.find((t) => t.id === sharer.userId) : undefined)
+  const togglePin = (id: string) => setPinned((p) => (p === id ? null : id))
+  const pinnable = allTiles.length > 1
 
   const badges = (
     <>
@@ -133,16 +148,16 @@ export function CallWindow() {
                   {declinedNames.length > 0 && !meta?.isDirect && <p className="text-body-sm text-slate-400">{declinedNames.join(', ')} declined</p>}
                   <button type="button" onClick={() => ctx.setPanel('people')} className="inline-flex items-center gap-1.5 rounded-btn bg-white/10 px-3 py-1.5 text-body-sm font-semibold hover:bg-white/20"><UserPlus size={15} /> Add people</button>
                 </div>
-              ) : sharer ? (
+              ) : focus ? (
                 <div className="flex h-full flex-col gap-2">
-                  <div className="min-h-0 flex-1 overflow-hidden rounded-card bg-slate-800"><TileView tile={peerTiles.find((t) => t.id === sharer.userId)!} contain /></div>
+                  <div className="min-h-0 flex-1 animate-fade-in overflow-hidden rounded-card bg-slate-800"><TileView key={focus.key} tile={focus} contain={focus.screen} pin={pinnable ? { on: pinned === focus.id, toggle: () => togglePin(focus.id) } : undefined} /></div>
                   <div className="flex h-28 shrink-0 gap-2 overflow-x-auto">
-                    {[meTile, ...peerTiles.filter((t) => t.id !== sharer.userId)].map((t) => <div key={t.key} className="aspect-video h-full shrink-0 overflow-hidden rounded-card bg-slate-800"><TileView tile={t} compact /></div>)}
+                    {allTiles.filter((t) => t.id !== focus.id).map((t) => <div key={t.key} className="aspect-video h-full shrink-0 overflow-hidden rounded-card bg-slate-800"><TileView tile={t} compact pin={{ on: false, toggle: () => togglePin(t.id) }} /></div>)}
                   </div>
                 </div>
               ) : (
-                <div className={cn('grid h-full gap-2', gridFor(peerTiles.length + 1))}>
-                  {[...peerTiles, meTile].map((t) => <div key={t.key} className="min-h-0 overflow-hidden rounded-card bg-slate-800"><TileView tile={t} /></div>)}
+                <div className={cn('grid h-full gap-2', gridFor(allTiles.length))}>
+                  {allTiles.map((t) => <div key={t.key} className="min-h-0 overflow-hidden rounded-card bg-slate-800 transition-shadow"><TileView tile={t} pin={pinnable ? { on: false, toggle: () => togglePin(t.id) } : undefined} /></div>)}
                 </div>
               )}
 
@@ -187,10 +202,10 @@ export function CallWindow() {
 
           {/* Controls */}
           <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-2 px-4 pb-5 pt-2 sm:gap-3">
-            <CtrlButton on={call.mic} onClick={ctx.toggleMic} label={call.mic ? 'Mute microphone' : 'Unmute microphone'} icon={call.mic ? <Mic size={20} /> : <MicOff size={20} />} />
-            <CtrlButton on={call.cam} onClick={ctx.toggleCam} label={call.cam ? 'Turn camera off' : 'Turn camera on'} icon={call.cam ? <Video size={20} /> : <VideoOff size={20} />} />
+            <CtrlButton on={call.mic} onClick={ctx.toggleMic} label={call.mic ? 'Mute microphone (M)' : 'Unmute microphone (M)'} icon={call.mic ? <Mic size={20} /> : <MicOff size={20} />} />
+            <CtrlButton on={call.cam} onClick={ctx.toggleCam} label={call.cam ? 'Turn camera off (V)' : 'Turn camera on (V)'} icon={call.cam ? <Video size={20} /> : <VideoOff size={20} />} />
             {canShare && <CtrlButton on={!call.screen} active={call.screen} onClick={ctx.toggleScreen} label={call.screen ? 'Stop sharing your screen' : 'Share your screen'} icon={call.screen ? <MonitorOff size={20} /> : <MonitorUp size={20} />} />}
-            <CtrlButton on active={call.hand} onClick={ctx.toggleHand} label={call.hand ? 'Lower your hand' : 'Raise your hand'} icon={<Hand size={20} />} />
+            <CtrlButton on active={call.hand} onClick={ctx.toggleHand} label={call.hand ? 'Lower your hand (H)' : 'Raise your hand (H)'} icon={<Hand size={20} />} />
             <div className="relative">
               <CtrlButton on onClick={() => setReactOpen((v) => !v)} label="React" icon={<Smile size={20} />} />
               {reactOpen && (
@@ -333,7 +348,7 @@ function NotesPanel() {
       {!call.noteTaker ? (
         <div className="space-y-3">
           <p className="flex items-start gap-2 text-ink"><Sparkles size={16} className="mt-0.5 shrink-0 text-primary" /> The AI note taker writes down what everyone says. When you stop it or the call ends, you get a summary, decisions and action items in the chat.</p>
-          <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Everyone's voice is written down with their name and shown in English (you can also see it as it was said). The notes are written in English; you can switch them to Urdu." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
+          <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Everyone's voice is written down with their name, in Roman Urdu (English stays English). The notes come in Roman Urdu; you can switch them to English or Urdu." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
           <LangPicker />
           <button type="button" disabled={busy} onClick={() => void toggle(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-btn bg-primary px-3 py-2 font-semibold text-white hover:bg-primary/90 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Start AI notes
@@ -387,7 +402,7 @@ function LangPicker() {
 
 interface Tile { avatarName?: string; key: string; id: string; name: string; stream: MediaStream; mic: boolean; hand: boolean; showVideo: boolean; mirror: boolean; local: boolean; state: PeerView['state']; screen?: boolean; stuck?: boolean; speaking?: boolean }
 
-function TileView({ tile, compact, contain }: { tile: Tile; compact?: boolean; contain?: boolean }) {
+function TileView({ tile, compact, contain, pin }: { tile: Tile; compact?: boolean; contain?: boolean; pin?: { on: boolean; toggle: () => void } }) {
   const ref = useRef<HTMLVideoElement>(null)
   const videoId = tile.stream.getVideoTracks()[0]?.id ?? ''
   useEffect(() => {
@@ -398,7 +413,11 @@ function TileView({ tile, compact, contain }: { tile: Tile; compact?: boolean; c
   }, [tile.stream, videoId, tile.showVideo])
   const connecting = !tile.local && tile.state !== 'connected'
   return (
-    <div className={cn('relative flex h-full w-full items-center justify-center', tile.hand ? 'ring-4 ring-inset ring-amber-400' : tile.speaking && 'ring-4 ring-inset ring-success')}>
+    <div
+      className={cn('group relative flex h-full w-full items-center justify-center', pin && 'cursor-pointer', tile.hand ? 'ring-4 ring-inset ring-amber-400' : tile.speaking && 'ring-4 ring-inset ring-success')}
+      onClick={pin?.toggle}
+      title={pin ? (pin.on ? 'Click to unpin' : `Click to show ${tile.name} big`) : undefined}
+    >
       {/* Video is always muted here; sound comes from the hidden <audio> per person. */}
       <video ref={ref} autoPlay playsInline muted className={cn('h-full w-full', contain || tile.screen ? 'object-contain' : 'object-cover', tile.mirror && '-scale-x-100', !tile.showVideo && 'hidden')} />
       {!tile.showVideo && <PersonAvatar person={{ id: tile.id, name: tile.avatarName ?? tile.name }} size={compact ? 44 : 84} />}
@@ -408,6 +427,16 @@ function TileView({ tile, compact, contain }: { tile: Tile; compact?: boolean; c
       </span>
       {tile.hand && <span className="absolute left-2 top-2 rounded-full bg-amber-400 p-1.5 text-slate-900" aria-label="Hand raised"><Hand size={compact ? 12 : 16} /></span>}
       {connecting && !tile.stuck && <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-black/55 px-2 py-0.5 text-[11px]"><Loader2 size={11} className="animate-spin" /> {tile.state === 'failed' ? 'Reconnecting…' : 'Connecting…'}</span>}
+      {pin && !connecting && !tile.stuck && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); pin.toggle() }}
+          className={cn('absolute right-2 top-2 rounded-full bg-black/55 p-1.5 transition-opacity hover:bg-black/75 focus-visible:opacity-100', pin.on ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
+          aria-label={pin.on ? `Unpin ${tile.name}` : `Pin ${tile.name}`}
+        >
+          {pin.on ? <PinOff size={compact ? 12 : 15} /> : <Pin size={compact ? 12 : 15} />}
+        </button>
+      )}
       {tile.stuck && <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-danger/90 px-2 py-0.5 text-[11px] font-semibold"><WifiOff size={11} /> Can't connect</span>}
     </div>
   )

@@ -200,7 +200,7 @@ function Columns({ data, onChanged }: { data: BoardData; onChanged: () => void }
             <input type="number" min={1} placeholder="WIP limit" defaultValue={c.wipLimit ?? ''} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== c.wipLimit) run(() => projectsApi.updateColumn(c.id, { wipLimit: v })) }} className={cn(fieldCls, 'h-8 w-24 text-body-sm')} aria-label="Work in progress limit" />
             <button type="button" onClick={() => run(() => projectsApi.updateColumn(c.id, { isDefault: true }))} title={c.isDefault ? 'New tasks land here' : 'Make this where new tasks land'} className={cn('rounded-btn p-1.5', c.isDefault ? 'text-warning' : 'text-ink-muted hover:text-warning')} aria-label="Default column"><Star size={15} fill={c.isDefault ? 'currentColor' : 'none'} /></button>
             <span className="ml-auto text-body-sm text-ink-muted">{counts.get(c.id) ?? 0} tasks</span>
-            <button type="button" onClick={() => { setDeleting(c); setMoveTo(cols.find((x) => x.id !== c.id)?.id ?? '') }} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Delete ${c.name}`}><Trash2 size={15} /></button>
+            <button type="button" onClick={() => { setDeleting(c); setMoveTo((cols.find((x) => x.id !== c.id && x.category === c.category) ?? cols.find((x) => x.id !== c.id && c.category !== 'DONE'))?.id ?? '') }} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Delete ${c.name}`}><Trash2 size={15} /></button>
           </li>
         ))}
       </ul>
@@ -211,10 +211,11 @@ function Columns({ data, onChanged }: { data: BoardData; onChanged: () => void }
       </form>
       {deleting && (
         <Modal open onClose={() => setDeleting(null)} title={`Delete "${deleting.name}"?`} size="sm" footer={<><Button variant="secondary" onClick={() => setDeleting(null)}>Cancel</Button><Button variant="danger" onClick={() => { const d = deleting; setDeleting(null); run(() => projectsApi.deleteColumn(d.id, moveTo)) }}>Delete column</Button></>}>
-          {(counts.get(deleting.id) ?? 0) > 0 ? (
+          {(counts.get(deleting.id) ?? 0) > 0 || deleting.category === 'DONE' ? (
             <div className="space-y-2">
-              <p className="text-body-md text-ink">Move its {counts.get(deleting.id)} task(s) to:</p>
-              <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className={fieldCls}>{cols.filter((x) => x.id !== deleting.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+              <p className="text-body-md text-ink">{deleting.category === 'DONE' ? 'Its finished tasks (older ones too) move to:' : `Move its ${counts.get(deleting.id)} task(s) to:`}</p>
+              <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className={fieldCls}>{cols.filter((x) => x.id !== deleting.id && (deleting.category !== 'DONE' || x.category === 'DONE')).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+              {deleting.category === 'DONE' && !cols.some((x) => x.id !== deleting.id && x.category === 'DONE') && <p className="text-body-sm text-danger">Add another Done type column first, so finished tasks stay finished.</p>}
             </div>
           ) : <p className="text-body-md text-ink">The column is empty.</p>}
         </Modal>

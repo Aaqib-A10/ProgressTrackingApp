@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, BellOff, CheckCheck, CornerUpLeft, Download, Expand, FileText, Film, Loader2, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Trash2, Users, Video, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, BellOff, CheckCheck, CornerUpLeft, Download, Expand, FileText, Film, Loader2, Mic, MoreHorizontal, Paperclip, Pencil, Phone, PhoneMissed, Send, Smile, SmilePlus, Sparkles, Square, Trash2, Users, Video, X } from 'lucide-react'
 import { chatApi, uploadChatFile, MAX_FILE_BYTES, visiblePoll, type ChatMessage, type ConversationDetail } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { useToast } from '../ui/Toast'
@@ -20,6 +20,17 @@ const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
  * One conversation: history (scroll up for older), live polling for new messages,
  * edits and deletes, typing indicator, read receipts, replies, @mentions and files.
  */
+/** Unsent text per chat, kept on this computer so switching chats does not lose it. */
+function readDraft(conversationId: string): string {
+  try { return localStorage.getItem(`pt-draft-${conversationId}`) ?? '' } catch { return '' }
+}
+function writeDraft(conversationId: string, text: string): void {
+  try {
+    if (text.trim()) localStorage.setItem(`pt-draft-${conversationId}`, text.slice(0, 5000))
+    else localStorage.removeItem(`pt-draft-${conversationId}`)
+  } catch { /* storage off */ }
+}
+
 /** Same data? (cheap deep compare for small poll answers) */
 function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
@@ -58,6 +69,9 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const atBottom = useRef(true)
   const lastTypingPing = useRef(0)
   const keepScroll = useRef<number | null>(null)
+  const loaded = useRef(false)
+  const [newBelow, setNewBelow] = useState(0) // messages that arrived while scrolled up
+  const [scrolledUp, setScrolledUp] = useState(false)
 
   const members = useMemo(() => (conv?.members ?? []).filter((m) => m.id !== meId), [conv, meId])
   const nameOf = (id: string) => conv?.members.find((m) => m.id === id)?.name ?? 'Someone'
@@ -73,21 +87,23 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   // Initial load
   useEffect(() => {
     let alive = true
-    setConv(null); setMsgs([]); setReplyTo(null); setEditing(null); lastSeq.current = 0; atBottom.current = true
-    setText(prefill ?? '')
+    setConv(null); setMsgs([]); setReplyTo(null); setEditing(null); lastSeq.current = 0; atBottom.current = true; loaded.current = false; setNewBelow(0)
+    setText(prefill ?? readDraft(conversationId))
     chatApi.conversation(conversationId).then((r) => alive && setConv(r.conversation)).catch(() => undefined)
     chatApi.messages(conversationId, { limit: 50 }).then((r) => {
       if (!alive) return
       setMsgs(r.messages); setHasMore(r.hasMore); setReads(r.reads); setTyping(r.typing)
       lastSeq.current = r.messages.at(-1)?.seq ?? 0
       lastSync.current = r.serverTime
+      loaded.current = true
       if (lastSeq.current) markRead(lastSeq.current)
     }).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not open the chat') }))
     return () => { alive = false }
   }, [conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live poll
+  // Live poll (only once the first load is in, or it would fetch the whole history from the start)
   useEffect(() => visiblePoll(async () => {
+    if (!loaded.current) return
     try {
       const r = await chatApi.messages(conversationId, { after: lastSeq.current, changedSince: lastSync.current ?? undefined })
       lastSync.current = r.serverTime
@@ -97,13 +113,17 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
       if (r.messages.length || r.changed.length) {
         setMsgs((cur) => {
           const map = new Map(cur.map((m) => [m.id, m]))
-          for (const m of [...r.changed, ...r.messages]) map.set(m.id, m)
+          // Edits/reactions only for messages already on screen (an old one would leave a gap in the history).
+          for (const m of r.changed) if (map.has(m.id)) map.set(m.id, m)
+          for (const m of r.messages) map.set(m.id, m)
           return [...map.values()].sort((a, b) => a.seq - b.seq)
         })
       }
       if (r.messages.length) {
-        lastSeq.current = r.messages.at(-1)!.seq
+        lastSeq.current = Math.max(lastSeq.current, r.messages.at(-1)!.seq)
         markRead(lastSeq.current)
+        // Scrolled up reading older messages: count what arrived from others for the "new messages" button.
+        if (!atBottom.current) setNewBelow((n) => n + r.messages.filter((m) => m.user.id !== meId).length)
       }
     } catch { /* transient */ }
   }, 2500), [conversationId, markRead])
@@ -139,11 +159,14 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
     if (bottom && !atBottom.current && lastSeq.current) { atBottom.current = true; markRead(lastSeq.current) }
     atBottom.current = bottom
+    if (bottom) setNewBelow(0)
+    setScrolledUp(el.scrollHeight - el.scrollTop - el.clientHeight > 400)
     if (el.scrollTop < 80) loadOlder()
   }
 
   function onType(v: string, pos: number) {
     setText(v)
+    if (!editing) writeDraft(conversationId, v)
     const m = v.slice(0, pos).match(/(?:^|\s)@([\w.-]{0,30})$/)
     if (!m) { setSuggest(null) } else {
       const tok = m[1].toLowerCase()
@@ -185,11 +208,11 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         const mentions = mentionIds.filter((id) => body.includes('@' + nameOf(id)))
         const r = await chatApi.send(conversationId, body, { replyToId: replyTo?.id ?? null, mentions })
         atBottom.current = true
-        setMsgs((cur) => (cur.some((m) => m.id === r.message.id) ? cur : [...cur, r.message]))
-        lastSeq.current = Math.max(lastSeq.current, r.message.seq)
+        // Shown now; the cursor is NOT moved past it, so messages others sent just before are still fetched.
+        setMsgs((cur) => (cur.some((m) => m.id === r.message.id) ? cur : [...cur, r.message].sort((a, b) => a.seq - b.seq)))
         setReplyTo(null)
       }
-      setText(''); setMentionIds([])
+      setText(''); setMentionIds([]); writeDraft(conversationId, '')
       chatApi.typing(conversationId, false).catch(() => undefined)
       refreshChatUnread()
       onSent?.()
@@ -235,10 +258,9 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         try {
           const msg = await up.done
           atBottom.current = true
-          setMsgs((cur) => (cur.some((m) => m.id === msg.id) ? cur : [...cur, msg]))
-          lastSeq.current = Math.max(lastSeq.current, msg.seq)
+          setMsgs((cur) => (cur.some((m) => m.id === msg.id) ? cur : [...cur, msg].sort((a, b) => a.seq - b.seq)))
           removePending(p.key)
-          if (first) { setText(''); setMentionIds([]) }
+          if (first) { setText((cur) => (cur.trim() === caption ? '' : cur)); if (caption) { setMentionIds([]); writeDraft(conversationId, '') } }
           first = false
         } catch (e) {
           if ((e as Error).message === 'cancelled') { removePending(p.key); continue }
@@ -278,6 +300,9 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   }
 
   const otherReadSeq = conv?.type === 'DIRECT' ? reads.find((r) => r.userId !== meId)?.lastReadSeq ?? 0 : 0
+  // Groups: who has read my last message.
+  const lastMineSeq = [...msgs].reverse().find((m) => m.user.id === meId && !m.deleted && !m.call)?.seq ?? 0
+  const seenBy = conv && conv.type !== 'DIRECT' && lastMineSeq ? reads.filter((r) => r.userId !== meId && r.lastReadSeq >= lastMineSeq).map((r) => conv.members.find((x) => x.id === r.userId)?.name.split(' ')[0]).filter(Boolean).join(', ') : ''
   const lastMine = [...msgs].reverse().find((m) => m.user.id === meId && !m.deleted && !m.call)
   const isDirect = conv?.type === 'DIRECT'
   const other = isDirect ? members[0] : null
@@ -332,6 +357,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                   </div>
                 )}
                 {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
+                {!isDirect && mine && lastMine?.id === m.id && seenBy && <p className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate px-1 text-[11px] text-primary" title={`Seen by ${seenBy}`}><CheckCheck size={12} className="shrink-0" /> Seen by {seenBy}</p>}
               </div>
               {!m.deleted && (
                 <div className={cn('absolute top-0 hidden items-center gap-0.5 rounded-btn border border-line bg-card p-0.5 shadow-card group-hover:flex', mine ? 'left-1' : 'right-1', menuFor === m.id && 'flex')}>
@@ -357,7 +383,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         )
       })}
     </>
-  ), [msgs, conv, meId, compact, menuFor, reactFor, isDirect, lastMine?.id, otherReadSeq, conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  ), [msgs, conv, meId, compact, menuFor, reactFor, isDirect, lastMine?.id, otherReadSeq, seenBy, conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return (
@@ -391,11 +417,27 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
       </div>
 
       {/* Messages */}
-      <div ref={scroller} onScroll={onScroll} className={cn('min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-4 py-3')} role="log" aria-live="polite" aria-label="Messages">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      {(scrolledUp || newBelow > 0) && (
+        <button type="button" onClick={() => { const el = scroller.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }) }} className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 animate-fade-in items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-body-sm font-semibold text-white shadow-overlay hover:bg-primary/90">
+          <ArrowDown size={14} /> {newBelow > 0 ? `${newBelow} new message${newBelow === 1 ? '' : 's'}` : 'Latest'}
+        </button>
+      )}
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        // A picture or video that finishes loading makes the list taller: stay at the bottom if we were there.
+        onLoadCapture={() => { const el = scroller.current; if (el && atBottom.current) el.scrollTop = el.scrollHeight }}
+        className={cn('min-h-0 flex-1 overflow-y-auto', compact ? 'px-3 py-2' : 'px-4 py-3')}
+        role="log"
+        aria-live="polite"
+        aria-label="Messages"
+      >
         {loadingOlder && <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-ink-muted" /></div>}
         {!hasMore && msgs.length > 0 && <p className="py-3 text-center text-body-sm text-ink-muted">Start of the conversation</p>}
         {msgs.length === 0 && conv && <p className="py-10 text-center text-body-md text-ink-muted">No messages yet. Say hello 👋</p>}
         {messageList}
+      </div>
       </div>
 
       {/* Typing */}
@@ -460,6 +502,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             style={{ height: Math.min(160, 34 + (text.split('\n').length - 1) * 20) }}
           />
           <button type="button" onClick={() => setShowEmoji((s) => !s)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Emoji"><Smile size={18} /></button>
+          {!editing && <VoiceButton onDone={(f) => addFiles([f])} onError={(m) => addToast({ type: 'error', message: m })} />}
           <button type="button" onClick={send} disabled={(!text.trim() && !pending.length) || sending} className="rounded-btn bg-primary p-1.5 text-white disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button>
         </div>
         {!compact && <p className="mt-1 text-[11px] text-ink-muted">Enter to send, Shift+Enter for a new line, @ to mention, paste a task code like RTI-12 to share it.</p>}
@@ -524,17 +567,96 @@ function renderBody(body: string, members: { id: string; name: string }[], menti
   return out
 }
 
-interface PendingFile { key: string; file: File; kind: 'image' | 'video' | 'file'; url: string | null; progress: number | null; error: string | null }
+/** Hold a short voice message: record, then it waits above the box like any file until Send. */
+function VoiceButton({ onDone, onError }: { onDone: (f: File) => void; onError: (msg: string) => void }) {
+  const [rec, setRec] = useState<{ started: number } | null>(null)
+  const [now, setNow] = useState(Date.now())
+  const r = useRef<{ mr: MediaRecorder; stream: MediaStream; chunks: Blob[]; keep: boolean } | null>(null)
+  useEffect(() => {
+    if (!rec) return
+    const t = window.setInterval(() => {
+      setNow(Date.now())
+      if (Date.now() - rec.started > 10 * 60_000) stop(true) // 10 minutes at most
+    }, 500)
+    return () => window.clearInterval(t)
+  }, [rec]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { r.current?.stream.getTracks().forEach((t) => t.stop()) }, [])
+
+  async function start() {
+    if (typeof MediaRecorder === 'undefined') { onError('This browser cannot record voice messages'); return }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+      const mime = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
+      const mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 32_000 } : undefined)
+      const state = { mr, stream, chunks: [] as Blob[], keep: true }
+      mr.ondataavailable = (e) => { if (e.data.size) state.chunks.push(e.data) }
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop())
+        if (!state.keep || !state.chunks.length) return
+        const type = (mr.mimeType || mime || 'audio/webm').split(';')[0]
+        const ext = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm'
+        const stamp = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }).replace(/[^0-9]/g, '-')
+        onDone(new File(state.chunks, `Voice message ${stamp}.${ext}`, { type }))
+      }
+      mr.start(1000)
+      r.current = state
+      setRec({ started: Date.now() })
+      setNow(Date.now())
+    } catch {
+      onError('Microphone blocked: allow it in the browser to record a voice message')
+    }
+  }
+  function stop(keep: boolean) {
+    const st = r.current
+    if (!st) return
+    st.keep = keep
+    try { st.mr.stop() } catch { /* already stopped */ }
+    r.current = null
+    setRec(null)
+  }
+
+  if (!rec) {
+    return <button type="button" onClick={() => void start()} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Record a voice message" title="Record a voice message"><Mic size={18} /></button>
+  }
+  const sec = Math.floor((now - rec.started) / 1000)
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-1 text-[12px] font-semibold text-danger">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-danger" />
+      {Math.floor(sec / 60)}:{String(sec % 60).padStart(2, '0')}
+      <button type="button" onClick={() => stop(true)} className="ml-1 rounded p-0.5 hover:bg-danger/10" aria-label="Stop recording" title="Stop (then press Send)"><Square size={13} /></button>
+      <button type="button" onClick={() => stop(false)} className="rounded p-0.5 hover:bg-danger/10" aria-label="Cancel recording" title="Cancel"><X size={13} /></button>
+    </span>
+  )
+}
+
+interface PendingFile { key: string; file: File; kind: 'image' | 'video' | 'audio' | 'file'; url: string | null; progress: number | null; error: string | null }
 
 function fileKind(f: File): PendingFile['kind'] {
   if (/^image\/(png|jpe?g|gif|webp)$/i.test(f.type)) return 'image'
   if (/^video\//i.test(f.type)) return 'video'
+  if (/^audio\//i.test(f.type)) return 'audio'
   return 'file'
 }
 
 /** One picked file waiting above the message box: preview, name, size, progress, remove. */
 function PendingTile({ p, onRemove }: { p: PendingFile; onRemove: () => void }) {
   const busy = p.progress !== null
+  if (p.kind === 'audio' && p.url) {
+    // A voice message: a wide tile with a proper player, so it can be checked before sending.
+    return (
+      <div className={cn('relative flex w-72 shrink-0 items-center gap-2 overflow-hidden rounded-btn border bg-card py-2 pl-2 pr-7', p.error ? 'border-danger' : 'border-line')} title={p.error ?? p.file.name}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Mic size={18} /></span>
+        <div className="min-w-0 flex-1">
+          {busy ? <p className="text-body-sm text-ink">Sending {Math.round((p.progress ?? 0) * 100)}%</p> : <audio src={p.url} controls className="h-8 w-full" />}
+          <p className={cn('text-[10px]', p.error ? 'text-danger' : 'text-ink-muted')}>{p.error ? 'Not sent' : `Voice message · ${fmtBytes(p.file.size)}`}</p>
+        </div>
+        {busy && <div className="absolute bottom-0 left-0 h-1 bg-primary transition-[width]" style={{ width: `${Math.round((p.progress ?? 0) * 100)}%` }} />}
+        <button type="button" onClick={onRemove} className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/70 text-white hover:bg-slate-900" aria-label={busy ? 'Stop sending the voice message' : 'Remove the voice message'} title={busy ? 'Stop sending' : 'Remove'}>
+          <X size={12} />
+        </button>
+      </div>
+    )
+  }
   return (
     <div className={cn('relative w-28 shrink-0 overflow-hidden rounded-btn border bg-card', p.error ? 'border-danger' : 'border-line')} title={p.error ?? p.file.name}>
       <div className="flex h-20 items-center justify-center bg-slate-100">
@@ -559,6 +681,7 @@ function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
   const href = API + file.url.replace(/^\/api/, '')
   const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(file.mime ?? '')
   const isVideo = /^video\/(webm|mp4|quicktime|ogg|x-m4v)$/i.test(file.mime ?? '')
+  const isAudio = /^audio\/(webm|ogg|mp4|mpeg|wav|x-m4a|aac)$/i.test(file.mime ?? '')
   const [open, setOpen] = useState(false)
   const [missing, setMissing] = useState(false)
   const [noPlay, setNoPlay] = useState(false) // a video this browser cannot play: offer the download
@@ -566,7 +689,13 @@ function FileBubble({ file }: { file: NonNullable<ChatMessage['file']> }) {
   if (missing) return <p className="mt-1 inline-flex items-center gap-1.5 rounded-btn border border-dashed border-line px-3 py-2 text-body-sm text-ink-muted"><FileText size={15} /> {name}: this file is no longer on the server</p>
   return (
     <div className="mt-1">
-      {isVideo && !noPlay ? (
+      {isAudio && !noPlay ? (
+        <div className="flex w-[min(320px,100%)] items-center gap-2">
+          <Mic size={16} className="shrink-0 text-primary" />
+          <audio controls preload="metadata" src={`${href}?inline=1`} onError={() => setNoPlay(true)} className="h-9 min-w-0 flex-1" />
+          <a href={href} className="shrink-0 rounded p-1 text-ink-muted hover:text-ink" aria-label="Download" title="Download"><Download size={14} /></a>
+        </div>
+      ) : isVideo && !noPlay ? (
         <div className="w-[min(420px,100%)]">
           <video controls preload="metadata" src={`${href}?inline=1`} onError={() => setNoPlay(true)} className="max-h-64 w-full rounded-btn border border-line bg-black object-contain" />
           <div className="mt-1 flex items-center gap-3 text-[12px] text-ink-muted">

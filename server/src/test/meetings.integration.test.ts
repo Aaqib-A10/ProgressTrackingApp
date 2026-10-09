@@ -25,6 +25,16 @@ afterAll(async () => {
   await prisma.$disconnect()
 })
 
+/** "Try again" writes the notes in the background; wait until they are done. */
+async function notesWhenDone(callId: string, who: Parameters<typeof auth>[0]) {
+  for (let i = 0; i < 100; i++) {
+    const r = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(who)).expect(200)
+    if (r.body.status !== 'pending') return r
+    await new Promise((res) => setTimeout(res, 50))
+  }
+  throw new Error('notes never finished')
+}
+
 const inHours = (h: number) => new Date(Date.now() + h * 3600_000).toISOString()
 
 describe('meetings', () => {
@@ -205,8 +215,8 @@ describe('in-call extras', () => {
     const answer = { summary: 'RTI pages ship Friday.', keyPoints: ['Pages nearly done'], decisions: ['Ship Friday'], actionItems: [{ owner: 'Leadgen Lead', task: 'Send county list', due: 'tomorrow' }], openQuestions: [] }
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ content: [{ type: 'text', text: '```json\n' + JSON.stringify(answer) + '\n```' }] }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
-    await request(app).post(`/api/chat/calls/${callId}/notes/retry`).set(...auth(w.itadLead)).expect(200)
-    const n = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
+    await request(app).post(`/api/chat/calls/${callId}/notes/retry`).set(...auth(w.itadLead)).expect(202)
+    const n = await notesWhenDone(callId, w.itadMember)
     expect(n.body.status).toBe('ready')
     expect(n.body.notes.actionItems[0]).toMatchObject({ owner: 'Leadgen Lead', task: 'Send county list', due: 'tomorrow' })
     const sent = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body)
@@ -269,7 +279,7 @@ describe('note taker with Groq (mocked)', () => {
         return new Response(JSON.stringify({ text, language: asUrdu ? 'urdu' : opts.sttLang ?? 'english', segments: opts.segments ?? [{ text, no_speech_prob: 0.01, avg_logprob: -0.2 }] }), { status: 200 })
       }
       const model = JSON.parse(String(init?.body ?? '{}')).model
-      if (model === 'openai/gpt-oss-20b') return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ en: 'We will send the pages on Friday.' }) } }] }), { status: 200 })
+      if (model === 'openai/gpt-oss-20b') return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ roman: 'hum jumma ko pages bhej denge', en: 'We will send the pages on Friday.' }) } }] }), { status: 200 })
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(opts.notes ?? { summary: 'S', keyPoints: [], decisions: [], actionItems: [], openQuestions: [] }) } }] }), { status: 200 })
     }))
   }
@@ -325,7 +335,7 @@ describe('note taker with Groq (mocked)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('a line said in Urdu is kept as said and shown in English; the caption is English', async () => {
+  it('a line said in Urdu is kept as said, and written in Roman Urdu and English; the caption is Roman Urdu', async () => {
     mockGroq({ sttText: 'ہم جمعہ کو پیجز بھیج دیں گے', sttLang: 'urdu' })
     await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'mixed', speaker: w.itadMember.id }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 4)).expect(200)
     await waitForCall(callId, 5000)
@@ -334,8 +344,9 @@ describe('note taker with Groq (mocked)', () => {
     const line = await prisma.callTranscriptLine.findFirstOrThrow({ where: { callId, text: 'ہم جمعہ کو پیجز بھیج دیں گے' } })
     expect(line.speakerName).toBe('itad member')
     expect(line.textEn).toBe('We will send the pages on Friday.')
+    expect(line.textRoman).toBe('hum jumma ko pages bhej denge')
     const p = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadMember)).expect(200)
-    expect(p.body.captions.some((c: { text: string }) => c.text === 'We will send the pages on Friday.')).toBe(true)
+    expect(p.body.captions.some((c: { text: string }) => c.text === 'hum jumma ko pages bhej denge')).toBe(true)
     await prisma.callTranscriptLine.delete({ where: { id: line.id } })
     vi.unstubAllGlobals()
   })
@@ -380,11 +391,12 @@ describe('note taker with Groq (mocked)', () => {
     const again = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
     expect(again.body.notes.actionItems[0].taskCode).toBe(code)
     await request(app).patch(`/api/chat/calls/${callId}/notes/action-items/0`).set(...auth(w.itadMember)).send({ taskCode: 'NOPE-1' }).expect(422)
-    expect(n.body.notes.language).toBe('en') // the meeting was in English
-    expect(JSON.parse(String(chat.body)).messages[0].content).toContain('clear, simple English')
+    expect(n.body.notes.language).toBe('roman') // Roman Urdu by default
+    expect(JSON.parse(String(chat.body)).messages[0].content).toContain('Roman Urdu')
     // "Try again" in Urdu keeps the task already made from that action item
     mockGroq({ notes: { summary: 'پیجز جمعہ کو جائیں گے۔', keyPoints: [], decisions: [], actionItems: [{ owner: 'ITAD Member', task: 'Send the list', due: 'tomorrow' }], openQuestions: [] } })
-    await request(app).post(`/api/chat/calls/${callId}/notes/retry`).set(...auth(w.itadMember)).send({ lang: 'ur' }).expect(200)
+    await request(app).post(`/api/chat/calls/${callId}/notes/retry`).set(...auth(w.itadMember)).send({ lang: 'ur' }).expect(202)
+    await notesWhenDone(callId, w.itadMember)
     const sys = JSON.parse(String(calls.find((c) => c.url.includes('/chat/completions'))!.body)).messages[0].content
     expect(sys).toContain('Urdu script')
     const third = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)

@@ -131,7 +131,13 @@ export async function createProjectWithDefaults(input: {
   })
 }
 
-/** Keep the project's # channel membership identical to the project membership. */
+/** The newest message number in a chat, so someone added now starts with nothing unread. */
+export async function latestSeq(conversationId: string, tx: Prisma.TransactionClient = prisma): Promise<number> {
+  const r = await tx.chatMessage.aggregate({ where: { conversationId }, _max: { seq: true } })
+  return r._max.seq ?? 0
+}
+
+/** Keep the project's channel membership identical to the project membership. */
 export async function syncProjectChannel(projectId: string, tx: Prisma.TransactionClient = prisma): Promise<void> {
   const project = await tx.pmProject.findUnique({ where: { id: projectId }, include: { conversation: true, members: true } })
   if (!project) return
@@ -142,7 +148,10 @@ export async function syncProjectChannel(projectId: string, tx: Prisma.Transacti
   const haveIds = new Set(have.map((h) => h.userId))
   const toAdd = [...want.keys()].filter((id) => !haveIds.has(id))
   const toRemove = have.filter((h) => !want.has(h.userId)).map((h) => h.id)
-  if (toAdd.length) await tx.chatMember.createMany({ data: toAdd.map((userId) => ({ conversationId: conv!.id, userId, isAdmin: !!want.get(userId) })), skipDuplicates: true })
+  if (toAdd.length) {
+    const seq = await latestSeq(conv.id, tx)
+    await tx.chatMember.createMany({ data: toAdd.map((userId) => ({ conversationId: conv!.id, userId, isAdmin: !!want.get(userId), lastReadSeq: seq })), skipDuplicates: true })
+  }
   if (toRemove.length) await tx.chatMember.deleteMany({ where: { id: { in: toRemove } } })
   for (const h of have) {
     if (want.has(h.userId) && h.isAdmin !== want.get(h.userId)) await tx.chatMember.update({ where: { id: h.id }, data: { isAdmin: !!want.get(h.userId) } })

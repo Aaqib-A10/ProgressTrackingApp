@@ -125,6 +125,8 @@ export interface TaskPerms {
   canEdit: boolean
   canChangeDue: boolean
   canDelete: boolean
+  /** Project admin: may remove other people's comments, files and reviews. */
+  canManage?: boolean
   canMove: boolean
   canComment: boolean
   canDecideExtension: boolean

@@ -6,6 +6,7 @@ import type { AttachmentKind } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString } from '../lib/time'
+import { contentDisposition } from '../lib/contentDisposition'
 
 const UPLOAD_DIR = path.resolve('uploads')
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
@@ -137,7 +138,7 @@ export async function downloadAttachment(req: AuthedRequest, res: Response): Pro
     return
   }
   res.setHeader('Content-Type', att.mimeType)
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(att.originalName)}"`)
+  res.setHeader('Content-Disposition', contentDisposition('attachment', att.originalName))
   res.sendFile(filePath)
 }
 

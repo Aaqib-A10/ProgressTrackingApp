@@ -10,6 +10,7 @@ import { companyToday, dbDateFromString, dateStringFromDb } from '../lib/time'
 import { notifyMentions, notifyTaskAssigned } from '../lib/notify'
 import { sendTaskAssignedEmail } from '../lib/mail'
 import { resolveMarketingActor, type MarketingActor } from '../lib/marketingAuth'
+import { contentDisposition } from '../lib/contentDisposition'
 
 const UPLOAD_DIR = path.resolve('uploads')
 const MAX_ATT_BYTES = 25 * 1024 * 1024
@@ -453,7 +454,7 @@ export async function downloadTaskAttachment(req: AuthedRequest, res: Response):
   const filePath = path.join(UPLOAD_DIR, att.storedName)
   try { await fs.access(filePath) } catch { res.status(404).json({ error: 'File missing on server' }); return }
   res.setHeader('Content-Type', att.mimeType)
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(att.originalName)}"`)
+  res.setHeader('Content-Disposition', contentDisposition('attachment', att.originalName))
   res.sendFile(filePath)
 }
 

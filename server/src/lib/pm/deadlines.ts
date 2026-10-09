@@ -129,7 +129,8 @@ export async function runDeadlineTick(now: Date = new Date()): Promise<TickResul
   })
   for (const t of soon) {
     const remainingMin = (t.dueAt!.getTime() - now.getTime()) / 60000
-    const offsets = [...(t.project.reminderOffsetsMinutes.length ? t.project.reminderOffsetsMinutes : [1440, 60])].sort((a, b) => a - b)
+    // An empty list means the project turned reminders off (new projects start with 24h and 1h).
+    const offsets = [...t.project.reminderOffsetsMinutes].sort((a, b) => a - b)
     const hit = offsets.find((o) => remainingMin <= o)
     if (hit === undefined) continue
     const kind = `due_soon_${hit}`
@@ -191,7 +192,15 @@ export async function runDeadlineTick(now: Date = new Date()): Promise<TickResul
 
   // 3. Overdue emails (one per recipient per overdue episode, after quiet hours).
   if (!quiet) {
-    const overdue = await prisma.pmTask.findMany({ where: { ...OPEN_TASK, isOverdue: true, dueAt: { lt: now } }, include: TASK_INCLUDE, take: BATCH })
+    // Only tasks whose overdue email has not gone out yet for this due date (otherwise the
+    // same first tasks were re-checked every 5 minutes and later ones never got theirs).
+    const waiting = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT t.id FROM "PmTask" t
+      WHERE t."isOverdue" = true AND t."deletedAt" IS NULL AND t."completedAt" IS NULL AND t."dueAt" < ${now}
+        AND NOT EXISTS (SELECT 1 FROM "PmDispatchLog" l WHERE l."taskId" = t.id AND l.kind = 'overdue_email' AND l."dueAtSnapshot" = t."dueAt")
+      ORDER BY t."dueAt" ASC
+      LIMIT ${BATCH}`
+    const overdue = waiting.length ? await prisma.pmTask.findMany({ where: { ...OPEN_TASK, isOverdue: true, dueAt: { lt: now }, id: { in: waiting.map((w) => w.id) } }, include: TASK_INCLUDE }) : []
     for (const t of overdue) {
       const { assignees, managers } = await overdueRecipients(t, supers)
       const late = fmtDuration(now.getTime() - t.dueAt!.getTime())

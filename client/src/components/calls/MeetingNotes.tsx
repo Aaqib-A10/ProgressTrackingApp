@@ -40,9 +40,10 @@ export function NotesContent({ callId }: { callId: string }) {
   const [d, setD] = useState<CallNotesResponse | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [showTranscript, setShowTranscript] = useState(false)
-  const [original, setOriginal] = useState(false) // show the words as said (Urdu) instead of English
+  const [view, setView] = useState<'roman' | 'en' | 'said'>('roman') // transcript: Roman Urdu, English, or as written down (Urdu script)
   const [retrying, setRetrying] = useState(false)
   const [makeTask, setMakeTask] = useState<number | null>(null)
+  const [makeAll, setMakeAll] = useState(false)
 
   const load = useCallback(() => callsApi.notes(callId).then((r) => { setD(r); setErr(null) }).catch((e) => setErr(errMsg(e, 'Could not load the notes'))), [callId])
   useEffect(() => { void load() }, [load])
@@ -58,7 +59,7 @@ export function NotesContent({ callId }: { callId: string }) {
   const n = d.notes
   const speakers = [...new Set(d.transcript.map((l) => l.userId))]
   const rtl = n?.language === 'ur'
-  const rewrite = async (lang: 'en' | 'ur') => {
+  const rewrite = async (lang: 'roman' | 'en' | 'ur') => {
     setRetrying(true)
     try { await callsApi.retryNotes(callId, lang); await load() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setRetrying(false) }
   }
@@ -97,9 +98,9 @@ export function NotesContent({ callId }: { callId: string }) {
         <div className="flex flex-wrap items-center gap-2 text-body-sm text-ink-muted">
           <span>Notes in</span>
           <div className="inline-flex overflow-hidden rounded-btn border border-line">
-            {(['en', 'ur'] as const).map((l) => (
+            {(['roman', 'en', 'ur'] as const).map((l) => (
               <button key={l} type="button" disabled={retrying || (n.language ?? 'en') === l} onClick={() => void rewrite(l)} className={cn('px-2.5 py-1 font-semibold', (n.language ?? 'en') === l ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50 disabled:opacity-50')}>
-                {l === 'en' ? 'English' : 'اردو'}
+                {l === 'roman' ? 'Roman Urdu' : l === 'en' ? 'English' : 'اردو'}
               </button>
             ))}
           </div>
@@ -117,7 +118,12 @@ export function NotesContent({ callId }: { callId: string }) {
           {n.decisions.length > 0 && <Bullets title="Decisions" items={n.decisions} rtl={rtl} icon={<CheckCircle2 size={15} className="text-success" />} />}
           {n.actionItems.length > 0 && (
             <section>
-              <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink"><ListChecks size={15} className="text-warning" /> Action items</h3>
+              <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink">
+                <ListChecks size={15} className="text-warning" /> Action items
+                {n.actionItems.filter((a) => !a.taskCode).length > 1 && (
+                  <button type="button" onClick={() => setMakeAll(true)} className="ml-auto inline-flex items-center gap-1 rounded-btn border border-line px-2 py-0.5 text-[12px] font-semibold text-ink hover:bg-slate-50"><Plus size={12} /> Make all tasks</button>
+                )}
+              </h3>
               <div className="overflow-hidden rounded-btn border border-line">
                 <table className="w-full text-body-sm">
                   <thead className="bg-slate-50 text-left text-ink-muted"><tr><th className="px-3 py-1.5 font-semibold">Who</th><th className="px-3 py-1.5 font-semibold">What</th><th className="px-3 py-1.5 font-semibold">When</th><th className="px-3 py-1.5" /></tr></thead>
@@ -152,6 +158,9 @@ export function NotesContent({ callId }: { callId: string }) {
         </section>
       )}
 
+      {makeAll && n && (
+        <AllTasksModal callId={callId} items={n.actionItems} meetingTitle={d.call.title} onClose={() => setMakeAll(false)} onDone={() => { setMakeAll(false); void load() }} />
+      )}
       {makeTask !== null && n?.actionItems[makeTask] && (
         <TaskFromActionModal callId={callId} index={makeTask} item={n.actionItems[makeTask]} meetingTitle={d.call.title} onClose={() => setMakeTask(null)} onDone={() => { setMakeTask(null); void load() }} />
       )}
@@ -162,10 +171,11 @@ export function NotesContent({ callId }: { callId: string }) {
             <button type="button" onClick={() => setShowTranscript((v) => !v)} className="flex items-center gap-1 text-body-md font-semibold text-ink">
               {showTranscript ? <ChevronDown size={16} /> : <ChevronRight size={16} />} Transcript ({d.transcript.length} lines)
             </button>
-            {showTranscript && d.transcript.some((l) => l.textEn && l.textEn !== l.text) && (
+            {showTranscript && d.transcript.some((l) => (l.textEn && l.textEn !== l.text) || (l.textRoman && l.textRoman !== l.text)) && (
               <div className="ml-auto inline-flex overflow-hidden rounded-btn border border-line text-body-sm">
-                <button type="button" onClick={() => setOriginal(false)} className={cn('px-2.5 py-1 font-semibold', !original ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50')}>English</button>
-                <button type="button" onClick={() => setOriginal(true)} className={cn('px-2.5 py-1 font-semibold', original ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50')}>As spoken</button>
+                {([['roman', 'Roman Urdu'], ['en', 'English'], ['said', 'اردو']] as const).map(([v, label]) => (
+                  <button key={v} type="button" onClick={() => setView(v)} className={cn('px-2.5 py-1 font-semibold', view === v ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50')}>{label}</button>
+                ))}
               </div>
             )}
           </div>
@@ -175,7 +185,7 @@ export function NotesContent({ callId }: { callId: string }) {
                 <p key={l.id} className="text-body-sm leading-relaxed">
                   <span className="mr-2 font-mono text-[11px] text-ink-muted">{fmtClock(l.offsetSec)}</span>
                   <b className={cn('mr-1', SPEAKER_COLORS[speakers.indexOf(l.userId) % SPEAKER_COLORS.length])}>{l.speaker}:</b>
-                  <span dir="auto" className="text-ink">{original ? l.text : l.textEn ?? l.text}</span>
+                  <span dir="auto" className="text-ink">{view === 'said' ? l.text : view === 'en' ? l.textEn ?? l.textRoman ?? l.text : l.textRoman ?? l.textEn ?? l.text}</span>
                 </p>
               ))}
             </div>
@@ -282,6 +292,103 @@ function TaskFromActionModal({ callId, index, item, meetingTitle, onClose, onDon
         <label className="block"><span className="mb-1 block font-semibold text-ink">Due date {item.due ? <span className="font-normal text-ink-muted">(notes say: {item.due})</span> : null}</span>
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className="h-9 w-full rounded-btn border border-line px-2" />
         </label>
+      </div>
+    </Modal>
+  )
+}
+
+type ActionItem = { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }
+
+/** The project member the notes name as owner ("Ali" matches "Ali Raza"). */
+function matchOwner(list: { userId: string; name: string }[], ownerName: string | null): string {
+  const owner = (ownerName ?? '').toLowerCase().trim()
+  if (!owner) return ''
+  const first = owner.split(' ')[0]
+  const hit = list.find((m) => m.name.toLowerCase() === owner) ?? list.find((m) => first && m.name.toLowerCase().split(' ')[0] === first)
+  return hit?.userId ?? ''
+}
+
+function dueOf(item: ActionItem): string {
+  return item.dueDate ?? (/^\d{4}-\d{2}-\d{2}/.test(item.due ?? '') ? item.due!.slice(0, 10) : '')
+}
+
+/** Every action item not yet a task becomes one, in one project, in one go. */
+function AllTasksModal({ callId, items, meetingTitle, onClose, onDone }: { callId: string; items: ActionItem[]; meetingTitle: string; onClose: () => void; onDone: () => void }) {
+  const { addToast } = useToast()
+  const open = items.map((a, i) => ({ a, i })).filter((x) => !x.a.taskCode)
+  const [projects, setProjects] = useState<ProjectListItem[]>([])
+  const [key, setKey] = useState('')
+  const [members, setMembers] = useState<{ userId: string; name: string }[]>([])
+  const [rows, setRows] = useState(() => open.map((x) => ({ index: x.i, on: true, title: x.a.task, assignee: '', due: dueOf(x.a), owner: x.a.owner })))
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    projectsApi.list().then((r) => {
+      const can = r.projects.filter((p) => p.myRole === 'ADMIN' || p.myRole === 'MEMBER')
+      setProjects(can)
+      const guess = can.find((p) => meetingTitle.toLowerCase().includes(p.key.toLowerCase()) || meetingTitle.toLowerCase().includes(p.name.toLowerCase())) ?? can[0]
+      if (guess) setKey(guess.key)
+    }).catch(() => undefined)
+  }, [meetingTitle])
+  useEffect(() => {
+    if (!key) return
+    projectsApi.members(key).then((r) => {
+      const list = r.members.filter((m) => m.isActive && m.role !== 'VIEWER')
+      setMembers(list)
+      setRows((rs) => rs.map((row) => ({ ...row, assignee: matchOwner(list, row.owner) })))
+    }).catch(() => setMembers([]))
+  }, [key])
+  const chosen = rows.filter((r) => r.on && r.title.trim())
+
+  async function create() {
+    if (!key || !chosen.length || busy) return
+    setBusy(true)
+    let made = 0
+    try {
+      for (const row of chosen) {
+        const r = await projectsApi.createTask(key, {
+          title: row.title.trim().slice(0, 200),
+          description: `From the meeting notes of "${meetingTitle}".`,
+          assigneeIds: row.assignee ? [row.assignee] : [],
+          dueAt: row.due ? new Date(`${row.due}T18:00:00`).toISOString() : null,
+        })
+        await callsApi.linkActionItem(callId, row.index, r.task.code)
+        made++
+      }
+      addToast({ type: 'success', message: `${made} task${made === 1 ? '' : 's'} created` })
+      onDone()
+    } catch (e) {
+      addToast({ type: 'error', message: `${made ? `${made} made, then: ` : ''}${errMsg(e, 'Could not create the tasks')}` })
+      if (made) onDone()
+    } finally { setBusy(false) }
+  }
+
+  const set = (i: number, patch: Partial<(typeof rows)[number]>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  return (
+    <Modal open onClose={onClose} title="Make the action items tasks" size="lg" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={create} disabled={busy || !key || !chosen.length}>{busy ? 'Creating…' : `Create ${chosen.length} task${chosen.length === 1 ? '' : 's'}`}</Button></>}>
+      <div className="space-y-3 text-body-sm">
+        <label className="block"><span className="mb-1 block font-semibold text-ink">Project</span>
+          <select value={key} onChange={(e) => setKey(e.target.value)} className="h-9 w-full rounded-btn border border-line bg-card px-2">
+            {projects.length === 0 && <option value="">No projects you can add tasks to</option>}
+            {projects.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+          </select>
+        </label>
+        <div className="space-y-2">
+          {rows.map((row, i) => (
+            <div key={row.index} className={cn('rounded-btn border border-line p-2 transition-opacity', !row.on && 'opacity-50')}>
+              <div className="flex items-start gap-2">
+                <input type="checkbox" checked={row.on} onChange={(e) => set(i, { on: e.target.checked })} className="mt-1.5 h-4 w-4 accent-primary" aria-label="Include this item" />
+                <textarea dir="auto" value={row.title} onChange={(e) => set(i, { title: e.target.value })} rows={1} className="min-h-[34px] flex-1 resize-y rounded-btn border border-line px-2 py-1 text-body-sm focus:border-primary focus:outline-none" />
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-2 pl-6">
+                <select value={row.assignee} onChange={(e) => set(i, { assignee: e.target.value })} className="h-8 min-w-0 flex-1 rounded-btn border border-line bg-card px-2" aria-label="Assign to">
+                  <option value="">{row.owner ? `Nobody yet (notes say: ${row.owner})` : 'Nobody yet'}</option>
+                  {members.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}
+                </select>
+                <input type="date" value={row.due} onChange={(e) => set(i, { due: e.target.value })} className="h-8 rounded-btn border border-line px-2" aria-label="Due date" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </Modal>
   )

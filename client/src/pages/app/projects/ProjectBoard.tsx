@@ -21,6 +21,11 @@ import { TaskDrawer } from './TaskDrawer'
  * and ?task=CODE opens the task drawer. The board refreshes every 5 seconds while
  * the tab is visible (paused during a drag) so moves by teammates show up live.
  */
+/** Same board, ignoring the server's clock (which changes on every answer). */
+function sameBoard(a: BoardData, b: BoardData): boolean {
+  return JSON.stringify({ ...a, serverTime: '' }) === JSON.stringify({ ...b, serverTime: '' })
+}
+
 export default function ProjectBoard() {
   const { key = '' } = useParams()
   const navigate = useNavigate()
@@ -33,6 +38,9 @@ export default function ProjectBoard() {
   const [createInColumn, setCreateInColumn] = useState<string | undefined>(undefined)
   const dragging = useRef(false)
   const pending = useRef(0)
+  // Bumped on every local change: a poll that started before a change must not overwrite it.
+  const version = useRef(0)
+  const inFlight = useRef(false)
 
   const view = params.get('view') === 'list' ? 'list' : params.get('view') === 'reviews' ? 'reviews' : 'board'
   const q = params.get('q') ?? ''
@@ -53,17 +61,22 @@ export default function ProjectBoard() {
   }
 
   const load = useCallback(async (quiet = false) => {
+    if (quiet && inFlight.current) return // the previous refresh is still on its way
+    const startedAt = version.current
+    inFlight.current = true
     try {
       const d = await projectsApi.board(key, showOld)
-      if (dragging.current || pending.current > 0) return
+      if (dragging.current || pending.current > 0 || version.current !== startedAt) return
       // Nothing new (the usual case): keep the same data so the board is not redrawn.
-      setData((cur) => (cur && JSON.stringify(cur) === JSON.stringify(d) ? cur : d))
+      setData((cur) => (cur && sameBoard(cur, d) ? cur : d))
       setNotFound(false)
     } catch (e) {
       if (!quiet) {
         setNotFound(true)
         if (!(e instanceof Error && /404|not found/i.test(e.message))) addToast({ type: 'error', message: errMsg(e, 'Could not load the board') })
       }
+    } finally {
+      inFlight.current = false
     }
   }, [key, showOld, addToast])
 
@@ -110,7 +123,7 @@ export default function ProjectBoard() {
   const filtersOn = !!(q || assignee || priority || label || due || mine)
   const myOverdue = data ? data.tasks.filter((t) => t.isOverdue && t.assignees.some((a) => a.id === meId)).length : 0
 
-  const upsert = (card: TaskCard) => setData((d) => (d ? { ...d, tasks: d.tasks.some((t) => t.id === card.id) ? d.tasks.map((t) => (t.id === card.id ? card : t)) : [...d.tasks, card] } : d))
+  const upsert = (card: TaskCard) => { version.current++; setData((d) => (d ? { ...d, tasks: d.tasks.some((t) => t.id === card.id) ? d.tasks.map((t) => (t.id === card.id ? card : t)) : [...d.tasks, card] } : d)) }
   const addLabel = (l: Label) => setData((d) => (d && !d.labels.some((x) => x.id === l.id) ? { ...d, labels: [...d.labels, l].sort((a, b) => a.name.localeCompare(b.name)) } : d))
 
   function moveTask(taskId: string, columnId: string, beforeId: string | null, afterId: string | null) {
@@ -123,6 +136,7 @@ export default function ProjectBoard() {
     // Optimistic: place the card now, then let the server confirm (or roll back).
     upsert({ ...task, columnId, status: col.name, category: col.category, position: rankBetween(pos(beforeId), pos(afterId)), completedAt: col.category === 'DONE' ? task.completedAt ?? new Date().toISOString() : null, isOverdue: col.category === 'DONE' ? false : task.isOverdue })
     pending.current++
+    version.current++
     projectsApi.moveTask(task.code, columnId, beforeId, afterId)
       .then((r) => upsert(r.task))
       .catch((e) => { setData(snapshot); addToast({ type: 'error', message: errMsg(e, 'Could not move the task') }) })
@@ -231,7 +245,7 @@ export default function ProjectBoard() {
           onReorderColumns={reorderColumns}
           onQuickAdd={perms.canContribute && project.status === 'ACTIVE' && !filtersOn ? quickAdd : null}
           onAddTask={perms.canContribute && project.status === 'ACTIVE' ? (colId) => { setCreateInColumn(colId); setCreating(true) } : null}
-          onDragState={(d) => { dragging.current = d }}
+          onDragState={(d) => { dragging.current = d; version.current++ }}
         />
       ) : (
         <ListView projectKey={project.key} tasks={filtered} columns={data.columns} members={data.members} canManage={perms.canManage} onOpen={(c) => setParam('task', c)} onChanged={() => load()} />

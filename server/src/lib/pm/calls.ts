@@ -62,6 +62,8 @@ export interface LiveCall {
   captions: Caption[]
   /** Whose browser records everyone's voice for the AI notes (see recorderOf). */
   noteRecorder: string | null
+  /** When the note taker was switched off (its last pieces are still accepted for a minute). */
+  notesOffAt: number | null
   meetingId: string | null
 }
 
@@ -81,8 +83,8 @@ export function allLive(): LiveCall[] {
   return [...live.values()]
 }
 
-export function registerLive(c: Omit<LiveCall, 'participants' | 'inbox' | 'joinedIds' | 'declined' | 'invited' | 'invitedBy' | 'guests' | 'noteTaker' | 'captions' | 'meetingId' | 'noteRecorder'> & { meetingId?: string | null }): LiveCall {
-  const call: LiveCall = { ...c, meetingId: c.meetingId ?? null, participants: new Map(), inbox: new Map(), joinedIds: new Set(), declined: new Set(), invited: new Map(), invitedBy: new Map(), guests: new Set(), noteTaker: false, captions: [], noteRecorder: null }
+export function registerLive(c: Omit<LiveCall, 'participants' | 'inbox' | 'joinedIds' | 'declined' | 'invited' | 'invitedBy' | 'guests' | 'noteTaker' | 'captions' | 'meetingId' | 'noteRecorder' | 'notesOffAt'> & { meetingId?: string | null }): LiveCall {
+  const call: LiveCall = { ...c, meetingId: c.meetingId ?? null, participants: new Map(), inbox: new Map(), joinedIds: new Set(), declined: new Set(), invited: new Map(), invitedBy: new Map(), guests: new Set(), noteTaker: false, captions: [], noteRecorder: null, notesOffAt: null }
   live.set(c.callId, call)
   return call
 }

@@ -152,8 +152,15 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     busy.current = true
     setDismissed((d) => new Set(d).add(callId))
     try {
-      // Answering another call hangs up the current one first.
-      if (engine.current) await engine.current.leave()
+      // Answering another call hangs up the current one first, fully: its recording is
+      // stopped and saved to ITS chat, and the note taker sends its last words.
+      if (engine.current) {
+        if (recorder.current?.recording) { engine.current.setRecording(false); void recorder.current.stop() }
+        transcriber.current?.stop()
+        for (const r of recorders.current.values()) void r.rec.stop()
+        recorders.current.clear()
+        await engine.current.leave()
+      }
       const card = active.find((c) => c.id === callId)
       titleHint.current = card?.title ?? null
       // Three or more people already talking: come in muted (like Teams does).

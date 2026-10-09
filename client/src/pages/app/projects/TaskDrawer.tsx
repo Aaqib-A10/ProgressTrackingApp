@@ -39,6 +39,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
   const [desc, setDesc] = useState('')
   const [editingDesc, setEditingDesc] = useState(false)
   const [newItem, setNewItem] = useState('')
+  const addingItem = useRef(false)
   const [uploading, setUploading] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [extOpen, setExtOpen] = useState(false)
@@ -208,14 +209,24 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
           <ul className="space-y-1">
             {task.checklist.map((c) => (
               <li key={c.id} className="group flex items-center gap-2 rounded-btn px-1 py-0.5 hover:bg-slate-50">
-                <input type="checkbox" checked={c.isDone} disabled={!canEdit} onChange={() => projectsApi.updateChecklist(c.id, { isDone: !c.isDone }).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task)))} className="h-4 w-4 accent-primary" aria-label={c.text} />
+                <input type="checkbox" checked={c.isDone} disabled={!canEdit} onChange={() => {
+                  // Tick at once, then save (and put it back if saving fails).
+                  setTask((t) => (t ? { ...t, checklist: t.checklist.map((x) => (x.id === c.id ? { ...x, isDone: !c.isDone } : x)) } : t))
+                  projectsApi.updateChecklist(c.id, { isDone: !c.isDone }).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => { addToast({ type: 'error', message: errMsg(e) }); void load() })
+                }} className="h-4 w-4 accent-primary" aria-label={c.text} />
                 <span className={cn('flex-1 text-body-md', c.isDone && 'text-ink-muted line-through')}>{c.text}</span>
-                {canEdit && <button type="button" onClick={() => projectsApi.deleteChecklist(c.id).then(load)} className="opacity-0 group-hover:opacity-100" aria-label="Delete item"><X size={14} className="text-ink-muted" /></button>}
+                {canEdit && <button type="button" onClick={() => projectsApi.deleteChecklist(c.id).then(load).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} className="opacity-0 group-hover:opacity-100" aria-label="Delete item"><X size={14} className="text-ink-muted" /></button>}
               </li>
             ))}
           </ul>
           {canEdit && (
-            <form className="mt-1 flex gap-2" onSubmit={async (e) => { e.preventDefault(); if (!newItem.trim()) return; await projectsApi.addChecklist(code, newItem.trim()); setNewItem(''); await load(); const r = await projectsApi.task(code); onChanged(r.task) }}>
+            <form className="mt-1 flex gap-2" onSubmit={async (e) => {
+              e.preventDefault()
+              const text = newItem.trim()
+              if (!text || addingItem.current) return // Enter pressed twice
+              addingItem.current = true
+              try { await projectsApi.addChecklist(code, text); setNewItem(''); await load(); const r = await projectsApi.task(code); onChanged(r.task) } catch (err) { addToast({ type: 'error', message: errMsg(err) }) } finally { addingItem.current = false }
+            }}>
               <input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Add an item" className={cn(fieldCls, 'h-8 text-body-sm')} />
               <Button size="sm" variant="secondary" type="submit" aria-label="Add item"><Plus size={14} /></Button>
             </form>
@@ -240,7 +251,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
                   <span className="min-w-0 flex-1 truncate text-ink" title={a.originalName}>{a.originalName}</span>
                   <span className="text-ink-muted">{fmtBytes(a.size)}</span>
                   <a href={(import.meta.env.VITE_API_URL ?? '/api') + a.downloadUrl.replace(/^\/api/, '')} className="text-ink-muted hover:text-primary" aria-label={`Download ${a.originalName}`}><Download size={14} /></a>
-                  {(a.uploadedBy.id === meId || perms.canDelete) && <button type="button" onClick={() => projectsApi.deleteAttachment(a.id).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} aria-label="Remove file"><Trash2 size={14} className="text-ink-muted hover:text-danger" /></button>}
+                  {(a.uploadedBy.id === meId || perms.canManage) && <button type="button" onClick={() => projectsApi.deleteAttachment(a.id).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} aria-label="Remove file"><Trash2 size={14} className="text-ink-muted hover:text-danger" /></button>}
                 </li>
               ))}
             </ul>
@@ -268,7 +279,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             : (
               <ul className="space-y-2">
                 {task.reviews.map((rv) => (
-                  <ReviewItem key={rv.id} review={rv} canDelete={rv.reviewer.id === meId || perms.canDelete}
+                  <ReviewItem key={rv.id} review={rv} canDelete={rv.reviewer.id === meId || !!perms.canManage}
                     onDelete={() => projectsApi.deleteReview(rv.id).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} />
                 ))}
               </ul>
@@ -289,7 +300,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
               {task.comments.length === 0 && <p className="py-2 text-body-sm text-ink-muted">No comments yet. Start the discussion below.</p>}
               <ul className="space-y-3">
                 {task.comments.map((c) => (
-                  <Comment key={c.id} comment={c} members={people} mine={c.author.id === meId} canDelete={c.author.id === meId || perms.canDelete} onChanged={load} />
+                  <Comment key={c.id} comment={c} members={people} mine={c.author.id === meId} canDelete={c.author.id === meId || !!perms.canManage} onChanged={load} />
                 ))}
               </ul>
               <MentionBox members={people} allowAll onSubmit={async (b, mentions, reset) => {
@@ -355,6 +366,7 @@ function linkify(text: string): React.ReactNode[] {
 function Comment({ comment, members, mine, canDelete, onChanged }: { comment: TaskDetail['comments'][number]; members: { id: string; name: string }[]; mine: boolean; canDelete: boolean; onChanged: () => void }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(comment.body)
+  const { addToast } = useToast()
   return (
     <li className="flex gap-2.5">
       <PersonAvatar person={comment.author} size={28} />
@@ -364,7 +376,7 @@ function Comment({ comment, members, mine, canDelete, onChanged }: { comment: Ta
           <span className="text-body-sm text-ink-muted" title={fmtDateTime(comment.createdAt)}>{fmtAgo(comment.createdAt)}{comment.editedAt ? ' · edited' : ''}</span>
           <span className="ml-auto flex gap-2">
             {mine && !editing && <button type="button" onClick={() => setEditing(true)} className="text-body-sm text-ink-muted hover:text-ink">Edit</button>}
-            {canDelete && !editing && <button type="button" onClick={() => projectsApi.deleteComment(comment.id).then(onChanged)} className="text-body-sm text-ink-muted hover:text-danger">Delete</button>}
+            {canDelete && !editing && <button type="button" onClick={() => projectsApi.deleteComment(comment.id).then(onChanged).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} className="text-body-sm text-ink-muted hover:text-danger">Delete</button>}
           </span>
         </div>
         {editing ? (
@@ -372,7 +384,7 @@ function Comment({ comment, members, mine, canDelete, onChanged }: { comment: Ta
             <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} className={cn(fieldCls, 'h-auto py-2 text-body-sm')} />
             <div className="mt-1 flex justify-end gap-2">
               <Button size="sm" variant="secondary" onClick={() => { setText(comment.body); setEditing(false) }}>Cancel</Button>
-              <Button size="sm" leadingIcon={<Check size={14} />} onClick={async () => { await projectsApi.editComment(comment.id, text); setEditing(false); onChanged() }}>Save</Button>
+              <Button size="sm" leadingIcon={<Check size={14} />} onClick={async () => { try { await projectsApi.editComment(comment.id, text); setEditing(false); onChanged() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } }}>Save</Button>
             </div>
           </div>
         ) : <p className="mt-0.5 whitespace-pre-wrap break-words text-body-md text-ink">{highlightMentions(comment.body, comment.mentions, members)}</p>}

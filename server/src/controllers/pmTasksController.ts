@@ -22,6 +22,7 @@ import { parse, viewer } from '../lib/pm/http'
 import { needsRebalance, rankBetween, RANK_STEP } from '../lib/pm/rank'
 import { CARD_INCLUDE, clearOverdueIfResolved, isTaskOverdue, logActivity, rebalanceColumn, serializeCard } from '../lib/pm/tasks'
 import { fmtDue, pmNotify, taskLink, trunc } from '../lib/pm/pmNotify'
+import { contentDisposition } from '../lib/contentDisposition'
 
 /**
  * Tasks inside a project: create/edit/move/delete, assignees, comments,
@@ -206,6 +207,8 @@ export async function getTask(req: AuthedRequest, res: Response): Promise<void> 
       canEdit: canEditTask(ctx, task),
       canChangeDue: canChangeDue(ctx, task),
       canDelete: canDeleteTask(ctx, task),
+      // Remove other people's comments, files and reviews (project admins).
+      canManage: ctx.canManage,
       canMove: ctx.canContribute,
       canComment: true,
       canDecideExtension: canDecideExtension(ctx, task),
@@ -566,7 +569,7 @@ export async function downloadAttachment(req: AuthedRequest, res: Response): Pro
   // Always download (never render inline) so an uploaded file can't run as a page on our origin.
   res.setHeader('Content-Type', 'application/octet-stream')
   res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(a.originalName)}"`)
+  res.setHeader('Content-Disposition', contentDisposition('attachment', a.originalName))
   res.sendFile(filePath)
 }
 
