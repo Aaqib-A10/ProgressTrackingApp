@@ -291,7 +291,7 @@ describe('note taker with Groq (mocked)', () => {
     expect(calls[0].url).toContain('/audio/translations') // mixed language is written in English
     const form = calls[0].body as FormData
     expect(form.get('model')).toBe('whisper-large-v3')
-    expect(String(form.get('prompt'))).toContain('RTI sync')
+    expect(form.get('prompt')).toBeNull() // no vocabulary prompt: Whisper parrots it on unclear sound
     mockGroq({ sttText: 'I will send the list tomorrow.' })
     await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en' }).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(200)
     await waitForCall(callId, 5000)

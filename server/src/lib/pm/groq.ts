@@ -47,9 +47,41 @@ async function groqFetch(path: string, init: () => RequestInit, attempts = 6): P
 export type SpeechMode = 'mixed' | 'en' | 'ur'
 
 // Whisper sometimes "hears" these in silence or noise.
-const HALLUCINATIONS = [/^thank(s| you)( so much)?( for watching)?[.!]*$/i, /^(you|bye|okay|\.|\.\.\.)[.!]*$/i, /subtitles? by/i, /please subscribe/i, /^\[?(music|silence|blank_audio|noise)\]?$/i]
+const HALLUCINATIONS = [
+  /^thank(s| you)( so much| very much)?( for watching| for listening)?[.!]*$/i,
+  /^(you|bye|bye-bye|okay|ok|hmm+|uh+|um+|yeah|yes|no|so|\.|\.\.\.)[.!?]*$/i,
+  /subtitles? (by|provided)/i, /please subscribe/i, /like and subscribe/i, /amara\.org/i, /transcribed by/i,
+  /^\[?\(?(music|silence|blank_audio|noise|applause|laughter|inaudible)\)?\]?$/i,
+]
 
-interface VerboseSegment { text: string; no_speech_prob?: number; avg_logprob?: number }
+export interface VerboseSegment { text: string; no_speech_prob?: number; avg_logprob?: number; compression_ratio?: number; start?: number; end?: number }
+
+/**
+ * Keep only the parts Whisper really heard. Whisper invents sentences when the
+ * sound is mostly silence, far-away voices or noise; it then reports a high
+ * "no speech" chance, a low confidence or very repetitive text. Those are dropped.
+ */
+export function keepSegment(s: VerboseSegment): boolean {
+  const t = s.text.trim()
+  if (!t) return false
+  const noSpeech = s.no_speech_prob ?? 0
+  const conf = s.avg_logprob ?? 0
+  if (noSpeech > 0.5 && conf < -0.4) return false // probably not speech at all
+  if (noSpeech > 0.8) return false
+  if (conf < -1.0) return false // Whisper was guessing
+  if ((s.compression_ratio ?? 0) > 2.4) return false // the same words over and over
+  const words = t.split(/\s+/).length
+  if (words <= 2 && conf < -0.6) return false // a stray word or two it was unsure of
+  return !HALLUCINATIONS.some((re) => re.test(t))
+}
+
+/** Remove a phrase repeated back to back ("start the engine, start the engine, start the engine"). */
+export function collapseRepeats(text: string): string {
+  const parts = text.split(/(?<=[.!?])\s+/)
+  const out: string[] = []
+  for (const p of parts) if (!out.length || out[out.length - 1].toLowerCase() !== p.toLowerCase()) out.push(p)
+  return out.join(' ')
+}
 
 /** One short recording -> text (empty string when nobody really spoke). */
 export async function transcribeAudio(audio: Buffer, opts: { mode: SpeechMode; prompt?: string; mime?: string }): Promise<string> {
@@ -63,16 +95,17 @@ export async function transcribeAudio(audio: Buffer, opts: { mode: SpeechMode; p
     form.append('response_format', 'verbose_json')
     form.append('temperature', '0')
     if (!translate) form.append('language', opts.mode === 'ur' ? 'ur' : 'en')
-    if (opts.prompt) form.append('prompt', opts.prompt.slice(0, 600))
+    // A prompt is only passed when explicitly given: Whisper tends to repeat prompt words
+    // (names, company names) when the sound is unclear, so none is sent by default.
+    if (opts.prompt) form.append('prompt', opts.prompt.slice(0, 300))
     return { method: 'POST', body: form }
   })
   if (!r.ok) throw new GroqError(`Groq speech-to-text ${r.status}: ${(await r.text()).slice(0, 200)}`, r.status)
   const j = (await r.json()) as { text?: string; segments?: VerboseSegment[] }
   const segs = j.segments?.length
-    ? j.segments.filter((s) => !((s.no_speech_prob ?? 0) > 0.6 && (s.avg_logprob ?? 0) < -0.7)).map((s) => s.text.trim())
-    : [String(j.text ?? '').trim()]
-  const text = segs.filter((t) => t && !HALLUCINATIONS.some((re) => re.test(t))).join(' ').replace(/\s+/g, ' ').trim()
-  return text
+    ? j.segments.filter(keepSegment).map((s) => s.text.trim())
+    : [String(j.text ?? '').trim()].filter((t) => t && !HALLUCINATIONS.some((re) => re.test(t)))
+  return collapseRepeats(segs.join(' ').replace(/\s+/g, ' ').trim())
 }
 
 // ---------- notes model ----------

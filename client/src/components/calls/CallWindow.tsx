@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Captions, CircleDot, Hand, Link2, Loader2, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, PhoneOff, Search,
+  AudioLines, Captions, CircleDot, Hand, Link2, Loader2, WifiOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorOff, MonitorUp, PhoneOff, Search,
   Smile, Sparkles, Square, UserPlus, Users, Video, VideoOff, X,
 } from 'lucide-react'
 import type { PeerView } from '../../lib/callEngine'
@@ -20,6 +20,7 @@ export function CallWindow() {
   const [now, setNow] = useState(Date.now())
   const [dismissErr, setDismissErr] = useState<string | null>(null)
   const [reactOpen, setReactOpen] = useState(false)
+  const speaking = useSpeaking(ctx?.call ? [{ id: ctx.meId, stream: ctx.call.localStream, on: ctx.call.mic }, ...ctx.call.peers.map((p) => ({ id: p.userId, stream: p.stream, on: p.mic }))] : [])
   useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(t) }, [])
   // Esc closes a side panel, then shrinks the meeting to the corner (never hangs up).
   useEffect(() => {
@@ -46,7 +47,9 @@ export function CallWindow() {
   const sharer = call.peers.find((p) => p.screen && hasVideo(p.stream))
   const myName = meta?.members.find((m) => m.id === ctx.meId)?.name ?? 'You'
   const meTile: Tile = { key: 'me', id: ctx.meId, name: 'You', avatarName: myName, stream: call.localStream, mic: call.mic, hand: call.hand, showVideo: (call.cam || call.screen) && hasVideo(call.localStream), mirror: call.cam && !call.screen, local: true, state: 'connected' }
-  const peerTiles: Tile[] = call.peers.map((p) => ({ key: p.userId, id: p.userId, name: p.name, stream: p.stream, mic: p.mic, hand: p.hand, showVideo: (p.cam || p.screen) && hasVideo(p.stream), mirror: false, local: false, state: p.state, screen: p.screen }))
+  const peerTiles: Tile[] = call.peers.map((p) => ({ key: p.userId, id: p.userId, name: p.name, stream: p.stream, mic: p.mic, hand: p.hand, showVideo: (p.cam || p.screen) && hasVideo(p.stream), mirror: false, local: false, state: p.state, screen: p.screen, stuck: p.stuck, speaking: speaking.has(p.userId) }))
+  meTile.speaking = speaking.has(ctx.meId)
+  const stuckNames = call.peers.filter((p) => p.stuck).map((p) => p.name)
   const err = call.error && call.error !== dismissErr ? call.error : null
   const recordingBy = [...(call.rec ? ['You'] : []), ...call.peers.filter((p) => p.rec).map((p) => p.name)]
   const recBusy = ctx.recState === 'starting' || ctx.recState === 'saving'
@@ -103,6 +106,16 @@ export function CallWindow() {
             </button>
           </div>
 
+          {stuckNames.length > 0 && (
+            <div className="mx-4 mb-2 flex items-start gap-2 rounded-btn bg-danger/20 px-3 py-2 text-body-sm text-red-100">
+              <WifiOff size={16} className="mt-0.5 shrink-0" />
+              <span>
+                <b>{stuckNames.join(', ')}</b> {stuckNames.length === 1 ? 'cannot' : 'cannot'} connect yet. {call.relay
+                  ? 'Still trying another route. If it stays like this, ask them to leave and join again.'
+                  : 'Their internet does not allow a direct call. The admin needs to switch on the call relay on the server (free, a few minutes).'}
+              </span>
+            </div>
+          )}
           {err && (
             <div className="mx-4 mb-2 flex items-center gap-2 rounded-btn bg-warning/20 px-3 py-2 text-body-sm text-amber-100">
               <span className="flex-1">{err}</span>
@@ -178,6 +191,7 @@ export function CallWindow() {
           <div className="relative flex shrink-0 flex-wrap items-center justify-center gap-2 px-4 pb-5 pt-2 sm:gap-3">
             <CtrlButton on={call.mic} onClick={ctx.toggleMic} label={call.mic ? 'Mute microphone' : 'Unmute microphone'} icon={call.mic ? <Mic size={20} /> : <MicOff size={20} />} />
             <CtrlButton on={call.cam} onClick={ctx.toggleCam} label={call.cam ? 'Turn camera off' : 'Turn camera on'} icon={call.cam ? <Video size={20} /> : <VideoOff size={20} />} />
+            {call.noise !== 'unavailable' && <CtrlButton on active={call.noise === 'on'} onClick={ctx.toggleNoise} label={call.noise === 'on' ? 'Background noise removal is on (click to turn off)' : 'Background noise removal is off (click to turn on)'} icon={<AudioLines size={20} />} />}
             {canShare && <CtrlButton on={!call.screen} active={call.screen} onClick={ctx.toggleScreen} label={call.screen ? 'Stop sharing your screen' : 'Share your screen'} icon={call.screen ? <MonitorOff size={20} /> : <MonitorUp size={20} />} />}
             <CtrlButton on active={call.hand} onClick={ctx.toggleHand} label={call.hand ? 'Lower your hand' : 'Raise your hand'} icon={<Hand size={20} />} />
             <div className="relative">
@@ -240,7 +254,10 @@ function PeoplePanel() {
   return (
     <div className="flex h-full flex-col">
       <div className="max-h-[45%] shrink-0 overflow-y-auto border-b border-line p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">In this call ({people.length})</p>
+        <div className="mb-2 flex items-center gap-2">
+          <p className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">In this call ({people.length})</p>
+          {call.peers.some((p) => p.mic) && <button type="button" onClick={() => ctx.muteOthers('*')} className="inline-flex items-center gap-1 rounded-btn border border-line px-2 py-0.5 text-[12px] font-semibold text-ink hover:bg-slate-50"><MicOff size={12} /> Mute everyone else</button>}
+        </div>
         <ul className="space-y-1.5">
           {people.map((p) => (
             <li key={p.id} className="flex items-center gap-2 text-body-sm">
@@ -248,7 +265,9 @@ function PeoplePanel() {
               <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
               {p.hand && <Hand size={14} className="text-amber-500" aria-label="Hand raised" />}
               {p.rec && <CircleDot size={14} className="text-danger" aria-label="Recording" />}
-              {p.mic ? <Mic size={14} className="text-ink-muted" /> : <MicOff size={14} className="text-danger" />}
+              {p.id !== ctx.meId && p.mic
+                ? <button type="button" onClick={() => ctx.muteOthers(p.id)} className="inline-flex items-center gap-1 rounded-btn px-1.5 py-0.5 text-[12px] text-ink-muted hover:bg-slate-100 hover:text-danger" title={`Mute ${p.name}`}><Mic size={14} /> Mute</button>
+                : p.mic ? <Mic size={14} className="text-ink-muted" /> : <MicOff size={14} className="text-danger" />}
             </li>
           ))}
           {[...ringing].map((id) => (
@@ -369,7 +388,7 @@ function LangPicker() {
 
 // ---------- tiles ----------
 
-interface Tile { avatarName?: string; key: string; id: string; name: string; stream: MediaStream; mic: boolean; hand: boolean; showVideo: boolean; mirror: boolean; local: boolean; state: PeerView['state']; screen?: boolean }
+interface Tile { avatarName?: string; key: string; id: string; name: string; stream: MediaStream; mic: boolean; hand: boolean; showVideo: boolean; mirror: boolean; local: boolean; state: PeerView['state']; screen?: boolean; stuck?: boolean; speaking?: boolean }
 
 function TileView({ tile, compact, contain }: { tile: Tile; compact?: boolean; contain?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null)
@@ -382,7 +401,7 @@ function TileView({ tile, compact, contain }: { tile: Tile; compact?: boolean; c
   }, [tile.stream, videoId, tile.showVideo])
   const connecting = !tile.local && tile.state !== 'connected'
   return (
-    <div className={cn('relative flex h-full w-full items-center justify-center', tile.hand && 'ring-4 ring-inset ring-amber-400')}>
+    <div className={cn('relative flex h-full w-full items-center justify-center', tile.hand ? 'ring-4 ring-inset ring-amber-400' : tile.speaking && 'ring-4 ring-inset ring-success')}>
       {/* Video is always muted here; sound comes from the hidden <audio> per person. */}
       <video ref={ref} autoPlay playsInline muted className={cn('h-full w-full', contain || tile.screen ? 'object-contain' : 'object-cover', tile.mirror && '-scale-x-100', !tile.showVideo && 'hidden')} />
       {!tile.showVideo && <PersonAvatar person={{ id: tile.id, name: tile.avatarName ?? tile.name }} size={compact ? 44 : 84} />}
@@ -391,7 +410,8 @@ function TileView({ tile, compact, contain }: { tile: Tile; compact?: boolean; c
         <span className="truncate">{tile.name}{tile.screen ? ' (sharing screen)' : ''}</span>
       </span>
       {tile.hand && <span className="absolute left-2 top-2 rounded-full bg-amber-400 p-1.5 text-slate-900" aria-label="Hand raised"><Hand size={compact ? 12 : 16} /></span>}
-      {connecting && <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-black/55 px-2 py-0.5 text-[11px]"><Loader2 size={11} className="animate-spin" /> {tile.state === 'failed' ? 'Reconnecting…' : 'Connecting…'}</span>}
+      {connecting && !tile.stuck && <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-black/55 px-2 py-0.5 text-[11px]"><Loader2 size={11} className="animate-spin" /> {tile.state === 'failed' ? 'Reconnecting…' : 'Connecting…'}</span>}
+      {tile.stuck && <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-danger/90 px-2 py-0.5 text-[11px] font-semibold"><WifiOff size={11} /> Can't connect</span>}
     </div>
   )
 }
@@ -456,3 +476,58 @@ function fmtTimer(ms: number): string {
   const sec = s % 60
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`
 }
+
+/** Who is talking right now (green outline), from the sound level of each person. */
+function useSpeaking(list: { id: string; stream: MediaStream; on: boolean }[]): Set<string> {
+  const [speaking, setSpeaking] = useState<Set<string>>(new Set())
+  const ctxRef = useRef<AudioContext | null>(null)
+  const nodes = useRef(new Map<string, { trackId: string; analyser: AnalyserNode; src: MediaStreamAudioSourceNode; level: number }>())
+  const listRef = useRef(list)
+  listRef.current = list
+  const key = list.map((x) => `${x.id}:${x.stream.getAudioTracks()[0]?.id ?? ''}`).join('|')
+  useEffect(() => {
+    if (!ctxRef.current) {
+      try { ctxRef.current = new AudioContext() } catch { return }
+    }
+    const ac = ctxRef.current
+    const wanted = new Set<string>()
+    for (const x of listRef.current) {
+      const t = x.stream.getAudioTracks()[0]
+      if (!t) continue
+      wanted.add(x.id)
+      const have = nodes.current.get(x.id)
+      if (have?.trackId === t.id) continue
+      have?.src.disconnect()
+      const src = ac.createMediaStreamSource(new MediaStream([t]))
+      const analyser = ac.createAnalyser()
+      analyser.fftSize = 512
+      src.connect(analyser)
+      nodes.current.set(x.id, { trackId: t.id, analyser, src, level: 0 })
+    }
+    for (const [id, n] of nodes.current) if (!wanted.has(id)) { n.src.disconnect(); nodes.current.delete(id) }
+  }, [key])
+  useEffect(() => {
+    const buf = new Float32Array(512)
+    const t = window.setInterval(() => {
+      void ctxRef.current?.resume().catch(() => undefined)
+      const next = new Set<string>()
+      for (const x of listRef.current) {
+        const n = nodes.current.get(x.id)
+        if (!n || !x.on) continue
+        n.analyser.getFloatTimeDomainData(buf)
+        let sum = 0
+        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
+        // Smooth it so the outline does not flicker between words.
+        n.level = Math.max(Math.sqrt(sum / buf.length), n.level * 0.8)
+        if (n.level > 0.03) next.add(x.id)
+      }
+      setSpeaking((cur) => (cur.size === next.size && [...next].every((id) => cur.has(id)) ? cur : next))
+    }, 200)
+    return () => {
+      window.clearInterval(t)
+    }
+  }, [])
+  useEffect(() => () => { void ctxRef.current?.close().catch(() => undefined) }, [])
+  return speaking
+}
+

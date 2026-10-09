@@ -37,6 +37,26 @@ export function isOvernight(shift: ShiftWindow): boolean {
 }
 
 /**
+ * For an overnight shift: the local minute that splits "still last night's
+ * shift" from "tonight's shift". It is the middle of the off-duty gap
+ * (19:00–04:00 → 11:30), so a check-out or an auto check-out after 04:00 still
+ * lands on last night, while an EARLY check-in (18:30 for a 19:00 start) already
+ * counts for tonight. Using the start time itself as the split sent every early
+ * check-in to the previous day: the widget showed yesterday's finished shift and
+ * the check-in was refused.
+ */
+export function overnightCutoffMinutes(shift: Pick<ShiftWindow, 'startTime' | 'endTime'>): number {
+  const end = shiftMinutes(shift.endTime)
+  const start = shiftMinutes(shift.startTime)
+  return end + Math.floor((start - end) / 2)
+}
+
+/** Does local minute `nowMin` still belong to the overnight shift that began the evening before? */
+export function belongsToPreviousShift(shift: ShiftWindow, nowMin: number): boolean {
+  return isOvernight(shift) && nowMin < overnightCutoffMinutes(shift)
+}
+
+/**
  * The calendar date — in the shift's OWN timezone — that the shift instance
  * currently in progress belongs to. For an overnight shift the post-midnight
  * hours still belong to the date the shift STARTED, so a check-out or break
@@ -46,12 +66,13 @@ export function isOvernight(shift: ShiftWindow): boolean {
  * Day shift, tz Pacific, 02:00 local  -> that day (normal).
  * Night shift 19:00–04:00, 21:00 local -> that day (shift started this evening).
  * Night shift 19:00–04:00, 02:00 local -> yesterday (still the evening's shift).
+ * Night shift 19:00–04:00, 18:30 local -> that day (early check-in for tonight).
  */
 export function shiftDayString(shift: ShiftWindow, now: Date = new Date()): DateString {
   const zone = shift.timeZone || COMPANY_TZ
   const local = DateTime.fromJSDate(now).setZone(zone)
   const nowMin = local.hour * 60 + local.minute
-  if (isOvernight(shift) && nowMin < shiftMinutes(shift.startTime)) {
+  if (belongsToPreviousShift(shift, nowMin)) {
     return local.minus({ days: 1 }).toISODate()!
   }
   return local.toISODate()!

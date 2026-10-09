@@ -1,4 +1,5 @@
 import { callsApi, type Caption, type CallParticipant, type CallSignal } from './callsApi'
+import { createNoiseFilter, noiseFilterPref, setNoiseFilterPref, type NoiseFilter } from './noiseFilter'
 
 /**
  * One voice/video call from this browser's point of view.
@@ -20,6 +21,8 @@ export interface PeerView {
   hand: boolean
   rec: boolean
   state: RTCPeerConnectionState | 'new'
+  /** Not connected for a long time (usually a network that needs the relay). */
+  stuck: boolean
 }
 
 export interface CallSnapshot {
@@ -54,6 +57,10 @@ export interface CallSnapshot {
   invited: string[]
   /** Where speech becomes text for the notes: on the server (Groq) or in the browser. */
   sttMode: 'server' | 'browser'
+  /** Background-noise removal on my microphone. */
+  noise: 'on' | 'off' | 'unavailable'
+  /** A relay (TURN) is set up on the server. */
+  relay: boolean
 }
 
 export interface Reaction { emoji: string; name: string; from: string; at: number }
@@ -66,6 +73,9 @@ interface Peer {
   initiator: boolean
   pendingIce: RTCIceCandidateInit[]
   info: CallParticipant | null
+  /** Since when this connection has not been working (null = connected). */
+  downSince: number | null
+  lastRestart: number
 }
 
 const POLL_MS = 1000
@@ -74,6 +84,9 @@ export class CallEngine {
   private peers = new Map<string, Peer>()
   private iceServers: RTCIceServer[] = []
   private audioTrack: MediaStreamTrack | null = null
+  /** The real microphone (audioTrack is the cleaned-up copy when the noise filter is on). */
+  private rawMic: MediaStreamTrack | null = null
+  private filter: NoiseFilter | null = null
   private camTrack: MediaStreamTrack | null = null
   private screenTrack: MediaStreamTrack | null = null
   private localStream = new MediaStream()
@@ -83,14 +96,16 @@ export class CallEngine {
   private closed = false
   private snap: CallSnapshot
 
-  constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void) {
-    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, captions: [], invited: [], sttMode: 'browser' }
+  constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void, private opts: { muteOnJoin?: boolean } = {}) {
+    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, captions: [], invited: [], sttMode: 'browser', noise: 'off', relay: true }
   }
 
   get snapshot(): CallSnapshot { return this.snap }
 
   /** Floating emoji reactions from others (set by the UI). */
   onReaction: ((r: Reaction) => void) | null = null
+  /** Someone muted me (set by the UI). */
+  onMutedBy: ((name: string) => void) | null = null
 
   /** My microphone track (for recording and the note taker). */
   get micTrack(): MediaStreamTrack | null { return this.audioTrack }
@@ -115,6 +130,7 @@ export class CallEngine {
         hand: p.info?.hand ?? false,
         rec: p.info?.rec ?? false,
         state: p.pc.connectionState,
+        stuck: p.downSince !== null && Date.now() - p.downSince > 20_000,
       })),
     }
     if (this.snap.peers.length && !this.snap.hadPeers) { this.snap.hadPeers = true; this.snap.connectedAt = Date.now() }
@@ -125,23 +141,39 @@ export class CallEngine {
   async start(): Promise<void> {
     try {
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: this.snap.video ? { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } : false })
+        const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: this.snap.video ? { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } : false })
         this.audioTrack = s.getAudioTracks()[0] ?? null
         this.camTrack = s.getVideoTracks()[0] ?? null
       } catch {
         // Camera busy or refused: fall back to microphone only.
         try {
-          const s = await navigator.mediaDevices.getUserMedia({ audio: true })
+          const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
           this.audioTrack = s.getAudioTracks()[0] ?? null
         } catch {
           this.audioTrack = null // join anyway, listen only
         }
       }
+      // Clean up background noise before it is sent (falls back to the plain mic if needed).
+      this.rawMic = this.audioTrack
+      let noise: CallSnapshot['noise'] = 'unavailable'
+      if (this.rawMic) {
+        this.filter = await createNoiseFilter(this.rawMic)
+        if (this.filter) {
+          this.audioTrack = this.filter.track
+          const on = noiseFilterPref()
+          this.filter.setEnabled(on)
+          noise = on ? 'on' : 'off'
+        }
+      }
+      // Joining a busy call: start muted so nobody's background noise interrupts.
+      const startMuted = !!this.opts.muteOnJoin && !!this.audioTrack
+      if (startMuted) this.audioTrack!.enabled = false
       this.rebuildLocal()
-      const j = await callsApi.join(this.snap.callId, { mic: !!this.audioTrack, cam: !!this.camTrack })
+      const j = await callsApi.join(this.snap.callId, { mic: !!this.audioTrack && !startMuted, cam: !!this.camTrack })
       this.me = j.me
       this.iceServers = j.iceServers
-      this.emit({ mic: !!this.audioTrack, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker, sttMode: j.sttMode ?? 'browser' })
+      this.emit({ noise, relay: j.relay !== false })
+      this.emit({ mic: !!this.audioTrack && !startMuted, cam: !!this.camTrack, status: 'live', error: this.audioTrack ? null : 'No microphone found or permission was blocked. You can still listen.', guest: !!j.guest, isDirect: !!j.isDirect, meetingId: j.meetingId ?? null, noteTaker: !!j.noteTaker, sttMode: j.sttMode ?? 'browser' })
       // The newcomer calls everyone who is already in the call.
       for (const o of j.others) await this.createPeer(o.userId, o.name, true, o)
       this.timer = window.setInterval(() => { void this.poll() }, POLL_MS)
@@ -167,7 +199,7 @@ export class CallEngine {
   private async createPeer(userId: string, name: string, initiator: boolean, info: CallParticipant | null): Promise<Peer> {
     this.peers.get(userId)?.pc.close()
     const pc = new RTCPeerConnection({ iceServers: this.iceServers })
-    const peer: Peer = { userId, name, pc, stream: new MediaStream(), initiator, pendingIce: [], info }
+    const peer: Peer = { userId, name, pc, stream: new MediaStream(), initiator, pendingIce: [], info, downSince: Date.now(), lastRestart: 0 }
     this.peers.set(userId, peer)
     pc.onicecandidate = (e) => { if (e.candidate) void callsApi.signal(this.snap.callId, userId, 'ice', e.candidate.toJSON()).catch(() => undefined) }
     pc.ontrack = (e) => {
@@ -176,7 +208,9 @@ export class CallEngine {
       this.emit()
     }
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' && peer.initiator) void this.offer(peer, true)
+      if (pc.connectionState === 'connected') peer.downSince = null
+      else if (peer.downSince === null) peer.downSince = Date.now()
+      if (pc.connectionState === 'failed') this.reconnect(peer)
       this.emit()
     }
     if (initiator) {
@@ -196,8 +230,27 @@ export class CallEngine {
     await callsApi.signal(this.snap.callId, peer.userId, 'offer', peer.pc.localDescription?.toJSON())
   }
 
+  /** Try again to connect to someone (new network path). Only the side that called starts it. */
+  private reconnect(peer: Peer) {
+    const now = Date.now()
+    if (now - peer.lastRestart < 12_000) return
+    peer.lastRestart = now
+    if (peer.initiator) void this.offer(peer, true).catch(() => undefined)
+    else void callsApi.signal(this.snap.callId, peer.userId, 'restart', null).catch(() => undefined)
+  }
+
   private async onSignal(s: CallSignal) {
     if (s.kind === 'bye') { this.dropPeer(s.from); return }
+    if (s.kind === 'mute') {
+      if (this.audioTrack?.enabled) this.toggleMic()
+      this.onMutedBy?.((s.data as { by?: string })?.by ?? 'Someone')
+      return
+    }
+    if (s.kind === 'restart') {
+      const p = this.peers.get(s.from)
+      if (p?.initiator) { p.lastRestart = 0; this.reconnect(p) }
+      return
+    }
     if (s.kind === 'react') {
       const d = s.data as { emoji?: string; name?: string }
       if (d?.emoji) this.onReaction?.({ emoji: d.emoji, name: d.name ?? 'Someone', from: s.from, at: Date.now() })
@@ -260,6 +313,10 @@ export class CallEngine {
         else { p.info = info; p.name = info.name }
       }
       this.tuneBitrate()
+      // A connection that keeps dropping (or never came up): try a fresh path.
+      for (const p of this.peers.values()) {
+        if (p.downSince !== null && Date.now() - p.downSince > 8000 && p.pc.connectionState !== 'connecting') this.reconnect(p)
+      }
       this.emit({ declined: r.declined ?? [], noteTaker: !!r.noteTaker, captions: r.captions ?? [], invited: r.invited ?? [] })
     } catch {
       /* temporary network hiccup: keep polling */
@@ -358,9 +415,25 @@ export class CallEngine {
     this.emit({ screen: !!this.screenTrack })
   }
 
+  /** Background-noise removal on or off (remembered on this computer). */
+  toggleNoise(): void {
+    if (!this.filter) return
+    const on = this.snap.noise !== 'on'
+    this.filter.setEnabled(on)
+    setNoiseFilterPref(on)
+    this.emit({ noise: on ? 'on' : 'off' })
+  }
+
+  /** Ask everyone else (or one person) to mute. */
+  muteOthers(userId: string | '*'): Promise<unknown> {
+    return callsApi.mute(this.snap.callId, userId)
+  }
+
   private stopLocal() {
-    for (const t of [this.audioTrack, this.camTrack, this.screenTrack]) t?.stop()
-    this.audioTrack = this.camTrack = this.screenTrack = null
+    for (const t of [this.audioTrack, this.rawMic, this.camTrack, this.screenTrack]) t?.stop()
+    this.filter?.destroy()
+    this.filter = null
+    this.audioTrack = this.rawMic = this.camTrack = this.screenTrack = null
   }
 
   private finish() {

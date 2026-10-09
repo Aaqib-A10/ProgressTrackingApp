@@ -668,10 +668,10 @@ export async function joinCall(req: AuthedRequest, res: Response): Promise<void>
   const others = Calls.participantList(call).filter((p) => p.userId !== me.id)
   Calls.join(call, me.id, await displayName(me.id), body)
   await prisma.chatCall.update({ where: { id: call.callId }, data: { joinedIds: [...call.joinedIds] } }).catch(() => undefined)
-  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, meetingId: call.meetingId, isDirect: call.isDirect, sttMode: groqEnabled() ? 'server' : 'browser' })
+  res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, meetingId: call.meetingId, isDirect: call.isDirect, sttMode: groqEnabled() ? 'server' : 'browser', relay: Calls.relayConfigured() })
 }
 
-const signalSchema = z.object({ to: z.string(), kind: z.enum(['offer', 'answer', 'ice']), data: z.unknown() })
+const signalSchema = z.object({ to: z.string(), kind: z.enum(['offer', 'answer', 'ice', 'restart']), data: z.unknown() })
 
 /** POST /api/chat/calls/:callId/signal — relay an offer / answer / network candidate to one participant. */
 export async function callSignal(req: AuthedRequest, res: Response): Promise<void> {
@@ -946,7 +946,6 @@ export async function postAudio(req: AuthedRequest, res: Response): Promise<void
   const live = Calls.getLive(req.params.callId)
   let speaker: string | null = live?.participants.get(me.id)?.name ?? null
   let callId = live?.callId ?? null
-  let title: string | null = null
   if (!live || !speaker) {
     // Just ended: still take the last piece from someone who was in it.
     const row = await prisma.chatCall.findUnique({ where: { id: req.params.callId }, select: { id: true, joinedIds: true, endedAt: true, noteTaker: true } })
@@ -962,14 +961,8 @@ export async function postAudio(req: AuthedRequest, res: Response): Promise<void
   const mode = (['mixed', 'en', 'ur'] as const).find((m) => m === req.query.mode) ?? 'mixed'
   const durationMs = Math.min(Math.max(Number(req.query.durationMs) || 0, 0), 120_000)
   const mime = String(req.headers['content-type'] || 'audio/webm').split(';')[0].slice(0, 40)
-  // Names and the meeting title help Whisper spell them right.
-  if (live) {
-    const conv = await prisma.chatConversation.findUnique({ where: { id: live.conversationId }, select: { name: true } })
-    title = conv?.name ?? null
-  }
-  const names = live ? [...live.participants.values()].map((p) => p.name) : [speaker!]
-  const prompt = `${title ? `${title}. ` : ''}Meeting with ${names.join(', ')}. PulseTrack, RTI, Minnesota Computers, 99 Technologies.`
-  await Stt.enqueue({ callId: callId!, userId: me.id, speakerName: speaker!, at: new Date(Date.now() - durationMs), mime, mode, prompt, audio: buf })
+  // No Whisper prompt: with unclear sound it repeats prompt words (names, company names) as if they were said.
+  await Stt.enqueue({ callId: callId!, userId: me.id, speakerName: speaker!, at: new Date(Date.now() - durationMs), mime, mode, audio: buf })
   res.json({ ok: true })
 }
 
@@ -987,3 +980,18 @@ export async function linkActionItem(req: AuthedRequest, res: Response): Promise
   await prisma.chatCall.update({ where: { id: call.id }, data: { notes: notes as unknown as Prisma.InputJsonValue } })
   res.json({ ok: true })
 }
+
+/** POST /api/chat/calls/:callId/mute { userId } — mute someone (they can unmute themselves). */
+export async function muteParticipant(req: AuthedRequest, res: Response): Promise<void> {
+  const { me, call } = await liveCallFor(req)
+  const p = call.participants.get(me.id)
+  if (!p) throw new HttpError(409, 'Join the call first')
+  const { userId } = parse(z.object({ userId: z.string() }), req.body)
+  const targets = userId === '*' ? [...call.participants.keys()].filter((id) => id !== me.id) : [userId]
+  for (const t of targets) {
+    if (!call.participants.has(t)) continue
+    Calls.push(call, t, me.id, 'mute', { by: p.name })
+  }
+  res.json({ ok: true, muted: targets.length })
+}
+

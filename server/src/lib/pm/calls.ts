@@ -16,7 +16,7 @@ export const MAX_PARTICIPANTS = 8
 const STALE_MS = 20_000 // a participant who stops polling for this long is dropped
 const RING_MS = 60_000 // how long people who haven't joined see the incoming call
 
-export type SignalKind = 'offer' | 'answer' | 'ice' | 'bye' | 'state' | 'react'
+export type SignalKind = 'offer' | 'answer' | 'ice' | 'bye' | 'state' | 'react' | 'mute' | 'restart'
 
 export interface Signal { id: number; from: string; kind: SignalKind; data: unknown }
 
@@ -201,6 +201,8 @@ export function startCallSweeper(): void {
   void prisma.chatCall.updateMany({ where: { endedAt: null }, data: { endedAt: new Date() } }).catch(() => undefined)
   timer = setInterval(() => { void sweep() }, 5000)
   timer.unref?.()
+  // eslint-disable-next-line no-console
+  console.log(relayConfigured() ? '[calls] relay (TURN) is on: calls work across networks' : '[calls] relay (TURN) is OFF: people outside the office may get stuck on "Connecting" (set CF_TURN_KEY_ID + CF_TURN_API_TOKEN)')
 }
 
 /** Test helper. */
@@ -215,14 +217,35 @@ export interface RTCIceServerLike { urls: string | string[]; username?: string; 
 
 const STUN: RTCIceServerLike[] = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }]
 
+/** Fixed TURN details from any provider: TURN_URLS (comma separated), TURN_USERNAME, TURN_CREDENTIAL. */
+function staticTurn(): RTCIceServerLike[] {
+  const urls = (process.env.TURN_URLS ?? '').split(',').map((u) => u.trim()).filter(Boolean)
+  if (!urls.length) return []
+  return [{ urls, username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL }]
+}
+
+/** Is a relay (TURN) set up? Without one, people on different networks often cannot connect. */
+export function relayConfigured(): boolean {
+  return !!(process.env.CF_TURN_KEY_ID && process.env.CF_TURN_API_TOKEN) || staticTurn().length > 0
+}
+
+/** Port 53 TURN URLs time out in browsers; drop them. */
+function dropPort53(servers: RTCIceServerLike[]): RTCIceServerLike[] {
+  return servers
+    .map((s) => ({ ...s, urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter((u) => !/:53(\?|$)/.test(u)) }))
+    .filter((s) => s.urls.length > 0)
+}
+
 /**
- * STUN always; TURN relay from Cloudflare when CF_TURN_KEY_ID + CF_TURN_API_TOKEN are set
- * (Cloudflare dashboard > Realtime > TURN). TURN lets calls connect even on strict networks.
+ * STUN always, plus a TURN relay so calls connect between different networks (office,
+ * home, mobile data). Cloudflare TURN when CF_TURN_KEY_ID + CF_TURN_API_TOKEN are set
+ * (Cloudflare dashboard > Realtime > TURN, 1,000 GB a month free), or fixed TURN details
+ * from any provider via TURN_URLS / TURN_USERNAME / TURN_CREDENTIAL.
  */
 export async function iceServers(): Promise<RTCIceServerLike[]> {
   const keyId = process.env.CF_TURN_KEY_ID
   const token = process.env.CF_TURN_API_TOKEN
-  if (!keyId || !token) return STUN
+  if (!keyId || !token) return [...STUN, ...staticTurn()]
   if (turnCache && Date.now() - turnCache.at < 6 * 3600_000) return turnCache.servers
   try {
     const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`, {
@@ -233,12 +256,12 @@ export async function iceServers(): Promise<RTCIceServerLike[]> {
     if (!r.ok) throw new Error(`TURN ${r.status}`)
     const j = (await r.json()) as { iceServers?: RTCIceServerLike | RTCIceServerLike[] }
     const turn = Array.isArray(j.iceServers) ? j.iceServers : j.iceServers ? [j.iceServers] : []
-    const servers = [...STUN, ...turn]
+    const servers = [...STUN, ...dropPort53(turn), ...staticTurn()]
     turnCache = { at: Date.now(), servers }
     return servers
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('[calls] could not get TURN credentials, using STUN only:', (e as Error).message)
-    return STUN
+    return [...STUN, ...staticTurn()]
   }
 }

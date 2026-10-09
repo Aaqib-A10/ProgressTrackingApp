@@ -18,8 +18,8 @@ export interface ActiveCall {
   guest?: boolean
   meetingId?: string | null
 }
-export interface CallSignal { id: number; from: string; kind: 'offer' | 'answer' | 'ice' | 'bye' | 'state' | 'react'; data: unknown }
-export interface JoinResponse { callId: string; video: boolean; conversationId: string; me: string; others: CallParticipant[]; iceServers: RTCIceServer[]; guest?: boolean; noteTaker?: boolean; meetingId?: string | null; isDirect?: boolean; sttMode?: 'server' | 'browser' }
+export interface CallSignal { id: number; from: string; kind: 'offer' | 'answer' | 'ice' | 'bye' | 'state' | 'react' | 'mute' | 'restart'; data: unknown }
+export interface JoinResponse { callId: string; video: boolean; conversationId: string; me: string; others: CallParticipant[]; iceServers: RTCIceServer[]; guest?: boolean; noteTaker?: boolean; meetingId?: string | null; isDirect?: boolean; sttMode?: 'server' | 'browser'; relay?: boolean }
 export interface PollResponse { ended: boolean; removed?: boolean; participants: CallParticipant[]; signals: CallSignal[]; declined?: string[]; noteTaker?: boolean; captions?: Caption[]; invited?: string[] }
 
 export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }[]; openQuestions: string[] }
@@ -39,11 +39,12 @@ export const callsApi = {
   start: (conversationId: string, video: boolean) => api.post<{ call: { id: string; video: boolean; conversationId: string }; existing: boolean }>(`/chat/conversations/${conversationId}/calls`, { video }),
   active: () => api.get<{ calls: ActiveCall[] }>('/chat/calls/active'),
   join: (callId: string, media: { mic: boolean; cam: boolean }) => api.post<JoinResponse>(`/chat/calls/${callId}/join`, media),
-  signal: (callId: string, to: string, kind: 'offer' | 'answer' | 'ice', data: unknown) => api.post<{ ok: boolean }>(`/chat/calls/${callId}/signal`, { to, kind, data }),
+  signal: (callId: string, to: string, kind: 'offer' | 'answer' | 'ice' | 'restart', data: unknown) => api.post<{ ok: boolean }>(`/chat/calls/${callId}/signal`, { to, kind, data }),
   poll: (callId: string) => api.get<PollResponse>(`/chat/calls/${callId}/poll`),
   state: (callId: string, s: { mic?: boolean; cam?: boolean; screen?: boolean; hand?: boolean; rec?: boolean }) => api.post(`/chat/calls/${callId}/state`, s),
   invite: (callId: string, userIds: string[]) => api.post<{ invited: { id: string; name: string }[] }>(`/chat/calls/${callId}/invite`, { userIds }),
   react: (callId: string, emoji: string) => api.post(`/chat/calls/${callId}/react`, { emoji }),
+  mute: (callId: string, userId: string) => api.post(`/chat/calls/${callId}/mute`, { userId }),
   setNotes: (callId: string, on: boolean) => api.post<{ noteTaker: boolean }>(`/chat/calls/${callId}/notes`, { on }),
   notes: (callId: string) => api.get<CallNotesResponse>(`/chat/calls/${callId}/notes`),
   retryNotes: (callId: string) => api.post(`/chat/calls/${callId}/notes/retry`),

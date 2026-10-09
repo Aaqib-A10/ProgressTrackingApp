@@ -34,6 +34,8 @@ interface CallsContextValue {
   toggleCam: () => void
   toggleScreen: () => void
   toggleHand: () => void
+  toggleNoise: () => void
+  muteOthers: (userId: string | '*') => void
   react: (emoji: string) => void
   reactions: Reaction[]
   invite: (userIds: string[]) => Promise<void>
@@ -109,9 +111,11 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     })
   }, [])
 
-  const begin = useCallback(async (callId: string, conversationId: string, video: boolean) => {
-    const e: CallEngine = new CallEngine(callId, conversationId, video, (s) => { if (engine.current === e) setCall(s) })
+  const begin = useCallback(async (callId: string, conversationId: string, video: boolean, muteOnJoin = false) => {
+    const e: CallEngine = new CallEngine(callId, conversationId, video, (s) => { if (engine.current === e) setCall(s) }, { muteOnJoin })
     e.onReaction = (r) => showReaction(r)
+    e.onMutedBy = (name) => addToast({ type: 'info', message: `${name} muted you. Click the microphone when you want to speak.` })
+    if (muteOnJoin) addToast({ type: 'info', message: 'You joined muted so background noise does not interrupt. Click the microphone to speak.' })
     engine.current = e
     setPanel(null)
     setCall(e.snapshot)
@@ -120,7 +124,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     loadMeta(conversationId)
     await e.start()
     void refreshActive()
-  }, [loadMeta, refreshActive])
+  }, [loadMeta, refreshActive, addToast]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const startCall = useCallback(async (conversationId: string, video: boolean) => {
     if (busy.current) return
@@ -146,8 +150,10 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     try {
       // Answering another call hangs up the current one first.
       if (engine.current) await engine.current.leave()
-      titleHint.current = active.find((c) => c.id === callId)?.title ?? null
-      await begin(callId, conversationId, video)
+      const card = active.find((c) => c.id === callId)
+      titleHint.current = card?.title ?? null
+      // Three or more people already talking: come in muted (like Teams does).
+      await begin(callId, conversationId, video, (card?.participants.length ?? 0) >= 3)
     } finally { busy.current = false }
   }, [begin, active])
 
@@ -342,6 +348,12 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     toggleCam: () => { void engine.current?.toggleCam() },
     toggleScreen: () => { void engine.current?.toggleScreen() },
     toggleHand: () => engine.current?.toggleHand(),
+    toggleNoise: () => engine.current?.toggleNoise(),
+    muteOthers: (userId: string | '*') => {
+      const e = engine.current
+      if (!e) return
+      void e.muteOthers(userId).then(() => addToast({ type: 'success', message: userId === '*' ? 'Everyone else is muted' : 'Muted' })).catch((err) => addToast({ type: 'error', message: errMsg(err) }))
+    },
     react: (emoji: string) => {
       engine.current?.react(emoji)
       showReaction({ emoji, name: 'You', from: meId, at: Date.now() })

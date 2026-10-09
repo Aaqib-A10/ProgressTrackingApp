@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
-import { isOvernight, shiftMinutes, shiftDayString, timesForWeekday, type DayTimes } from '../lib/shiftDay'
+import { isOvernight, shiftMinutes, shiftDayString, belongsToPreviousShift, timesForWeekday, type DayTimes } from '../lib/shiftDay'
 import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { sendCsv } from '../lib/csv'
@@ -102,12 +102,12 @@ function localMinutes(d: Date, shift?: Shift): number {
 
 /**
  * Minutes of an instant mapped onto the shift's axis: for an overnight shift, an
- * instant that falls before the start time belongs to the post-midnight portion,
+ * instant in the early-morning part (before the middle of the off-duty gap) belongs to the post-midnight portion,
  * so it is shifted by +1440. Lets late/early-leave math work across midnight.
  */
 function shiftAxisMinutes(d: Date, shift: Shift): number {
   const m = localMinutes(d, shift)
-  return isOvernight(shift) && m < shiftMinutes(shift.startTime) ? m + 1440 : m
+  return belongsToPreviousShift(shift, m) ? m + 1440 : m
 }
 
 function isLate(checkInAt: Date, shift: Shift): boolean {
@@ -1088,14 +1088,14 @@ const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull, n
 /**
  * Combine a "YYYY-MM-DD" (the attendance day) + "HH:mm" into a UTC instant,
  * anchored in the shift's timezone. For an overnight shift a time in the
- * post-midnight portion (before the shift start) belongs to the NEXT calendar
+ * post-midnight portion (before the middle of the off-duty gap) belongs to the NEXT calendar
  * day, so it is rolled forward — e.g. a 04:00 check-out on a 19:00–04:00 shift.
  */
 function instantFrom(dateStr: string, hhmmStr: string, baseShift: Shift): Date {
   const shift = baseShift.dayTimes ? shiftForDate(baseShift, dateStr) : baseShift
   const zone = shift.timeZone || COMPANY_TZ
   let dt = DateTime.fromISO(`${dateStr}T${hhmmStr}`, { zone })
-  if (isOvernight(shift) && shiftMinutes(hhmmStr) < shiftMinutes(shift.startTime)) {
+  if (belongsToPreviousShift(shift, shiftMinutes(hhmmStr))) {
     dt = dt.plus({ days: 1 })
   }
   return dt.toJSDate()

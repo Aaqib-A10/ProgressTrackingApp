@@ -27,7 +27,7 @@ interface Job {
   file: string
   mime: string
   mode: SpeechMode
-  prompt: string
+  prompt?: string
 }
 
 const queue: Job[] = []
