@@ -1,12 +1,35 @@
-import { Router, raw } from 'express'
-import { requireAuth } from '../middleware/auth'
+import { Router, raw, type NextFunction, type Response } from 'express'
+import type { Role } from '@prisma/client'
+import { requireAuth, type AuthedRequest } from '../middleware/auth'
+import { GUEST_CALL_PATH, readGuestPass } from '../lib/pm/guests'
+import * as G from '../controllers/guestController'
 import { pmHandler as h } from '../lib/pm/http'
 import * as C from '../controllers/chatController'
 
 /** /api/chat — direct messages, groups and project channels (polling based). */
 export const chatRouter = Router()
 
-chatRouter.use(requireAuth)
+/**
+ * Team members sign in as usual. A guest from outside Metriq (joined by link, let in by
+ * someone in the call) may only use the call endpoints, with their guest pass. The guest
+ * page says so with an X-PT-Guest header, so a signed-in Metriq user testing a guest link
+ * is treated as the guest there too.
+ */
+function memberOrGuest(req: AuthedRequest, res: Response, next: NextFunction): void {
+  const wantsGuest = req.headers['x-pt-guest'] === '1'
+  const hasLogin = !!(req as AuthedRequest & { cookies?: Record<string, string> }).cookies?.token || !!req.headers.authorization
+  if (GUEST_CALL_PATH.test(req.path) && (wantsGuest || !hasLogin)) {
+    const pass = readGuestPass(req)
+    if (pass) {
+      req.user = { id: pass.gid, role: 'GUEST' as unknown as Role }
+      next()
+      return
+    }
+  }
+  void requireAuth(req, res, next)
+}
+
+chatRouter.use(memberOrGuest)
 
 chatRouter.get('/unread', h(C.unreadSummary))
 chatRouter.get('/users', h(C.chatUsers))
@@ -38,6 +61,10 @@ chatRouter.get('/calls/:callId/poll', h(C.pollCall))
 chatRouter.post('/calls/:callId/state', h(C.callState))
 chatRouter.post('/calls/:callId/leave', h(C.leaveCall))
 chatRouter.post('/calls/:callId/decline', h(C.declineCall))
+chatRouter.post('/calls/:callId/lobby', h(G.answerGuest))
+chatRouter.get('/conversations/:id/guest-link', h(G.getGuestLink))
+chatRouter.post('/conversations/:id/guest-link', h(G.makeGuestLink))
+chatRouter.delete('/conversations/:id/guest-link', h(G.deleteGuestLink))
 chatRouter.post('/calls/:callId/invite', h(C.inviteToCall))
 chatRouter.post('/calls/:callId/react', h(C.reactInCall))
 chatRouter.post('/calls/:callId/mute', h(C.muteParticipant))

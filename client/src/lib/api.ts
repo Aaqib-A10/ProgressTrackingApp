@@ -21,6 +21,13 @@ export class ApiError extends Error {
 // AuthProvider registers it to clear auth state so the route guard redirects to
 // login. Auth endpoints (/auth/*) manage their own 401s and are exempt.
 let onUnauthorized: (() => void) | null = null
+
+// The guest page (people outside Metriq joining a call by link) marks its requests, so the
+// server uses the guest pass even if this browser is also signed in to Metriq.
+let guestMode = false
+export function setGuestMode(on: boolean): void {
+  guestMode = on
+}
 export function setUnauthorizedHandler(fn: (() => void) | null): void {
   onUnauthorized = fn
 }
@@ -35,13 +42,14 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
       'X-Client-Mobile': isMobileOrTablet() ? '1' : '0',
       // Is this tab in front? (the server then skips pushing pop-ups to this person)
       'X-PT-Visible': typeof document !== 'undefined' && document.visibilityState === 'visible' ? '1' : '0',
+      ...(guestMode ? { 'X-PT-Guest': '1' } : {}),
     },
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
   })
 
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized?.()
+    if (res.status === 401 && !path.startsWith('/auth/') && !guestMode) onUnauthorized?.()
     const message = await res.text().catch(() => res.statusText)
     throw new ApiError(message || `Request failed (${res.status})`, res.status)
   }

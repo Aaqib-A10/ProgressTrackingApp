@@ -20,7 +20,19 @@ export interface ActiveCall {
 }
 export interface CallSignal { id: number; from: string; kind: 'offer' | 'answer' | 'ice' | 'bye' | 'state' | 'react' | 'mute' | 'restart'; data: unknown }
 export interface JoinResponse { callId: string; video: boolean; conversationId: string; me: string; others: CallParticipant[]; iceServers: RTCIceServer[]; guest?: boolean; noteTaker?: boolean; noteRecorder?: string | null; meetingId?: string | null; isDirect?: boolean; sttMode?: 'server' | 'browser'; relay?: boolean }
-export interface PollResponse { ended: boolean; removed?: boolean; participants: CallParticipant[]; signals: CallSignal[]; declined?: string[]; noteTaker?: boolean; noteRecorder?: string | null; captions?: Caption[]; invited?: string[] }
+export interface PollResponse { ended: boolean; removed?: boolean; participants: CallParticipant[]; signals: CallSignal[]; declined?: string[]; noteTaker?: boolean; noteRecorder?: string | null; captions?: Caption[]; invited?: string[]; lobby?: { id: string; name: string }[] }
+
+/** People outside Metriq: the link, the waiting room, and answering a request. */
+export const guestApi = {
+  getLink: (conversationId: string) => api.get<{ token: string | null; url: string | null }>(`/chat/conversations/${conversationId}/guest-link`),
+  makeLink: (conversationId: string, reset = false) => api.post<{ token: string; url: string }>(`/chat/conversations/${conversationId}/guest-link`, { reset }),
+  removeLink: (conversationId: string) => api.del(`/chat/conversations/${conversationId}/guest-link`),
+  answer: (callId: string, guestId: string, admit: boolean) => api.post<{ ok: boolean; status: string }>(`/chat/calls/${callId}/lobby`, { guestId, admit }),
+  // For the guest (no login):
+  info: (token: string) => api.get<{ title: string; live: boolean; video: boolean }>(`/guest/${encodeURIComponent(token)}`),
+  knock: (token: string, name: string) => api.post<{ status: string; callId: string; title: string }>(`/guest/${encodeURIComponent(token)}/knock`, { name }),
+  status: (token: string) => api.get<{ status: 'none' | 'waiting' | 'admitted' | 'denied' | 'ended'; title: string; callId?: string; conversationId?: string; video?: boolean; me?: string; name?: string }>(`/guest/${encodeURIComponent(token)}/status`),
+}
 
 export interface MeetingNotesData { summary: string; keyPoints: string[]; decisions: string[]; actionItems: { owner: string | null; task: string; due: string | null; dueDate?: string | null; taskCode?: string | null }[]; openQuestions: string[]; language?: 'roman' | 'en' | 'ur' }
 export interface CallNotesResponse {
@@ -41,7 +53,7 @@ export const callsApi = {
   join: (callId: string, media: { mic: boolean; cam: boolean }) => api.post<JoinResponse>(`/chat/calls/${callId}/join`, media),
   signal: (callId: string, to: string, kind: 'offer' | 'answer' | 'ice' | 'restart', data: unknown) => api.post<{ ok: boolean }>(`/chat/calls/${callId}/signal`, { to, kind, data }),
   poll: (callId: string) => api.get<PollResponse>(`/chat/calls/${callId}/poll`),
-  state: (callId: string, s: { mic?: boolean; cam?: boolean; screen?: boolean; hand?: boolean; rec?: boolean }) => api.post(`/chat/calls/${callId}/state`, s),
+  state: (callId: string, s: { mic?: boolean; cam?: boolean; screen?: boolean; hand?: boolean; rec?: boolean; lang?: string }) => api.post(`/chat/calls/${callId}/state`, s),
   invite: (callId: string, userIds: string[]) => api.post<{ invited: { id: string; name: string }[] }>(`/chat/calls/${callId}/invite`, { userIds }),
   react: (callId: string, emoji: string) => api.post(`/chat/calls/${callId}/react`, { emoji }),
   mute: (callId: string, userId: string) => api.post(`/chat/calls/${callId}/mute`, { userId }),
@@ -49,7 +61,7 @@ export const callsApi = {
   notes: (callId: string) => api.get<CallNotesResponse>(`/chat/calls/${callId}/notes`),
   retryNotes: (callId: string, lang?: 'roman' | 'en' | 'ur') => api.post(`/chat/calls/${callId}/notes/retry`, lang ? { lang } : {}),
   transcript: (callId: string, text: string, final: boolean) => api.post(`/chat/calls/${callId}/transcript`, { text, final }),
-  audio: (callId: string, blob: Blob, mode: string, durationMs: number, speaker: string, spokeAt: number) => api.postRaw<{ ok: boolean }>(`/chat/calls/${callId}/audio?mode=${mode}&durationMs=${Math.round(durationMs)}&speaker=${encodeURIComponent(speaker)}&spokeAt=${Math.round(spokeAt)}`, blob, blob.type || 'audio/webm'),
+  audio: (callId: string, blob: Blob, mode: string, durationMs: number, speaker: string, spokeAt: number, speechMs = 0) => api.postRaw<{ ok: boolean }>(`/chat/calls/${callId}/audio?mode=${mode}&durationMs=${Math.round(durationMs)}&speaker=${encodeURIComponent(speaker)}&spokeAt=${Math.round(spokeAt)}&speechMs=${Math.round(speechMs)}`, blob, blob.type || 'audio/webm'),
   linkActionItem: (callId: string, index: number, taskCode: string) => api.patch(`/chat/calls/${callId}/notes/action-items/${index}`, { taskCode }),
   startRecording: (callId: string, mime: string) => api.post<{ recording: { id: string } }>(`/chat/calls/${callId}/recordings`, { mime }),
   recordingChunk: (recId: string, index: number, blob: Blob) => api.postRaw<{ ok: boolean }>(`/chat/recordings/${recId}/chunk?index=${index}`, blob, 'application/octet-stream'),

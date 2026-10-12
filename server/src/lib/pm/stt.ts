@@ -6,24 +6,22 @@ import * as Calls from './calls'
 import { transcribeAudio, type SpeechMode } from './groq'
 import * as Translate from './translate'
 
-// A rewritten line becomes the live caption, in Roman Urdu (English stays English).
-Translate.setOnTranslated((l) => {
-  const live = Calls.getLive(l.callId)
-  if (live) Calls.addCaption(live, l.userId, l.speakerName, l.textRoman, true)
-})
-
 /**
- * Server-side transcription queue for the AI note taker.
+ * Server-side transcription for the AI note taker.
  *
  * While notes are on, one browser in the call records each person's sound separately and
- * sends a short piece (cut at a pause, 15 to 45 seconds) whenever they have spoken.
- * Pieces are transcribed one at a time with Groq Whisper (free tier: about 20 a
- * minute), saved as transcript lines with the right speaker, and shown as captions.
- * The audio file is deleted as soon as it has been turned into text.
+ * sends a short piece whenever they pause (a few seconds of speech). Each piece is turned
+ * into text with Groq Whisper in that person's language, written in Roman Urdu, saved as a
+ * transcript line with the right speaker and shown as a live caption, usually 2 to 3
+ * seconds after the sentence ends. The audio file is deleted straight away.
+ *
+ * Several pieces are transcribed at the same time, within Groq's per-minute limit
+ * (GROQ_STT_RPM, 19 on the free tier; raise it on a paid plan).
  */
 
 const DIR = path.resolve('uploads', 'stt')
-const MIN_GAP_MS = Number(process.env.GROQ_STT_MIN_GAP_MS ?? 3200) // stay under ~20 requests a minute
+const RPM = () => Math.max(1, Number(process.env.GROQ_STT_RPM ?? 19))
+const CONCURRENCY = () => Math.max(1, Number(process.env.GROQ_STT_CONCURRENCY ?? 3))
 
 interface Job {
   id: string
@@ -34,13 +32,14 @@ interface Job {
   file: string
   mime: string
   mode: SpeechMode
-  prompt?: string
+  /** How long the person was actually speaking in this piece (to spot made-up text). */
+  speechMs?: number
 }
 
 const queue: Job[] = []
 const pendingByCall = new Map<string, number>()
-let running = false
-let lastRun = 0
+let active = 0
+const starts: number[] = [] // when the last requests started (rate limit)
 
 export function pendingFor(callId: string): number {
   return pendingByCall.get(callId) ?? 0
@@ -54,40 +53,55 @@ export async function enqueue(input: Omit<Job, 'id' | 'file'> & { audio: Buffer 
   const { audio: _audio, ...rest } = input
   queue.push({ ...rest, id, file })
   pendingByCall.set(input.callId, pendingFor(input.callId) + 1)
-  void work()
+  pump()
 }
 
-async function work(): Promise<void> {
-  if (running) return
-  running = true
+/** Wait for a free place under the per-minute limit. */
+async function slot(): Promise<void> {
+  for (;;) {
+    const now = Date.now()
+    while (starts.length && now - starts[0] > 60_000) starts.shift()
+    if (starts.length < RPM()) { starts.push(now); return }
+    await new Promise((ok) => setTimeout(ok, Math.max(200, 60_000 - (now - starts[0]) + 50)))
+  }
+}
+
+function pump(): void {
+  while (active < CONCURRENCY() && queue.length) {
+    const job = queue.shift()!
+    active++
+    void run(job).finally(() => { active--; pump() })
+  }
+}
+
+/** What this person said just before (helps Whisper continue a sentence cut in two). */
+async function previousWords(job: Job): Promise<string | undefined> {
+  const prev = await prisma.callTranscriptLine.findFirst({ where: { callId: job.callId, userId: job.userId, at: { lt: job.at, gt: new Date(job.at.getTime() - 90_000) } }, orderBy: { at: 'desc' }, select: { text: true } })
+  return prev?.text.slice(-200) || undefined
+}
+
+async function run(job: Job): Promise<void> {
   try {
-    while (queue.length) {
-      const job = queue.shift()!
-      const wait = lastRun + MIN_GAP_MS - Date.now()
-      if (wait > 0) await new Promise((ok) => setTimeout(ok, wait))
-      lastRun = Date.now()
-      try {
-        const audio = await fs.readFile(job.file)
-        const text = await transcribeAudio(audio, { mode: job.mode, prompt: job.prompt, mime: job.mime })
-        if (text) {
-          const line = await prisma.callTranscriptLine.create({ data: { callId: job.callId, userId: job.userId, speakerName: job.speakerName, text, at: job.at } })
-          // English straight away when it already is; otherwise the caption shows once translated.
-          const en = await Translate.addLine({ id: line.id, callId: job.callId, text })
-          const live = Calls.getLive(job.callId)
-          if (live && en) Calls.addCaption(live, job.userId, job.speakerName, en, true)
-        }
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[stt] could not transcribe a piece:', (e as Error).message)
-      } finally {
-        await fs.rm(job.file, { force: true }).catch(() => undefined)
-        const n = pendingFor(job.callId) - 1
-        if (n > 0) pendingByCall.set(job.callId, n)
-        else pendingByCall.delete(job.callId)
-      }
-    }
+    await slot()
+    const audio = await fs.readFile(job.file)
+    const prompt = await previousWords(job).catch(() => undefined)
+    const text = await transcribeAudio(audio, { mode: job.mode, prompt, mime: job.mime, speechMs: job.speechMs })
+    if (!text) return
+    const line = await prisma.callTranscriptLine.create({ data: { callId: job.callId, userId: job.userId, speakerName: job.speakerName, text, at: job.at } })
+    // The two lines before this one help to read names and half sentences right.
+    const before = await prisma.callTranscriptLine.findMany({ where: { callId: job.callId, at: { lt: job.at } }, orderBy: { at: 'desc' }, take: 2, select: { speakerName: true, text: true, textRoman: true } })
+    const context = before.reverse().map((b) => `${b.speakerName}: ${b.textRoman ?? b.text}`).join('\n')
+    const shown = await Translate.romanizeLine({ id: line.id, callId: job.callId, text, context })
+    const live = Calls.getLive(job.callId)
+    if (live) Calls.addCaption(live, job.userId, job.speakerName, shown, true)
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[stt] could not transcribe a piece:', (e as Error).message)
   } finally {
-    running = false
+    await fs.rm(job.file, { force: true }).catch(() => undefined)
+    const n = pendingFor(job.callId) - 1
+    if (n > 0) pendingByCall.set(job.callId, n)
+    else pendingByCall.delete(job.callId)
   }
 }
 
@@ -101,5 +115,5 @@ export async function waitForCall(callId: string, maxMs = 15 * 60_000): Promise<
 export function resetStt(): void {
   queue.length = 0
   pendingByCall.clear()
-  lastRun = 0
+  starts.length = 0
 }

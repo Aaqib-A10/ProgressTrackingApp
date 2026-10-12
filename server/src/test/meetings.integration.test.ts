@@ -278,8 +278,14 @@ describe('note taker with Groq (mocked)', () => {
         const text = asUrdu ? opts.urduText! : opts.sttText ?? ''
         return new Response(JSON.stringify({ text, language: asUrdu ? 'urdu' : opts.sttLang ?? 'english', segments: opts.segments ?? [{ text, no_speech_prob: 0.01, avg_logprob: -0.2 }] }), { status: 200 })
       }
-      const model = JSON.parse(String(init?.body ?? '{}')).model
-      if (model === 'openai/gpt-oss-20b') return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ roman: 'hum jumma ko pages bhej denge', en: 'We will send the pages on Friday.' }) } }] }), { status: 200 })
+      const req = JSON.parse(String(init?.body ?? '{}')) as { model: string; messages: { content: string }[] }
+      if (req.model === 'openai/gpt-oss-20b') {
+        // Live: one line in Roman Urdu. With the notes: every line, Roman Urdu and English.
+        const content = req.messages[1].content.includes('"lines"')
+          ? { lines: [{ i: 0, roman: 'hum jumma ko pages bhej denge', en: 'We will send the pages on Friday.' }] }
+          : { roman: 'hum jumma ko pages bhej denge' }
+        return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }), { status: 200 })
+      }
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(opts.notes ?? { summary: 'S', keyPoints: [], decisions: [], actionItems: [], openQuestions: [] }) } }] }), { status: 200 })
     }))
   }
@@ -308,9 +314,9 @@ describe('note taker with Groq (mocked)', () => {
     expect(calls).toHaveLength(1) // English: one pass, nothing translated
     expect(calls[0].url).toContain('/audio/transcriptions')
     const form = calls[0].body as FormData
-    expect(form.get('model')).toBe('whisper-large-v3-turbo')
-    expect(form.get('language')).toBeNull() // Whisper picks the language
-    expect(form.get('prompt')).toBeNull() // no vocabulary prompt: Whisper parrots it on unclear sound
+    expect(form.get('model')).toBe('whisper-large-v3')
+    expect(form.get('language')).toBe('ur') // never left to Whisper: it would translate Urdu into made-up English
+    expect(form.get('prompt')).toBeNull() // nothing said before by this person yet
     mockGroq({ sttText: 'I will send the list tomorrow.' })
     // Only the recording browser (the one that started the notes) sends audio, labelled per person.
     await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'en', speaker: w.itadMember.id }).set(...auth(w.itadMember)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 2)).expect(409)
@@ -326,12 +332,28 @@ describe('note taker with Groq (mocked)', () => {
     expect(p.body.captions.some((c: { text: string; final: boolean }) => c.final && c.text.includes('county pages'))).toBe(true)
   })
 
-  it('Urdu that Whisper writes in Hindi letters is written again in Urdu script', async () => {
-    mockGroq({ sttText: 'हम शुक्रवार को पेज भेज देंगे', sttLang: 'hindi', urduText: 'ہم جمعہ کو پیجز بھیج دیں گے' })
+  it('the language is never guessed: Urdu (with English) as Urdu, English-only speakers as English', async () => {
+    mockGroq({ sttText: 'ignored', urduText: 'ہم جمعہ کو پیجز بھیج دیں گے' })
     expect(await transcribeAudio(Buffer.alloc(100), { mode: 'mixed' })).toBe('ہم جمعہ کو پیجز بھیج دیں گے')
-    expect(calls).toHaveLength(2)
-    expect((calls[1].body as FormData).get('model')).toBe('whisper-large-v3')
-    expect((calls[1].body as FormData).get('language')).toBe('ur')
+    expect(calls).toHaveLength(1)
+    expect((calls[0].body as FormData).get('model')).toBe('whisper-large-v3')
+    expect((calls[0].body as FormData).get('language')).toBe('ur')
+    mockGroq({ sttText: 'We will ship on Friday.' })
+    await transcribeAudio(Buffer.alloc(100), { mode: 'en' })
+    expect((calls[0].body as FormData).get('language')).toBe('en')
+    // Each person's own "I speak" choice wins over the recording browser's.
+    await request(app).post(`/api/chat/calls/${callId}/state`).set(...auth(w.itadMember)).send({ lang: 'en' }).expect(200)
+    mockGroq({ sttText: 'Sending it now.' })
+    await request(app).post(`/api/chat/calls/${callId}/audio`).query({ mode: 'mixed', speaker: w.itadMember.id }).set(...auth(w.itadLead)).set('Content-Type', 'audio/webm').send(Buffer.alloc(4000, 6)).expect(200)
+    await waitForCall(callId, 5000)
+    expect((calls[0].body as FormData).get('language')).toBe('en')
+    await request(app).post(`/api/chat/calls/${callId}/state`).set(...auth(w.itadMember)).send({ lang: 'mixed' }).expect(200)
+    await prisma.callTranscriptLine.deleteMany({ where: { callId, text: 'Sending it now.' } })
+    // Too many words for the time spoken, or the context parroted back: made up, dropped.
+    mockGroq({ sttText: 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen' })
+    expect(await transcribeAudio(Buffer.alloc(100), { mode: 'en', speechMs: 1000 })).toBe('')
+    mockGroq({ sttText: 'the county list' })
+    expect(await transcribeAudio(Buffer.alloc(100), { mode: 'en', prompt: 'I will send the county list tomorrow' })).toBe('')
     vi.unstubAllGlobals()
   })
 
@@ -343,10 +365,18 @@ describe('note taker with Groq (mocked)', () => {
     await waitTranslate(callId, 5000)
     const line = await prisma.callTranscriptLine.findFirstOrThrow({ where: { callId, text: 'ہم جمعہ کو پیجز بھیج دیں گے' } })
     expect(line.speakerName).toBe('itad member')
-    expect(line.textEn).toBe('We will send the pages on Friday.')
+    // Live: Roman Urdu straight away (the caption); English comes with the notes.
     expect(line.textRoman).toBe('hum jumma ko pages bhej denge')
+    expect(line.textEn).toBeNull()
+    const live = calls.find((c) => c.url.includes('/chat/completions'))!
+    expect(JSON.parse(String(live.body)).messages[0].content).toContain('never translate')
     const p = await request(app).get(`/api/chat/calls/${callId}/poll`).set(...auth(w.itadMember)).expect(200)
     expect(p.body.captions.some((c: { text: string }) => c.text === 'hum jumma ko pages bhej denge')).toBe(true)
+    const { translateMissing } = await import('../lib/pm/translate')
+    await translateMissing(callId)
+    const after = await prisma.callTranscriptLine.findUniqueOrThrow({ where: { id: line.id } })
+    expect(after.textEn).toBe('We will send the pages on Friday.')
+    expect(after.textRoman).toBe('hum jumma ko pages bhej denge')
     await prisma.callTranscriptLine.delete({ where: { id: line.id } })
     vi.unstubAllGlobals()
   })
@@ -376,7 +406,7 @@ describe('note taker with Groq (mocked)', () => {
   it('notes are written with the Groq model after the last pieces are in; action items link to tasks', async () => {
     const { generateNotes } = await import('../lib/pm/notes')
     await generateNotes(callId)
-    const chat = calls.find((c) => c.url.includes('/chat/completions'))!
+    const chat = calls.find((c) => c.url.includes('/chat/completions') && JSON.parse(String(c.body)).model === 'openai/gpt-oss-120b')!
     const body = JSON.parse(String(chat.body))
     expect(body.model).toBe('openai/gpt-oss-120b')
     expect(body.messages[1].content).toContain('Last words before leaving.')
@@ -397,7 +427,7 @@ describe('note taker with Groq (mocked)', () => {
     mockGroq({ notes: { summary: 'پیجز جمعہ کو جائیں گے۔', keyPoints: [], decisions: [], actionItems: [{ owner: 'ITAD Member', task: 'Send the list', due: 'tomorrow' }], openQuestions: [] } })
     await request(app).post(`/api/chat/calls/${callId}/notes/retry`).set(...auth(w.itadMember)).send({ lang: 'ur' }).expect(202)
     await notesWhenDone(callId, w.itadMember)
-    const sys = JSON.parse(String(calls.find((c) => c.url.includes('/chat/completions'))!.body)).messages[0].content
+    const sys = JSON.parse(String(calls.find((c) => c.url.includes('/chat/completions') && JSON.parse(String(c.body)).model === 'openai/gpt-oss-120b')!.body)).messages[0].content
     expect(sys).toContain('Urdu script')
     const third = await request(app).get(`/api/chat/calls/${callId}/notes`).set(...auth(w.itadMember)).expect(200)
     expect(third.body.notes.language).toBe('ur')

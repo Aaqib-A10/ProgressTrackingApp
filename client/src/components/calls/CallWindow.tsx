@@ -10,6 +10,8 @@ import { SPEECH_LANGS, speechSupported } from '../../lib/transcriber'
 import { PersonAvatar } from '../projects/pmUi'
 import { ChatThread } from '../chat/ChatThread'
 import { cn } from '../../lib/cn'
+import { TestingBadge } from './TestingBadge'
+import { GuestLinkBox, LobbyRequests } from './GuestLink'
 import { BACKGROUNDS, FILTERS, bgThumb, effectsOn, effectsSupported, preloadEffects, type EffectsSettings } from '../../lib/videoEffects'
 import { useCalls, type CallPanel } from './CallProvider'
 
@@ -75,6 +77,7 @@ export function CallWindow() {
     <>
       {recordingBy.length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-danger px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Rec</span>}
       {call.noteTaker && <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-white"><Sparkles size={11} /> AI notes</span>}
+      {call.noteTaker && <TestingBadge dark />}
     </>
   )
 
@@ -93,6 +96,7 @@ export function CallWindow() {
               <span className="absolute left-2 top-2 flex gap-1">{badges}</span>
             </div>
           </button>
+          {call.lobby.length > 0 && <div className="p-2"><LobbyRequests callId={call.callId} lobby={call.lobby} dark /></div>}
           <div className="flex items-center gap-2 px-3 py-2">
             <div className="min-w-0 flex-1">
               <p className="truncate text-body-sm font-semibold">{title}</p>
@@ -137,6 +141,9 @@ export function CallWindow() {
               <button type="button" onClick={() => setDismissErr(call.error)} aria-label="Dismiss"><X size={15} /></button>
             </div>
           )}
+
+          {/* People outside Metriq waiting to be let in */}
+          {call.lobby.length > 0 && <div className="mx-4 mb-2"><LobbyRequests callId={call.callId} lobby={call.lobby} dark /></div>}
 
           {/* Stage + side panel */}
           <div className="flex min-h-0 flex-1 gap-3 px-4 pb-2">
@@ -188,7 +195,7 @@ export function CallWindow() {
             {ctx.panel && (
               <aside className="flex w-[min(360px,40vw)] shrink-0 flex-col overflow-hidden rounded-card bg-card text-ink">
                 <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-                  <span className="flex-1 text-body-md font-semibold">{ctx.panel === 'people' ? 'People' : ctx.panel === 'chat' ? 'Meeting chat' : ctx.panel === 'effects' ? 'Backgrounds and filters' : 'AI notes'}</span>
+                  <span className="flex flex-1 items-center gap-2 text-body-md font-semibold">{ctx.panel === 'people' ? 'People' : ctx.panel === 'chat' ? 'Meeting chat' : ctx.panel === 'effects' ? 'Backgrounds and filters' : <>AI notes <TestingBadge /></>}</span>
                   <button type="button" onClick={() => ctx.setPanel(null)} className="rounded p-1 text-ink-muted hover:bg-slate-100" aria-label="Close panel"><X size={16} /></button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-hidden">
@@ -360,6 +367,7 @@ function PeoplePanel() {
             <Link2 size={14} /> {copied ? 'Link copied' : 'Copy meeting link'}
           </button>
         )}
+        {!call.guest && <GuestLinkBox conversationId={call.conversationId} className="mb-3" />}
         <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted"><UserPlus size={13} /> Add people</p>
         <label className="mb-2 flex items-center gap-2 rounded-btn border border-line px-2 py-1.5 focus-within:border-primary">
           <Search size={14} className="text-ink-muted" />
@@ -420,7 +428,7 @@ function NotesPanel() {
       ) : (
         <>
           <div className="mb-2 space-y-2">
-            <p className="flex items-center gap-2 font-semibold text-primary"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" /> AI notes are on</p>
+            <p className="flex items-center gap-2 font-semibold text-primary"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" /> AI notes are on <TestingBadge /></p>
             <TranscriberStatus />
             <LangPicker />
           </div>
@@ -442,7 +450,7 @@ function TranscriberStatus() {
   const ctx = useCalls()!
   const call = ctx.call!
   if (!call.mic) return <p className="text-ink-muted">Your microphone is muted, so nothing of yours is being written down.</p>
-  if (call.sttMode === 'server') return <p className="text-ink-muted">Your speech is being written down. Lines appear here a few seconds after you finish a sentence.</p>
+  if (call.sttMode === 'server') return <p className="text-ink-muted">Your speech is being written down. Lines appear here 2 to 3 seconds after you finish a sentence.</p>
   if (!speechSupported()) return <p className="rounded-btn bg-warning/15 px-2 py-1.5 text-amber-800">Your browser cannot turn speech into text, so your words are not in the notes. Use Chrome or Edge.</p>
   if (ctx.transcriber === 'blocked') return <p className="rounded-btn bg-danger/10 px-2 py-1.5 text-danger">Speech-to-text was blocked. Allow the microphone for this site and try again.</p>
   if (ctx.transcriber === 'error') return <p className="text-amber-700">Speech-to-text hiccupped; it keeps retrying.</p>
@@ -463,9 +471,9 @@ function LangPicker() {
 
 // ---------- tiles ----------
 
-interface Tile { avatarName?: string; key: string; id: string; name: string; stream: MediaStream; mic: boolean; hand: boolean; showVideo: boolean; mirror: boolean; local: boolean; state: PeerView['state']; screen?: boolean; stuck?: boolean; speaking?: boolean }
+export interface Tile { avatarName?: string; key: string; id: string; name: string; stream: MediaStream; mic: boolean; hand: boolean; showVideo: boolean; mirror: boolean; local: boolean; state: PeerView['state']; screen?: boolean; stuck?: boolean; speaking?: boolean }
 
-function TileView({ tile, compact, contain, pin }: { tile: Tile; compact?: boolean; contain?: boolean; pin?: { on: boolean; toggle: () => void } }) {
+export function TileView({ tile, compact, contain, pin }: { tile: Tile; compact?: boolean; contain?: boolean; pin?: { on: boolean; toggle: () => void } }) {
   const ref = useRef<HTMLVideoElement>(null)
   const videoId = tile.stream.getVideoTracks()[0]?.id ?? ''
   useEffect(() => {
@@ -505,7 +513,7 @@ function TileView({ tile, compact, contain, pin }: { tile: Tile; compact?: boole
   )
 }
 
-function PeerAudio({ stream }: { stream: MediaStream }) {
+export function PeerAudio({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLAudioElement>(null)
   const n = stream.getAudioTracks().length
   useEffect(() => {
@@ -523,7 +531,7 @@ function PeerAudio({ stream }: { stream: MediaStream }) {
   return <audio ref={ref} autoPlay className="hidden" />
 }
 
-function CtrlButton({ on, active, danger, disabled, onClick, label, icon, small, badge }: { on: boolean; active?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void; label: string; icon: React.ReactNode; small?: boolean; badge?: number }) {
+export function CtrlButton({ on, active, danger, disabled, onClick, label, icon, small, badge }: { on: boolean; active?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void; label: string; icon: React.ReactNode; small?: boolean; badge?: number }) {
   return (
     <button
       type="button"
@@ -544,7 +552,7 @@ function CtrlButton({ on, active, danger, disabled, onClick, label, icon, small,
   )
 }
 
-function LeaveButton({ onClick, small }: { onClick: () => void; small?: boolean }) {
+export function LeaveButton({ onClick, small }: { onClick: () => void; small?: boolean }) {
   return (
     <button type="button" onClick={onClick} className={cn('inline-flex items-center justify-center gap-2 rounded-full bg-danger font-semibold text-white hover:bg-danger/90 focus:outline-none focus-visible:ring-4 focus-visible:ring-danger/40', small ? 'h-9 w-9' : 'h-12 px-5')} aria-label="Leave call" title="Leave call">
       <PhoneOff size={small ? 16 : 20} />{!small && <span className="hidden sm:inline">Leave</span>}
@@ -552,11 +560,11 @@ function LeaveButton({ onClick, small }: { onClick: () => void; small?: boolean 
   )
 }
 
-function hasVideo(s: MediaStream): boolean {
+export function hasVideo(s: MediaStream): boolean {
   return s.getVideoTracks().some((t) => t.readyState === 'live')
 }
 
-function gridFor(n: number): string {
+export function gridFor(n: number): string {
   if (n <= 1) return 'grid-cols-1'
   if (n === 2) return 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1'
   if (n <= 4) return 'grid-cols-2 grid-rows-2'
@@ -580,7 +588,7 @@ function fmtTimer(ms: number): string {
 }
 
 /** Who is talking right now (green outline), from the sound level of each person. */
-function useSpeaking(list: { id: string; stream: MediaStream; on: boolean }[]): Set<string> {
+export function useSpeaking(list: { id: string; stream: MediaStream; on: boolean }[]): Set<string> {
   const [speaking, setSpeaking] = useState<Set<string>>(new Set())
   const ctxRef = useRef<AudioContext | null>(null)
   const nodes = useRef(new Map<string, { trackId: string; analyser: AnalyserNode; src: MediaStreamAudioSourceNode; level: number }>())

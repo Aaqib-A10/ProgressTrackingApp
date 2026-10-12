@@ -712,6 +712,11 @@ async function liveCallFor(req: AuthedRequest) {
   const me = viewer(req)
   const call = Calls.getLive(req.params.callId)
   if (!call) throw new HttpError(410, 'This call has ended')
+  // A guest from outside Metriq: only once someone in the call has let them in.
+  if (Calls.isOutsideGuest(me.id)) {
+    if (!call.guests.has(me.id)) throw new HttpError(404, 'Wait until someone in the call lets you in')
+    return { me, call }
+  }
   // Members of the conversation, plus people added to this call ("Add people").
   if (!call.invited.has(me.id) && !call.participants.has(me.id)) await membership(call.conversationId, me.id) // 404 for others
   return { me, call }
@@ -809,7 +814,7 @@ export async function joinCall(req: AuthedRequest, res: Response): Promise<void>
   const body = parse(joinSchema, req.body ?? {})
   if (!call.participants.has(me.id) && call.participants.size >= Calls.MAX_PARTICIPANTS) throw new HttpError(409, `Calls are limited to ${Calls.MAX_PARTICIPANTS} people`)
   const others = Calls.participantList(call).filter((p) => p.userId !== me.id)
-  Calls.join(call, me.id, await displayName(me.id), body)
+  Calls.join(call, me.id, call.guestNames.get(me.id) ?? await displayName(me.id), body)
   await prisma.chatCall.update({ where: { id: call.callId }, data: { joinedIds: [...call.joinedIds] } }).catch(() => undefined)
   res.json({ callId: call.callId, video: call.video, conversationId: call.conversationId, me: me.id, others, iceServers: await Calls.iceServers(), guest: call.guests.has(me.id), noteTaker: call.noteTaker, noteRecorder: Calls.recorderOf(call), meetingId: call.meetingId, isDirect: call.isDirect, sttMode: groqEnabled() ? 'server' : 'browser', relay: Calls.relayConfigured() })
 }
@@ -828,7 +833,7 @@ export async function callSignal(req: AuthedRequest, res: Response): Promise<voi
   res.json({ ok: true })
 }
 
-const stateSchema = z.object({ mic: z.boolean().optional(), cam: z.boolean().optional(), screen: z.boolean().optional(), hand: z.boolean().optional(), rec: z.boolean().optional() })
+const stateSchema = z.object({ mic: z.boolean().optional(), cam: z.boolean().optional(), screen: z.boolean().optional(), hand: z.boolean().optional(), rec: z.boolean().optional(), lang: z.enum(['mixed', 'en', 'ur']).optional() })
 
 /** GET /api/chat/calls/:callId/poll — my pending signals + who is in the call. Also keeps me "present". */
 export async function pollCall(req: AuthedRequest, res: Response): Promise<void> {
@@ -840,7 +845,9 @@ export async function pollCall(req: AuthedRequest, res: Response): Promise<void>
   p.lastSeen = Date.now()
   const signals = call.inbox.get(me.id) ?? []
   call.inbox.set(me.id, [])
-  res.json({ ended: false, participants: Calls.participantList(call), signals, declined: [...call.declined], noteTaker: call.noteTaker, noteRecorder: Calls.recorderOf(call), captions: Calls.recentCaptions(call), invited: [...call.invited.keys()].filter((id) => !call.participants.has(id)) })
+  // People outside Metriq waiting to be let in (only team members see and answer them).
+  const lobby = Calls.isOutsideGuest(me.id) ? [] : Calls.waitingGuests(call)
+  res.json({ ended: false, participants: Calls.participantList(call), signals, declined: [...call.declined], noteTaker: call.noteTaker, noteRecorder: Calls.recorderOf(call), captions: Calls.recentCaptions(call), invited: [...call.invited.keys()].filter((id) => !call.participants.has(id)), lobby })
 }
 
 /** POST /api/chat/calls/:callId/state — mic / camera / screen share on or off (shown to others). */
@@ -1132,14 +1139,17 @@ export async function postAudio(req: AuthedRequest, res: Response): Promise<void
   const buf = req.body as Buffer
   if (!Buffer.isBuffer(buf) || buf.length < 200) { res.json({ ok: true, skipped: true }); return }
   if (buf.length > AUDIO_MAX) throw new HttpError(413, 'Piece too large')
-  const mode = (['mixed', 'en', 'ur'] as const).find((m) => m === req.query.mode) ?? 'mixed'
+  // Each person's own "I speak" choice decides the language (the recording browser's is only a fallback).
+  const asked = (['mixed', 'en', 'ur'] as const).find((m) => m === req.query.mode) ?? 'mixed'
+  const mode = live?.participants.get(speakerId)?.lang ?? asked
   const durationMs = Math.min(Math.max(Number(req.query.durationMs) || 0, 0), 120_000)
+  const speechMsRaw = Number(req.query.speechMs)
+  const speechMs = Number.isFinite(speechMsRaw) && speechMsRaw > 0 ? Math.min(speechMsRaw, durationMs || speechMsRaw) : undefined
   // When the person started talking (sent by the browser), so lines stay in the order they were said.
   const spokeAt = Number(req.query.spokeAt)
   const at = Number.isFinite(spokeAt) && spokeAt > Date.now() - 10 * 60_000 && spokeAt <= Date.now() + 5000 ? new Date(Math.min(spokeAt, Date.now())) : new Date(Date.now() - durationMs)
   const mime = String(req.headers['content-type'] || 'audio/webm').split(';')[0].slice(0, 40)
-  // No Whisper prompt: with unclear sound it repeats prompt words (names, company names) as if they were said.
-  await Stt.enqueue({ callId, userId: speakerId, speakerName, at, mime, mode, audio: buf })
+  await Stt.enqueue({ callId, userId: speakerId, speakerName, at, mime, mode, speechMs, audio: buf })
   res.json({ ok: true })
 }
 

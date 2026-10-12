@@ -58,6 +58,8 @@ export interface CallSnapshot {
   captions: Caption[]
   /** People added who have not joined yet (still ringing). */
   invited: string[]
+  /** People outside Metriq asking to join (only team members see them). */
+  lobby: { id: string; name: string }[]
   /** Where speech becomes text for the notes: on the server (Groq) or in the browser. */
   sttMode: 'server' | 'browser'
   /** Background-noise removal on my microphone. */
@@ -110,7 +112,7 @@ export class CallEngine {
   private snap: CallSnapshot
 
   constructor(callId: string, conversationId: string, video: boolean, private onChange: (s: CallSnapshot) => void, private opts: { muteOnJoin?: boolean } = {}) {
-    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, noteRecorder: null, captions: [], invited: [], sttMode: 'browser', noise: 'off', relay: true, effects: loadEffects(), effectsState: 'off' }
+    this.snap = { callId, conversationId, video, status: 'connecting', error: null, localStream: this.localStream, mic: true, cam: false, screen: false, peers: [], startedAt: Date.now(), declined: [], hadPeers: false, connectedAt: null, hand: false, rec: false, guest: false, isDirect: false, meetingId: null, noteTaker: false, noteRecorder: null, captions: [], invited: [], lobby: [], sttMode: 'browser', noise: 'off', relay: true, effects: loadEffects(), effectsState: 'off' }
   }
 
   get snapshot(): CallSnapshot { return this.snap }
@@ -367,7 +369,7 @@ export class CallEngine {
         const down = Date.now() - p.downSince
         if ((down > 8000 && p.pc.connectionState !== 'connecting') || down > 15_000) this.reconnect(p)
       }
-      this.emit({ declined: r.declined ?? [], noteTaker: !!r.noteTaker, noteRecorder: r.noteRecorder ?? null, captions: r.captions ?? [], invited: r.invited ?? [] })
+      this.emit({ declined: r.declined ?? [], noteTaker: !!r.noteTaker, noteRecorder: r.noteRecorder ?? null, captions: r.captions ?? [], invited: r.invited ?? [], lobby: r.lobby ?? [] })
     } catch {
       /* temporary network hiccup: keep polling */
     } finally {

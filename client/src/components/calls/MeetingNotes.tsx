@@ -5,6 +5,7 @@ import { callsApi, type CallNotesResponse } from '../../lib/callsApi'
 import { errMsg, projectsApi, type ProjectListItem } from '../../lib/projectsApi'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { TestingBadge } from './TestingBadge'
 import { useToast } from '../ui/Toast'
 import { cn } from '../../lib/cn'
 
@@ -207,7 +208,7 @@ function Bullets({ title, items, icon, rtl }: { title: string; items: string[]; 
 
 export function NotesModal({ callId, title, onClose }: { callId: string; title?: string; onClose: () => void }) {
   return (
-    <Modal open onClose={onClose} title={title ?? 'Meeting notes'} size="lg">
+    <Modal open onClose={onClose} title={<span className="flex items-center gap-2">{title ?? 'Meeting notes'} <TestingBadge /></span>} size="lg">
       <NotesContent callId={callId} />
     </Modal>
   )

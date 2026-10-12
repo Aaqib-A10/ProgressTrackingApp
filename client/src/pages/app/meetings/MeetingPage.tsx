@@ -11,6 +11,7 @@ import { PersonAvatar } from '../../../components/projects/pmUi'
 import { ChatThread } from '../../../components/chat/ChatThread'
 import { useCalls } from '../../../components/calls/CallProvider'
 import { NotesModal } from '../../../components/calls/MeetingNotes'
+import { GuestLinkBox } from '../../../components/calls/GuestLink'
 import { MeetingFormModal } from '../../../components/meetings/MeetingFormModal'
 import { ResponseChip } from './CalendarPage'
 import { cn } from '../../../lib/cn'
@@ -179,6 +180,7 @@ export default function MeetingPage() {
               ))}
             </ul>
           </section>
+          {data.isAttendee && <GuestLinkBox conversationId={m.conversationId} className="bg-card" />}
           {data.isAttendee && (
             <section className="h-[520px] overflow-hidden rounded-card border border-line bg-card">
               <ChatThread conversationId={m.conversationId} meId={user?.id ?? ''} compact hideCallButtons />

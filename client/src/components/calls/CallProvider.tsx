@@ -280,6 +280,13 @@ export function CallProvider({ meId, children }: { meId: string; children: React
   }, [iRecord])
   useEffect(() => () => { for (const r of recorders.current.values()) void r.rec.stop(); recorders.current.clear() }, [])
 
+  // Tell the call what I speak, so the notes write MY words in my language (whoever's browser records).
+  const liveCallId = call?.status === 'live' ? call.callId : null
+  useEffect(() => {
+    if (!liveCallId) return
+    void callsApi.state(liveCallId, { lang: speechLang }).catch(() => undefined)
+  }, [liveCallId, speechLang])
+
   // Browser mode only: this browser's speech recognition writes my words.
   useEffect(() => {
     const e = engine.current

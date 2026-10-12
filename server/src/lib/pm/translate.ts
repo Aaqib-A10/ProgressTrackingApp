@@ -1,29 +1,39 @@
 import { prisma } from '../prisma'
-import { chatJson, groqEnabled } from './groq'
+import { chatJson, groqEnabled, quickJson } from './groq'
 
 /**
  * Roman Urdu and English for every transcript line.
  *
- * Whisper writes Urdu correctly in Urdu script (its own "translate to English" mode is
- * much worse), so each line is written down as said and then a language model writes it
- * again in Roman Urdu (Urdu in English letters, the way the team types it: "shaadi to
- * maine nahin karni") and in English. Roman Urdu is what people see by default; English
- * and the Urdu script stay available.
+ * Whisper writes Urdu speech in Urdu script. Each line is then written again, word for
+ * word, in Roman Urdu (Urdu in English letters, the way the team types it: "shaadi to
+ * maine nahin karni"), with English words in normal English ("website", "meeting").
+ * Nothing is translated in Roman Urdu: it is the same words, only in other letters.
+ *
+ * Live: every new line is written in Roman Urdu straight away (about half a second) so
+ * the caption is readable. When the notes are written, all lines get a second, careful
+ * pass with the lines around them as context, plus an English translation.
  *
  * Uses its own Groq model (default openai/gpt-oss-20b) so its free daily limit is
- * separate from the model that writes the notes. Lines are translated one after the
- * other in the background, with the previous lines as context; a line that cannot be
- * translated now is tried again (in bulk) when the notes are written.
+ * separate from the model that writes the notes.
  */
 
 const MODEL = () => process.env.GROQ_TRANSLATE_MODEL || 'openai/gpt-oss-20b'
 
+const ROMAN_RULES =
+  'Transliterate, never translate: keep exactly the speaker\'s words and word order, only in English letters, the way Pakistanis type Urdu on WhatsApp ' +
+  '(for example "shaadi to maine nahin karni, wo to khair hai"). ' +
+  'English words said in the middle of Urdu are often written in Urdu script by speech recognition (ویب سائٹ, میٹنگ, ڈیزائن, فائنل, ٹیم): write them in normal English spelling (website, meeting, design, final, team). ' +
+  'Keep names of people, companies and products, numbers and dates exactly. Do not add, drop, fix or summarise words. '
+
+const LIVE_SYSTEM =
+  'You turn one line of a Pakistani work meeting (Urdu, often mixed with English, written by speech recognition) into Roman Urdu. ' +
+  ROMAN_RULES + 'If the line is already in English letters, return it unchanged. Answer JSON {"roman": "..."}.'
+
 const SYSTEM =
-  'You rewrite lines from a work meeting transcript. The team is in Pakistan and speaks Urdu, Hindi-like Urdu, Punjabi or English, often mixed, ' +
+  'You rewrite lines from a work meeting transcript. The team is in Pakistan and speaks Urdu or English, often mixed, ' +
   'written by speech recognition in Urdu script, Hindi script or Roman letters. For every line give two versions: ' +
-  '"roman": exactly the same words in Roman Urdu, the way Pakistanis type Urdu on WhatsApp in English letters (for example "shaadi to maine nahin karni, wo to khair hai"). ' +
-  'Do not translate in "roman": keep the speaker\'s own words and word order, and keep English words in English. ' +
-  '"en": a faithful, natural English translation. Keep names of people, companies, products, numbers and dates exactly. ' +
+  '"roman": the line in Roman Urdu. ' + ROMAN_RULES +
+  '"en": a faithful, natural English translation of the same line. ' +
   'If a line is already English, both versions are the line unchanged. Never add anything that was not said. Answer with JSON only.'
 
 // Common English words vs. common Roman-Urdu words: decides whether a Latin-letter line needs translating.
@@ -41,64 +51,45 @@ export function needsTranslation(text: string): boolean {
   return ur >= 2 && ur >= en
 }
 
-const queue: string[] = []
+/** Lines being written in Roman Urdu right now, per call (the notes wait for them). */
 const pendingByCall = new Map<string, number>()
-let running = false
 
 export function translatePending(callId: string): number {
   return pendingByCall.get(callId) ?? 0
 }
 
-/** A new transcript line: English lines are copied, the rest go to the translator. Returns the text to show now (English lines), else null. */
-export async function addLine(line: { id: string; callId: string; text: string }): Promise<string | null> {
-  if (!needsTranslation(line.text)) {
-    await prisma.callTranscriptLine.update({ where: { id: line.id }, data: { textEn: line.text, textRoman: line.text } })
+/** Is the line in Urdu or Hindi letters (so it needs Roman Urdu)? */
+export function needsRoman(text: string): boolean {
+  return /[؀-ۿݐ-ݿऀ-ॿ਀-੿]/.test(text)
+}
+
+/**
+ * A new transcript line, written in Roman Urdu now (for the live caption). Lines already
+ * in English letters are kept as they are. Returns the text to show: Roman Urdu, or the
+ * line as said when Groq could not answer in time (it is finished with the notes).
+ */
+export async function romanizeLine(line: { id: string; callId: string; text: string; context?: string }): Promise<string> {
+  if (!needsRoman(line.text)) {
+    // Already in English letters (English, or Roman Urdu as said): nothing to rewrite.
+    await prisma.callTranscriptLine.update({ where: { id: line.id }, data: { textRoman: line.text, ...(needsTranslation(line.text) ? {} : { textEn: line.text }) } })
     return line.text
   }
-  if (!groqEnabled()) return null
-  queue.push(line.id)
+  if (!groqEnabled()) return line.text
   pendingByCall.set(line.callId, translatePending(line.callId) + 1)
-  void work()
-  return null
-}
-
-/** Called after each translated line (to show it as a caption). */
-let onTranslated: ((line: { id: string; callId: string; userId: string; speakerName: string; textEn: string; textRoman: string }) => void) | null = null
-export function setOnTranslated(fn: typeof onTranslated): void {
-  onTranslated = fn
-}
-
-async function work(): Promise<void> {
-  if (running) return
-  running = true
   try {
-    while (queue.length) {
-      const id = queue.shift()!
-      const line = await prisma.callTranscriptLine.findUnique({ where: { id } })
-      if (!line) continue
-      try {
-        if (!line.textEn || !line.textRoman) {
-          const before = await prisma.callTranscriptLine.findMany({ where: { callId: line.callId, at: { lt: line.at } }, orderBy: { at: 'desc' }, take: 3, select: { speakerName: true, text: true, textRoman: true } })
-          const context = before.reverse().map((b) => `${b.speakerName}: ${b.textRoman ?? b.text}`).join('\n')
-          const out = await translateOne(line.text, context)
-          if (out.en || out.roman) {
-            const textEn = out.en || line.text
-            const textRoman = out.roman || textEn
-            await prisma.callTranscriptLine.update({ where: { id }, data: { textEn, textRoman } })
-            onTranslated?.({ id, callId: line.callId, userId: line.userId, speakerName: line.speakerName, textEn, textRoman })
-          }
-        }
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[translate] line not translated now (tried again with the notes):', (e as Error).message)
-      } finally {
-        const n = translatePending(line.callId) - 1
-        if (n > 0) pendingByCall.set(line.callId, n)
-        else pendingByCall.delete(line.callId)
-      }
-    }
+    const user = `${line.context ? `Earlier lines (context only, do not rewrite):\n${line.context}\n\n` : ''}Line:\n${line.text}`
+    const out = await quickJson(LIVE_SYSTEM, user, MODEL(), 500, 6000)
+    if (!out) return line.text
+    const roman = String(parseJson(out).roman ?? '').trim()
+    if (!roman) return line.text
+    await prisma.callTranscriptLine.update({ where: { id: line.id }, data: { textRoman: roman } })
+    return roman
+  } catch {
+    return line.text
   } finally {
-    running = false
+    const n = translatePending(line.callId) - 1
+    if (n > 0) pendingByCall.set(line.callId, n)
+    else pendingByCall.delete(line.callId)
   }
 }
 
@@ -109,16 +100,11 @@ function parseJson(text: string): Record<string, unknown> {
   return JSON.parse(text.slice(a, b + 1)) as Record<string, unknown>
 }
 
-async function translateOne(text: string, context: string): Promise<{ roman: string; en: string }> {
-  const user = `${context ? `Earlier in the meeting (for context only, do not rewrite):\n${context}\n\n` : ''}Rewrite this line:\n${text}\n\nReturn {"roman": "Roman Urdu", "en": "English"}`
-  const j = parseJson(await chatJson(SYSTEM, user, 800, MODEL()))
-  return { roman: String(j.roman ?? '').trim(), en: String(j.en ?? '').trim() }
-}
-
 /** Translate every line of a call that has no English yet (in groups of 25). Used before writing the notes. */
 export async function translateMissing(callId: string): Promise<void> {
   if (!groqEnabled()) return
-  const lines = await prisma.callTranscriptLine.findMany({ where: { callId, OR: [{ textEn: null }, { textRoman: null }] }, orderBy: { at: 'asc' }, select: { id: true, text: true } })
+  // Lines without English yet: their Roman Urdu is also redone, carefully, with context.
+  const lines = await prisma.callTranscriptLine.findMany({ where: { callId, OR: [{ textEn: null }, { textRoman: null }] }, orderBy: { at: 'asc' }, select: { id: true, text: true, textRoman: true } })
   for (const l of lines) if (!needsTranslation(l.text)) await prisma.callTranscriptLine.update({ where: { id: l.id }, data: { textEn: l.text, textRoman: l.text } })
   const todo = lines.filter((l) => needsTranslation(l.text))
   for (let i = 0; i < todo.length; i += 25) {
@@ -131,7 +117,8 @@ export async function translateMissing(callId: string): Promise<void> {
         const n = Number(o.i)
         const en = String(o.en ?? '').trim()
         const roman = String(o.roman ?? '').trim()
-        if (Number.isInteger(n) && group[n] && (en || roman)) await prisma.callTranscriptLine.update({ where: { id: group[n].id }, data: { textEn: en || roman, textRoman: roman || en } })
+        // Keep the live Roman Urdu if this pass gave none.
+        if (Number.isInteger(n) && group[n] && (en || roman)) await prisma.callTranscriptLine.update({ where: { id: group[n].id }, data: { textEn: en || roman, textRoman: roman || group[n].textRoman || en } })
       }
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -147,6 +134,5 @@ export async function waitForCall(callId: string, maxMs = 60_000): Promise<void>
 }
 
 export function resetTranslate(): void {
-  queue.length = 0
   pendingByCall.clear()
 }

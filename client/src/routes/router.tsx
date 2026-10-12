@@ -1,4 +1,4 @@
-import { lazy } from 'react'
+import { Suspense, lazy } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import Login from '../pages/auth/Login'
 import Signup from '../pages/auth/Signup'
@@ -83,6 +83,7 @@ const ProjectsDashboard = lazy(() => import('../pages/app/projects/ProjectsDashb
 const ChatPage = lazy(() => import('../pages/app/chat/ChatPage'))
 const CalendarPage = lazy(() => import('../pages/app/meetings/CalendarPage'))
 const MeetingPage = lazy(() => import('../pages/app/meetings/MeetingPage'))
+const GuestJoin = lazy(() => import('../pages/GuestJoin'))
 const Notifications = lazy(() => import('../pages/app/Notifications'))
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
@@ -95,6 +96,9 @@ export const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
   { path: '/reset-success', element: <ResetSuccess /> },
+
+  // People outside Metriq joining a call by link (no login)
+  { path: '/join/:token', element: <Suspense fallback={null}><GuestJoin /></Suspense> },
 
   // Authenticated app shell
   {

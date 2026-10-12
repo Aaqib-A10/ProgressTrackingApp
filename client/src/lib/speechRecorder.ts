@@ -3,9 +3,10 @@ import { callsApi } from './callsApi'
 /**
  * For the AI note taker (server transcription): records ONE person's sound (my microphone,
  * or another person's sound as it arrives in the call) and sends it in short pieces,
- * labelled with that person. A piece is cut at a natural pause once it is 15 seconds long
- * (or at 30 seconds whatever happens), and pieces where I did not speak are not sent.
- * The server turns each piece into text with Groq Whisper and labels it with my name.
+ * labelled with that person. A piece is cut at the first natural pause after a couple of
+ * seconds of speech (at 15 seconds whatever happens), so each sentence is written down
+ * and shown as a caption 2 to 3 seconds after it is said. Pieces where nobody spoke are
+ * not sent. The server turns each piece into text with Groq Whisper.
  *
  * "Speech" means clearly louder than the room: the recorder keeps track of the
  * background level and only counts sound well above it, so far-away voices, fans
@@ -15,10 +16,11 @@ import { callsApi } from './callsApi'
 
 export type SpeechMode = 'mixed' | 'en' | 'ur'
 
-const MIN_PIECE_MS = 15_000
-const MAX_PIECE_MS = 30_000
-const PAUSE_MS = 600
-const MIN_SPEECH_MS = 1500
+const MIN_PIECE_MS = 2_500 // a piece is at least this long before a pause can end it
+const MIN_PIECE_SPEECH_MS = 800 // ...and has at least this much speech
+const MAX_PIECE_MS = 15_000
+const PAUSE_MS = 700
+const MIN_SPEECH_MS = 700 // less speech than this: not sent
 const LEVEL = 0.012 // RMS above this (and well above the room) counts as speech
 const ABOVE_ROOM = 3 // speech must be this many times louder than the background
 
@@ -68,7 +70,7 @@ export class SpeechRecorder {
       this.room = rms < this.room ? this.room * 0.8 + rms * 0.2 : this.room * 0.995 + rms * 0.005
       if (rms > Math.max(LEVEL, this.room * ABOVE_ROOM) && this.track.enabled) { p.speechMs += 100; this.lastVoice = now; p.firstVoice ??= now }
       const age = now - p.started
-      if ((age > MIN_PIECE_MS && now - this.lastVoice > PAUSE_MS) || age > MAX_PIECE_MS) this.cut()
+      if ((age > MIN_PIECE_MS && p.speechMs >= MIN_PIECE_SPEECH_MS && now - this.lastVoice > PAUSE_MS) || age > MAX_PIECE_MS) this.cut()
     }, 100)
   }
 
@@ -82,7 +84,9 @@ export class SpeechRecorder {
       const blob = new Blob(piece.chunks, { type: this.mime.split(';')[0] })
       const durationMs = Date.now() - piece.started
       const spokeAt = piece.firstVoice ?? piece.started
-      this.uploads = this.uploads.then(() => this.upload(blob, durationMs, spokeAt))
+      const speechMs = piece.speechMs
+      // Pieces go out at once (not one after the other), so a slow one never holds up the next.
+      void this.upload(blob, durationMs, spokeAt, speechMs)
     }
     rec.start()
     return piece
@@ -95,10 +99,21 @@ export class SpeechRecorder {
     try { old?.rec.stop() } catch { /* already stopped */ }
   }
 
-  private async upload(blob: Blob, durationMs: number, spokeAt: number) {
+  private async upload(blob: Blob, durationMs: number, spokeAt: number, speechMs: number) {
+    let done!: () => void
+    const finished = new Promise<void>((ok) => { done = ok })
+    this.uploads = this.uploads.then(() => finished)
+    try {
+      await this.send(blob, durationMs, spokeAt, speechMs)
+    } finally {
+      done()
+    }
+  }
+
+  private async send(blob: Blob, durationMs: number, spokeAt: number, speechMs: number) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await callsApi.audio(this.callId, blob, this.mode, durationMs, this.speakerId, spokeAt)
+        await callsApi.audio(this.callId, blob, this.mode, durationMs, this.speakerId, spokeAt, speechMs)
         return
       } catch (e) {
         const msg = (e as Error).message || ''

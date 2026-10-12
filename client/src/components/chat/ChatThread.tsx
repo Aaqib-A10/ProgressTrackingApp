@@ -9,6 +9,7 @@ import { refreshChatUnread } from './useChatUnread'
 import { cn } from '../../lib/cn'
 import { useCalls } from '../calls/CallProvider'
 import { NotesModal } from '../calls/MeetingNotes'
+import { TestingBadge } from '../calls/TestingBadge'
 import { ChatPicture, PictureEditor } from '../ui/Pictures'
 import { Modal } from '../ui/Modal'
 import { refreshAvatars } from '../../lib/avatars'
@@ -590,7 +591,7 @@ function NotesCard({ body, onOpen }: { callId: string; body: string; onOpen: () 
     <button type="button" onClick={onOpen} className="flex max-w-md items-start gap-3 rounded-btn border border-primary/20 bg-card p-2.5 text-left hover:border-primary/40 hover:shadow-card">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Sparkles size={17} /></span>
       <span className="min-w-0">
-        <span className="block text-body-md font-semibold text-ink">Meeting notes</span>
+        <span className="flex items-center gap-2 text-body-md font-semibold text-ink">Meeting notes <TestingBadge /></span>
         <span className="line-clamp-3 block text-body-sm text-ink-muted">{body.replace(/^Meeting notes: /, '')}</span>
         <span className="mt-1 block text-body-sm font-semibold text-primary">Open summary, action items and transcript</span>
       </span>

@@ -2140,6 +2140,8 @@ model ChatConversation {
   /// Group chat picture last changed, and by whom.
   avatarAt      DateTime?
   avatarById    String?
+  /// Secret part of the link that lets people outside Metriq ask to join this chat's calls (null = off).
+  guestToken    String?              @unique
   createdAt     DateTime             @default(now())
 
   members  ChatMember[]

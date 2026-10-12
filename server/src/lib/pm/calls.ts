@@ -33,6 +33,8 @@ export interface Participant {
   hand: boolean
   /** This person is recording the call (everyone sees a "Recording" badge). */
   rec: boolean
+  /** What this person speaks, for the AI notes ("mixed" = Urdu with English, "en" = English only). */
+  lang?: 'mixed' | 'en' | 'ur'
 }
 
 export interface Caption { id: number; userId: string; name: string; text: string; final: boolean; at: number }
@@ -55,8 +57,13 @@ export interface LiveCall {
   invited: Map<string, number>
   /** Who added them (shown on their ringing card). */
   invitedBy: Map<string, string>
-  /** Invited people who are not members of the conversation (call only, no chat access). */
+  /** Invited people who are not members of the conversation (call only, no chat access),
+   *  and admitted guests from outside Metriq (their ids start with "guest-"). */
   guests: Set<string>
+  /** Guests from outside Metriq: id -> name shown in the call ("Ali (Guest)"). */
+  guestNames: Map<string, string>
+  /** People outside Metriq asking to join (they wait until someone in the call lets them in). */
+  lobby: Map<string, { name: string; at: number; status: 'waiting' | 'admitted' | 'denied' }>
   /** AI note taker on: every browser transcribes its own microphone. */
   noteTaker: boolean
   /** Recent speech for live captions (kept for a short while). */
@@ -84,8 +91,8 @@ export function allLive(): LiveCall[] {
   return [...live.values()]
 }
 
-export function registerLive(c: Omit<LiveCall, 'participants' | 'inbox' | 'joinedIds' | 'declined' | 'invited' | 'invitedBy' | 'guests' | 'noteTaker' | 'captions' | 'meetingId' | 'noteRecorder' | 'notesOffAt'> & { meetingId?: string | null }): LiveCall {
-  const call: LiveCall = { ...c, meetingId: c.meetingId ?? null, participants: new Map(), inbox: new Map(), joinedIds: new Set(), declined: new Set(), invited: new Map(), invitedBy: new Map(), guests: new Set(), noteTaker: false, captions: [], noteRecorder: null, notesOffAt: null }
+export function registerLive(c: Omit<LiveCall, 'participants' | 'inbox' | 'joinedIds' | 'declined' | 'invited' | 'invitedBy' | 'guests' | 'guestNames' | 'lobby' | 'noteTaker' | 'captions' | 'meetingId' | 'noteRecorder' | 'notesOffAt'> & { meetingId?: string | null }): LiveCall {
+  const call: LiveCall = { ...c, meetingId: c.meetingId ?? null, participants: new Map(), inbox: new Map(), joinedIds: new Set(), declined: new Set(), invited: new Map(), invitedBy: new Map(), guests: new Set(), guestNames: new Map(), lobby: new Map(), noteTaker: false, captions: [], noteRecorder: null, notesOffAt: null }
   live.set(c.callId, call)
   return call
 }
@@ -159,12 +166,23 @@ let captionSeq = 0
  * the page in front. It is the person who turned the notes on; when they leave, the
  * person who has been in the call longest takes over.
  */
+/** A guest from outside Metriq (not a PulseTrack account). */
+export function isOutsideGuest(id: string): boolean {
+  return id.startsWith('guest-')
+}
+
 export function recorderOf(call: LiveCall): string | null {
   if (!call.noteTaker) return null
   if (call.noteRecorder && call.participants.has(call.noteRecorder)) return call.noteRecorder
-  const next = call.participants.keys().next()
-  call.noteRecorder = next.done ? null : next.value
+  // A team member's browser records the notes, never a guest's.
+  call.noteRecorder = [...call.participants.keys()].find((id) => !isOutsideGuest(id)) ?? null
   return call.noteRecorder
+}
+
+/** People waiting to be let in (shown to everyone in the call). Old requests run out after 10 minutes. */
+export function waitingGuests(call: LiveCall, now = Date.now()): { id: string; name: string }[] {
+  for (const [id, g] of call.lobby) if (now - g.at > 10 * 60_000 && g.status === 'waiting') call.lobby.delete(id)
+  return [...call.lobby.entries()].filter(([, g]) => g.status === 'waiting').map(([id, g]) => ({ id, name: g.name }))
 }
 
 /** Who recorded the notes of a call that just ended (their last pieces still arrive). */

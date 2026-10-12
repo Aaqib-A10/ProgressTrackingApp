@@ -32,11 +32,13 @@ export function speechSupported(): boolean {
   return typeof window !== 'undefined' && !!ctor()
 }
 
-/** What people speak in the call. "mixed" = Urdu, English or both, written in English. */
+/**
+ * What I speak in calls (each person picks their own). "mixed" = Urdu, or Urdu with English
+ * words: written exactly as said, in Roman Urdu, with English words in English.
+ */
 export const SPEECH_LANGS = [
-  { code: 'mixed', label: 'Urdu and English (shown in Roman Urdu)', browser: 'en-IN' },
+  { code: 'mixed', label: 'Urdu / Urdu with English (written in Roman Urdu)', browser: 'en-IN' },
   { code: 'en', label: 'English only', browser: 'en-US' },
-  { code: 'ur', label: 'Urdu only (Urdu script)', browser: 'ur-PK' },
 ]
 
 /** Language code for the browser's own speech recognition (live captions). */

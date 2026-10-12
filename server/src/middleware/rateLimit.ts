@@ -27,3 +27,6 @@ export const loginLimiter = rateLimit({ ...base, windowMs: 15 * 60 * 1000, limit
  * tighter cap over a longer window to slow reset-token guessing and signup spam.
  */
 export const sensitiveAuthLimiter = rateLimit({ ...base, windowMs: 60 * 60 * 1000, limit: 8 })
+
+/** People outside Metriq asking to join a call by link: blunts link guessing and lobby spam. */
+export const guestLimiter = rateLimit({ ...base, windowMs: 10 * 60 * 1000, limit: 30 })

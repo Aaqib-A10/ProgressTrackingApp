@@ -19,7 +19,7 @@ export class GroqError extends Error {
   constructor(message: string, public status: number) { super(message) }
 }
 
-async function groqFetch(path: string, init: () => RequestInit, attempts = 6): Promise<Response> {
+async function groqFetch(path: string, init: () => RequestInit, attempts = 6, maxWaitMs = 65_000): Promise<Response> {
   let lastErr: unknown
   for (let i = 0; i < attempts; i++) {
     try {
@@ -29,6 +29,7 @@ async function groqFetch(path: string, init: () => RequestInit, attempts = 6): P
         const ra = Number(r.headers.get('retry-after'))
         const wait = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000 + 250, 65_000) : Math.min(2000 * 2 ** i, 30_000)
         lastErr = new GroqError(`Groq ${r.status}: ${(await r.text()).slice(0, 200)}`, r.status)
+        if (i === attempts - 1 || wait > maxWaitMs) break
         await sleep(wait)
         continue
       }
@@ -55,6 +56,8 @@ const HALLUCINATIONS = [
   // The same in Urdu / Hindi script.
   /^(شکریہ|بہت شکریہ|جی|ہاں|اچھا|ٹھیک ہے|اللہ حافظ|धन्यवाद|शुक्रिया|हाँ|जी)[\s.!?۔]*$/,
   /سبسکرائب|subscribe|सब्सक्राइब/i,
+  // Music, tones, ringing and noise that Whisper names instead of hearing words.
+  /^[[(]?\s*(موسیقی|میوزک|موسیقی کی آواز|संगीत|म्यूजिक|شور|تالیاں)\s*[\])]?[\s.!?۔]*$/,
 ]
 
 export interface VerboseSegment { text: string; no_speech_prob?: number; avg_logprob?: number; compression_ratio?: number; start?: number; end?: number }
@@ -113,30 +116,66 @@ function cleanText(j: SttResult): string {
   return collapseRepeats(segs.join(' ').replace(/\s+/g, ' ').trim())
 }
 
-const DEVANAGARI = /[\u0900-\u097F]/
+/** Whisper's language for a speaker: English speakers in English, everyone else in Urdu. */
+export function whisperLanguage(mode: SpeechMode): 'en' | 'ur' {
+  return mode === 'en' ? 'en' : 'ur'
+}
 
 /**
- * One short recording -> the words as they were said (empty string when nobody really spoke).
- *
- * mixed: Whisper picks the language of each piece. English stays English. Urdu that it
- * writes in Hindi letters (it often does) is written again in Urdu script.
+ * More words than anyone can say in the time they were speaking: Whisper made it up
+ * (it does that with noise, music or someone far away).
  */
-export async function transcribeAudio(audio: Buffer, opts: { mode: SpeechMode; prompt?: string; mime?: string }): Promise<string> {
-  const big = process.env.GROQ_STT_MODEL || 'whisper-large-v3'
-  if (opts.mode === 'en') return cleanText(await sttCall(audio, { model: big, language: 'en', prompt: opts.prompt, mime: opts.mime }))
-  if (opts.mode === 'ur') return cleanText(await sttCall(audio, { model: big, language: 'ur', prompt: opts.prompt, mime: opts.mime }))
-  // First pass on the fast model (its own free-tier limits), language chosen by Whisper.
-  const first = await sttCall(audio, { model: process.env.GROQ_STT_FAST_MODEL || 'whisper-large-v3-turbo', prompt: opts.prompt, mime: opts.mime })
-  const lang = String(first.language ?? '').toLowerCase()
-  const text = cleanText(first)
-  if (!text) return ''
-  if (DEVANAGARI.test(text) || lang === 'hindi' || lang === 'hi' || lang === 'punjabi' || lang === 'pa') {
-    return cleanText(await sttCall(audio, { model: big, language: 'ur', prompt: opts.prompt, mime: opts.mime }))
-  }
+export function tooManyWords(text: string, speechMs: number | undefined): boolean {
+  if (!speechMs || speechMs <= 0) return false
+  const words = text.split(/\s+/).filter(Boolean).length
+  return words > 4 + (speechMs / 1000) * 5
+}
+
+/**
+ * One short recording -> the words exactly as they were said (empty string when nobody
+ * really spoke).
+ *
+ * The language is never left for Whisper to guess: when it guesses, it often picks
+ * "English" for Urdu speech and then TRANSLATES (or invents) English words instead of
+ * writing down what was said. So Urdu (and Urdu mixed with English) is always
+ * transcribed as Urdu, and English-only speakers as English. English words inside Urdu
+ * speech come out in Urdu letters; they are written in English again by the Roman Urdu step.
+ */
+export async function transcribeAudio(audio: Buffer, opts: { mode: SpeechMode; prompt?: string; mime?: string; speechMs?: number }): Promise<string> {
+  const model = process.env.GROQ_STT_MODEL || 'whisper-large-v3'
+  const text = cleanText(await sttCall(audio, { model, language: whisperLanguage(opts.mode), prompt: opts.prompt, mime: opts.mime }))
+  if (text && tooManyWords(text, opts.speechMs)) return ''
+  // With unclear sound Whisper sometimes just repeats the words it was given as context.
+  const norm = (t: string) => t.replace(/[\s.,!?،۔'"-]+/g, ' ').trim().toLowerCase()
+  if (text && opts.prompt && norm(text).split(' ').length >= 3 && norm(opts.prompt).includes(norm(text))) return ''
   return text
 }
 
 // ---------- notes model ----------
+
+/**
+ * A quick answer for live captions: one try, a short time limit. Returns null when Groq is
+ * busy or slow (the line is then finished later, when the notes are written).
+ */
+export async function quickJson(system: string, user: string, model: string, maxTokens = 400, timeoutMs = 6000): Promise<string | null> {
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), timeoutMs)
+  try {
+    const r = await groqFetch('/chat/completions', () => ({
+      method: 'POST',
+      signal: ctl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, temperature: 0, max_completion_tokens: maxTokens, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], response_format: { type: 'json_object' }, ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}) }),
+    }), 2, 1500)
+    if (!r.ok) return null
+    const j = (await r.json()) as { choices?: { message?: { content?: string } }[] }
+    return j.choices?.[0]?.message?.content ?? null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(t)
+  }
+}
 
 /** Ask the notes model for one JSON answer. */
 export async function chatJson(system: string, user: string, maxTokens = 2500, modelOverride?: string): Promise<string> {
