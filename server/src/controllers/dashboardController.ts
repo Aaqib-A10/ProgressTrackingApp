@@ -6,6 +6,8 @@ import { companyToday, dbDateFromString, dateStringFromDb, periodRange, previous
 import { sumItad, itadKpis } from '../lib/itad'
 import { sumLeadGen, leadGenKpis } from '../lib/leadgen'
 import { buildSeries, pctDelta, improvementLine } from '../lib/trends'
+import { talkloopDashboard, ecommerceDashboard, marketingDashboard, csrDashboard, inventoryDashboard, type DashCtx, type TeamDashboardPayload } from '../lib/deptDashboards'
+import { topAchievers } from '../lib/topAchiever'
 
 type SubmissionStatus = 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
 
@@ -27,7 +29,7 @@ function statusFor(entry: { status: string } | undefined): SubmissionStatus {
 }
 
 async function deptMembers(departmentId: string): Promise<User[]> {
-  return prisma.user.findMany({ where: { departmentId, role: 'MEMBER', isActive: true }, orderBy: { name: 'asc' } })
+  return prisma.user.findMany({ where: { departmentId, role: { in: ['MEMBER', 'SUB_DEPT_LEAD'] }, isActive: true, status: 'ACTIVE' }, orderBy: { name: 'asc' } })
 }
 
 async function dailyTarget(departmentId: string, metricKey: string, period: 'DAILY' | 'WEEKLY'): Promise<number> {
@@ -57,17 +59,30 @@ export async function teamDashboard(req: AuthedRequest, res: Response): Promise<
   } else if (me.department.type === 'LEAD_GEN') {
     await leadgenDashboard(res, me.department, members, rangeKey, range, prev, todayStr)
   } else {
-    res.json({
-      department: me.department.type,
-      range: { ...range, key: rangeKey },
-      kpis: [],
-      trend: { metricLabel: '', points: [] },
-      breakdown: [],
-      improvement: 'Marketing dashboards arrive in Phase 3.',
-      todaySubmissions: [],
-      counts: { submitted: 0, total: members.length },
-    })
+    const subs = await prisma.subDepartment.findMany({ where: { departmentId: me.department.id }, select: { id: true, slug: true } })
+    const subSlugs = new Map(members.map((m) => [m.id, subs.find((s) => s.id === m.subDepartmentId)?.slug ?? '']))
+    const ctx: DashCtx = { dept: me.department, members, subSlugs, rangeKey, range, prev, todayStr }
+    const build: Record<string, (c: DashCtx) => Promise<TeamDashboardPayload>> = {
+      TALKLOOP: talkloopDashboard,
+      ECOMMERCE: ecommerceDashboard,
+      MARKETING: marketingDashboard,
+      CSR: csrDashboard,
+      INVENTORY: inventoryDashboard,
+    }
+    res.json(await build[me.department.type](ctx))
   }
+}
+
+/** GET /api/dashboard/top-achiever?month=YYYY-MM — the best person of the month in YOUR department
+ *  (the Super Admin sees every department; QA sees the departments it scores). */
+export async function topAchiever(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month)) ? String(req.query.month) : companyToday().slice(0, 7)
+  const depts =
+    me.role === 'SUPER_ADMIN' ? (['ITAD', 'LEAD_GEN', 'TALKLOOP', 'ECOMMERCE', 'MARKETING', 'CSR', 'INVENTORY'] as const)
+      : me.role === 'QA' || me.role === 'QA_LEAD' ? (['ITAD', 'CSR'] as const)
+        : me.department ? [me.department.type] : []
+  res.json({ month, winners: await topAchievers(month, [...depts]) })
 }
 
 async function itadDashboard(

@@ -45,7 +45,8 @@ export function UpdateBanner() {
         if (live && live !== running) setOutdated(true)
       } catch { /* offline: try again later */ }
     }
-    const t = window.setInterval(() => { void check() }, CHECK_MS)
+    // Only while the tab is in front (it checks again the moment it comes back).
+    const t = window.setInterval(() => { if (document.visibilityState === 'visible') void check() }, CHECK_MS)
     const onVis = () => { if (document.visibilityState === 'visible') void check() }
     document.addEventListener('visibilitychange', onVis)
     void check()

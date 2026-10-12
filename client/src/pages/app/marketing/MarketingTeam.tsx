@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Users, Crown, ListChecks } from 'lucide-react'
+import { Users, Crown } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/Toast'
@@ -46,9 +45,6 @@ export default function MarketingTeam() {
             <p className="mt-0.5 text-body-md text-ink-muted">People by sub-department, with their live workload. {totalMembers} {totalMembers === 1 ? 'person' : 'people'}.</p>
           </div>
         </div>
-        <Link to="/app/marketing/board" className="inline-flex h-9 items-center gap-1.5 rounded-btn border border-line bg-card px-3 text-body-sm font-semibold text-ink-muted hover:border-primary/40 hover:text-ink">
-          <ListChecks size={15} /> Board
-        </Link>
       </div>
 
       {!groups ? (

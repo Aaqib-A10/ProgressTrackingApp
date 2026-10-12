@@ -7,8 +7,9 @@ import { useToast } from '../../../components/ui/Toast'
 import type { Department } from '../../../lib/types'
 import { listTargets, upsertTarget, deleteTarget, type AdminTarget } from '../../../lib/adminApi'
 import { listBrands, type Brand } from '../../../lib/marketingApi'
+import { useAuth } from '../../../lib/auth'
 
-const DEPARTMENTS: { value: Department; label: string }[] = [
+const ALL_DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'ITAD', label: 'ITAD' },
   { value: 'LEAD_GEN', label: 'Lead Generation' },
   { value: 'MARKETING', label: 'Marketing' },
@@ -39,10 +40,14 @@ const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-m
 
 export default function AdminTargets() {
   const { addToast } = useToast()
+  const { user } = useAuth()
+  // A team lead sets targets for their own department only; the Super Admin picks any.
+  const DEPARTMENTS = user?.role === 'SUPER_ADMIN' ? ALL_DEPARTMENTS : ALL_DEPARTMENTS.filter((d) => d.value === user?.department)
+  const first = DEPARTMENTS[0]?.value ?? 'ITAD'
   const [targets, setTargets] = useState<AdminTarget[]>([])
-  const [department, setDepartment] = useState<Department>('ITAD')
-  const [metricKey, setMetricKey] = useState('callsDialed')
-  const [period, setPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY')
+  const [department, setDepartment] = useState<Department>(first)
+  const [metricKey, setMetricKey] = useState(METRICS[first]?.[0]?.key ?? '')
+  const [period, setPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>(first === 'MARKETING' ? 'MONTHLY' : 'DAILY')
   const [minValue, setMinValue] = useState(80)
   const [maxValue, setMaxValue] = useState(100)
   const [brands, setBrands] = useState<Brand[]>([])
@@ -54,8 +59,9 @@ export default function AdminTargets() {
       .then((r) => setTargets(r.targets))
       .catch(() => addToast({ type: 'error', message: 'Could not load targets.' }))
       .finally(() => setLoading(false))
-    listBrands().then((r) => setBrands(r.brands)).catch(() => undefined)
-  }, [addToast])
+    // Brands are a Marketing thing: only load them for people who can use them.
+    if (user?.role === 'SUPER_ADMIN' || user?.department === 'MARKETING') listBrands().then((r) => setBrands(r.brands)).catch(() => undefined)
+  }, [addToast, user?.role, user?.department])
 
   const metricOptions = useMemo(() => METRICS[department] ?? [], [department])
 
@@ -77,7 +83,7 @@ export default function AdminTargets() {
       })
       addToast({ type: 'success', message: 'Target saved.' })
     } catch {
-      addToast({ type: 'error', message: 'Could not save (TLs can only set their own department).' })
+      addToast({ type: 'error', message: 'Could not save the target.' })
     }
   }
 
@@ -125,7 +131,7 @@ export default function AdminTargets() {
         <form onSubmit={save} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-6">
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
-            <select className={sel} value={department} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setMetricKey((METRICS[d] ?? [])[0]?.key ?? ''); if (d === 'MARKETING') setPeriod('MONTHLY') }}>
+            <select className={sel} value={department} disabled={DEPARTMENTS.length < 2} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setMetricKey((METRICS[d] ?? [])[0]?.key ?? ''); if (d === 'MARKETING') setPeriod('MONTHLY') }}>
               {DEPARTMENTS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
             </select>
           </div>

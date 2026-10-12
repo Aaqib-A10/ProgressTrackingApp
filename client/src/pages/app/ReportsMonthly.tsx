@@ -104,7 +104,8 @@ export default function ReportsMonthly() {
         </div>
       </div>
 
-      <Card>
+      {/* Covers several departments, so only the Super Admin sees it. */}
+      {isAdmin && <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary"><Layers size={20} /></span>
@@ -122,7 +123,7 @@ export default function ReportsMonthly() {
             </Button>
           </div>
         </div>
-      </Card>
+      </Card>}
 
       {loading ? (
         <Card><p className="py-10 text-center text-body-md text-ink-muted">Loading…</p></Card>

@@ -672,7 +672,7 @@ export async function deleteTarget(req: AuthedRequest, res: Response): Promise<v
     res.status(404).json({ error: 'Target not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Can only delete targets for your department' })
     return
   }
@@ -746,7 +746,7 @@ export async function updateTag(req: AuthedRequest, res: Response): Promise<void
     res.status(404).json({ error: 'Tag not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && existing.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || existing.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -763,7 +763,8 @@ export async function listHolidays(_req: AuthedRequest, res: Response): Promise<
 
 export async function createHoliday(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.role !== 'SUPER_ADMIN' && me.role !== 'TEAM_LEAD') {
+  // Holidays are company wide (every department's attendance and averages), so only the Super Admin sets them.
+  if (me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -782,7 +783,7 @@ export async function createHoliday(req: AuthedRequest, res: Response): Promise<
 
 export async function deleteHoliday(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.role !== 'SUPER_ADMIN' && me.role !== 'TEAM_LEAD') {
+  if (me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -796,7 +797,8 @@ export async function listLeave(req: AuthedRequest, res: Response): Promise<void
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const where = me.role === 'TEAM_LEAD' && me.departmentId ? { user: { departmentId: me.departmentId } } : {}
+  // A team lead sees only their own department (none at all when they have no department yet).
+  const where = me.role === 'TEAM_LEAD' ? { user: { departmentId: me.departmentId ?? '__none__' } } : {}
   const leave = await prisma.leaveDay.findMany({ where, include: { user: { select: { name: true } } }, orderBy: { date: 'desc' }, take: 200 })
   res.json({ leave: leave.map((l) => ({ id: l.id, userId: l.userId, userName: l.user.name, date: dateStringFromDb(l.date), type: l.type, note: l.note ?? '' })) })
 }
@@ -807,7 +809,7 @@ export async function listLeaveMembers(req: AuthedRequest, res: Response): Promi
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const where = me.role === 'TEAM_LEAD' && me.departmentId ? { departmentId: me.departmentId } : {}
+  const where = me.role === 'TEAM_LEAD' ? { departmentId: me.departmentId ?? '__none__' } : {}
   const members = await prisma.user.findMany({ where, select: { id: true, name: true }, orderBy: { name: 'asc' } })
   res.json({ members })
 }
@@ -828,7 +830,7 @@ export async function createLeave(req: AuthedRequest, res: Response): Promise<vo
     res.status(404).json({ error: 'User not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -854,7 +856,7 @@ export async function deleteLeave(req: AuthedRequest, res: Response): Promise<vo
     where: { id: req.params.id },
     include: { user: { select: { departmentId: true } } },
   })
-  if (leave && (me.role === 'SUPER_ADMIN' || leave.user.departmentId === me.departmentId)) {
+  if (leave && (me.role === 'SUPER_ADMIN' || (!!me.departmentId && leave.user.departmentId === me.departmentId))) {
     await prisma.leaveDay.delete({ where: { id: leave.id } }).catch(() => undefined)
   }
   res.status(204).end()

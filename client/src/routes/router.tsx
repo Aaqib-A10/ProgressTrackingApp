@@ -1,13 +1,18 @@
 import { Suspense, lazy } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import Login from '../pages/auth/Login'
-import Signup from '../pages/auth/Signup'
-import ForgotPassword from '../pages/auth/ForgotPassword'
-import ResetPassword from '../pages/auth/ResetPassword'
-import ResetSuccess from '../pages/auth/ResetSuccess'
-import Landing from '../pages/Landing'
 import NotFound from '../pages/NotFound'
 import { RequireAuth, RequireRole, RequireFinance, AppShellRoute } from './guards'
+
+// Public pages people open rarely load on demand (Login stays in the main bundle: it is
+// the page most people land on).
+const Landing = lazy(() => import('../pages/Landing'))
+const Signup = lazy(() => import('../pages/auth/Signup'))
+const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'))
+const ResetPassword = lazy(() => import('../pages/auth/ResetPassword'))
+const ResetSuccess = lazy(() => import('../pages/auth/ResetSuccess'))
+const Page = ({ children }: { children: ReactNode }) => <Suspense fallback={null}>{children}</Suspense>
 
 // App screens are code-split — the public landing/auth pages don't pull in
 // Recharts/dnd-kit. Suspense boundary lives in <AppShell>.
@@ -47,15 +52,13 @@ const InventoryList = lazy(() => import('../pages/app/inventory/InventoryList'))
 const InventoryRequests = lazy(() => import('../pages/app/inventory/InventoryRequests'))
 const InventoryTeam = lazy(() => import('../pages/app/inventory/InventoryTeam'))
 const RdpRecords = lazy(() => import('../pages/app/ecommerce/RdpRecords'))
-const MarketingBoard = lazy(() => import('../pages/app/marketing/MarketingBoard'))
+const MarketingTaskRedirect = lazy(() => import('../pages/app/marketing/MarketingTaskRedirect'))
 const MarketingTeam = lazy(() => import('../pages/app/marketing/MarketingTeam'))
 const SeoActivity = lazy(() => import('../pages/app/marketing/SeoActivity'))
-const SocialActivity = lazy(() => import('../pages/app/marketing/SocialActivity'))
 const ContentActivity = lazy(() => import('../pages/app/marketing/ContentActivity'))
 const ContentDailyLog = lazy(() => import('../pages/app/marketing/ContentDailyLog'))
 const SocialPlanner = lazy(() => import('../pages/app/marketing/SocialPlanner'))
 const AdsCampaigns = lazy(() => import('../pages/app/marketing/AdsCampaigns'))
-const SeoAnalytics = lazy(() => import('../pages/app/marketing/SeoAnalytics'))
 const EmailMarketing = lazy(() => import('../pages/app/marketing/EmailMarketing'))
 const MarketingAnalytics = lazy(() => import('../pages/app/marketing/MarketingAnalytics'))
 const MarketingBrands = lazy(() => import('../pages/app/marketing/MarketingBrands'))
@@ -88,14 +91,14 @@ const Notifications = lazy(() => import('../pages/app/Notifications'))
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
 export const router = createBrowserRouter([
-  { path: '/', element: <Landing /> },
+  { path: '/', element: <Page><Landing /></Page> },
 
   // Public auth
   { path: '/login', element: <Login /> },
-  { path: '/signup', element: <Signup /> },
-  { path: '/forgot-password', element: <ForgotPassword /> },
-  { path: '/reset-password', element: <ResetPassword /> },
-  { path: '/reset-success', element: <ResetSuccess /> },
+  { path: '/signup', element: <Page><Signup /></Page> },
+  { path: '/forgot-password', element: <Page><ForgotPassword /></Page> },
+  { path: '/reset-password', element: <Page><ResetPassword /></Page> },
+  { path: '/reset-success', element: <Page><ResetSuccess /></Page> },
 
   // People outside Metriq joining a call by link (no login)
   { path: '/join/:token', element: <Suspense fallback={null}><GuestJoin /></Suspense> },
@@ -134,7 +137,7 @@ export const router = createBrowserRouter([
       { path: 'qa/analytics', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaTeam /></RequireRole> },
       { path: 'qa/evaluators', element: <RequireRole roles={['QA_LEAD', 'SUPER_ADMIN']}><QaEvaluators /></RequireRole> },
       { path: 'qa/my', element: <MyQaScores /> },
-      { path: 'qa/evaluations', element: <RequireRole roles={['QA', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaEvaluationsList /></RequireRole> },
+      { path: 'qa/evaluations', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaEvaluationsList /></RequireRole> },
       { path: 'qa/evaluations/:id', element: <QaEvaluationDetail /> },
       { path: 'qa/evaluations/:id/edit', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaEvaluationEdit /></RequireRole> },
 
@@ -178,14 +181,16 @@ export const router = createBrowserRouter([
       { path: 'inventory/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><InventoryTeam /></RequireRole> },
 
       // Marketing
-      { path: 'marketing/board', element: <MarketingBoard /> },
+      // The board was retired: old task links go on to the planner / content / SEO page.
+      { path: 'marketing/board', element: <MarketingTaskRedirect /> },
+      // Retired pages: old bookmarks go to where that work lives now.
+      { path: 'marketing/social', element: <Navigate to="/app/marketing/social/monthly" replace /> },
+      { path: 'marketing/seo/analytics', element: <Navigate to="/app/marketing/seo" replace /> },
       { path: 'marketing/team', element: <RequireRole roles={['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']}><MarketingTeam /></RequireRole> },
       // Social Planner replaces the old editorial calendar — keep the link alive.
       { path: 'marketing/calendar', element: <Navigate to="/app/marketing/planner" replace /> },
       { path: 'marketing/planner', element: <SocialPlanner /> },
       { path: 'marketing/seo', element: <SeoActivity /> },
-      { path: 'marketing/seo/analytics', element: <SeoAnalytics /> },
-      { path: 'marketing/social', element: <SocialActivity /> },
       { path: 'marketing/social/monthly', element: <SocialMonthly /> },
       { path: 'marketing/social/analytics', element: <SocialAnalytics /> },
       { path: 'marketing/content', element: <ContentActivity /> },

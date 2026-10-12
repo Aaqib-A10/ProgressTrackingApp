@@ -1,0 +1,2597 @@
+diff --git a/client/src/components/EmployeeOfMonthCard.tsx b/client/src/components/EmployeeOfMonthCard.tsx
+index 5afa031..a37473b 100644
+--- a/client/src/components/EmployeeOfMonthCard.tsx
++++ b/client/src/components/EmployeeOfMonthCard.tsx
+@@ -1,20 +1,28 @@
+ import { useEffect, useState } from 'react'
+ import { Trophy } from 'lucide-react'
+ import { Card } from './ui/Card'
+-import { getEmployeeOfMonth, type EmployeeOfMonth } from '../lib/qaApi'
++import { cn } from '../lib/cn'
++import { getTopAchievers, type TopAchiever } from '../lib/dashboardApi'
+ 
+-/** Top Achiever per department (by avg QA score, must clear the benchmark). Visible to everyone. */
++/**
++ * Top Achiever of the month for YOUR department only (the Super Admin sees every department).
++ * Each department is judged on its own work: QA score for ITAD and CSR, leads for Lead
++ * Generation, demos for Talkloop, listings for Ecommerce, tasks published for Marketing,
++ * requests completed for Inventory.
++ */
+ export function EmployeeOfMonthCard() {
+-  const [data, setData] = useState<EmployeeOfMonth | null>(null)
++  const [data, setData] = useState<{ month: string; winners: TopAchiever[] } | null>(null)
+   const [failed, setFailed] = useState(false)
+ 
+   useEffect(() => {
+-    getEmployeeOfMonth().then(setData).catch(() => setFailed(true))
++    getTopAchievers().then(setData).catch(() => setFailed(true))
+   }, [])
+ 
+-  if (failed) return null
++  if (failed || (data && data.winners.length === 0)) return null
+ 
+-  const monthLabel = data ? new Date(data.month + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : ''
++  const monthLabel = data ? new Date(data.month + '-01T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : ''
++  const winners = data?.winners ?? []
++  const one = winners.length === 1 ? winners[0] : null
+ 
+   return (
+     <Card className="border-warning/30 bg-gradient-to-br from-warning/10 to-card">
+@@ -22,28 +30,33 @@ export function EmployeeOfMonthCard() {
+         <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-warning/20 text-warning"><Trophy size={20} /></span>
+         <div>
+           <p className="text-label-md uppercase tracking-wide text-warning">Top Achiever</p>
+-          <p className="text-body-sm text-ink-muted">{monthLabel} · by QA score{data ? ` · ${data.minScore}%+ benchmark` : ''}</p>
++          <p className="text-body-sm text-ink-muted">{monthLabel}{one ? ` · ${one.label} · ${one.basis}` : ''}</p>
+         </div>
+       </div>
+-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+-        {(data?.winners ?? [{ department: 'ITAD', winner: null }, { department: 'CSR', winner: null }]).map((w) => (
+-          <div key={w.department} className="rounded-card border border-line bg-card p-3">
+-            <p className="text-body-sm font-semibold uppercase text-ink-muted">{w.department}</p>
+-            {w.winner ? (
+-              <div className="mt-1 flex items-center justify-between">
+-                <span className="text-headline-md text-ink">{w.winner.name}</span>
+-                <span className="text-headline-md font-bold tabular-nums text-warning">{w.winner.avg}%</span>
+-              </div>
+-            ) : w.topScore != null ? (
+-              <p className="mt-1 text-body-md text-ink-muted">
+-                No top achiever — best was <span className="font-semibold tabular-nums text-ink">{w.topScore}%</span>, below the {data?.minScore ?? 80}% benchmark
+-              </p>
+-            ) : (
+-              <p className="mt-1 text-body-md text-ink-muted">Not enough evaluations yet</p>
+-            )}
+-          </div>
+-        ))}
+-      </div>
++      {!data ? (
++        <p className="mt-4 text-body-sm text-ink-muted">Loading…</p>
++      ) : (
++        <div className={cn('mt-4 grid grid-cols-1 gap-3', winners.length > 1 && 'sm:grid-cols-2', winners.length > 2 && 'lg:grid-cols-3')}>
++          {winners.map((w) => (
++            <div key={w.department} className="rounded-card border border-line bg-card p-3">
++              {!one && (
++                <>
++                  <p className="text-body-sm font-semibold uppercase text-ink-muted">{w.label}</p>
++                  <p className="text-[11px] text-ink-muted">{w.basis}</p>
++                </>
++              )}
++              {w.winner ? (
++                <div className="mt-1 flex items-center justify-between gap-3">
++                  <span className="truncate text-headline-md text-ink">{w.winner.name}</span>
++                  <span className="shrink-0 text-headline-md font-bold tabular-nums text-warning">{w.winner.display}</span>
++                </div>
++              ) : (
++                <p className="mt-1 text-body-md text-ink-muted">{w.note ?? 'Nobody yet this month'}</p>
++              )}
++            </div>
++          ))}
++        </div>
++      )}
+     </Card>
+   )
+ }
+diff --git a/client/src/components/layout/Sidebar.tsx b/client/src/components/layout/Sidebar.tsx
+index 641cfa4..c46e1df 100644
+--- a/client/src/components/layout/Sidebar.tsx
++++ b/client/src/components/layout/Sidebar.tsx
+@@ -48,7 +48,7 @@ function useIsProjectAdmin(user: CurrentUser): boolean {
+ 
+ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
+   const isProjectAdmin = useIsProjectAdmin(user)
+-  const groups = filterNav(user.role, user.department, user.email)
++  const groups = filterNav(user)
+     .map((g) => ({ ...g, items: g.items.filter((i) => !i.projectAdminOnly || isProjectAdmin) }))
+     .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
+   const location = useLocation()
+diff --git a/client/src/components/layout/navConfig.ts b/client/src/components/layout/navConfig.ts
+index d0a3d84..1907334 100644
+--- a/client/src/components/layout/navConfig.ts
++++ b/client/src/components/layout/navConfig.ts
+@@ -39,7 +39,8 @@ import {
+   LayoutGrid,
+   type LucideIcon,
+ } from 'lucide-react'
+-import type { Role, Department } from '../../lib/types'
++import type { CurrentUser, Role } from '../../lib/types'
++import { canOpen } from '../../lib/access'
+ import type { BadgeTone } from '../ui/Badge'
+ import { FINANCE_EMAILS } from '../../lib/finance'
+ 
+@@ -47,12 +48,8 @@ export interface NavItem {
+   label: string
+   to: string
+   icon: LucideIcon
+-  /** Visible only to these roles (omit = all roles). */
+-  roles?: Role[]
+   /** Visible only to people who administer at least one project (and Super Admins). */
+   projectAdminOnly?: boolean
+-  /** Visible only for these departments (omit = all departments). */
+-  departments?: Department[]
+   /** Hidden for these roles, even Super Admin (who otherwise sees everything). */
+   hideFor?: Role[]
+   /** Restricted to these exact emails (identity gate) — overrides even Super Admin. */
+@@ -78,8 +75,6 @@ export interface NavGroup {
+   color?: string
+ }
+ 
+-const TL_ROLES: Role[] = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
+-const ADMIN_ROLES: Role[] = ['TEAM_LEAD', 'SUPER_ADMIN']
+ // Member data-entry / per-department operational tabs the Super Admin doesn't use.
+ // The admin keeps oversight (dashboards, team views, analytics) + admin/config.
+ const HIDE_FROM_SA: Role[] = ['SUPER_ADMIN']
+@@ -90,12 +85,12 @@ export const NAV_GROUPS: NavGroup[] = [
+     items: [
+       { label: 'Dashboard', to: '/app/dashboard', icon: LayoutDashboard },
+       { label: 'My Reports', to: '/app/reports', icon: FileBarChart, hideFor: HIDE_FROM_SA },
+-      { label: 'My Analytics', to: '/app/analytics', icon: LineChart, roles: ['MEMBER'], hideFor: HIDE_FROM_SA },
++      { label: 'My Analytics', to: '/app/analytics', icon: LineChart, hideFor: HIDE_FROM_SA },
+       { label: 'My Tasks', to: '/app/tasks', icon: ListChecks },
+       { label: 'My To-Do', to: '/app/todo', icon: ListTodo },
+-      { label: 'My Team', to: '/app/team/members', icon: Users, roles: ['TEAM_LEAD'], hideFor: HIDE_FROM_SA },
+-      { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart, roles: ['TEAM_LEAD', 'SUPER_ADMIN'], departments: ['ITAD', 'LEAD_GEN'] },
+-      { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, roles: ['MEMBER'], hideFor: HIDE_FROM_SA },
++      { label: 'My Team', to: '/app/team/members', icon: Users, hideFor: HIDE_FROM_SA },
++      { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart },
++      { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, hideFor: HIDE_FROM_SA },
+       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
+     ],
+   },
+@@ -117,7 +112,7 @@ export const NAV_GROUPS: NavGroup[] = [
+     color: '#0EA5E9',
+     items: [
+       { label: 'My Attendance', to: '/app/attendance/me', icon: Clock },
+-      { label: 'Team Attendance', to: '/app/attendance/team', icon: Users, roles: ADMIN_ROLES, badge: { text: 'TL', tone: 'accent' } },
++      { label: 'Team Attendance', to: '/app/attendance/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
+     ],
+   },
+   {
+@@ -125,10 +120,10 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: ClipboardCheck,
+     color: '#22C55E',
+     items: [
+-      { label: 'Evaluate', to: '/app/qa/evaluate', icon: ClipboardCheck, roles: ['QA', 'QA_LEAD'] },
+-      { label: 'Scorecards', to: '/app/qa/scorecards', icon: ClipboardList, roles: ['QA', 'QA_LEAD'] },
+-      { label: 'QA Analytics', to: '/app/qa/analytics', icon: LineChart, roles: ['QA', 'QA_LEAD', 'TEAM_LEAD'] },
+-      { label: 'QA Team', to: '/app/qa/evaluators', icon: Users, roles: ['QA_LEAD'] },
++      { label: 'Evaluate', to: '/app/qa/evaluate', icon: ClipboardCheck },
++      { label: 'Scorecards', to: '/app/qa/scorecards', icon: ClipboardList },
++      { label: 'QA Analytics', to: '/app/qa/analytics', icon: LineChart },
++      { label: 'QA Team', to: '/app/qa/evaluators', icon: Users },
+     ],
+   },
+   {
+@@ -136,10 +131,10 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: Phone,
+     color: '#4F46E5',
+     items: [
+-      { label: 'Daily Log', to: '/app/itad/log', icon: Phone, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
+-      { label: 'Deal Tracker', to: '/app/itad/bids', icon: Briefcase, departments: ['ITAD'], hideFor: HIDE_FROM_SA },
+-      { label: 'Team View', to: '/app/itad/team', icon: Users, departments: ['ITAD'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
+-      { label: 'Analytics', to: '/app/itad/analytics', icon: LineChart, departments: ['ITAD'], roles: TL_ROLES },
++      { label: 'Daily Log', to: '/app/itad/log', icon: Phone, hideFor: HIDE_FROM_SA },
++      { label: 'Deal Tracker', to: '/app/itad/bids', icon: Briefcase, hideFor: HIDE_FROM_SA },
++      { label: 'Team View', to: '/app/itad/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
++      { label: 'Analytics', to: '/app/itad/analytics', icon: LineChart },
+     ],
+   },
+   {
+@@ -147,10 +142,10 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: TargetIcon,
+     color: '#14B8A6',
+     items: [
+-      { label: 'Daily Log', to: '/app/leadgen/log', icon: Phone, departments: ['LEAD_GEN'], hideFor: HIDE_FROM_SA },
+-      { label: 'Team View', to: '/app/leadgen/team', icon: Users, departments: ['LEAD_GEN'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
+-      { label: 'Monthly Breakdown', to: '/app/leadgen/breakdown', icon: Building2, departments: ['LEAD_GEN'], roles: ADMIN_ROLES },
+-      { label: 'Analytics', to: '/app/leadgen/analytics', icon: LineChart, departments: ['LEAD_GEN'], roles: TL_ROLES },
++      { label: 'Daily Log', to: '/app/leadgen/log', icon: Phone, hideFor: HIDE_FROM_SA },
++      { label: 'Team View', to: '/app/leadgen/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
++      { label: 'Monthly Breakdown', to: '/app/leadgen/breakdown', icon: Building2 },
++      { label: 'Analytics', to: '/app/leadgen/analytics', icon: LineChart },
+     ],
+   },
+   {
+@@ -158,8 +153,8 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: PhoneCall,
+     color: '#0EA5E9',
+     items: [
+-      { label: 'Daily Log', to: '/app/talkloop/log', icon: PhoneCall, departments: ['TALKLOOP'], hideFor: HIDE_FROM_SA },
+-      { label: 'Team View', to: '/app/talkloop/team', icon: Users, departments: ['TALKLOOP'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
++      { label: 'Daily Log', to: '/app/talkloop/log', icon: PhoneCall, hideFor: HIDE_FROM_SA },
++      { label: 'Team View', to: '/app/talkloop/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
+     ],
+   },
+   {
+@@ -167,12 +162,12 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: ShoppingCart,
+     color: '#F59E0B',
+     items: [
+-      { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
+-      { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
+-      { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
+-      { label: 'Team View', to: '/app/ecommerce/team', icon: Users, departments: ['ECOMMERCE'] },
+-      { label: 'Meeting Notes', to: '/app/ecommerce/notes', icon: StickyNote, departments: ['ECOMMERCE'], hideFor: HIDE_FROM_SA },
+-      { label: 'RDP Records', to: '/app/ecommerce/rdp', icon: Server, departments: ['ECOMMERCE'], roles: ADMIN_ROLES, badge: { text: 'TL', tone: 'accent' } },
++      { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, hideFor: HIDE_FROM_SA },
++      { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, hideFor: HIDE_FROM_SA },
++      { label: 'Stock Tracking', to: '/app/ecommerce/stock', icon: Boxes, hideFor: HIDE_FROM_SA },
++      { label: 'Team View', to: '/app/ecommerce/team', icon: Users },
++      { label: 'Meeting Notes', to: '/app/ecommerce/notes', icon: StickyNote, hideFor: HIDE_FROM_SA },
++      { label: 'RDP Records', to: '/app/ecommerce/rdp', icon: Server, badge: { text: 'TL', tone: 'accent' } },
+     ],
+   },
+   {
+@@ -180,9 +175,9 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: Boxes,
+     color: '#0891B2',
+     items: [
+-      { label: 'Inventory', to: '/app/inventory', icon: Boxes, departments: ['INVENTORY'] },
+-      { label: 'Requests', to: '/app/inventory/requests', icon: ListChecks, departments: ['INVENTORY'] },
+-      { label: 'Team', to: '/app/inventory/team', icon: Users, departments: ['INVENTORY'], roles: TL_ROLES, badge: { text: 'TL', tone: 'accent' } },
++      { label: 'Inventory', to: '/app/inventory', icon: Boxes },
++      { label: 'Requests', to: '/app/inventory/requests', icon: ListChecks },
++      { label: 'Team', to: '/app/inventory/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
+     ],
+   },
+   {
+@@ -190,48 +185,48 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: Megaphone,
+     color: '#8B5CF6',
+     items: [
+-      { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare, departments: ['MARKETING'] },
+-      { label: 'Team', to: '/app/marketing/team', icon: Users, departments: ['MARKETING'], roles: TL_ROLES },
+-      { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart, departments: ['MARKETING'], roles: TL_ROLES },
+-      { label: 'Brands', to: '/app/marketing/brands', icon: Building2, departments: ['MARKETING'], roles: ADMIN_ROLES },
+-      { label: 'Profiles & Platforms', to: '/app/marketing/profiles', icon: Globe, departments: ['MARKETING'], roles: ADMIN_ROLES },
++      { label: 'Board', to: '/app/marketing/board', icon: KanbanSquare },
++      { label: 'Team', to: '/app/marketing/team', icon: Users },
++      { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart },
++      { label: 'Brands', to: '/app/marketing/brands', icon: Building2 },
++      { label: 'Profiles & Platforms', to: '/app/marketing/profiles', icon: Globe },
+     ],
+     subgroups: [
+       {
+         title: 'Social Media',
+         items: [
+-          { label: 'Social Planner', to: '/app/marketing/planner', icon: CalendarDays, departments: ['MARKETING'] },
+-          { label: 'Daily Log', to: '/app/marketing/social', icon: Share2, departments: ['MARKETING'] },
+-          { label: 'Social Reports', to: '/app/marketing/social/monthly', icon: BarChart3, departments: ['MARKETING'] },
+-          { label: 'Social Analytics', to: '/app/marketing/social/analytics', icon: LineChart, departments: ['MARKETING'] },
++          { label: 'Social Planner', to: '/app/marketing/planner', icon: CalendarDays },
++          { label: 'Daily Log', to: '/app/marketing/social', icon: Share2 },
++          { label: 'Social Reports', to: '/app/marketing/social/monthly', icon: BarChart3 },
++          { label: 'Social Analytics', to: '/app/marketing/social/analytics', icon: LineChart },
+         ],
+       },
+       {
+         title: 'Content',
+         items: [
+-          { label: 'Master Plan', to: '/app/marketing/plan', icon: ListChecks, departments: ['MARKETING'] },
+-          { label: 'Daily Log', to: '/app/marketing/content/log', icon: PenTool, departments: ['MARKETING'] },
+-          { label: 'Blogs', to: '/app/marketing/blogs', icon: PenTool, departments: ['MARKETING'] },
+-          { label: 'Content', to: '/app/marketing/content', icon: KanbanSquare, departments: ['MARKETING'] },
++          { label: 'Master Plan', to: '/app/marketing/plan', icon: ListChecks },
++          { label: 'Daily Log', to: '/app/marketing/content/log', icon: PenTool },
++          { label: 'Blogs', to: '/app/marketing/blogs', icon: PenTool },
++          { label: 'Content', to: '/app/marketing/content', icon: KanbanSquare },
+         ],
+       },
+       {
+         title: 'SEO',
+         items: [
+-          { label: 'Daily Log', to: '/app/marketing/seo', icon: Search, departments: ['MARKETING'] },
+-          { label: 'Analytics', to: '/app/marketing/seo/analytics', icon: LineChart, departments: ['MARKETING'] },
++          { label: 'Daily Log', to: '/app/marketing/seo', icon: Search },
++          { label: 'Analytics', to: '/app/marketing/seo/analytics', icon: LineChart },
+         ],
+       },
+       {
+         title: 'ADS Campaign',
+         items: [
+-          { label: 'Campaigns', to: '/app/marketing/ads', icon: Megaphone, departments: ['MARKETING'] },
++          { label: 'Campaigns', to: '/app/marketing/ads', icon: Megaphone },
+         ],
+       },
+       {
+         title: 'Email Marketing',
+         items: [
+-          { label: 'Email', to: '/app/marketing/email', icon: Mail, departments: ['MARKETING'] },
++          { label: 'Email', to: '/app/marketing/email', icon: Mail },
+         ],
+       },
+     ],
+@@ -241,47 +236,46 @@ export const NAV_GROUPS: NavGroup[] = [
+     icon: Shield,
+     color: '#EF4444',
+     items: [
+-      { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, roles: ['SUPER_ADMIN'], requireEmail: FINANCE_EMAILS },
+-      { label: 'Activity Log', to: '/app/admin/activity', icon: History, roles: ['SUPER_ADMIN', 'TEAM_LEAD'] },
+-      { label: 'Users', to: '/app/admin/users', icon: UserCog, roles: ['SUPER_ADMIN'], badge: { text: 'ADMIN', tone: 'danger' } },
+-      { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon, roles: ADMIN_ROLES },
+-      { label: 'Tags', to: '/app/admin/tags', icon: Tags, roles: ADMIN_ROLES },
+-      { label: 'Holidays & Leave', to: '/app/admin/leave', icon: CalendarOff, roles: ADMIN_ROLES },
+-      { label: 'Office Networks', to: '/app/admin/networks', icon: Wifi, roles: ['SUPER_ADMIN'] },
++      { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, requireEmail: FINANCE_EMAILS },
++      { label: 'Activity Log', to: '/app/admin/activity', icon: History },
++      { label: 'Users', to: '/app/admin/users', icon: UserCog, badge: { text: 'ADMIN', tone: 'danger' } },
++      { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon },
++      { label: 'Tags', to: '/app/admin/tags', icon: Tags },
++      { label: 'Holidays & Leave', to: '/app/admin/leave', icon: CalendarOff },
++      { label: 'Office Networks', to: '/app/admin/networks', icon: Wifi },
+     ],
+   },
+ ]
+ 
+-function itemVisible(item: NavItem, role: Role, department?: Department | null, email?: string | null): boolean {
++type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email'>
++
++/** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
++function itemVisible(item: NavItem, u: NavUser): boolean {
+   // Identity gate wins over everything, including Super Admin: only the listed emails see it.
+   if (item.requireEmail) {
+-    return !!email && item.requireEmail.map((e) => e.toLowerCase()).includes(email.toLowerCase())
++    return !!u.email && item.requireEmail.map((e) => e.toLowerCase()).includes(u.email.toLowerCase())
+   }
+-  // Super Admin sees every screen (needed for management demos / full oversight),
+-  // regardless of department or per-item hideFor opt-outs.
+-  if (role === 'SUPER_ADMIN') return true
+-  // Explicit per-item opt-out for non-admin roles.
+-  if (item.hideFor?.includes(role)) return false
+-  if (item.roles && !item.roles.includes(role)) return false
+-  if (item.departments && (!department || !item.departments.includes(department))) return false
+-  return true
++  // Super Admin sees every screen (management oversight), regardless of per-item opt-outs.
++  if (u.role === 'SUPER_ADMIN') return true
++  if (item.hideFor?.includes(u.role)) return false
++  return canOpen(u, item.to)
+ }
+ 
+ /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
+-export function filterNav(role: Role, department?: Department | null, email?: string | null): NavGroup[] {
+-  // Inventory-only operations users see ONLY the Inventory tab — nothing else.
+-  // Super Admin keeps full see-all access.
+-  if (department === 'INVENTORY' && role !== 'SUPER_ADMIN') {
++export function filterNav(u: NavUser): NavGroup[] {
++  // Inventory staff see only Inventory and the shared Projects tools (their lead also gets the dashboard).
++  if (u.department === 'INVENTORY' && u.role !== 'SUPER_ADMIN') {
+     return NAV_GROUPS
+-      .filter((g) => g.title === 'Inventory' || g.title === 'Projects')
+-      .map((g) => ({ ...g, items: g.items.filter((i) => itemVisible(i, role, department, email)) }))
++      .map((g, i) => (i === 0 ? { ...g, items: u.role === 'TEAM_LEAD' ? g.items.filter((it) => it.to === '/app/dashboard') : [] } : g))
++      .filter((g, i) => i === 0 || g.title === 'Inventory' || g.title === 'Projects')
++      .map((g) => ({ ...g, items: g.items.filter((i) => itemVisible(i, u)) }))
+       .filter((g) => g.items.length > 0)
+   }
+   return NAV_GROUPS.map((g) => ({
+     ...g,
+-    items: g.items.filter((i) => itemVisible(i, role, department, email)),
++    items: g.items.filter((i) => itemVisible(i, u)),
+     subgroups: g.subgroups
+-      ?.map((sg) => ({ ...sg, items: sg.items.filter((i) => itemVisible(i, role, department, email)) }))
++      ?.map((sg) => ({ ...sg, items: sg.items.filter((i) => itemVisible(i, u)) }))
+       .filter((sg) => sg.items.length > 0),
+   })).filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
+ }
+diff --git a/client/src/lib/access.ts b/client/src/lib/access.ts
+new file mode 100644
+index 0000000..e1f619c
+--- /dev/null
++++ b/client/src/lib/access.ts
+@@ -0,0 +1,148 @@
++import { matchPath } from 'react-router-dom'
++import type { CurrentUser, Department, Role } from './types'
++
++/**
++ * Who may open which screen: ONE list used by both the side menu and the page guard, so a
++ * screen that is hidden from someone's menu is also closed to them when they type its address.
++ *
++ * Each screen lists who it is for. Someone gets in when they match any one line:
++ *   roles        their role is one of these
++ *   departments  their current department is one of these
++ *   subDepts     (Marketing) their sub-department is one of these; team leads see all of Marketing
++ * The Super Admin opens every screen. Screens not listed (dashboard, chat, calendar, projects,
++ * to-do, my tasks, attendance, feedback, settings) are for everyone.
++ *
++ * The server checks the same things again on every request; this only keeps the menus and
++ * pages tidy so nobody is shown screens that are not for them.
++ */
++
++export interface AccessLine {
++  roles?: Role[]
++  departments?: Department[]
++  subDepts?: string[]
++}
++
++/** People who work inside a department (not QA, not the Super Admin). */
++const WORK: Role[] = ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD']
++const LEAD: Role[] = ['TEAM_LEAD']
++const QA_TEAM: Role[] = ['QA', 'QA_LEAD']
++/** Departments QA scores. */
++export const QA_SCORED: Department[] = ['ITAD', 'CSR']
++
++const dept = (departments: Department[], roles: Role[] = WORK): AccessLine[] => [{ departments, roles }]
++const lead = (departments: Department[]): AccessLine[] => [{ departments, roles: LEAD }]
++/** Marketing screen for one discipline: its own people, plus every Marketing team lead. */
++const mkt = (...subDepts: string[]): AccessLine[] => [
++  { departments: ['MARKETING'], roles: ['MEMBER', 'SUB_DEPT_LEAD'], subDepts },
++  { departments: ['MARKETING'], roles: LEAD },
++]
++
++export const ACCESS: Record<string, AccessLine[]> = {
++  // ---- personal
++  '/app/reports': dept(['ITAD', 'LEAD_GEN']).concat(mkt('seo', 'social')),
++  '/app/analytics': dept(['ITAD', 'LEAD_GEN'], ['MEMBER']),
++  '/app/qa/my': dept(QA_SCORED, ['MEMBER']),
++
++  // ---- team lead tools
++  '/app/team/members': [{ roles: LEAD }],
++  '/app/team/not-submitted': lead(['ITAD', 'LEAD_GEN', 'ECOMMERCE', 'MARKETING', 'TALKLOOP']),
++  '/app/members/:id': [{ roles: LEAD }],
++  '/app/reports/monthly': lead(['ITAD', 'LEAD_GEN']),
++  '/app/attendance/team': [{ roles: LEAD }],
++
++  // ---- QA
++  '/app/qa/evaluate': [{ roles: QA_TEAM }],
++  '/app/qa/scorecards': [{ roles: QA_TEAM }],
++  '/app/qa/evaluators': [{ roles: ['QA_LEAD'] }],
++  '/app/qa/analytics': [{ roles: QA_TEAM }, ...lead(QA_SCORED)],
++  '/app/qa/evaluations': [{ roles: QA_TEAM }, ...lead(QA_SCORED)],
++  '/app/qa/evaluations/:id': [{ roles: QA_TEAM }, ...dept(QA_SCORED)],
++  '/app/qa/evaluations/:id/edit': [{ roles: QA_TEAM }],
++
++  // ---- ITAD
++  '/app/itad/log': dept(['ITAD']),
++  '/app/itad/bids': dept(['ITAD']),
++  '/app/itad/team': lead(['ITAD']),
++  '/app/itad/analytics': lead(['ITAD']),
++
++  // ---- Lead Generation
++  '/app/leadgen/log': dept(['LEAD_GEN']),
++  '/app/leadgen/team': lead(['LEAD_GEN']),
++  '/app/leadgen/breakdown': lead(['LEAD_GEN']),
++  '/app/leadgen/analytics': lead(['LEAD_GEN']),
++
++  // ---- Talkloop
++  '/app/talkloop/log': dept(['TALKLOOP']),
++  '/app/talkloop/team': lead(['TALKLOOP']),
++
++  // ---- Ecommerce
++  '/app/ecommerce/log': dept(['ECOMMERCE']),
++  '/app/ecommerce/board': dept(['ECOMMERCE']),
++  '/app/ecommerce/stock': dept(['ECOMMERCE']),
++  '/app/ecommerce/notes': dept(['ECOMMERCE']),
++  '/app/ecommerce/team': dept(['ECOMMERCE']),
++  '/app/ecommerce/rdp': lead(['ECOMMERCE']),
++
++  // ---- Inventory
++  '/app/inventory': dept(['INVENTORY']),
++  '/app/inventory/requests': dept(['INVENTORY']),
++  '/app/inventory/team': lead(['INVENTORY']),
++
++  // ---- Marketing (shared)
++  '/app/marketing/board': dept(['MARKETING']),
++  '/app/marketing/calendar': mkt('social'),
++  '/app/marketing/team': [{ departments: ['MARKETING'], roles: ['TEAM_LEAD', 'SUB_DEPT_LEAD'] }],
++  '/app/marketing/analytics': [{ departments: ['MARKETING'], roles: ['TEAM_LEAD', 'SUB_DEPT_LEAD'] }],
++  '/app/marketing/brands': lead(['MARKETING']),
++  '/app/marketing/profiles': lead(['MARKETING']),
++  // ---- Marketing by discipline
++  '/app/marketing/planner': mkt('social'),
++  '/app/marketing/social': mkt('social'),
++  '/app/marketing/social/monthly': mkt('social'),
++  '/app/marketing/social/analytics': mkt('social'),
++  '/app/marketing/plan': mkt('content'),
++  '/app/marketing/content/log': mkt('content'),
++  '/app/marketing/blogs': mkt('content'),
++  '/app/marketing/content': mkt('content'),
++  '/app/marketing/seo': mkt('seo'),
++  '/app/marketing/seo/analytics': mkt('seo'),
++  '/app/marketing/ads': mkt('ads'),
++  '/app/marketing/email': mkt('email'),
++
++  // ---- Admin
++  '/app/admin/users': [],
++  '/app/admin/networks': [],
++  '/app/admin/targets': lead(['ITAD', 'LEAD_GEN', 'TALKLOOP', 'MARKETING']),
++  '/app/admin/tags': lead(['ITAD', 'LEAD_GEN', 'MARKETING', 'TALKLOOP', 'ECOMMERCE']),
++  '/app/admin/leave': [{ roles: LEAD }],
++  '/app/admin/activity': [{ roles: LEAD }],
++}
++
++type Who = Pick<CurrentUser, 'role' | 'department' | 'subDepartment'>
++
++function lineAllows(line: AccessLine, u: Who): boolean {
++  if (line.roles && !line.roles.includes(u.role)) return false
++  if (line.departments && (!u.department || !line.departments.includes(u.department))) return false
++  // A Marketing person with no sub-department set yet sees all of Marketing (nothing to go by).
++  if (line.subDepts && u.subDepartment && !line.subDepts.includes(u.subDepartment)) return false
++  return true
++}
++
++/** The rule for this address, if the address is one of the listed screens. */
++export function accessRuleFor(pathname: string): AccessLine[] | undefined {
++  const exact = ACCESS[pathname]
++  if (exact) return exact
++  for (const pattern of Object.keys(ACCESS)) {
++    if (pattern.includes(':') && matchPath({ path: pattern, end: true }, pathname)) return ACCESS[pattern]
++  }
++  return undefined
++}
++
++/** May this person open this screen? */
++export function canOpen(u: Who | null | undefined, pathname: string): boolean {
++  if (!u) return false
++  if (u.role === 'SUPER_ADMIN') return true
++  const rule = accessRuleFor(pathname.replace(/\/+$/, '') || '/')
++  if (!rule) return true
++  return rule.some((line) => lineAllows(line, u))
++}
+diff --git a/client/src/lib/adminApi.ts b/client/src/lib/adminApi.ts
+index 166c993..f13aa0f 100644
+--- a/client/src/lib/adminApi.ts
++++ b/client/src/lib/adminApi.ts
+@@ -93,7 +93,7 @@ export const deleteTarget = (id: string) => api.del<void>(`/admin/targets/${id}`
+ export interface AdminTag {
+   id: string
+   name: string
+-  type: 'VERTICAL' | 'PLATFORM' | 'CAMPAIGN' | 'DATA_SOURCE'
++  type: 'VERTICAL' | 'LEAD_TYPE' | 'PLATFORM' | 'CAMPAIGN' | 'DATA_SOURCE' | 'MARKETPLACE' | 'TASK_TYPE' | 'COUNTRY'
+   department: Department | null
+   isActive: boolean
+ }
+diff --git a/client/src/lib/dashboardApi.ts b/client/src/lib/dashboardApi.ts
+index 05bd288..035465d 100644
+--- a/client/src/lib/dashboardApi.ts
++++ b/client/src/lib/dashboardApi.ts
+@@ -1,6 +1,7 @@
+ import { api } from './api'
+ import type { RangeKey, CustomRange } from '../components/layout/RangeSelector'
+ import { rangeQuery } from './range'
++import type { Department } from './types'
+ 
+ export interface DashKpi {
+   label: string
+@@ -8,6 +9,8 @@ export interface DashKpi {
+   format: 'number' | 'percent'
+   delta: number
+   caption?: string
++  /** A count of how things stand right now: no "vs previous period" arrow. */
++  now?: boolean
+ }
+ 
+ export interface DashTrendPoint {
+@@ -25,14 +28,31 @@ export interface DashSubmission {
+ }
+ 
+ export interface TeamDashboard {
+-  department: 'ITAD' | 'LEAD_GEN' | 'MARKETING'
++  department: Department
+   range: { startDate: string; endDate: string; key: RangeKey }
+   kpis: DashKpi[]
+   trend: { metricLabel: string; points: DashTrendPoint[] }
+   breakdown: { name: string; value: number }[]
++  /** Title of the breakdown card (default "Activity Breakdown"). */
++  breakdownTitle?: string
+   improvement: string
+   todaySubmissions: DashSubmission[]
+   counts: { submitted: number; total: number }
++  /** Departments without a daily form: the people table shows a number instead of a submitted badge. */
++  people?: { title: string; subtitle: string; showStatus: boolean }
++}
++
++// --- Top Achiever (one per department, judged on what that department does) ---
++export interface TopAchiever {
++  department: Department
++  label: string
++  basis: string
++  winner: { name: string; value: number; display: string } | null
++  note?: string
++}
++
++export function getTopAchievers(month?: string) {
++  return api.get<{ month: string; winners: TopAchiever[] }>(`/dashboard/top-achiever${month ? `?month=${month}` : ''}`)
+ }
+ 
+ export function getTeamDashboard(range: RangeKey, custom?: CustomRange | null) {
+@@ -41,7 +61,7 @@ export function getTeamDashboard(range: RangeKey, custom?: CustomRange | null) {
+ 
+ // --- Executive (Super Admin) ---
+ export interface ExecDeptCard {
+-  type: 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE' | 'TALKLOOP'
++  type: Department
+   name: string
+   members: number
+   subtitle: string
+diff --git a/client/src/pages/app/DashboardHome.tsx b/client/src/pages/app/DashboardHome.tsx
+index cad5f95..5347d7a 100644
+--- a/client/src/pages/app/DashboardHome.tsx
++++ b/client/src/pages/app/DashboardHome.tsx
+@@ -1,18 +1,18 @@
+ import { useEffect, useState } from 'react'
+ import { Link } from 'react-router-dom'
+-import { ClipboardList, Users, ArrowRight, MessageSquare, LineChart } from 'lucide-react'
++import { ClipboardList, ClipboardCheck, ArrowRight, MessageSquare, LineChart } from 'lucide-react'
++import { canOpen } from '../../lib/access'
+ import { useAuth } from '../../lib/auth'
+ import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
+ import { Card } from '../../components/ui/Card'
+ import { Badge, FeedbackSentimentBadge } from '../../components/ui/Badge'
+ import { listFeedback, type FeedbackThread } from '../../lib/feedbackApi'
+ import { fromNow } from '../../lib/datetime'
++import { DEPARTMENT_LABEL } from '../../lib/departments'
+ import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
+ import { AssignedTasksCard } from '../../components/AssignedTasksCard'
+ import { TodoList } from '../../components/TodoList'
+ 
+-const TL_ROLES = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
+-
+ /** Where this user logs their daily work — Marketing routes to its sub-department page. */
+ function logPath(user: CurrentUser): string | null {
+   switch (user.department) {
+@@ -22,26 +22,14 @@ function logPath(user: CurrentUser): string | null {
+       return '/app/leadgen/log'
+     case 'TALKLOOP':
+       return '/app/talkloop/log'
++    case 'ECOMMERCE':
++      return '/app/ecommerce/log'
+     case 'MARKETING':
+       if (user.subDepartment === 'seo') return '/app/marketing/seo'
+       if (user.subDepartment === 'social') return '/app/marketing/social'
+-      return '/app/marketing/content'
+-    default:
+-      return null
+-  }
+-}
+-
+-/** Where this lead sees their team. */
+-function teamPath(user: CurrentUser): string | null {
+-  switch (user.department) {
+-    case 'ITAD':
+-      return '/app/itad/team'
+-    case 'LEAD_GEN':
+-      return '/app/leadgen/team'
+-    case 'TALKLOOP':
+-      return '/app/talkloop/team'
+-    case 'MARKETING':
+-      return '/app/marketing/analytics'
++      // Ads and Email have no daily log.
++      if (user.subDepartment === 'ads' || user.subDepartment === 'email') return null
++      return '/app/marketing/content/log'
+     default:
+       return null
+   }
+@@ -52,8 +40,6 @@ export default function DashboardHome() {
+   if (!user) return null
+ 
+   const log = logPath(user)
+-  const team = teamPath(user)
+-  const isLead = TL_ROLES.includes(user.role)
+ 
+   return (
+     <div className="mx-auto max-w-7xl space-y-6">
+@@ -63,7 +49,7 @@ export default function DashboardHome() {
+           <Badge tone="primary">{ROLE_LABEL[user.role]}</Badge>
+         </div>
+         <p className="mt-1 text-body-md text-ink-muted">
+-          {user.department ? `${user.department.replace('_', ' ')} · ` : ''}Here&apos;s where you pick up your work.
++          {user.department ? `${DEPARTMENT_LABEL[user.department]} · ` : ''}Here&apos;s where you pick up your work.
+         </p>
+       </div>
+ 
+@@ -76,15 +62,15 @@ export default function DashboardHome() {
+             desc="Submit your daily entry in under a minute."
+           />
+         )}
+-        {isLead && team && (
++        {canOpen(user, '/app/qa/my') && (
+           <QuickAction
+-            to={team}
+-            icon={<Users size={20} />}
+-            title="Team view"
+-            desc="See every member's progress and team totals."
++            to="/app/qa/my"
++            icon={<ClipboardCheck size={20} />}
++            title="My QA scores"
++            desc="See how your calls were scored and what to work on."
+           />
+         )}
+-        {!isLead && log && (
++        {canOpen(user, '/app/analytics') && (
+           <QuickAction
+             to="/app/analytics"
+             icon={<LineChart size={20} />}
+diff --git a/client/src/pages/app/DashboardIndex.tsx b/client/src/pages/app/DashboardIndex.tsx
+index 19f2259..2215414 100644
+--- a/client/src/pages/app/DashboardIndex.tsx
++++ b/client/src/pages/app/DashboardIndex.tsx
+@@ -9,8 +9,8 @@ import QaTeam from './qa/QaTeam'
+ export default function DashboardIndex() {
+   const { user } = useAuth()
+   if (!user) return null
+-  // Inventory-only operations users have no general dashboard — send them to their tab.
+-  if (user.department === 'INVENTORY' && user.role !== 'SUPER_ADMIN') return <Navigate to="/app/inventory" replace />
++  // Inventory staff work from their Inventory tab; their team lead gets the team dashboard.
++  if (user.department === 'INVENTORY' && user.role === 'MEMBER') return <Navigate to="/app/inventory" replace />
+   if (user.role === 'SUPER_ADMIN') return <ExecutiveDashboard />
+   if (user.role === 'QA' || user.role === 'QA_LEAD') return <QaTeam />
+   if (user.role === 'TEAM_LEAD' || user.role === 'SUB_DEPT_LEAD') return <TeamLeadDashboard />
+diff --git a/client/src/pages/app/MemberProfile.tsx b/client/src/pages/app/MemberProfile.tsx
+index fbc4dbc..cd85845 100644
+--- a/client/src/pages/app/MemberProfile.tsx
++++ b/client/src/pages/app/MemberProfile.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useState } from 'react'
+-import { Link, useParams } from 'react-router-dom'
++import { Link, useNavigate, useParams } from 'react-router-dom'
+ import { ArrowLeft, Mail, Phone, Heart, CheckCircle2, Target, TrendingUp, Users, MessageSquare, ChevronRight } from 'lucide-react'
+ import { Card } from '../../components/ui/Card'
+ import { StatCard } from '../../components/StatCard'
+@@ -272,11 +272,13 @@ function LeadGenView({ data, summary }: { data: MemberProfileResponse; summary:
+   )
+ }
+ 
++/** Back to wherever this page was opened from (team dashboard, QA list, a notification...). */
+ function BackLink() {
++  const navigate = useNavigate()
+   return (
+-    <Link to="/app/team/not-submitted" className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink">
++    <button type="button" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/app/dashboard'))} className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink">
+       <ArrowLeft size={16} /> Back
+-    </Link>
++    </button>
+   )
+ }
+ 
+diff --git a/client/src/pages/app/ReportsMonthly.tsx b/client/src/pages/app/ReportsMonthly.tsx
+index 3e286a0..5a399a5 100644
+--- a/client/src/pages/app/ReportsMonthly.tsx
++++ b/client/src/pages/app/ReportsMonthly.tsx
+@@ -104,7 +104,8 @@ export default function ReportsMonthly() {
+         </div>
+       </div>
+ 
+-      <Card>
++      {/* Covers several departments, so only the Super Admin sees it. */}
++      {isAdmin && <Card>
+         <div className="flex flex-wrap items-center justify-between gap-3">
+           <div className="flex items-start gap-3">
+             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary"><Layers size={20} /></span>
+@@ -122,7 +123,7 @@ export default function ReportsMonthly() {
+             </Button>
+           </div>
+         </div>
+-      </Card>
++      </Card>}
+ 
+       {loading ? (
+         <Card><p className="py-10 text-center text-body-md text-ink-muted">Loading…</p></Card>
+diff --git a/client/src/pages/app/TeamLeadDashboard.tsx b/client/src/pages/app/TeamLeadDashboard.tsx
+index b110734..66b5bad 100644
+--- a/client/src/pages/app/TeamLeadDashboard.tsx
++++ b/client/src/pages/app/TeamLeadDashboard.tsx
+@@ -13,6 +13,7 @@ import { useAuth } from '../../lib/auth'
+ import { formatNumber, formatPercent } from '../../lib/format'
+ import { getTeamDashboard, type TeamDashboard, type DashSubmission } from '../../lib/dashboardApi'
+ import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
++import { DEPARTMENT_LABEL } from '../../lib/departments'
+ 
+ const RANGE_LABEL: Record<string, string> = {
+   today: 'Today',
+@@ -45,9 +46,12 @@ export default function TeamLeadDashboard() {
+   const fmt = (k: { value: number; format: 'number' | 'percent' }) =>
+     k.format === 'percent' ? formatPercent(k.value) : formatNumber(k.value)
+ 
++  const showStatus = data?.people?.showStatus ?? true
++  // Only a team lead (or the Super Admin) can open someone's profile.
++  const canOpenProfile = user?.role === 'TEAM_LEAD' || user?.role === 'SUPER_ADMIN'
+   const subColumns: Column<DashSubmission>[] = [
+     { key: 'name', header: 'Team Member', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
+-    { key: 'status', header: 'Status', render: (r) => <SubmissionBadge status={r.status} /> },
++    ...(showStatus ? [{ key: 'status', header: 'Status', render: (r: DashSubmission) => <SubmissionBadge status={r.status} /> }] : []),
+     {
+       key: 'metric',
+       header: data?.todaySubmissions[0]?.metricLabel ?? 'Today',
+@@ -63,7 +67,7 @@ export default function TeamLeadDashboard() {
+       <div>
+         <h1 className="text-headline-lg text-ink">Team Performance Overview</h1>
+         <p className="mt-0.5 text-body-md text-ink-muted">
+-          {user?.department?.replace('_', ' ')} · {RANGE_LABEL[range] ?? 'This Month'}
++          {user?.department ? DEPARTMENT_LABEL[user.department] : ''} · {RANGE_LABEL[range] ?? 'This Month'}
+         </p>
+       </div>
+ 
+@@ -76,19 +80,23 @@ export default function TeamLeadDashboard() {
+           {/* KPI cards */}
+           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+             {data.kpis.map((k) => (
+-              <StatCard key={k.label} label={k.label} value={fmt(k)} delta={k.delta} caption={k.caption} />
++              <StatCard key={k.label} label={k.label} value={fmt(k)} delta={k.now ? undefined : k.delta} caption={k.caption} />
+             ))}
+           </div>
+ 
+           {/* Trend + breakdown */}
+           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+-            <Card title={`${data.trend.metricLabel} Velocity`} subtitle="Actual vs target" className="lg:col-span-2">
++            <Card
++              title={`${data.trend.metricLabel} over time`}
++              subtitle={data.trend.points.some((p) => p.target !== undefined) ? 'Actual vs target' : 'Team total'}
++              className="lg:col-span-2"
++            >
+               <TrendLineChart
+                 data={data.trend.points}
+                 showTargetSeries={data.trend.points.some((p) => p.target !== undefined)}
+               />
+             </Card>
+-            <Card title="Activity Breakdown">
++            <Card title={data.breakdownTitle ?? 'Activity Breakdown'}>
+               {breakdownTotal > 0 ? (
+                 <DonutChart data={data.breakdown} centerValue={formatNumber(breakdownTotal)} centerLabel="Total" />
+               ) : (
+@@ -112,15 +120,15 @@ export default function TeamLeadDashboard() {
+ 
+           {/* Today's submissions */}
+           <Card
+-            title="Today's Submissions"
+-            subtitle={`${data.counts.submitted} of ${data.counts.total} submitted`}
++            title={data.people?.title ?? "Today's Submissions"}
++            subtitle={data.people?.subtitle ?? `${data.counts.submitted} of ${data.counts.total} submitted`}
+             flush
+           >
+             <DataTable
+               columns={subColumns}
+               rows={data.todaySubmissions}
+               getRowId={(r) => r.id}
+-              onRowClick={(r) => navigate(`/app/members/${r.id}`)}
++              onRowClick={canOpenProfile ? (r) => navigate(`/app/members/${r.id}`) : undefined}
+               emptyMessage="No team members yet."
+             />
+           </Card>
+diff --git a/client/src/pages/app/admin/AdminLeave.tsx b/client/src/pages/app/admin/AdminLeave.tsx
+index 629892b..5fb54a7 100644
+--- a/client/src/pages/app/admin/AdminLeave.tsx
++++ b/client/src/pages/app/admin/AdminLeave.tsx
+@@ -10,12 +10,15 @@ import {
+   listLeave, listLeaveMembers, createLeave, deleteLeave,
+   type Holiday, type LeaveRow,
+ } from '../../../lib/adminApi'
++import { useAuth } from '../../../lib/auth'
+ 
+ const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
+ const LEAVE_TONE = { ON_LEAVE: 'primary', HOLIDAY: 'accent', OFF: 'neutral', WFH: 'success' } as const
+ 
+ export default function AdminLeave() {
+   const { addToast } = useToast()
++  // Holidays are company wide, so only the Super Admin adds or removes them; team leads see the list.
++  const canEditHolidays = useAuth().user?.role === 'SUPER_ADMIN'
+   const [holidays, setHolidays] = useState<Holiday[]>([])
+   const [leave, setLeave] = useState<LeaveRow[]>([])
+   const [members, setMembers] = useState<{ id: string; name: string }[]>([])
+@@ -80,8 +83,8 @@ export default function AdminLeave() {
+       <h1 className="text-headline-lg text-ink">Holidays & Leave</h1>
+       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+         {/* Holidays */}
+-        <Card title="Company Holidays" subtitle="Excluded from averages for everyone">
+-          <form onSubmit={addHoliday} className="mb-4 flex items-end gap-2">
++        <Card title="Company Holidays" subtitle={canEditHolidays ? 'Excluded from averages for everyone' : 'Set by the admin for the whole company'}>
++          {canEditHolidays && <form onSubmit={addHoliday} className="mb-4 flex items-end gap-2">
+             <div className="flex-1">
+               <label className="mb-1 block text-body-sm font-semibold text-ink">Date</label>
+               <input type="date" className={sel} value={hDate} onChange={(e) => setHDate(e.target.value)} />
+@@ -90,12 +93,12 @@ export default function AdminLeave() {
+               <TextField label="Name" value={hName} onChange={(e) => setHName(e.target.value)} placeholder="e.g. Eid" />
+             </div>
+             <Button type="submit" leadingIcon={<Plus size={16} />}>Add</Button>
+-          </form>
++          </form>}
+           <ul className="divide-y divide-line">
+             {holidays.map((h) => (
+               <li key={h.id} className="flex items-center justify-between py-2">
+                 <span className="text-body-md text-ink"><span className="tabular-nums text-ink-muted">{h.date}</span> · {h.name}</span>
+-                <button onClick={() => removeHoliday(h.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger"><Trash2 size={15} /></button>
++                {canEditHolidays && <button onClick={() => removeHoliday(h.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger"><Trash2 size={15} /></button>}
+               </li>
+             ))}
+             {holidays.length === 0 && <li className="py-3 text-body-sm text-ink-muted">No holidays yet.</li>}
+diff --git a/client/src/pages/app/admin/AdminTags.tsx b/client/src/pages/app/admin/AdminTags.tsx
+index dabe5b7..9d90e70 100644
+--- a/client/src/pages/app/admin/AdminTags.tsx
++++ b/client/src/pages/app/admin/AdminTags.tsx
+@@ -8,16 +8,38 @@ import { DataTable, type Column } from '../../../components/DataTable'
+ import { useToast } from '../../../components/ui/Toast'
+ import type { Department } from '../../../lib/types'
+ import { listTags, createTag, updateTag, type AdminTag } from '../../../lib/adminApi'
++import { useAuth } from '../../../lib/auth'
++
++const TAG_DEPARTMENTS: { value: Department; label: string }[] = [
++  { value: 'LEAD_GEN', label: 'Lead Generation' },
++  { value: 'MARKETING', label: 'Marketing' },
++  { value: 'ITAD', label: 'ITAD' },
++  { value: 'TALKLOOP', label: 'Talkloop' },
++  { value: 'ECOMMERCE', label: 'Ecommerce' },
++]
++/** Tag kinds each department uses. */
++const CLASSIC: { value: AdminTag['type']; label: string }[] = [{ value: 'VERTICAL', label: 'Vertical' }, { value: 'PLATFORM', label: 'Platform' }, { value: 'CAMPAIGN', label: 'Campaign' }, { value: 'DATA_SOURCE', label: 'Data Source' }]
++const TYPES_FOR: Record<string, { value: AdminTag['type']; label: string }[]> = {
++  LEAD_GEN: CLASSIC,
++  MARKETING: CLASSIC,
++  ITAD: CLASSIC,
++  TALKLOOP: [{ value: 'COUNTRY', label: 'Country' }],
++  ECOMMERCE: [{ value: 'MARKETPLACE', label: 'Marketplace' }, { value: 'TASK_TYPE', label: 'Task Type' }],
++}
+ 
+ const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
+ 
+ export default function AdminTags() {
+   const { addToast } = useToast()
++  const { user } = useAuth()
++  // A team lead adds tags for their own department only; the Super Admin picks any.
++  const depts = user?.role === 'SUPER_ADMIN' ? TAG_DEPARTMENTS : TAG_DEPARTMENTS.filter((d) => d.value === user?.department)
+   const [tags, setTags] = useState<AdminTag[]>([])
+   const [loading, setLoading] = useState(true)
+   const [name, setName] = useState('')
+-  const [type, setType] = useState<AdminTag['type']>('VERTICAL')
+-  const [department, setDepartment] = useState<Department>('LEAD_GEN')
++  const [department, setDepartment] = useState<Department>(depts[0]?.value ?? 'LEAD_GEN')
++  const [type, setType] = useState<AdminTag['type']>(TYPES_FOR[depts[0]?.value ?? 'LEAD_GEN']?.[0]?.value ?? 'VERTICAL')
++  const typeOptions = TYPES_FOR[department] ?? []
+ 
+   useEffect(() => {
+     let active = true
+@@ -62,24 +84,19 @@ export default function AdminTags() {
+   return (
+     <div className="mx-auto max-w-5xl space-y-6">
+       <h1 className="text-headline-lg text-ink">Tag Management</h1>
+-      <Card title="Add Tag" subtitle="Industry verticals (Lead Gen) and platforms (Marketing)">
++      <Card title="Add Tag" subtitle="The lists your team picks from in its daily log">
+         <form onSubmit={add} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-4">
+           <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Healthcare" />
+           <div>
+             <label className="mb-1 block text-body-sm font-semibold text-ink">Type</label>
+             <select className={sel} value={type} onChange={(e) => setType(e.target.value as AdminTag['type'])}>
+-              <option value="VERTICAL">Vertical</option>
+-              <option value="PLATFORM">Platform</option>
+-              <option value="CAMPAIGN">Campaign</option>
+-              <option value="DATA_SOURCE">Data Source</option>
++              {typeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+             </select>
+           </div>
+           <div>
+             <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
+-            <select className={sel} value={department} onChange={(e) => setDepartment(e.target.value as Department)}>
+-              <option value="LEAD_GEN">Lead Generation</option>
+-              <option value="MARKETING">Marketing</option>
+-              <option value="ITAD">ITAD</option>
++            <select className={sel} value={department} disabled={depts.length < 2} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setType(TYPES_FOR[d]?.[0]?.value ?? 'VERTICAL') }}>
++              {depts.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+             </select>
+           </div>
+           <Button type="submit" leadingIcon={<Plus size={16} />}>Add</Button>
+diff --git a/client/src/pages/app/admin/AdminTargets.tsx b/client/src/pages/app/admin/AdminTargets.tsx
+index da8cd72..c671235 100644
+--- a/client/src/pages/app/admin/AdminTargets.tsx
++++ b/client/src/pages/app/admin/AdminTargets.tsx
+@@ -7,8 +7,9 @@ import { useToast } from '../../../components/ui/Toast'
+ import type { Department } from '../../../lib/types'
+ import { listTargets, upsertTarget, deleteTarget, type AdminTarget } from '../../../lib/adminApi'
+ import { listBrands, type Brand } from '../../../lib/marketingApi'
++import { useAuth } from '../../../lib/auth'
+ 
+-const DEPARTMENTS: { value: Department; label: string }[] = [
++const ALL_DEPARTMENTS: { value: Department; label: string }[] = [
+   { value: 'ITAD', label: 'ITAD' },
+   { value: 'LEAD_GEN', label: 'Lead Generation' },
+   { value: 'MARKETING', label: 'Marketing' },
+@@ -39,10 +40,14 @@ const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-m
+ 
+ export default function AdminTargets() {
+   const { addToast } = useToast()
++  const { user } = useAuth()
++  // A team lead sets targets for their own department only; the Super Admin picks any.
++  const DEPARTMENTS = user?.role === 'SUPER_ADMIN' ? ALL_DEPARTMENTS : ALL_DEPARTMENTS.filter((d) => d.value === user?.department)
++  const first = DEPARTMENTS[0]?.value ?? 'ITAD'
+   const [targets, setTargets] = useState<AdminTarget[]>([])
+-  const [department, setDepartment] = useState<Department>('ITAD')
+-  const [metricKey, setMetricKey] = useState('callsDialed')
+-  const [period, setPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY')
++  const [department, setDepartment] = useState<Department>(first)
++  const [metricKey, setMetricKey] = useState(METRICS[first]?.[0]?.key ?? '')
++  const [period, setPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>(first === 'MARKETING' ? 'MONTHLY' : 'DAILY')
+   const [minValue, setMinValue] = useState(80)
+   const [maxValue, setMaxValue] = useState(100)
+   const [brands, setBrands] = useState<Brand[]>([])
+@@ -54,8 +59,9 @@ export default function AdminTargets() {
+       .then((r) => setTargets(r.targets))
+       .catch(() => addToast({ type: 'error', message: 'Could not load targets.' }))
+       .finally(() => setLoading(false))
+-    listBrands().then((r) => setBrands(r.brands)).catch(() => undefined)
+-  }, [addToast])
++    // Brands are a Marketing thing: only load them for people who can use them.
++    if (user?.role === 'SUPER_ADMIN' || user?.department === 'MARKETING') listBrands().then((r) => setBrands(r.brands)).catch(() => undefined)
++  }, [addToast, user?.role, user?.department])
+ 
+   const metricOptions = useMemo(() => METRICS[department] ?? [], [department])
+ 
+@@ -77,7 +83,7 @@ export default function AdminTargets() {
+       })
+       addToast({ type: 'success', message: 'Target saved.' })
+     } catch {
+-      addToast({ type: 'error', message: 'Could not save (TLs can only set their own department).' })
++      addToast({ type: 'error', message: 'Could not save the target.' })
+     }
+   }
+ 
+@@ -125,7 +131,7 @@ export default function AdminTargets() {
+         <form onSubmit={save} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-6">
+           <div>
+             <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
+-            <select className={sel} value={department} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setMetricKey((METRICS[d] ?? [])[0]?.key ?? ''); if (d === 'MARKETING') setPeriod('MONTHLY') }}>
++            <select className={sel} value={department} disabled={DEPARTMENTS.length < 2} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setMetricKey((METRICS[d] ?? [])[0]?.key ?? ''); if (d === 'MARKETING') setPeriod('MONTHLY') }}>
+               {DEPARTMENTS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+             </select>
+           </div>
+diff --git a/client/src/pages/app/qa/QaEvaluationDetail.tsx b/client/src/pages/app/qa/QaEvaluationDetail.tsx
+index c8a9ffd..86a096d 100644
+--- a/client/src/pages/app/qa/QaEvaluationDetail.tsx
++++ b/client/src/pages/app/qa/QaEvaluationDetail.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useState } from 'react'
+-import { Link, useParams } from 'react-router-dom'
++import { Link, useNavigate, useParams } from 'react-router-dom'
+ import { ArrowLeft, AlertTriangle, CheckCircle2, Pencil } from 'lucide-react'
+ import { Card } from '../../../components/ui/Card'
+ import { Button } from '../../../components/ui/Button'
+@@ -143,6 +143,12 @@ export default function QaEvaluationDetail() {
+   )
+ }
+ 
++/** Back to wherever this page was opened from (team dashboard, QA list, a notification...). */
+ function Back() {
+-  return <Link to="/app/qa/my" className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink"><ArrowLeft size={16} /> Back</Link>
++  const navigate = useNavigate()
++  return (
++    <button type="button" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/app/dashboard'))} className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink">
++      <ArrowLeft size={16} /> Back
++    </button>
++  )
+ }
+diff --git a/client/src/routes/guards.tsx b/client/src/routes/guards.tsx
+index 2c6f5e9..de37fef 100644
+--- a/client/src/routes/guards.tsx
++++ b/client/src/routes/guards.tsx
+@@ -4,6 +4,7 @@ import { Activity } from 'lucide-react'
+ import type { Role } from '../lib/types'
+ import { useAuth } from '../lib/auth'
+ import { canViewFinance } from '../lib/finance'
++import { canOpen } from '../lib/access'
+ import { AppShell } from '../components/layout/AppShell'
+ 
+ function FullScreenSpinner() {
+@@ -26,7 +27,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
+ /** Renders the app shell with the authenticated user; nested routes fill the Outlet. */
+ export function AppShellRoute() {
+   const { user } = useAuth()
++  const { pathname } = useLocation()
+   if (!user) return <Navigate to="/login" replace />
++  // Every page under /app checks the same access list as the menu (lib/access.ts), so a
++  // screen for another department or role cannot be opened by typing its address.
++  if (!canOpen(user, pathname)) return <Navigate to="/app/dashboard" replace />
+   return <AppShell user={user} />
+ }
+ 
+diff --git a/client/src/routes/router.tsx b/client/src/routes/router.tsx
+index e2f7627..38145fb 100644
+--- a/client/src/routes/router.tsx
++++ b/client/src/routes/router.tsx
+@@ -134,7 +134,7 @@ export const router = createBrowserRouter([
+       { path: 'qa/analytics', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaTeam /></RequireRole> },
+       { path: 'qa/evaluators', element: <RequireRole roles={['QA_LEAD', 'SUPER_ADMIN']}><QaEvaluators /></RequireRole> },
+       { path: 'qa/my', element: <MyQaScores /> },
+-      { path: 'qa/evaluations', element: <RequireRole roles={['QA', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaEvaluationsList /></RequireRole> },
++      { path: 'qa/evaluations', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN', 'TEAM_LEAD']}><QaEvaluationsList /></RequireRole> },
+       { path: 'qa/evaluations/:id', element: <QaEvaluationDetail /> },
+       { path: 'qa/evaluations/:id/edit', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaEvaluationEdit /></RequireRole> },
+ 
+diff --git a/server/package.json b/server/package.json
+index a8d80e9..6b8996c 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -13,6 +13,7 @@
+     "prisma:migrate": "prisma migrate dev",
+     "prisma:studio": "prisma studio",
+     "seed": "tsx prisma/seed.ts",
++    "seed:test-users": "tsx prisma/test-users.ts",
+     "import:rdp": "tsx prisma/importRdp.ts"
+   },
+   "prisma": {
+diff --git a/server/prisma/test-users.ts b/server/prisma/test-users.ts
+new file mode 100644
+index 0000000..10de65c
+--- /dev/null
++++ b/server/prisma/test-users.ts
+@@ -0,0 +1,111 @@
++import { PrismaClient, type DepartmentType, type Role } from '@prisma/client'
++import { hashPassword } from '../src/lib/auth'
++import { companyToday, dbDateFromString } from '../src/lib/time'
++
++/**
++ * LOCAL TESTING ONLY: one team lead and one member for every department (plus Marketing
++ * people per discipline and a QA user), all with the password Password123!, and a little
++ * activity for today so every dashboard has numbers. Log in as each one to check that
++ * people only see their own department.
++ *
++ *   npm run seed:test-users
++ *
++ * Refuses to run against anything but a database on this computer, so it can never put
++ * test accounts on the live site. Safe to run again (it updates instead of duplicating).
++ */
++
++const url = process.env.DATABASE_URL ?? ''
++if (!/@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)) {
++  console.error('Refusing: DATABASE_URL is not a database on this computer. This script is for local testing only.')
++  process.exit(1)
++}
++
++const prisma = new PrismaClient()
++const PASSWORD = 'Password123!'
++
++const PEOPLE: { email: string; name: string; role: Role; dept?: DepartmentType; sub?: string }[] = [
++  { email: 'itad.lead@test.local', name: 'Test ITAD Lead', role: 'TEAM_LEAD', dept: 'ITAD' },
++  { email: 'itad.member@test.local', name: 'Test ITAD Member', role: 'MEMBER', dept: 'ITAD' },
++  { email: 'leadgen.lead@test.local', name: 'Test LeadGen Lead', role: 'TEAM_LEAD', dept: 'LEAD_GEN' },
++  { email: 'leadgen.member@test.local', name: 'Test LeadGen Member', role: 'MEMBER', dept: 'LEAD_GEN' },
++  { email: 'marketing.lead@test.local', name: 'Test Marketing Lead', role: 'TEAM_LEAD', dept: 'MARKETING' },
++  { email: 'marketing.seo@test.local', name: 'Test SEO Member', role: 'MEMBER', dept: 'MARKETING', sub: 'seo' },
++  { email: 'marketing.social@test.local', name: 'Test Social Member', role: 'MEMBER', dept: 'MARKETING', sub: 'social' },
++  { email: 'marketing.content@test.local', name: 'Test Content Member', role: 'MEMBER', dept: 'MARKETING', sub: 'content' },
++  { email: 'csr.lead@test.local', name: 'Test CSR Lead', role: 'TEAM_LEAD', dept: 'CSR' },
++  { email: 'csr.member@test.local', name: 'Test CSR Agent', role: 'MEMBER', dept: 'CSR' },
++  { email: 'ecommerce.lead@test.local', name: 'Test Ecommerce Lead', role: 'TEAM_LEAD', dept: 'ECOMMERCE' },
++  { email: 'ecommerce.member@test.local', name: 'Test Ecommerce Member', role: 'MEMBER', dept: 'ECOMMERCE' },
++  { email: 'talkloop.lead@test.local', name: 'Test Talkloop Lead', role: 'TEAM_LEAD', dept: 'TALKLOOP' },
++  { email: 'talkloop.member@test.local', name: 'Test Talkloop Member', role: 'MEMBER', dept: 'TALKLOOP' },
++  { email: 'inventory.lead@test.local', name: 'Test Inventory Lead', role: 'TEAM_LEAD', dept: 'INVENTORY' },
++  { email: 'inventory.member@test.local', name: 'Test Inventory Member', role: 'MEMBER', dept: 'INVENTORY' },
++  { email: 'qa@test.local', name: 'Test QA', role: 'QA' },
++  { email: 'admin@test.local', name: 'Test Super Admin', role: 'SUPER_ADMIN' },
++]
++
++async function main() {
++  const passwordHash = await hashPassword(PASSWORD)
++  const depts = new Map((await prisma.department.findMany()).map((d) => [d.type, d.id]))
++  if (depts.size < 7) throw new Error('Departments are missing. Run "npm run seed" first.')
++  const id: Record<string, string> = {}
++
++  for (const p of PEOPLE) {
++    const departmentId = p.dept ? depts.get(p.dept)! : null
++    const subDepartmentId = p.sub && departmentId
++      ? (await prisma.subDepartment.findUnique({ where: { departmentId_slug: { departmentId, slug: p.sub } } }))?.id ?? null
++      : null
++    const data = { name: p.name, role: p.role, status: 'ACTIVE' as const, isActive: true, passwordHash, departmentId, subDepartmentId }
++    const u = await prisma.user.upsert({ where: { email: p.email }, update: data, create: { email: p.email, ...data } })
++    if (departmentId) {
++      await prisma.userDepartment.upsert({
++        where: { userId_departmentId: { userId: u.id, departmentId } },
++        update: { role: p.role, subDepartmentId },
++        create: { userId: u.id, departmentId, role: p.role, subDepartmentId },
++      })
++    }
++    id[p.email.split('@')[0]] = u.id
++  }
++
++  // A little activity for today, so each dashboard shows numbers.
++  const date = dbDateFromString(companyToday())
++  const day = (userId: string) => ({ userId_date: { userId, date } })
++  await prisma.itadDailyEntry.upsert({ where: day(id['itad.member']), update: {}, create: { userId: id['itad.member'], date, callsDialed: 120, connected: 30, voicemail: 40, emailsSent: 15, interested: 4, closed: 1 } })
++  await prisma.leadGenDailyEntry.upsert({ where: day(id['leadgen.member']), update: {}, create: { userId: id['leadgen.member'], date, leadsGenerated: 25, accountsResearched: 40, contactsFound: 60, qualifiedMql: 8, handedToSql: 3 } })
++  await prisma.talkloopDailyEntry.upsert({ where: day(id['talkloop.member']), update: {}, create: { userId: id['talkloop.member'], date, callsMade: 80, connects: 20, demosScheduled: 4, demosConducted: 3 } })
++  await prisma.seoDailyEntry.upsert({ where: day(id['marketing.seo']), update: {}, create: { userId: id['marketing.seo'], date, body: 'Optimised 3 pages' } })
++
++  const ecom = depts.get('ECOMMERCE')!
++  const tag = (name: string, type: 'MARKETPLACE' | 'TASK_TYPE') =>
++    prisma.tag.upsert({ where: { departmentId_type_name: { departmentId: ecom, type, name } }, update: {}, create: { departmentId: ecom, type, name } })
++  const [amazon, listing] = await Promise.all([tag('Amazon', 'MARKETPLACE'), tag('Listings', 'TASK_TYPE')])
++  if (!(await prisma.ecommerceDailyEntry.findUnique({ where: day(id['ecommerce.member']) }))) {
++    await prisma.ecommerceDailyEntry.create({ data: { userId: id['ecommerce.member'], date, lines: { create: [{ taskTypeId: listing.id, marketplaceId: amazon.id, listings: 18 }] } } })
++  }
++
++  if (!(await prisma.marketingTask.findFirst({ where: { title: 'Test: launch post' } }))) {
++    await prisma.marketingTask.create({ data: { title: 'Test: launch post', discipline: 'SOCIAL', status: 'PUBLISHED', completedAt: new Date(), publishedDate: date, assigneeId: id['marketing.social'] } })
++  }
++
++  const csr = depts.get('CSR')!
++  if (!(await prisma.qaEvaluation.findFirst({ where: { agentId: id['csr.member'] } }))) {
++    for (const score of [92, 84, 88]) {
++      await prisma.qaEvaluation.create({ data: { scorecardName: 'Test CSR scorecard', evaluatorId: id.qa, agentId: id['csr.member'], departmentId: csr, totalScore: score, passed: true, band: 'Good', submittedAt: new Date() } })
++    }
++  }
++
++  const inv = depts.get('INVENTORY')!
++  let item = await prisma.inventoryItem.findFirst({ where: { departmentId: inv, name: 'Test SSD 512GB' } })
++  if (!item) {
++    item = await prisma.inventoryItem.create({ data: { departmentId: inv, name: 'Test SSD 512GB', category: 'Storage', quantity: 2, lowStockAt: 5 } })
++    await prisma.inventoryMovement.create({ data: { itemId: item.id, type: 'STOCK_OUT', quantity: 3, status: 'COMPLETED', assignedToId: id['inventory.member'], assignedAt: new Date(), resolvedAt: new Date() } })
++    await prisma.inventoryMovement.create({ data: { itemId: item.id, type: 'STOCK_IN', quantity: 10, requestedByName: 'Warehouse' } })
++  }
++
++  console.log(`\nTest accounts ready (password for all: ${PASSWORD}):`)
++  for (const p of PEOPLE) console.log(`  ${p.email.padEnd(30)} ${p.role.padEnd(10)} ${p.dept ?? ''}${p.sub ? ` / ${p.sub}` : ''}`)
++}
++
++main()
++  .catch((e) => { console.error(e); process.exitCode = 1 })
++  .finally(() => prisma.$disconnect())
+diff --git a/server/src/controllers/adminController.ts b/server/src/controllers/adminController.ts
+index 7f282ff..6837505 100644
+--- a/server/src/controllers/adminController.ts
++++ b/server/src/controllers/adminController.ts
+@@ -672,7 +672,7 @@ export async function deleteTarget(req: AuthedRequest, res: Response): Promise<v
+     res.status(404).json({ error: 'Target not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Can only delete targets for your department' })
+     return
+   }
+@@ -746,7 +746,7 @@ export async function updateTag(req: AuthedRequest, res: Response): Promise<void
+     res.status(404).json({ error: 'Tag not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && existing.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || existing.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -763,7 +763,8 @@ export async function listHolidays(_req: AuthedRequest, res: Response): Promise<
+ 
+ export async function createHoliday(req: AuthedRequest, res: Response): Promise<void> {
+   const me = await loadUser(req.user!.id)
+-  if (me.role !== 'SUPER_ADMIN' && me.role !== 'TEAM_LEAD') {
++  // Holidays are company wide (every department's attendance and averages), so only the Super Admin sets them.
++  if (me.role !== 'SUPER_ADMIN') {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -782,7 +783,7 @@ export async function createHoliday(req: AuthedRequest, res: Response): Promise<
+ 
+ export async function deleteHoliday(req: AuthedRequest, res: Response): Promise<void> {
+   const me = await loadUser(req.user!.id)
+-  if (me.role !== 'SUPER_ADMIN' && me.role !== 'TEAM_LEAD') {
++  if (me.role !== 'SUPER_ADMIN') {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -796,7 +797,8 @@ export async function listLeave(req: AuthedRequest, res: Response): Promise<void
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+-  const where = me.role === 'TEAM_LEAD' && me.departmentId ? { user: { departmentId: me.departmentId } } : {}
++  // A team lead sees only their own department (none at all when they have no department yet).
++  const where = me.role === 'TEAM_LEAD' ? { user: { departmentId: me.departmentId ?? '__none__' } } : {}
+   const leave = await prisma.leaveDay.findMany({ where, include: { user: { select: { name: true } } }, orderBy: { date: 'desc' }, take: 200 })
+   res.json({ leave: leave.map((l) => ({ id: l.id, userId: l.userId, userName: l.user.name, date: dateStringFromDb(l.date), type: l.type, note: l.note ?? '' })) })
+ }
+@@ -807,7 +809,7 @@ export async function listLeaveMembers(req: AuthedRequest, res: Response): Promi
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+-  const where = me.role === 'TEAM_LEAD' && me.departmentId ? { departmentId: me.departmentId } : {}
++  const where = me.role === 'TEAM_LEAD' ? { departmentId: me.departmentId ?? '__none__' } : {}
+   const members = await prisma.user.findMany({ where, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+   res.json({ members })
+ }
+@@ -828,7 +830,7 @@ export async function createLeave(req: AuthedRequest, res: Response): Promise<vo
+     res.status(404).json({ error: 'User not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -854,7 +856,7 @@ export async function deleteLeave(req: AuthedRequest, res: Response): Promise<vo
+     where: { id: req.params.id },
+     include: { user: { select: { departmentId: true } } },
+   })
+-  if (leave && (me.role === 'SUPER_ADMIN' || leave.user.departmentId === me.departmentId)) {
++  if (leave && (me.role === 'SUPER_ADMIN' || (!!me.departmentId && leave.user.departmentId === me.departmentId))) {
+     await prisma.leaveDay.delete({ where: { id: leave.id } }).catch(() => undefined)
+   }
+   res.status(204).end()
+diff --git a/server/src/controllers/attendanceController.ts b/server/src/controllers/attendanceController.ts
+index 092e288..d3ce1f7 100644
+--- a/server/src/controllers/attendanceController.ts
++++ b/server/src/controllers/attendanceController.ts
+@@ -566,7 +566,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void>
+       res.status(404).json({ error: 'User not found' })
+       return
+     }
+-    if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++    if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+       res.status(403).json({ error: 'Forbidden' })
+       return
+     }
+@@ -940,6 +940,10 @@ export async function getShift(req: AuthedRequest, res: Response): Promise<void>
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
++  if (me.role === 'TEAM_LEAD' && !me.departmentId) {
++    res.status(403).json({ error: 'Your account has no department yet' })
++    return
++  }
+   const { departmentId } = await editableShiftScope(me)
+   const shifts = await prisma.attendanceShift.findMany()
+   res.json({
+@@ -996,6 +1000,11 @@ export async function putShift(req: AuthedRequest, res: Response): Promise<void>
+     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+     return
+   }
++  // A team lead with no department would otherwise overwrite the company-wide default.
++  if (me.role === 'TEAM_LEAD' && !me.departmentId) {
++    res.status(403).json({ error: 'Your account has no department yet' })
++    return
++  }
+   const { departmentId } = await editableShiftScope(me)
+   // Null-department can't use upsert on a unique-nullable key — find-then-write.
+   const existing = await prisma.attendanceShift.findFirst({ where: { departmentId, userId: null } })
+@@ -1019,7 +1028,7 @@ export async function getUserShift(req: AuthedRequest, res: Response): Promise<v
+     res.status(404).json({ error: 'User not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -1045,7 +1054,7 @@ export async function putUserShift(req: AuthedRequest, res: Response): Promise<v
+     res.status(404).json({ error: 'User not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -1074,7 +1083,7 @@ export async function deleteUserShift(req: AuthedRequest, res: Response): Promis
+     res.status(404).json({ error: 'User not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -1117,7 +1126,7 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
+     res.status(404).json({ error: 'User not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -1183,7 +1192,7 @@ async function requireManageableTarget(me: Awaited<ReturnType<typeof loadUser>>,
+     res.status(404).json({ error: 'User not found' })
+     return null
+   }
+-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
++  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
+     res.status(403).json({ error: 'Forbidden' })
+     return null
+   }
+diff --git a/server/src/controllers/dashboardController.ts b/server/src/controllers/dashboardController.ts
+index d191d85..35bd06d 100644
+--- a/server/src/controllers/dashboardController.ts
++++ b/server/src/controllers/dashboardController.ts
+@@ -6,6 +6,8 @@ import { companyToday, dbDateFromString, dateStringFromDb, periodRange, previous
+ import { sumItad, itadKpis } from '../lib/itad'
+ import { sumLeadGen, leadGenKpis } from '../lib/leadgen'
+ import { buildSeries, pctDelta, improvementLine } from '../lib/trends'
++import { talkloopDashboard, ecommerceDashboard, marketingDashboard, csrDashboard, inventoryDashboard, type DashCtx, type TeamDashboardPayload } from '../lib/deptDashboards'
++import { topAchievers } from '../lib/topAchiever'
+ 
+ type SubmissionStatus = 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
+ 
+@@ -27,7 +29,7 @@ function statusFor(entry: { status: string } | undefined): SubmissionStatus {
+ }
+ 
+ async function deptMembers(departmentId: string): Promise<User[]> {
+-  return prisma.user.findMany({ where: { departmentId, role: 'MEMBER', isActive: true }, orderBy: { name: 'asc' } })
++  return prisma.user.findMany({ where: { departmentId, role: { in: ['MEMBER', 'SUB_DEPT_LEAD'] }, isActive: true, status: 'ACTIVE' }, orderBy: { name: 'asc' } })
+ }
+ 
+ async function dailyTarget(departmentId: string, metricKey: string, period: 'DAILY' | 'WEEKLY'): Promise<number> {
+@@ -57,19 +59,32 @@ export async function teamDashboard(req: AuthedRequest, res: Response): Promise<
+   } else if (me.department.type === 'LEAD_GEN') {
+     await leadgenDashboard(res, me.department, members, rangeKey, range, prev, todayStr)
+   } else {
+-    res.json({
+-      department: me.department.type,
+-      range: { ...range, key: rangeKey },
+-      kpis: [],
+-      trend: { metricLabel: '', points: [] },
+-      breakdown: [],
+-      improvement: 'Marketing dashboards arrive in Phase 3.',
+-      todaySubmissions: [],
+-      counts: { submitted: 0, total: members.length },
+-    })
++    const subs = await prisma.subDepartment.findMany({ where: { departmentId: me.department.id }, select: { id: true, slug: true } })
++    const subSlugs = new Map(members.map((m) => [m.id, subs.find((s) => s.id === m.subDepartmentId)?.slug ?? '']))
++    const ctx: DashCtx = { dept: me.department, members, subSlugs, rangeKey, range, prev, todayStr }
++    const build: Record<string, (c: DashCtx) => Promise<TeamDashboardPayload>> = {
++      TALKLOOP: talkloopDashboard,
++      ECOMMERCE: ecommerceDashboard,
++      MARKETING: marketingDashboard,
++      CSR: csrDashboard,
++      INVENTORY: inventoryDashboard,
++    }
++    res.json(await build[me.department.type](ctx))
+   }
+ }
+ 
++/** GET /api/dashboard/top-achiever?month=YYYY-MM — the best person of the month in YOUR department
++ *  (the Super Admin sees every department; QA sees the departments it scores). */
++export async function topAchiever(req: AuthedRequest, res: Response): Promise<void> {
++  const me = await loadUser(req.user!.id)
++  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month)) ? String(req.query.month) : companyToday().slice(0, 7)
++  const depts =
++    me.role === 'SUPER_ADMIN' ? (['ITAD', 'LEAD_GEN', 'TALKLOOP', 'ECOMMERCE', 'MARKETING', 'CSR', 'INVENTORY'] as const)
++      : me.role === 'QA' || me.role === 'QA_LEAD' ? (['ITAD', 'CSR'] as const)
++        : me.department ? [me.department.type] : []
++  res.json({ month, winners: await topAchievers(month, [...depts]) })
++}
++
+ async function itadDashboard(
+   res: Response,
+   dept: Department,
+diff --git a/server/src/controllers/executiveController.ts b/server/src/controllers/executiveController.ts
+index ef4452c..0faa223 100644
+--- a/server/src/controllers/executiveController.ts
++++ b/server/src/controllers/executiveController.ts
+@@ -5,6 +5,7 @@ import { companyToday, dbDateFromString, dateStringFromDb, periodRange, previous
+ import { sumItad, itadKpis } from '../lib/itad'
+ import { sumLeadGen, leadGenKpis } from '../lib/leadgen'
+ import { buildSeries, pctDelta, improvementLine } from '../lib/trends'
++import { timeIn } from '../lib/deptDashboards'
+ 
+ const inRange = (r: DateRange) => ({ gte: dbDateFromString(r.startDate), lte: dbDateFromString(r.endDate) })
+ const submitted = <T extends { status: string }>(rows: T[]): T[] => rows.filter((e) => e.status === 'SUBMITTED')
+@@ -24,7 +25,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
+   const prev = previousRange(range)
+   const todayValue = dbDateFromString(companyToday())
+ 
+-  const depts = await prisma.department.findMany({ where: { type: { in: ['ITAD', 'LEAD_GEN', 'MARKETING', 'CSR', 'ECOMMERCE'] } } })
++  const depts = await prisma.department.findMany({ where: { type: { in: ['ITAD', 'LEAD_GEN', 'MARKETING', 'CSR', 'ECOMMERCE', 'TALKLOOP', 'INVENTORY'] } } })
+   const id = (t: string) => depts.find((d) => d.type === t)?.id
+   const headcount = (t: string) => {
+     const did = id(t)
+@@ -32,6 +33,24 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
+   }
+   const csrId = id('CSR')
+   const ecomId = id('ECOMMERCE')
++  const invId = id('INVENTORY')
++
++  // Talkloop (daily calls) and Inventory (stock requests).
++  const invItem = { departmentId: invId ?? '__none__' }
++  const [tlCur, tlPrev, tlToday, invDone, invDonePrev, invOpen, invItems, hcTalk, hcInv] = await Promise.all([
++    prisma.talkloopDailyEntry.findMany({ where: { date: inRange(range) } }),
++    prisma.talkloopDailyEntry.findMany({ where: { date: inRange(prev) } }),
++    prisma.talkloopDailyEntry.findMany({ where: { date: todayValue } }),
++    prisma.inventoryMovement.count({ where: { item: invItem, status: 'COMPLETED', resolvedAt: timeIn(range) } }),
++    prisma.inventoryMovement.count({ where: { item: invItem, status: 'COMPLETED', resolvedAt: timeIn(prev) } }),
++    prisma.inventoryMovement.count({ where: { item: invItem, status: { in: ['REQUESTED', 'ASSIGNED'] } } }),
++    prisma.inventoryItem.findMany({ where: { ...invItem, active: true }, select: { quantity: true, lowStockAt: true } }),
++    headcount('TALKLOOP'),
++    headcount('INVENTORY'),
++  ])
++  const tlSum = (rows: typeof tlCur) => ({ calls: submitted(rows).reduce((a, e) => a + e.callsMade, 0), demos: submitted(rows).reduce((a, e) => a + e.demosConducted, 0) })
++  const tc = tlSum(tlCur), tp = tlSum(tlPrev)
++  const invLow = invItems.filter((i) => i.quantity <= i.lowStockAt).length
+ 
+   const [
+     itadCur, itadPrev, itadToday,
+@@ -120,8 +139,9 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
+       type: 'CSR', name: 'CSR', members: hcCsr, route: '/app/qa/analytics',
+       subtitle: `${hcCsr} agents · ${csrCur.length} evaluation${csrCur.length === 1 ? '' : 's'}`,
+       headline: [
+-        { label: 'QA avg', value: csrAvg, format: 'percent', delta: pctDelta(csrAvg, csrAvgPrev) },
+-        { label: 'Pass rate', value: csrPass, format: 'percent', delta: 0 },
++        // Percent cards take a fraction (0.85 shows as 85%).
++        { label: 'QA avg', value: csrAvg / 100, format: 'percent', delta: pctDelta(csrAvg, csrAvgPrev) },
++        { label: 'Pass rate', value: csrPass / 100, format: 'percent', delta: 0 },
+       ] as Kpi[],
+       improvement: csrCur.length ? improvementLine([{ label: 'QA avg', delta: pctDelta(csrAvg, csrAvgPrev) }]) : 'No QA evaluations logged yet.',
+     },
+@@ -134,6 +154,24 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
+       ] as Kpi[],
+       improvement: improvementLine([{ label: 'Listings', delta: pctDelta(ecomListings, ecomListingsPrev) }]),
+     },
++    {
++      type: 'TALKLOOP', name: 'Talkloop', members: hcTalk, route: '/app/talkloop/team',
++      subtitle: `${submitted(tlToday).length}/${hcTalk} submitted today`,
++      headline: [
++        { label: 'Calls', value: tc.calls, format: 'number', delta: pctDelta(tc.calls, tp.calls) },
++        { label: 'Demos', value: tc.demos, format: 'number', delta: pctDelta(tc.demos, tp.demos) },
++      ] as Kpi[],
++      improvement: improvementLine([{ label: 'Calls', delta: pctDelta(tc.calls, tp.calls) }, { label: 'Demos', delta: pctDelta(tc.demos, tp.demos) }]),
++    },
++    {
++      type: 'INVENTORY', name: 'Inventory', members: hcInv, route: '/app/inventory/team',
++      subtitle: `${invOpen} open request${invOpen === 1 ? '' : 's'} · ${invLow} low stock`,
++      headline: [
++        { label: 'Requests done', value: invDone, format: 'number', delta: pctDelta(invDone, invDonePrev) },
++        { label: 'Open requests', value: invOpen, format: 'number', delta: 0 },
++      ] as Kpi[],
++      improvement: improvementLine([{ label: 'Requests completed', delta: pctDelta(invDone, invDonePrev) }]),
++    },
+   ]
+ 
+   // Company activity trend = submitted entries per bucket across departments with daily forms.
+@@ -142,6 +180,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
+     ...leadCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
+     ...socCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
+     ...ecomCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
++    ...tlCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
+   ]
+   const combinedTrend = { metricLabel: 'Submissions', points: buildSeries(range, activityRows) }
+ 
+@@ -151,15 +190,17 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
+     { department: 'Marketing', members: hcMkt, submitted: `${mktToday}/${hcMkt}`, primaryLabel: 'Posts', primaryValue: posts, secondary: `${mktPubCur} content published`, delta: pctDelta(posts, postsPrev) },
+     { department: 'CSR', members: hcCsr, submitted: '—', primaryLabel: 'Evaluations', primaryValue: csrCur.length, secondary: `${csrAvg}% avg QA`, delta: pctDelta(csrAvg, csrAvgPrev) },
+     { department: 'Ecommerce', members: hcEcom, submitted: `${submitted(ecomToday).length}/${hcEcom}`, primaryLabel: 'Listings', primaryValue: ecomListings, secondary: `${stockOpen} open stock`, delta: pctDelta(ecomListings, ecomListingsPrev) },
++    { department: 'Talkloop', members: hcTalk, submitted: `${submitted(tlToday).length}/${hcTalk}`, primaryLabel: 'Calls', primaryValue: tc.calls, secondary: `${tc.demos} demos`, delta: pctDelta(tc.calls, tp.calls) },
++    { department: 'Inventory', members: hcInv, submitted: '—', primaryLabel: 'Requests done', primaryValue: invDone, secondary: `${invOpen} open · ${invLow} low stock`, delta: pctDelta(invDone, invDonePrev) },
+   ]
+ 
+   // Company summary (KPI header + alert totals).
+   const st = (rows: { status: string }[]) => submitted(rows).length
+-  const submittedTodayTotal = st(itadToday) + st(leadToday) + mktToday + st(ecomToday)
+-  const formMembers = hcItad + hcLead + hcMkt + hcEcom
++  const submittedTodayTotal = st(itadToday) + st(leadToday) + mktToday + st(ecomToday) + st(tlToday)
++  const formMembers = hcItad + hcLead + hcMkt + hcEcom + hcTalk
+   const notSubmitted =
+     Math.max(0, hcItad - st(itadToday)) + Math.max(0, hcLead - st(leadToday)) +
+-    Math.max(0, hcMkt - mktToday) + Math.max(0, hcEcom - st(ecomToday))
++    Math.max(0, hcMkt - mktToday) + Math.max(0, hcEcom - st(ecomToday)) + Math.max(0, hcTalk - st(tlToday))
+   const summary = {
+     employees,
+     departments: depts.length,
+@@ -192,18 +233,20 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
+   const itadTop = topSum(submitted(itadCur), (e) => e.userId, (e) => e.callsDialed)
+   const leadTop = topSum(submitted(leadCur), (e) => e.userId, (e) => e.leadsGenerated)
+   const ecomTop = topSum(submitted(ecomCur), (e) => e.userId, (e) => e.lines.reduce((s, l) => s + l.listings, 0))
++  const talkTop = topSum(submitted(tlCur), (e) => e.userId, (e) => e.demosConducted)
+   const qaAgg = new Map<string, { sum: number; n: number }>()
+   for (const e of allQa) { const a = qaAgg.get(e.agentId) ?? { sum: 0, n: 0 }; a.sum += e.totalScore; a.n++; qaAgg.set(e.agentId, a) }
+   let qaTop: { id: string; value: number } | null = null
+   for (const [pid, a] of qaAgg) { const v = round1(a.sum / a.n); if (!qaTop || v > qaTop.value) qaTop = { id: pid, value: v } }
+ 
+-  const winnerIds = [itadTop, leadTop, ecomTop, qaTop].filter(Boolean).map((t) => t!.id)
++  const winnerIds = [itadTop, leadTop, ecomTop, talkTop, qaTop].filter(Boolean).map((t) => t!.id)
+   const winners = winnerIds.length ? await prisma.user.findMany({ where: { id: { in: winnerIds } }, select: { id: true, name: true } }) : []
+   const nameOf = (uid?: string) => winners.find((w) => w.id === uid)?.name ?? '—'
+   const topPerformers = [
+     itadTop && itadTop.value > 0 ? { department: 'ITAD', name: nameOf(itadTop.id), metric: `${itadTop.value} dials` } : null,
+     leadTop && leadTop.value > 0 ? { department: 'Lead Gen', name: nameOf(leadTop.id), metric: `${leadTop.value} leads` } : null,
+-    ecomTop && ecomTop.value > 0 ? { department: 'Ecommerce', name: nameOf(ecomTop.id), metric: `${ecomTop.value} actions` } : null,
++    ecomTop && ecomTop.value > 0 ? { department: 'Ecommerce', name: nameOf(ecomTop.id), metric: `${ecomTop.value} listings` } : null,
++    talkTop && talkTop.value > 0 ? { department: 'Talkloop', name: nameOf(talkTop.id), metric: `${talkTop.value} demos` } : null,
+     qaTop ? { department: 'QA', name: nameOf(qaTop.id), metric: `${qaTop.value}% QA` } : null,
+   ].filter(Boolean)
+ 
+diff --git a/server/src/controllers/notificationsController.ts b/server/src/controllers/notificationsController.ts
+index 85baf36..d341522 100644
+--- a/server/src/controllers/notificationsController.ts
++++ b/server/src/controllers/notificationsController.ts
+@@ -14,13 +14,15 @@ async function submittedToday(userId: string, dept?: string | null, sub?: string
+   if (dept === 'LEAD_GEN') return !!(await prisma.leadGenDailyEntry.findUnique({ where: key }))
+   if (dept === 'MARKETING' && sub === 'seo') return !!(await prisma.seoDailyEntry.findUnique({ where: key }))
+   if (dept === 'MARKETING' && sub === 'social') return !!(await prisma.socialDailyEntry.findUnique({ where: key }))
++  if (dept === 'MARKETING' && sub === 'content') return !!(await prisma.contentDailyEntry.findUnique({ where: key }))
+   if (dept === 'ECOMMERCE') return !!(await prisma.ecommerceDailyEntry.findUnique({ where: key }))
++  if (dept === 'TALKLOOP') return !!(await prisma.talkloopDailyEntry.findUnique({ where: key }))
+   return true // no daily form for this user → nothing to remind
+ }
+ 
+ /** Does this member's dept/sub have a daily form to submit? Mirrors submittedToday's coverage. */
+ function hasDailyForm(dept?: string | null, sub?: string | null): boolean {
+-  return dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || (dept === 'MARKETING' && (sub === 'seo' || sub === 'social'))
++  return dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || dept === 'TALKLOOP' || (dept === 'MARKETING' && (sub === 'seo' || sub === 'social' || sub === 'content'))
+ }
+ 
+ /**
+@@ -39,7 +41,11 @@ async function submittedTodayIds(ids: string[]): Promise<Set<string>> {
+     prisma.socialDailyEntry.findMany({ where, select }),
+     prisma.ecommerceDailyEntry.findMany({ where, select }),
+   ])
+-  return new Set([...itad, ...leadgen, ...seo, ...social, ...ecom].map((e) => e.userId))
++  const [talk, content] = await Promise.all([
++    prisma.talkloopDailyEntry.findMany({ where, select }),
++    prisma.contentDailyEntry.findMany({ where, select }),
++  ])
++  return new Set([...itad, ...leadgen, ...seo, ...social, ...ecom, ...talk, ...content].map((e) => e.userId))
+ }
+ 
+ /** GET /api/notifications — contextual notifications derived from live state. */
+@@ -77,7 +83,7 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
+ 
+   // TL/Admin: members who haven't submitted today.
+   if ((me.role === 'TEAM_LEAD' || me.role === 'SUPER_ADMIN') && (dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || me.role === 'SUPER_ADMIN')) {
+-    const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
++    const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId ?? '__none__' }
+     const members = await prisma.user.findMany({ where: { role: 'MEMBER', isActive: true, ...deptFilter }, include: { department: true, subDepartment: true } })
+     const submitted = await submittedTodayIds(members.map((m) => m.id))
+     const missing = members.filter((m) => hasDailyForm(m.department?.type, m.subDepartment?.slug) && !submitted.has(m.id)).length
+@@ -134,7 +140,7 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
+   res.json({ notifications, unread: notifications.length })
+ }
+ 
+-const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing' }
++const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', CSR: 'CSR', INVENTORY: 'Inventory' }
+ 
+ /**
+  * GET /api/notifications/not-submitted — members who haven't logged today,
+@@ -149,7 +155,7 @@ export async function getNotSubmitted(req: AuthedRequest, res: Response): Promis
+     return
+   }
+ 
+-  const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
++  const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId ?? '__none__' }
+   const members = await prisma.user.findMany({
+     where: { role: 'MEMBER', isActive: true, ...deptFilter },
+     include: { department: true, subDepartment: true },
+diff --git a/server/src/controllers/qaController.ts b/server/src/controllers/qaController.ts
+index e1d484c..c1bb5d7 100644
+--- a/server/src/controllers/qaController.ts
++++ b/server/src/controllers/qaController.ts
+@@ -952,7 +952,11 @@ export async function employeeOfMonth(req: AuthedRequest, res: Response): Promis
+     am.set(e.agentId, a)
+   }
+ 
+-  const winners = QA_DEPTS.map((dept) => {
++  // Everyone sees only their own department; QA and the Super Admin see both.
++  const me = await loadMe(req.user!.id)
++  const seeAll = isQa(me.role) || me.role === 'SUPER_ADMIN'
++  const shown = QA_DEPTS.filter((d) => seeAll || me.department?.type === d)
++  const winners = shown.map((dept) => {
+     const am = byDeptAgent.get(dept)
+     if (!am) return { department: dept, winner: null }
+     let best: { name: string; avg: number; count: number } | null = null
+diff --git a/server/src/controllers/reportsController.ts b/server/src/controllers/reportsController.ts
+index 9b9f703..992c314 100644
+--- a/server/src/controllers/reportsController.ts
++++ b/server/src/controllers/reportsController.ts
+@@ -41,7 +41,8 @@ export async function exportTeamCsv(req: AuthedRequest, res: Response): Promise<
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+-  const deptType = me.department?.type ?? (req.query.department as string)
++  // Leads export their own department only; the Super Admin picks one.
++  const deptType = me.role === 'SUPER_ADMIN' ? (req.query.department as string) ?? me.department?.type : me.department?.type
+   if (deptType !== 'ITAD' && deptType !== 'LEAD_GEN') {
+     res.status(400).json({ error: 'Specify a valid department (ITAD or LEAD_GEN)' })
+     return
+@@ -51,7 +52,7 @@ export async function exportTeamCsv(req: AuthedRequest, res: Response): Promise<
+     res.status(404).json({ error: 'Department not found' })
+     return
+   }
+-  if (me.role === 'TEAM_LEAD' && me.departmentId !== dept.id) {
++  if (me.role !== 'SUPER_ADMIN' && me.departmentId !== dept.id) {
+     res.status(403).json({ error: 'Forbidden' })
+     return
+   }
+@@ -206,10 +207,11 @@ export async function sendMonthlyReport(req: AuthedRequest, res: Response): Prom
+ 
+ // ==================== Consolidated management report (ITAD + Bids + Marketing) ====================
+ 
+-/** Any Team Lead or Super Admin may view/send the consolidated management report. */
++/** The consolidated management report spans several departments (ITAD, Bids, Marketing),
++ *  so only the Super Admin may view or send it. */
+ async function assertManager(req: AuthedRequest): Promise<boolean> {
+   const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { role: true } })
+-  return me.role === 'SUPER_ADMIN' || me.role === 'TEAM_LEAD'
++  return me.role === 'SUPER_ADMIN'
+ }
+ 
+ /** GET /api/reports/management/preview?month= — standalone printable combined report HTML. */
+diff --git a/server/src/lib/deptDashboards.ts b/server/src/lib/deptDashboards.ts
+new file mode 100644
+index 0000000..55fc005
+--- /dev/null
++++ b/server/src/lib/deptDashboards.ts
+@@ -0,0 +1,290 @@
++import { DateTime } from 'luxon'
++import type { Department, User } from '@prisma/client'
++import { prisma } from './prisma'
++import { COMPANY_TZ, dbDateFromString, dateStringFromDb, type DateRange, type RangeKey } from './time'
++import { buildSeries, pctDelta, improvementLine } from './trends'
++
++/**
++ * Team lead dashboards for the departments that are not ITAD or Lead Generation:
++ * Talkloop, Ecommerce, Marketing, CSR and Inventory. Same shape as the ITAD one, so the
++ * same screen shows them. Each department sees only its own numbers.
++ */
++
++type SubmissionStatus = 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
++
++export interface DashKpi {
++  label: string
++  value: number
++  format: 'number' | 'percent'
++  delta: number
++  caption?: string
++  /** A count of how things stand right now: no "vs previous period" arrow. */
++  now?: boolean
++}
++
++export interface TeamDashboardPayload {
++  department: string
++  range: DateRange & { key: RangeKey }
++  kpis: DashKpi[]
++  trend: { metricLabel: string; points: { label: string; value: number; target?: number }[] }
++  breakdown: { name: string; value: number }[]
++  /** Title of the breakdown card (default "Activity Breakdown"). */
++  breakdownTitle?: string
++  improvement: string
++  todaySubmissions: { id: string; name: string; status: SubmissionStatus; metricLabel: string; metricValue: number }[]
++  counts: { submitted: number; total: number }
++  /** Departments without a daily form: the people table shows a number, not a submitted badge. */
++  people?: { title: string; subtitle: string; showStatus: boolean }
++}
++
++export interface DashCtx {
++  dept: Department
++  members: User[]
++  /** Sub-department slug per member (Marketing: seo / social / content / ads / email). */
++  subSlugs: Map<string, string>
++  rangeKey: RangeKey
++  range: DateRange
++  prev: DateRange
++  todayStr: string
++}
++
++const dateIn = (r: DateRange) => ({ gte: dbDateFromString(r.startDate), lte: dbDateFromString(r.endDate) })
++/** Timestamps (completedAt, resolvedAt, createdAt) inside the range, by the company's clock. */
++export function timeIn(r: DateRange) {
++  return {
++    gte: DateTime.fromISO(r.startDate, { zone: COMPANY_TZ }).startOf('day').toJSDate(),
++    lte: DateTime.fromISO(r.endDate, { zone: COMPANY_TZ }).endOf('day').toJSDate(),
++  }
++}
++/** Company calendar day of a timestamp. */
++const dayOf = (d: Date) => DateTime.fromJSDate(d).setZone(COMPANY_TZ).toISODate()!
++const submitted = <T extends { status: string }>(rows: T[]) => rows.filter((e) => e.status === 'SUBMITTED')
++const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + f(r), 0)
++const statusFor = (e: { status: string } | undefined): SubmissionStatus => (!e ? 'PENDING' : e.status === 'SUBMITTED' ? 'SUBMITTED' : 'ON_LEAVE')
++const ratio = (a: number, b: number) => (b ? a / b : 0)
++
++async function deptTarget(departmentId: string, metricKey: string, period: 'DAILY' | 'WEEKLY'): Promise<number> {
++  const t = await prisma.target.findFirst({ where: { scope: 'DEPARTMENT', departmentId, metricKey, period } })
++  return t?.value ?? 0
++}
++
++function base(c: DashCtx) {
++  return { department: c.dept.type, range: { ...c.range, key: c.rangeKey } }
++}
++
++// ------------------------------------------------------------------ Talkloop
++
++export async function talkloopDashboard(c: DashCtx): Promise<TeamDashboardPayload> {
++  const ids = c.members.map((m) => m.id)
++  const [cur, prv, today, callsTarget, demosTarget] = await Promise.all([
++    prisma.talkloopDailyEntry.findMany({ where: { userId: { in: ids }, date: dateIn(c.range) }, include: { countryCounts: { include: { tag: true } } } }),
++    prisma.talkloopDailyEntry.findMany({ where: { userId: { in: ids }, date: dateIn(c.prev) } }),
++    prisma.talkloopDailyEntry.findMany({ where: { userId: { in: ids }, date: dbDateFromString(c.todayStr) } }),
++    deptTarget(c.dept.id, 'callsMade', 'DAILY'),
++    deptTarget(c.dept.id, 'demosConducted', 'DAILY'),
++  ])
++  const t = (rows: { status: string; callsMade: number; connects: number; demosScheduled: number; demosConducted: number }[]) => {
++    const s = submitted(rows)
++    return { calls: sum(s, (e) => e.callsMade), connects: sum(s, (e) => e.connects), scheduled: sum(s, (e) => e.demosScheduled), conducted: sum(s, (e) => e.demosConducted) }
++  }
++  const ct = t(cur), pt = t(prv)
++  const connectRate = ratio(ct.connects, ct.calls), connectPrev = ratio(pt.connects, pt.calls)
++  const byCountry = new Map<string, number>()
++  for (const e of submitted(cur)) for (const cc of e.countryCounts) byCountry.set(cc.tag.name, (byCountry.get(cc.tag.name) ?? 0) + cc.calls)
++  const todayMap = new Map(today.map((e) => [e.userId, e]))
++  return {
++    ...base(c),
++    kpis: [
++      { label: 'Calls Made', value: ct.calls, format: 'number', delta: pctDelta(ct.calls, pt.calls), caption: callsTarget ? `Target ${callsTarget}/day each` : 'vs prev period' },
++      { label: 'Connect Rate', value: connectRate, format: 'percent', delta: pctDelta(connectRate, connectPrev), caption: 'vs prev period' },
++      { label: 'Demos Scheduled', value: ct.scheduled, format: 'number', delta: pctDelta(ct.scheduled, pt.scheduled), caption: 'vs prev period' },
++      { label: 'Demos Conducted', value: ct.conducted, format: 'number', delta: pctDelta(ct.conducted, pt.conducted), caption: demosTarget ? `Target ${demosTarget}/day each` : 'vs prev period' },
++    ],
++    trend: { metricLabel: 'Calls', points: buildSeries(c.range, cur.map((e) => ({ date: dateStringFromDb(e.date), value: e.callsMade, status: e.status })), callsTarget * c.members.length) },
++    breakdown: [...byCountry.entries()].sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })),
++    breakdownTitle: 'Calls by Country',
++    improvement: improvementLine([
++      { label: 'Calls', delta: pctDelta(ct.calls, pt.calls) },
++      { label: 'Demos conducted', delta: pctDelta(ct.conducted, pt.conducted) },
++    ]),
++    todaySubmissions: c.members.map((m) => {
++      const e = todayMap.get(m.id)
++      return { id: m.id, name: m.name, status: statusFor(e), metricLabel: 'Calls', metricValue: e?.callsMade ?? 0 }
++    }),
++    counts: { submitted: submitted(today).length, total: c.members.length },
++  }
++}
++
++// ------------------------------------------------------------------ Ecommerce
++
++export async function ecommerceDashboard(c: DashCtx): Promise<TeamDashboardPayload> {
++  const ids = c.members.map((m) => m.id)
++  const [cur, prv, today, doneCur, donePrev, openTasks, stockCur, stockPrev] = await Promise.all([
++    prisma.ecommerceDailyEntry.findMany({ where: { userId: { in: ids }, date: dateIn(c.range) }, include: { lines: { include: { marketplace: true } } } }),
++    prisma.ecommerceDailyEntry.findMany({ where: { userId: { in: ids }, date: dateIn(c.prev) }, include: { lines: true } }),
++    prisma.ecommerceDailyEntry.findMany({ where: { userId: { in: ids }, date: dbDateFromString(c.todayStr) }, include: { lines: true } }),
++    prisma.ecommerceTask.count({ where: { status: 'DONE', completedAt: timeIn(c.range) } }),
++    prisma.ecommerceTask.count({ where: { status: 'DONE', completedAt: timeIn(c.prev) } }),
++    prisma.ecommerceTask.count({ where: { status: { not: 'DONE' } } }),
++    prisma.stockRequest.count({ where: { departmentId: c.dept.id, status: 'RESOLVED', resolvedAt: timeIn(c.range) } }),
++    prisma.stockRequest.count({ where: { departmentId: c.dept.id, status: 'RESOLVED', resolvedAt: timeIn(c.prev) } }),
++  ])
++  const listingsOf = (e: { lines: { listings: number }[] }) => sum(e.lines, (l) => l.listings)
++  const lc = sum(submitted(cur), listingsOf), lp = sum(submitted(prv), listingsOf)
++  const byMarket = new Map<string, number>()
++  for (const e of submitted(cur)) for (const l of e.lines) byMarket.set(l.marketplace.name, (byMarket.get(l.marketplace.name) ?? 0) + l.listings)
++  const todayMap = new Map(today.map((e) => [e.userId, e]))
++  return {
++    ...base(c),
++    kpis: [
++      { label: 'Listings', value: lc, format: 'number', delta: pctDelta(lc, lp), caption: 'vs prev period' },
++      { label: 'Tasks Completed', value: doneCur, format: 'number', delta: pctDelta(doneCur, donePrev), caption: 'vs prev period' },
++      { label: 'Open Tasks', value: openTasks, format: 'number', delta: 0, now: true, caption: 'Right now' },
++      { label: 'Stock Requests Done', value: stockCur, format: 'number', delta: pctDelta(stockCur, stockPrev), caption: 'vs prev period' },
++    ],
++    trend: { metricLabel: 'Listings', points: buildSeries(c.range, cur.map((e) => ({ date: dateStringFromDb(e.date), value: listingsOf(e), status: e.status }))) },
++    breakdown: [...byMarket.entries()].sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })),
++    breakdownTitle: 'Listings by Marketplace',
++    improvement: improvementLine([
++      { label: 'Listings', delta: pctDelta(lc, lp) },
++      { label: 'Tasks completed', delta: pctDelta(doneCur, donePrev) },
++    ]),
++    todaySubmissions: c.members.map((m) => {
++      const e = todayMap.get(m.id)
++      return { id: m.id, name: m.name, status: statusFor(e), metricLabel: 'Listings', metricValue: e ? listingsOf(e) : 0 }
++    }),
++    counts: { submitted: submitted(today).length, total: c.members.length },
++  }
++}
++
++// ------------------------------------------------------------------ Marketing
++
++/** Marketing sub-departments with a daily log. */
++const logSubs = new Set(['seo', 'social', 'content'])
++const DISCIPLINE_LABEL: Record<string, string> = { SEO: 'SEO', SOCIAL: 'Social Media', CONTENT: 'Content' }
++
++export async function marketingDashboard(c: DashCtx): Promise<TeamDashboardPayload> {
++  const ids = c.members.map((m) => m.id)
++  const todayDate = dbDateFromString(c.todayStr)
++  const [doneCur, donePrev, socCur, socPrev, blogsCur, blogsPrev, overdue, seoToday, socToday, contentToday] = await Promise.all([
++    prisma.marketingTask.findMany({ where: { status: 'PUBLISHED', completedAt: timeIn(c.range) }, select: { completedAt: true, discipline: true, assigneeId: true } }),
++    prisma.marketingTask.count({ where: { status: 'PUBLISHED', completedAt: timeIn(c.prev) } }),
++    prisma.socialDailyEntry.findMany({ where: { date: dateIn(c.range) }, select: { status: true, postsPublished: true } }),
++    prisma.socialDailyEntry.findMany({ where: { date: dateIn(c.prev) }, select: { status: true, postsPublished: true } }),
++    prisma.blogPost.count({ where: { status: 'PUBLISHED', publishedAt: dateIn(c.range) } }),
++    prisma.blogPost.count({ where: { status: 'PUBLISHED', publishedAt: dateIn(c.prev) } }),
++    prisma.marketingTask.count({ where: { status: { not: 'PUBLISHED' }, dueDate: { lt: todayDate } } }),
++    prisma.seoDailyEntry.findMany({ where: { userId: { in: ids }, date: todayDate }, select: { userId: true, status: true } }),
++    prisma.socialDailyEntry.findMany({ where: { userId: { in: ids }, date: todayDate }, select: { userId: true, status: true } }),
++    prisma.contentDailyEntry.findMany({ where: { userId: { in: ids }, date: todayDate }, select: { userId: true, status: true } }),
++  ])
++  const posts = sum(submitted(socCur), (e) => e.postsPublished), postsPrev = sum(submitted(socPrev), (e) => e.postsPublished)
++  const byDiscipline = new Map<string, number>()
++  for (const t of doneCur) byDiscipline.set(DISCIPLINE_LABEL[t.discipline] ?? t.discipline, (byDiscipline.get(DISCIPLINE_LABEL[t.discipline] ?? t.discipline) ?? 0) + 1)
++  // One daily log a day per person, whichever their discipline uses.
++  const todayLog = new Map<string, { status: string }>()
++  for (const e of [...seoToday, ...socToday, ...contentToday]) if (!todayLog.has(e.userId) || e.status === 'SUBMITTED') todayLog.set(e.userId, e)
++  const doneToday = new Map<string, number>()
++  for (const t of doneCur) if (t.assigneeId && t.completedAt && dayOf(t.completedAt) === c.todayStr) doneToday.set(t.assigneeId, (doneToday.get(t.assigneeId) ?? 0) + 1)
++  return {
++    ...base(c),
++    kpis: [
++      { label: 'Tasks Published', value: doneCur.length, format: 'number', delta: pctDelta(doneCur.length, donePrev), caption: 'vs prev period' },
++      { label: 'Social Posts', value: posts, format: 'number', delta: pctDelta(posts, postsPrev), caption: 'vs prev period' },
++      { label: 'Blogs Published', value: blogsCur, format: 'number', delta: pctDelta(blogsCur, blogsPrev), caption: 'vs prev period' },
++      { label: 'Overdue Tasks', value: overdue, format: 'number', delta: 0, now: true, caption: 'Right now' },
++    ],
++    trend: { metricLabel: 'Tasks Published', points: buildSeries(c.range, doneCur.map((t) => ({ date: dayOf(t.completedAt!), value: 1 }))) },
++    breakdown: [...byDiscipline.entries()].map(([name, value]) => ({ name, value })),
++    breakdownTitle: 'Published by Discipline',
++    improvement: improvementLine([
++      { label: 'Tasks published', delta: pctDelta(doneCur.length, donePrev) },
++      { label: 'Social posts', delta: pctDelta(posts, postsPrev) },
++    ]),
++    todaySubmissions: c.members
++      .filter((m) => logSubs.has(c.subSlugs.get(m.id) ?? ''))
++      .map((m) => ({ id: m.id, name: m.name, status: statusFor(todayLog.get(m.id)), metricLabel: 'Tasks done today', metricValue: doneToday.get(m.id) ?? 0 })),
++    // Ads and Email have no daily log, so they are not counted as "not submitted".
++    counts: { submitted: [...todayLog.values()].filter((e) => e.status === 'SUBMITTED').length, total: c.members.filter((m) => logSubs.has(c.subSlugs.get(m.id) ?? '')).length },
++  }
++}
++
++// ------------------------------------------------------------------ CSR (QA scores)
++
++export async function csrDashboard(c: DashCtx): Promise<TeamDashboardPayload> {
++  const where = (r: DateRange) => ({ departmentId: c.dept.id, status: 'SUBMITTED' as const, createdAt: timeIn(r) })
++  const [cur, prv] = await Promise.all([
++    prisma.qaEvaluation.findMany({ where: where(c.range), select: { agentId: true, totalScore: true, passed: true, coachingNeeded: true, createdAt: true } }),
++    prisma.qaEvaluation.findMany({ where: where(c.prev), select: { totalScore: true, passed: true, coachingNeeded: true } }),
++  ])
++  const avgOf = (rows: { totalScore: number }[]) => (rows.length ? sum(rows, (e) => e.totalScore) / rows.length / 100 : 0)
++  const passOf = (rows: { passed: boolean }[]) => ratio(rows.filter((e) => e.passed).length, rows.length)
++  const coach = cur.filter((e) => e.coachingNeeded).length, coachPrev = prv.filter((e) => e.coachingNeeded).length
++  const perAgent = new Map<string, number[]>()
++  for (const e of cur) perAgent.set(e.agentId, [...(perAgent.get(e.agentId) ?? []), e.totalScore])
++  return {
++    ...base(c),
++    kpis: [
++      { label: 'Evaluations', value: cur.length, format: 'number', delta: pctDelta(cur.length, prv.length), caption: 'vs prev period' },
++      { label: 'Average QA Score', value: avgOf(cur), format: 'percent', delta: pctDelta(avgOf(cur), avgOf(prv)), caption: 'vs prev period' },
++      { label: 'Pass Rate', value: passOf(cur), format: 'percent', delta: pctDelta(passOf(cur), passOf(prv)), caption: 'vs prev period' },
++      { label: 'Coaching Needed', value: coach, format: 'number', delta: pctDelta(coach, coachPrev), caption: 'vs prev period' },
++    ],
++    trend: { metricLabel: 'Evaluations', points: buildSeries(c.range, cur.map((e) => ({ date: dayOf(e.createdAt), value: 1 }))) },
++    breakdown: [
++      { name: 'Passed', value: cur.filter((e) => e.passed).length },
++      { name: 'Failed', value: cur.filter((e) => !e.passed).length },
++    ],
++    breakdownTitle: 'Pass / Fail',
++    improvement: cur.length
++      ? improvementLine([
++        { label: 'Average QA score', delta: pctDelta(avgOf(cur), avgOf(prv)) },
++        { label: 'Pass rate', delta: pctDelta(passOf(cur), passOf(prv)) },
++      ])
++      : 'No QA evaluations for your team in this period yet.',
++    todaySubmissions: c.members.map((m) => {
++      const s = perAgent.get(m.id) ?? []
++      return { id: m.id, name: m.name, status: 'SUBMITTED', metricLabel: 'Avg QA score (%)', metricValue: s.length ? Math.round(sum(s, (x) => x) / s.length) : 0 }
++    }),
++    counts: { submitted: perAgent.size, total: c.members.length },
++    people: { title: 'Team QA Scores', subtitle: `${perAgent.size} of ${c.members.length} agents evaluated in this period`, showStatus: false },
++  }
++}
++
++// ------------------------------------------------------------------ Inventory
++
++export async function inventoryDashboard(c: DashCtx): Promise<TeamDashboardPayload> {
++  const item = { departmentId: c.dept.id }
++  const [doneCur, donePrev, open, items] = await Promise.all([
++    prisma.inventoryMovement.findMany({ where: { item, status: 'COMPLETED', resolvedAt: timeIn(c.range) }, select: { type: true, quantity: true, resolvedAt: true, assignedToId: true } }),
++    prisma.inventoryMovement.findMany({ where: { item, status: 'COMPLETED', resolvedAt: timeIn(c.prev) }, select: { quantity: true } }),
++    prisma.inventoryMovement.count({ where: { item, status: { in: ['REQUESTED', 'ASSIGNED'] } } }),
++    prisma.inventoryItem.findMany({ where: { ...item, active: true }, select: { quantity: true, lowStockAt: true } }),
++  ])
++  const low = items.filter((i) => i.quantity <= i.lowStockAt).length
++  const units = sum(doneCur, (m) => m.quantity), unitsPrev = sum(donePrev, (m) => m.quantity)
++  const perPerson = new Map<string, number>()
++  for (const m of doneCur) if (m.assignedToId) perPerson.set(m.assignedToId, (perPerson.get(m.assignedToId) ?? 0) + 1)
++  return {
++    ...base(c),
++    kpis: [
++      { label: 'Requests Completed', value: doneCur.length, format: 'number', delta: pctDelta(doneCur.length, donePrev.length), caption: 'vs prev period' },
++      { label: 'Units Moved', value: units, format: 'number', delta: pctDelta(units, unitsPrev), caption: 'vs prev period' },
++      { label: 'Open Requests', value: open, format: 'number', delta: 0, now: true, caption: 'Right now' },
++      { label: 'Low Stock Items', value: low, format: 'number', delta: 0, now: true, caption: `of ${items.length} items` },
++    ],
++    trend: { metricLabel: 'Requests Completed', points: buildSeries(c.range, doneCur.map((m) => ({ date: dayOf(m.resolvedAt!), value: 1 }))) },
++    breakdown: [
++      { name: 'Stock in', value: sum(doneCur.filter((m) => m.type === 'STOCK_IN'), (m) => m.quantity) },
++      { name: 'Stock out', value: sum(doneCur.filter((m) => m.type === 'STOCK_OUT'), (m) => m.quantity) },
++    ],
++    breakdownTitle: 'Units In / Out',
++    improvement: improvementLine([
++      { label: 'Requests completed', delta: pctDelta(doneCur.length, donePrev.length) },
++      { label: 'Units moved', delta: pctDelta(units, unitsPrev) },
++    ]),
++    todaySubmissions: c.members.map((m) => ({ id: m.id, name: m.name, status: 'SUBMITTED', metricLabel: 'Requests completed', metricValue: perPerson.get(m.id) ?? 0 })),
++    counts: { submitted: perPerson.size, total: c.members.length },
++    people: { title: 'Team Work', subtitle: 'Requests each person completed in this period', showStatus: false },
++  }
++}
+diff --git a/server/src/lib/topAchiever.ts b/server/src/lib/topAchiever.ts
+new file mode 100644
+index 0000000..4d16576
+--- /dev/null
++++ b/server/src/lib/topAchiever.ts
+@@ -0,0 +1,134 @@
++import { DateTime } from 'luxon'
++import type { DepartmentType } from '@prisma/client'
++import { prisma } from './prisma'
++import { dbDateFromString } from './time'
++import { timeIn } from './deptDashboards'
++
++/**
++ * Top Achiever of the month, one per department, each judged on what that department does:
++ * QA score for ITAD and CSR (the departments QA scores), and the department's main daily
++ * number for the rest. Nobody is shown for a department with no real activity.
++ */
++
++export const QA_MIN_EVALS = 3
++export const QA_MIN_SCORE = 80
++
++export interface TopAchiever {
++  department: DepartmentType
++  label: string
++  /** What the winner is judged on, e.g. "by QA score · 80%+ benchmark". */
++  basis: string
++  winner: { name: string; value: number; display: string } | null
++  /** Why there is no winner (shown instead). */
++  note?: string
++}
++
++const LABEL: Record<DepartmentType, string> = {
++  ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', CSR: 'CSR', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', INVENTORY: 'Inventory',
++}
++
++function monthRange(month: string) {
++  const start = DateTime.fromISO(`${month}-01`, { zone: 'utc' }).startOf('month')
++  const startDate = start.toISODate()!
++  const endDate = start.endOf('month').toISODate()!
++  return { startDate, endDate, dates: { gte: dbDateFromString(startDate), lte: dbDateFromString(endDate) } }
++}
++
++/** Highest total, ignoring zeros. */
++function best(totals: Map<string, number>): { id: string; value: number } | null {
++  let top: { id: string; value: number } | null = null
++  for (const [id, value] of totals) if (value > 0 && (!top || value > top.value)) top = { id, value }
++  return top
++}
++
++function add(m: Map<string, number>, id: string | null | undefined, v: number) {
++  if (id) m.set(id, (m.get(id) ?? 0) + v)
++}
++
++async function qaWinner(deptId: string, month: string): Promise<Pick<TopAchiever, 'winner' | 'note'>> {
++  const r = monthRange(month)
++  const evals = await prisma.qaEvaluation.findMany({
++    where: { departmentId: deptId, status: 'SUBMITTED', createdAt: timeIn(r) },
++    select: { agentId: true, totalScore: true, agent: { select: { name: true } } },
++  })
++  const per = new Map<string, { name: string; scores: number[] }>()
++  for (const e of evals) {
++    const a = per.get(e.agentId) ?? { name: e.agent.name, scores: [] }
++    a.scores.push(e.totalScore)
++    per.set(e.agentId, a)
++  }
++  let top: { name: string; avg: number } | null = null
++  for (const a of per.values()) {
++    if (a.scores.length < QA_MIN_EVALS) continue
++    const avg = Math.round((a.scores.reduce((s, x) => s + x, 0) / a.scores.length) * 10) / 10
++    if (!top || avg > top.avg) top = { name: a.name, avg }
++  }
++  if (!top) return { winner: null, note: 'Not enough evaluations yet' }
++  if (top.avg < QA_MIN_SCORE) return { winner: null, note: `No top achiever: best was ${top.avg}%, below the ${QA_MIN_SCORE}% benchmark` }
++  return { winner: { name: top.name, value: top.avg, display: `${top.avg}%` } }
++}
++
++/** Totals per person for one department's main number this month. */
++async function activityTotals(type: DepartmentType, deptId: string, memberIds: string[], month: string): Promise<{ totals: Map<string, number>; unit: string; one: string } | null> {
++  const r = monthRange(month)
++  const totals = new Map<string, number>()
++  const mine = { userId: { in: memberIds }, date: r.dates, status: 'SUBMITTED' as const }
++  switch (type) {
++    case 'LEAD_GEN': {
++      for (const e of await prisma.leadGenDailyEntry.findMany({ where: mine, select: { userId: true, leadsGenerated: true } })) add(totals, e.userId, e.leadsGenerated)
++      return { totals, unit: 'leads', one: 'lead' }
++    }
++    case 'TALKLOOP': {
++      for (const e of await prisma.talkloopDailyEntry.findMany({ where: mine, select: { userId: true, demosConducted: true } })) add(totals, e.userId, e.demosConducted)
++      return { totals, unit: 'demos', one: 'demo' }
++    }
++    case 'ECOMMERCE': {
++      for (const e of await prisma.ecommerceDailyEntry.findMany({ where: mine, select: { userId: true, lines: { select: { listings: true } } } })) add(totals, e.userId, e.lines.reduce((s, l) => s + l.listings, 0))
++      return { totals, unit: 'listings', one: 'listing' }
++    }
++    case 'MARKETING': {
++      for (const t of await prisma.marketingTask.findMany({ where: { status: 'PUBLISHED', completedAt: timeIn(r), assigneeId: { in: memberIds } }, select: { assigneeId: true } })) add(totals, t.assigneeId, 1)
++      return { totals, unit: 'tasks published', one: 'task published' }
++    }
++    case 'INVENTORY': {
++      for (const m of await prisma.inventoryMovement.findMany({ where: { item: { departmentId: deptId }, status: 'COMPLETED', resolvedAt: timeIn(r), assignedToId: { in: memberIds } }, select: { assignedToId: true } })) add(totals, m.assignedToId, 1)
++      return { totals, unit: 'requests completed', one: 'request completed' }
++    }
++    default:
++      return null
++  }
++}
++
++const BASIS: Partial<Record<DepartmentType, string>> = {
++  LEAD_GEN: 'by leads generated',
++  TALKLOOP: 'by demos conducted',
++  ECOMMERCE: 'by listings',
++  MARKETING: 'by tasks published',
++  INVENTORY: 'by requests completed',
++}
++
++export async function topAchievers(month: string, types: DepartmentType[]): Promise<TopAchiever[]> {
++  if (!types.length) return []
++  const depts = await prisma.department.findMany({ where: { type: { in: types } } })
++  const one = async (type: DepartmentType): Promise<TopAchiever | null> => {
++    const dept = depts.find((d) => d.type === type)
++    const label = LABEL[type]
++    if (!dept) return null
++    if (type === 'ITAD' || type === 'CSR') {
++      return { department: type, label, basis: `by QA score · ${QA_MIN_SCORE}%+ benchmark`, ...(await qaWinner(dept.id, month)) }
++    }
++    // The team, not its lead, competes.
++    const members = await prisma.user.findMany({ where: { departmentId: dept.id, isActive: true, role: { in: ['MEMBER', 'SUB_DEPT_LEAD'] } }, select: { id: true, name: true } })
++    const t = await activityTotals(type, dept.id, members.map((m) => m.id), month)
++    const top = t ? best(t.totals) : null
++    const name = top ? members.find((m) => m.id === top.id)?.name : undefined
++    return {
++      department: type,
++      label,
++      basis: BASIS[type] ?? '',
++      winner: top && name && t ? { name, value: top.value, display: `${top.value.toLocaleString('en-US')} ${top.value === 1 ? t.one : t.unit}` } : null,
++      ...(top ? {} : { note: 'No activity logged this month yet' }),
++    }
++  }
++  return (await Promise.all(types.map(one))).filter((x): x is TopAchiever => !!x)
++}
+diff --git a/server/src/middleware/department.ts b/server/src/middleware/department.ts
+new file mode 100644
+index 0000000..c701b7a
+--- /dev/null
++++ b/server/src/middleware/department.ts
+@@ -0,0 +1,41 @@
++import type { Response, NextFunction } from 'express'
++import type { DepartmentType } from '@prisma/client'
++import { prisma } from '../lib/prisma'
++import type { AuthedRequest } from './auth'
++
++const LABEL: Record<DepartmentType, string> = {
++  ITAD: 'ITAD',
++  LEAD_GEN: 'Lead Generation',
++  MARKETING: 'Marketing',
++  CSR: 'CSR',
++  ECOMMERCE: 'Ecommerce',
++  TALKLOOP: 'Talkloop',
++  INVENTORY: 'Inventory',
++}
++
++/**
++ * Department wall for a whole router: only people whose current department is one of
++ * these (and the Super Admin) get through. The handlers still do their own finer checks
++ * (team lead only, own rows only); this is the outer wall, so a handler that forgets its
++ * check can never open one department's data to another. Use after requireAuth.
++ */
++export function requireDepartment(...types: DepartmentType[]) {
++  return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
++    if (!req.user) {
++      res.status(401).json({ error: 'Not authenticated' })
++      return
++    }
++    if (req.user.role === 'SUPER_ADMIN') return next()
++    try {
++      const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { department: { select: { type: true } } } })
++      const type = me?.department?.type
++      if (!type || !types.includes(type)) {
++        res.status(403).json({ error: `This is only for the ${types.map((t) => LABEL[t]).join(' / ')} team` })
++        return
++      }
++      next()
++    } catch (e) {
++      next(e)
++    }
++  }
++}
+diff --git a/server/src/routes/admin.ts b/server/src/routes/admin.ts
+index 27f7d5d..be55774 100644
+--- a/server/src/routes/admin.ts
++++ b/server/src/routes/admin.ts
+@@ -50,8 +50,8 @@ adminRouter.patch('/tags/:id', teamLeadOrAdmin, asyncHandler(updateTag))
+ // Holidays & Leave (TL / Admin). NOTE: GET /holidays is intentionally open to any
+ // authenticated user — it's the company-wide holiday calendar shown across the app.
+ adminRouter.get('/holidays', asyncHandler(listHolidays))
+-adminRouter.post('/holidays', teamLeadOrAdmin, asyncHandler(createHoliday))
+-adminRouter.delete('/holidays/:id', teamLeadOrAdmin, asyncHandler(deleteHoliday))
++adminRouter.post('/holidays', superAdmin, asyncHandler(createHoliday))
++adminRouter.delete('/holidays/:id', superAdmin, asyncHandler(deleteHoliday))
+ adminRouter.get('/leave', teamLeadOrAdmin, asyncHandler(listLeave))
+ adminRouter.get('/leave/members', teamLeadOrAdmin, asyncHandler(listLeaveMembers))
+ adminRouter.post('/leave', teamLeadOrAdmin, asyncHandler(createLeave))
+diff --git a/server/src/routes/dashboard.ts b/server/src/routes/dashboard.ts
+index 799f08a..8dc61bb 100644
+--- a/server/src/routes/dashboard.ts
++++ b/server/src/routes/dashboard.ts
+@@ -1,5 +1,5 @@
+ import { Router } from 'express'
+-import { teamDashboard } from '../controllers/dashboardController'
++import { teamDashboard, topAchiever } from '../controllers/dashboardController'
+ import { executiveDashboard } from '../controllers/executiveController'
+ import { requireAuth } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+@@ -9,3 +9,4 @@ export const dashboardRouter = Router()
+ dashboardRouter.use(requireAuth)
+ dashboardRouter.get('/team', asyncHandler(teamDashboard))
+ dashboardRouter.get('/executive', asyncHandler(executiveDashboard))
++dashboardRouter.get('/top-achiever', asyncHandler(topAchiever))
+diff --git a/server/src/routes/ecommerce.ts b/server/src/routes/ecommerce.ts
+index 47b97e8..d66db39 100644
+--- a/server/src/routes/ecommerce.ts
++++ b/server/src/routes/ecommerce.ts
+@@ -1,12 +1,13 @@
+ import { Router } from 'express'
+ import { getMyEntry, upsertMyEntry, teamView, getBoard, createTask, updateTask, deleteTask, getTask, addComment, listStock, createStock, assignStock, resolveStock } from '../controllers/ecommerceController'
+ import { listMeetingNotes, createMeetingNote, updateMeetingNote, deleteMeetingNote } from '../controllers/meetingNotesController'
++import { requireDepartment } from '../middleware/department'
+ import { requireAuth } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+ 
+ export const ecommerceRouter = Router()
+ 
+-ecommerceRouter.use(requireAuth)
++ecommerceRouter.use(requireAuth, requireDepartment('ECOMMERCE'))
+ ecommerceRouter.get('/entries', asyncHandler(getMyEntry))
+ ecommerceRouter.put('/entries', asyncHandler(upsertMyEntry))
+ ecommerceRouter.get('/team', asyncHandler(teamView))
+diff --git a/server/src/routes/inventory.ts b/server/src/routes/inventory.ts
+index 5dc86ad..23c71cb 100644
+--- a/server/src/routes/inventory.ts
++++ b/server/src/routes/inventory.ts
+@@ -4,12 +4,13 @@ import {
+   createMovement, assignMovement, resolveMovement, cancelMovement,
+   listRequests, teamView,
+ } from '../controllers/inventoryController'
++import { requireDepartment } from '../middleware/department'
+ import { requireAuth, requireRole } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+ 
+ export const inventoryRouter = Router()
+ 
+-inventoryRouter.use(requireAuth)
++inventoryRouter.use(requireAuth, requireDepartment('INVENTORY'))
+ 
+ // Items
+ inventoryRouter.get('/items', asyncHandler(listItems))
+diff --git a/server/src/routes/itad.ts b/server/src/routes/itad.ts
+index 5524148..f96592b 100644
+--- a/server/src/routes/itad.ts
++++ b/server/src/routes/itad.ts
+@@ -2,12 +2,13 @@ import { Router } from 'express'
+ import { getMyEntry, upsertMyEntry, teamView } from '../controllers/itadController'
+ import { itadAnalytics } from '../controllers/analyticsController'
+ import { listBids, createBid, updateBid, deleteBid } from '../controllers/bidController'
++import { requireDepartment } from '../middleware/department'
+ import { requireAuth } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+ 
+ export const itadRouter = Router()
+ 
+-itadRouter.use(requireAuth)
++itadRouter.use(requireAuth, requireDepartment('ITAD'))
+ itadRouter.get('/entries', asyncHandler(getMyEntry))
+ itadRouter.put('/entries', asyncHandler(upsertMyEntry))
+ itadRouter.get('/team', asyncHandler(teamView))
+diff --git a/server/src/routes/leadgen.ts b/server/src/routes/leadgen.ts
+index 64fa4c5..1763109 100644
+--- a/server/src/routes/leadgen.ts
++++ b/server/src/routes/leadgen.ts
+@@ -2,12 +2,13 @@ import { Router } from 'express'
+ import { getMyEntry, upsertMyEntry, teamView, createVertical } from '../controllers/leadgenController'
+ import { getBreakdown, putBreakdown } from '../controllers/leadgenBreakdownController'
+ import { leadgenAnalytics } from '../controllers/analyticsController'
++import { requireDepartment } from '../middleware/department'
+ import { requireAuth, requireRole } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+ 
+ export const leadgenRouter = Router()
+ 
+-leadgenRouter.use(requireAuth)
++leadgenRouter.use(requireAuth, requireDepartment('LEAD_GEN'))
+ leadgenRouter.get('/entries', asyncHandler(getMyEntry))
+ leadgenRouter.put('/entries', asyncHandler(upsertMyEntry))
+ leadgenRouter.post('/verticals', asyncHandler(createVertical))
+diff --git a/server/src/routes/marketing.ts b/server/src/routes/marketing.ts
+index 5b7453c..c231fcb 100644
+--- a/server/src/routes/marketing.ts
++++ b/server/src/routes/marketing.ts
+@@ -15,12 +15,13 @@ import { listBlogs, createBlog, updateBlog, deleteBlog, blogCounts } from '../co
+ import { listAds, adsSummary, createAd, updateAd, deleteAd } from '../controllers/marketingAdsController'
+ import { getPlan, addPlanItem, updatePlanItem, deletePlanItem } from '../controllers/marketingPlanController'
+ import { emailOverview } from '../controllers/marketingEmailController'
++import { requireDepartment } from '../middleware/department'
+ import { requireAuth } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+ 
+ export const marketingRouter = Router()
+ 
+-marketingRouter.use(requireAuth)
++marketingRouter.use(requireAuth, requireDepartment('MARKETING'))
+ 
+ // Kanban board
+ marketingRouter.get('/board', asyncHandler(getBoard))
+diff --git a/server/src/routes/rdp.ts b/server/src/routes/rdp.ts
+index 1a31b39..d42e59f 100644
+--- a/server/src/routes/rdp.ts
++++ b/server/src/routes/rdp.ts
+@@ -4,12 +4,13 @@ import {
+   assignAgent, endAssignment, deleteAssignment,
+   listAgents, agentHistory,
+ } from '../controllers/rdpController'
++import { requireDepartment } from '../middleware/department'
+ import { requireAuth } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+ 
+ export const rdpRouter = Router()
+ 
+-rdpRouter.use(requireAuth)
++rdpRouter.use(requireAuth, requireDepartment('ECOMMERCE'))
+ 
+ // Literal routes first so they don't get captured by /:id.
+ rdpRouter.get('/agents', asyncHandler(listAgents))
+diff --git a/server/src/routes/reports.ts b/server/src/routes/reports.ts
+index 4b0d685..927468b 100644
+--- a/server/src/routes/reports.ts
++++ b/server/src/routes/reports.ts
+@@ -12,5 +12,5 @@ reportsRouter.get('/monthly', asyncHandler(monthlyReport))
+ reportsRouter.get('/monthly/preview', asyncHandler(previewMonthlyReport))
+ reportsRouter.post('/monthly/send', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(sendMonthlyReport))
+ reportsRouter.get('/management/preview', asyncHandler(managementPreview))
+-reportsRouter.post('/management/send', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(sendManagementReport))
++reportsRouter.post('/management/send', requireRole('SUPER_ADMIN'), asyncHandler(sendManagementReport))
+ reportsRouter.get('/me', asyncHandler(myReports))
+diff --git a/server/src/routes/talkloop.ts b/server/src/routes/talkloop.ts
+index 5ab9c80..289d171 100644
+--- a/server/src/routes/talkloop.ts
++++ b/server/src/routes/talkloop.ts
+@@ -1,11 +1,12 @@
+ import { Router } from 'express'
+ import { getMyEntry, upsertMyEntry, teamView, createCountry } from '../controllers/talkloopController'
++import { requireDepartment } from '../middleware/department'
+ import { requireAuth, requireRole } from '../middleware/auth'
+ import { asyncHandler } from '../lib/asyncHandler'
+ 
+ export const talkloopRouter = Router()
+ 
+-talkloopRouter.use(requireAuth)
++talkloopRouter.use(requireAuth, requireDepartment('TALKLOOP'))
+ talkloopRouter.get('/entries', asyncHandler(getMyEntry))
+ talkloopRouter.put('/entries', asyncHandler(upsertMyEntry))
+ talkloopRouter.post('/countries', asyncHandler(createCountry))
+diff --git a/server/src/test/departments.integration.test.ts b/server/src/test/departments.integration.test.ts
+new file mode 100644
+index 0000000..88fc1ac
+--- /dev/null
++++ b/server/src/test/departments.integration.test.ts
+@@ -0,0 +1,218 @@
++import { describe, it, expect, beforeAll, afterAll } from 'vitest'
++import request from 'supertest'
++import type { Role } from '@prisma/client'
++import { app, auth, prisma, seedWorld, type SeededWorld } from './helpers'
++import { hashPassword } from '../lib/auth'
++import { companyToday, dbDateFromString } from '../lib/time'
++
++// Each department sees only its own things: the department wall on every department's
++// API, the per-department team lead dashboards, Top Achiever, and the cross-department leaks
++// that were closed (management report, company holidays, leads with no department).
++
++type U = { id: string; role: Role }
++let w: SeededWorld
++const u: Record<string, U> = {}
++let mkt = '', csr = '', ecom = '', talk = ''
++
++beforeAll(async () => {
++  w = await seedWorld()
++  const passwordHash = await hashPassword('Password123!')
++  const [m, c, e, t] = await Promise.all([
++    prisma.department.create({ data: { type: 'MARKETING', name: 'Marketing' } }),
++    prisma.department.create({ data: { type: 'CSR', name: 'CSR' } }),
++    prisma.department.create({ data: { type: 'ECOMMERCE', name: 'Ecommerce' } }),
++    prisma.department.create({ data: { type: 'TALKLOOP', name: 'Talkloop' } }),
++  ])
++  mkt = m.id; csr = c.id; ecom = e.id; talk = t.id
++  const [seo, social] = await Promise.all([
++    prisma.subDepartment.create({ data: { name: 'SEO', slug: 'seo', departmentId: mkt } }),
++    prisma.subDepartment.create({ data: { name: 'Social', slug: 'social', departmentId: mkt } }),
++  ])
++  const mk = async (key: string, role: Role, departmentId?: string, subDepartmentId?: string) => {
++    const r = await prisma.user.create({ data: { name: key, email: `${key}@test.local`, role, status: 'ACTIVE', isActive: true, passwordHash, departmentId, subDepartmentId } })
++    u[key] = { id: r.id, role: r.role }
++  }
++  await Promise.all([
++    mk('mktLead', 'TEAM_LEAD', mkt), mk('mktSeo', 'MEMBER', mkt, seo.id), mk('mktSdl', 'SUB_DEPT_LEAD', mkt, social.id),
++    mk('csrLead', 'TEAM_LEAD', csr), mk('csrAgent', 'MEMBER', csr),
++    mk('ecomLead', 'TEAM_LEAD', ecom), mk('ecomMember', 'MEMBER', ecom),
++    mk('talkLead', 'TEAM_LEAD', talk), mk('talkMember', 'MEMBER', talk), mk('talkMember2', 'MEMBER', talk),
++    mk('qa', 'QA'), mk('lostLead', 'TEAM_LEAD'),
++  ])
++})
++afterAll(async () => { await prisma.$disconnect() })
++
++const get = (path: string, who: U) => request(app).get(path).set(...auth(who))
++
++describe('the department wall', () => {
++  it('people cannot open another department’s data', async () => {
++    const blocked: [string, U][] = [
++      ['/api/itad/entries', w.leadgenMember],
++      ['/api/itad/team', u.mktLead],
++      ['/api/itad/bids', u.talkMember],
++      ['/api/leadgen/entries', w.itadMember],
++      ['/api/talkloop/entries', u.ecomMember],
++      ['/api/talkloop/team', u.ecomLead],
++      ['/api/marketing/board', u.talkMember],
++      ['/api/marketing/brands', w.itadLead],
++      ['/api/ecommerce/board', w.inventoryMember],
++      ['/api/inventory/items', u.mktSeo],
++      ['/api/rdp', w.itadLead],
++    ]
++    for (const [path, who] of blocked) {
++      const r = await get(path, who)
++      expect(r.status, `${path}`).toBe(403)
++      expect(r.body.error).toMatch(/only for the/)
++    }
++  })
++
++  it('people still open their own department, and the Super Admin opens everything', async () => {
++    await get('/api/itad/entries', w.itadMember).expect(200)
++    await get('/api/talkloop/entries', u.talkMember).expect(200)
++    await get('/api/marketing/board', u.mktSeo).expect(200)
++    await get('/api/itad/team', w.superAdmin).expect(200)
++    await get('/api/talkloop/team', w.superAdmin).expect(200)
++  })
++
++  it('shared tools stay open to everyone', async () => {
++    for (const who of [u.talkMember, u.csrAgent, w.inventoryMember]) {
++      await get('/api/todos', who).expect(200)
++      await get('/api/attendance/me', who).expect(200)
++      await get('/api/projects/me/tasks', who).expect(200)
++      await get('/api/chat/conversations', who).expect(200)
++    }
++  })
++})
++
++describe('closed cross-department leaks', () => {
++  it('the management report (ITAD + Bids + Marketing) is for the Super Admin only', async () => {
++    await get('/api/reports/management/preview', u.mktLead).expect(403)
++    await request(app).post('/api/reports/management/send').set(...auth(u.talkLead)).send({ to: 'someone@example.com' }).expect(403)
++    await get('/api/reports/management/preview', w.superAdmin).expect(200)
++  })
++
++  it('company holidays are set by the Super Admin; leads can still see them', async () => {
++    await request(app).post('/api/admin/holidays').set(...auth(u.talkLead)).send({ date: '2026-12-25', name: 'X' }).expect(403)
++    const h = await request(app).post('/api/admin/holidays').set(...auth(w.superAdmin)).send({ date: '2026-12-25', name: 'Christmas' }).expect(201)
++    await request(app).delete(`/api/admin/holidays/${h.body.holiday.id}`).set(...auth(w.itadLead)).expect(403)
++    await get('/api/admin/holidays', u.talkLead).expect(200)
++  })
++
++  it('a team lead with no department sees nobody', async () => {
++    await prisma.leaveDay.create({ data: { userId: w.itadMember.id, date: dbDateFromString('2026-10-01'), type: 'ON_LEAVE' } })
++    expect((await get('/api/admin/leave', u.lostLead).expect(200)).body.leave).toHaveLength(0)
++    expect((await get('/api/admin/leave/members', u.lostLead).expect(200)).body.members).toHaveLength(0)
++    expect((await get('/api/admin/leave', w.itadLead).expect(200)).body.leave).toHaveLength(1)
++    // ...and cannot touch the Super Admin (who also has no department)
++    await get(`/api/attendance/history?userId=${w.superAdmin.id}`, u.lostLead).expect(403)
++    // ...nor the company-wide default work hours
++    await get('/api/attendance/shift', u.lostLead).expect(403)
++  })
++
++  it('the team export only covers the lead’s own department', async () => {
++    await get('/api/reports/team.csv?department=ITAD', u.mktSdl).expect(400)
++    await get('/api/reports/team.csv?department=LEAD_GEN', w.itadLead).expect(200).expect((r) => expect(r.text).not.toContain('leadgen member'))
++  })
++
++  it('QA Top Achiever is only shown for your own department', async () => {
++    expect((await get('/api/qa/employee-of-month', u.mktSeo).expect(200)).body.winners).toEqual([])
++    expect((await get('/api/qa/employee-of-month', u.csrAgent).expect(200)).body.winners.map((x: { department: string }) => x.department)).toEqual(['CSR'])
++    expect((await get('/api/qa/employee-of-month', u.qa).expect(200)).body.winners).toHaveLength(2)
++  })
++})
++
++describe('team lead dashboards for every department', () => {
++  const today = dbDateFromString(companyToday())
++
++  it('Talkloop: calls, connect rate, demos, by country, today', async () => {
++    const pk = await prisma.tag.create({ data: { name: 'Pakistan', type: 'COUNTRY', departmentId: talk } })
++    await prisma.talkloopDailyEntry.create({ data: { userId: u.talkMember.id, date: today, callsMade: 50, connects: 10, demosScheduled: 3, demosConducted: 2, countryCounts: { create: [{ tagId: pk.id, calls: 50, demos: 2 }] } } })
++    await prisma.talkloopDailyEntry.create({ data: { userId: u.talkMember2.id, date: today, callsMade: 30, connects: 5, demosConducted: 4 } })
++    const d = (await get('/api/dashboard/team', u.talkLead).expect(200)).body
++    expect(d.department).toBe('TALKLOOP')
++    const k = Object.fromEntries(d.kpis.map((x: { label: string; value: number }) => [x.label, x.value]))
++    expect(k['Calls Made']).toBe(80)
++    expect(k['Connect Rate']).toBeCloseTo(15 / 80)
++    expect(k['Demos Conducted']).toBe(6)
++    expect(d.breakdown).toEqual([{ name: 'Pakistan', value: 50 }])
++    expect(d.counts).toEqual({ submitted: 2, total: 2 })
++    expect(d.improvement).not.toMatch(/Phase 3/)
++  })
++
++  it('Ecommerce: listings by marketplace and tasks', async () => {
++    const amazon = await prisma.tag.create({ data: { name: 'Amazon', type: 'MARKETPLACE', departmentId: ecom } })
++    const bto = await prisma.tag.create({ data: { name: 'BTO', type: 'TASK_TYPE', departmentId: ecom } })
++    await prisma.ecommerceDailyEntry.create({ data: { userId: u.ecomMember.id, date: today, lines: { create: [{ taskTypeId: bto.id, marketplaceId: amazon.id, listings: 12 }] } } })
++    await prisma.ecommerceTask.create({ data: { title: 'Done', status: 'DONE', completedAt: new Date(), assignedToId: u.ecomMember.id } })
++    await prisma.ecommerceTask.create({ data: { title: 'Open', status: 'TODO' } })
++    const d = (await get('/api/dashboard/team', u.ecomLead).expect(200)).body
++    const k = Object.fromEntries(d.kpis.map((x: { label: string; value: number }) => [x.label, x.value]))
++    expect(k).toMatchObject({ Listings: 12, 'Tasks Completed': 1, 'Open Tasks': 1 })
++    expect(d.breakdown).toEqual([{ name: 'Amazon', value: 12 }])
++    expect(d.todaySubmissions[0]).toMatchObject({ name: 'ecomMember', status: 'SUBMITTED', metricValue: 12 })
++  })
++
++  it('Marketing: tasks published, posts, who logged today (sub-dept leads count as team)', async () => {
++    await prisma.marketingTask.create({ data: { title: 'Post', discipline: 'SOCIAL', status: 'PUBLISHED', completedAt: new Date(), assigneeId: u.mktSdl.id } })
++    await prisma.seoDailyEntry.create({ data: { userId: u.mktSeo.id, date: today } })
++    const d = (await get('/api/dashboard/team', u.mktLead).expect(200)).body
++    expect(d.kpis.find((x: { label: string }) => x.label === 'Tasks Published').value).toBe(1)
++    expect(d.breakdown).toEqual([{ name: 'Social Media', value: 1 }])
++    expect(d.counts).toEqual({ submitted: 1, total: 2 })
++    expect(d.todaySubmissions.find((x: { name: string }) => x.name === 'mktSdl').metricValue).toBe(1)
++  })
++
++  it('CSR: QA scores (shown as percentages) and no "submitted" badges', async () => {
++    for (const score of [90, 70, 85]) {
++      await prisma.qaEvaluation.create({ data: { scorecardName: 'CSR', evaluatorId: u.qa.id, agentId: u.csrAgent.id, departmentId: csr, totalScore: score, passed: score >= 80, coachingNeeded: score < 80 } })
++    }
++    const d = (await get('/api/dashboard/team', u.csrLead).expect(200)).body
++    const k = Object.fromEntries(d.kpis.map((x: { label: string; value: number }) => [x.label, x.value]))
++    expect(k.Evaluations).toBe(3)
++    expect(k['Average QA Score']).toBeCloseTo(245 / 300)
++    expect(k['Pass Rate']).toBeCloseTo(2 / 3)
++    expect(d.people.showStatus).toBe(false)
++    expect(d.todaySubmissions[0]).toMatchObject({ name: 'csrAgent', metricValue: 82 })
++  })
++
++  it('Inventory: requests completed, open, low stock', async () => {
++    const inv = await prisma.department.findUniqueOrThrow({ where: { type: 'INVENTORY' } })
++    const item = await prisma.inventoryItem.create({ data: { departmentId: inv.id, name: 'SSD', category: 'Parts', quantity: 1, lowStockAt: 2 } })
++    await prisma.inventoryMovement.create({ data: { itemId: item.id, type: 'STOCK_OUT', quantity: 3, status: 'COMPLETED', resolvedAt: new Date(), assignedToId: w.inventoryMember.id } })
++    await prisma.inventoryMovement.create({ data: { itemId: item.id, type: 'STOCK_IN', quantity: 1 } })
++    const d = (await get('/api/dashboard/team', w.inventoryLead).expect(200)).body
++    const k = Object.fromEntries(d.kpis.map((x: { label: string; value: number }) => [x.label, x.value]))
++    expect(k).toMatchObject({ 'Requests Completed': 1, 'Units Moved': 3, 'Open Requests': 1, 'Low Stock Items': 1 })
++  })
++
++  it('Top Achiever: your own department only, judged on its own work', async () => {
++    const t = (await get('/api/dashboard/top-achiever', u.talkMember).expect(200)).body
++    expect(t.winners).toHaveLength(1)
++    expect(t.winners[0]).toMatchObject({ department: 'TALKLOOP', basis: 'by demos conducted', winner: { name: 'talkMember2', value: 4, display: '4 demos' } })
++    const c = (await get('/api/dashboard/top-achiever', u.csrLead).expect(200)).body
++    expect(c.winners[0]).toMatchObject({ department: 'CSR', winner: { name: 'csrAgent', display: '81.7%' } })
++    const m = (await get('/api/dashboard/top-achiever', u.mktSeo).expect(200)).body
++    expect(m.winners[0]).toMatchObject({ department: 'MARKETING', winner: { name: 'mktSdl' } })
++    expect((await get('/api/dashboard/top-achiever', u.qa).expect(200)).body.winners.map((x: { department: string }) => x.department)).toEqual(['ITAD', 'CSR'])
++    expect((await get('/api/dashboard/top-achiever', w.superAdmin).expect(200)).body.winners).toHaveLength(7)
++    expect((await get('/api/dashboard/top-achiever', u.lostLead).expect(200)).body.winners).toEqual([])
++    await get('/api/dashboard/top-achiever?month=2026-13', u.talkMember).expect(200)
++  })
++
++  it('the executive view now includes Talkloop and Inventory, and CSR percentages read right', async () => {
++    const d = (await get('/api/dashboard/executive', w.superAdmin).expect(200)).body
++    const types = d.departments.map((x: { type: string }) => x.type)
++    expect(types).toEqual(expect.arrayContaining(['TALKLOOP', 'INVENTORY']))
++    const tl = d.departments.find((x: { type: string }) => x.type === 'TALKLOOP')
++    expect(tl.headline[0]).toMatchObject({ label: 'Calls', value: 80 })
++    const c = d.departments.find((x: { type: string }) => x.type === 'CSR')
++    expect(c.headline[0].value).toBeLessThanOrEqual(1)
++    expect(d.benchmark.map((x: { department: string }) => x.department)).toEqual(expect.arrayContaining(['Talkloop', 'Inventory']))
++  })
++
++  it('Talkloop and Content now count in "not submitted"', async () => {
++    await prisma.talkloopDailyEntry.deleteMany({ where: { userId: u.talkMember2.id } })
++    const r = (await get('/api/notifications/not-submitted', u.talkLead).expect(200)).body
++    expect(r.groups).toEqual([{ department: 'TALKLOOP', label: 'Talkloop', members: [expect.objectContaining({ name: 'talkMember2' })] }])
++  })
++})

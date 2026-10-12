@@ -8,16 +8,38 @@ import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import type { Department } from '../../../lib/types'
 import { listTags, createTag, updateTag, type AdminTag } from '../../../lib/adminApi'
+import { useAuth } from '../../../lib/auth'
+
+const TAG_DEPARTMENTS: { value: Department; label: string }[] = [
+  { value: 'LEAD_GEN', label: 'Lead Generation' },
+  { value: 'MARKETING', label: 'Marketing' },
+  { value: 'ITAD', label: 'ITAD' },
+  { value: 'TALKLOOP', label: 'Talkloop' },
+  { value: 'ECOMMERCE', label: 'Ecommerce' },
+]
+/** Tag kinds each department uses. */
+const CLASSIC: { value: AdminTag['type']; label: string }[] = [{ value: 'VERTICAL', label: 'Vertical' }, { value: 'PLATFORM', label: 'Platform' }, { value: 'CAMPAIGN', label: 'Campaign' }, { value: 'DATA_SOURCE', label: 'Data Source' }]
+const TYPES_FOR: Record<string, { value: AdminTag['type']; label: string }[]> = {
+  LEAD_GEN: CLASSIC,
+  MARKETING: CLASSIC,
+  ITAD: CLASSIC,
+  TALKLOOP: [{ value: 'COUNTRY', label: 'Country' }],
+  ECOMMERCE: [{ value: 'MARKETPLACE', label: 'Marketplace' }, { value: 'TASK_TYPE', label: 'Task Type' }],
+}
 
 const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
 
 export default function AdminTags() {
   const { addToast } = useToast()
+  const { user } = useAuth()
+  // A team lead adds tags for their own department only; the Super Admin picks any.
+  const depts = user?.role === 'SUPER_ADMIN' ? TAG_DEPARTMENTS : TAG_DEPARTMENTS.filter((d) => d.value === user?.department)
   const [tags, setTags] = useState<AdminTag[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
-  const [type, setType] = useState<AdminTag['type']>('VERTICAL')
-  const [department, setDepartment] = useState<Department>('LEAD_GEN')
+  const [department, setDepartment] = useState<Department>(depts[0]?.value ?? 'LEAD_GEN')
+  const [type, setType] = useState<AdminTag['type']>(TYPES_FOR[depts[0]?.value ?? 'LEAD_GEN']?.[0]?.value ?? 'VERTICAL')
+  const typeOptions = TYPES_FOR[department] ?? []
 
   useEffect(() => {
     let active = true
@@ -62,24 +84,19 @@ export default function AdminTags() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-headline-lg text-ink">Tag Management</h1>
-      <Card title="Add Tag" subtitle="Industry verticals (Lead Gen) and platforms (Marketing)">
+      <Card title="Add Tag" subtitle="The lists your team picks from in its daily log">
         <form onSubmit={add} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-4">
           <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Healthcare" />
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Type</label>
             <select className={sel} value={type} onChange={(e) => setType(e.target.value as AdminTag['type'])}>
-              <option value="VERTICAL">Vertical</option>
-              <option value="PLATFORM">Platform</option>
-              <option value="CAMPAIGN">Campaign</option>
-              <option value="DATA_SOURCE">Data Source</option>
+              {typeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
-            <select className={sel} value={department} onChange={(e) => setDepartment(e.target.value as Department)}>
-              <option value="LEAD_GEN">Lead Generation</option>
-              <option value="MARKETING">Marketing</option>
-              <option value="ITAD">ITAD</option>
+            <select className={sel} value={department} disabled={depts.length < 2} onChange={(e) => { const d = e.target.value as Department; setDepartment(d); setType(TYPES_FOR[d]?.[0]?.value ?? 'VERTICAL') }}>
+              {depts.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
             </select>
           </div>
           <Button type="submit" leadingIcon={<Plus size={16} />}>Add</Button>

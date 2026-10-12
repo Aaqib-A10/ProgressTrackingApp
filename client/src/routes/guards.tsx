@@ -4,6 +4,7 @@ import { Activity } from 'lucide-react'
 import type { Role } from '../lib/types'
 import { useAuth } from '../lib/auth'
 import { canViewFinance } from '../lib/finance'
+import { canOpen } from '../lib/access'
 import { AppShell } from '../components/layout/AppShell'
 
 function FullScreenSpinner() {
@@ -26,7 +27,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 /** Renders the app shell with the authenticated user; nested routes fill the Outlet. */
 export function AppShellRoute() {
   const { user } = useAuth()
+  const { pathname } = useLocation()
   if (!user) return <Navigate to="/login" replace />
+  // Every page under /app checks the same access list as the menu (lib/access.ts), so a
+  // screen for another department or role cannot be opened by typing its address.
+  if (!canOpen(user, pathname)) return <Navigate to="/app/dashboard" replace />
   return <AppShell user={user} />
 }
 

@@ -145,6 +145,3 @@ export const fieldCls = 'h-10 w-full rounded-btn border border-line bg-card px-3
 
 export const fmtBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`)
 
-export function ProjectDot({ color, size = 10 }: { color: string; size?: number }) {
-  return <span className="inline-block shrink-0 rounded-sm" style={{ width: size, height: size, backgroundColor: color }} />
-}

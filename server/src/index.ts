@@ -8,6 +8,7 @@ import { startTaskReminders } from './lib/taskReminders'
 import { startPmDeadlines } from './lib/pm/deadlines'
 import { startCallSweeper, setOnCallEnded } from './lib/pm/calls'
 import { startMeetingReminders } from './lib/pm/meetings'
+import { startCleanup } from './lib/cleanup'
 import { scheduleNotes } from './controllers/chatController'
 import { recoverNotes } from './lib/pm/notes'
 
@@ -40,6 +41,7 @@ app.listen(PORT, () => {
   startPmDeadlines()
   startCallSweeper()
   startMeetingReminders()
+  startCleanup()
   // When a call with the AI note taker on ends, write its notes.
   setOnCallEnded((c) => { if (c.noteTaker) scheduleNotes(c.callId) })
   // Notes interrupted by a restart or deploy are written now.

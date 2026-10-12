@@ -41,7 +41,8 @@ export async function exportTeamCsv(req: AuthedRequest, res: Response): Promise<
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const deptType = me.department?.type ?? (req.query.department as string)
+  // Leads export their own department only; the Super Admin picks one.
+  const deptType = me.role === 'SUPER_ADMIN' ? (req.query.department as string) ?? me.department?.type : me.department?.type
   if (deptType !== 'ITAD' && deptType !== 'LEAD_GEN') {
     res.status(400).json({ error: 'Specify a valid department (ITAD or LEAD_GEN)' })
     return
@@ -51,7 +52,7 @@ export async function exportTeamCsv(req: AuthedRequest, res: Response): Promise<
     res.status(404).json({ error: 'Department not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && me.departmentId !== dept.id) {
+  if (me.role !== 'SUPER_ADMIN' && me.departmentId !== dept.id) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -206,10 +207,11 @@ export async function sendMonthlyReport(req: AuthedRequest, res: Response): Prom
 
 // ==================== Consolidated management report (ITAD + Bids + Marketing) ====================
 
-/** Any Team Lead or Super Admin may view/send the consolidated management report. */
+/** The consolidated management report spans several departments (ITAD, Bids, Marketing),
+ *  so only the Super Admin may view or send it. */
 async function assertManager(req: AuthedRequest): Promise<boolean> {
   const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { role: true } })
-  return me.role === 'SUPER_ADMIN' || me.role === 'TEAM_LEAD'
+  return me.role === 'SUPER_ADMIN'
 }
 
 /** GET /api/reports/management/preview?month= — standalone printable combined report HTML. */

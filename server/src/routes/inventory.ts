@@ -4,12 +4,13 @@ import {
   createMovement, assignMovement, resolveMovement, cancelMovement,
   listRequests, teamView,
 } from '../controllers/inventoryController'
+import { requireDepartment } from '../middleware/department'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const inventoryRouter = Router()
 
-inventoryRouter.use(requireAuth)
+inventoryRouter.use(requireAuth, requireDepartment('INVENTORY'))
 
 // Items
 inventoryRouter.get('/items', asyncHandler(listItems))

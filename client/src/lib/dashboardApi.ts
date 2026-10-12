@@ -1,6 +1,7 @@
 import { api } from './api'
 import type { RangeKey, CustomRange } from '../components/layout/RangeSelector'
 import { rangeQuery } from './range'
+import type { Department } from './types'
 
 export interface DashKpi {
   label: string
@@ -8,6 +9,8 @@ export interface DashKpi {
   format: 'number' | 'percent'
   delta: number
   caption?: string
+  /** A count of how things stand right now: no "vs previous period" arrow. */
+  now?: boolean
 }
 
 export interface DashTrendPoint {
@@ -25,14 +28,31 @@ export interface DashSubmission {
 }
 
 export interface TeamDashboard {
-  department: 'ITAD' | 'LEAD_GEN' | 'MARKETING'
+  department: Department
   range: { startDate: string; endDate: string; key: RangeKey }
   kpis: DashKpi[]
   trend: { metricLabel: string; points: DashTrendPoint[] }
   breakdown: { name: string; value: number }[]
+  /** Title of the breakdown card (default "Activity Breakdown"). */
+  breakdownTitle?: string
   improvement: string
   todaySubmissions: DashSubmission[]
   counts: { submitted: number; total: number }
+  /** Departments without a daily form: the people table shows a number instead of a submitted badge. */
+  people?: { title: string; subtitle: string; showStatus: boolean }
+}
+
+// --- Top Achiever (one per department, judged on what that department does) ---
+export interface TopAchiever {
+  department: Department
+  label: string
+  basis: string
+  winner: { name: string; value: number; display: string } | null
+  note?: string
+}
+
+export function getTopAchievers(month?: string) {
+  return api.get<{ month: string; winners: TopAchiever[] }>(`/dashboard/top-achiever${month ? `?month=${month}` : ''}`)
 }
 
 export function getTeamDashboard(range: RangeKey, custom?: CustomRange | null) {
@@ -41,7 +61,7 @@ export function getTeamDashboard(range: RangeKey, custom?: CustomRange | null) {
 
 // --- Executive (Super Admin) ---
 export interface ExecDeptCard {
-  type: 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE' | 'TALKLOOP'
+  type: Department
   name: string
   members: number
   subtitle: string

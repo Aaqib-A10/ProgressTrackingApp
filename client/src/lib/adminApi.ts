@@ -93,7 +93,7 @@ export const deleteTarget = (id: string) => api.del<void>(`/admin/targets/${id}`
 export interface AdminTag {
   id: string
   name: string
-  type: 'VERTICAL' | 'PLATFORM' | 'CAMPAIGN' | 'DATA_SOURCE'
+  type: 'VERTICAL' | 'LEAD_TYPE' | 'PLATFORM' | 'CAMPAIGN' | 'DATA_SOURCE' | 'MARKETPLACE' | 'TASK_TYPE' | 'COUNTRY'
   department: Department | null
   isActive: boolean
 }

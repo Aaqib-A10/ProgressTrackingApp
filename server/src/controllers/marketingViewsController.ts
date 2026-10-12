@@ -16,34 +16,6 @@ async function marketingUser(req: AuthedRequest, res: Response) {
 }
 const inRange = (r: DateRange) => ({ gte: dbDateFromString(r.startDate), lte: dbDateFromString(r.endDate) })
 
-/** GET /api/marketing/calendar?month=YYYY-MM — scheduled vs published vs due events. */
-export async function calendar(req: AuthedRequest, res: Response): Promise<void> {
-  if (!(await marketingUser(req, res))) return
-  const monthParam = (req.query.month as string) || companyToday().slice(0, 7)
-  const start = DateTime.fromISO(`${monthParam}-01`, { zone: 'utc' }).startOf('month')
-  const end = start.endOf('month')
-  const range: DateRange = { startDate: start.toISODate()!, endDate: end.toISODate()! }
-
-  const tasks = await prisma.marketingTask.findMany({
-    where: {
-      OR: [{ scheduledDate: inRange(range) }, { publishedDate: inRange(range) }, { dueDate: inRange(range) }],
-    },
-    orderBy: { title: 'asc' },
-  })
-
-  const events: { id: string; title: string; discipline: string; date: string; type: 'scheduled' | 'published' | 'due' }[] = []
-  for (const t of tasks) {
-    if (t.publishedDate && t.publishedDate >= start.toJSDate() && t.publishedDate <= end.toJSDate())
-      events.push({ id: `${t.id}-p`, title: t.title, discipline: t.discipline, date: dateStringFromDb(t.publishedDate), type: 'published' })
-    else if (t.scheduledDate && t.scheduledDate >= start.toJSDate() && t.scheduledDate <= end.toJSDate())
-      events.push({ id: `${t.id}-s`, title: t.title, discipline: t.discipline, date: dateStringFromDb(t.scheduledDate), type: 'scheduled' })
-    else if (t.dueDate && t.dueDate >= start.toJSDate() && t.dueDate <= end.toJSDate())
-      events.push({ id: `${t.id}-d`, title: t.title, discipline: t.discipline, date: dateStringFromDb(t.dueDate), type: 'due' })
-  }
-
-  res.json({ month: monthParam, startDate: range.startDate, endDate: range.endDate, events })
-}
-
 /**
  * GET /api/marketing/social/planner?month=YYYY-MM&brandId=
  * Scheduled SOCIAL cards for the month, grouped by brand → platform. Powers the
@@ -79,43 +51,28 @@ export async function socialPlanner(req: AuthedRequest, res: Response): Promise<
   res.json({ month: monthParam, startDate: range.startDate, endDate: range.endDate, posts })
 }
 
-const sum = <T>(rows: T[], pick: (r: T) => number, ok: (r: T) => boolean) =>
-  rows.reduce((a, r) => (ok(r) ? a + pick(r) : a), 0)
-
-/** GET /api/marketing/analytics?range= — SEO + Social + Content + velocity. */
+/** GET /api/marketing/analytics?range= — work published, content pipeline and velocity. */
 export async function marketingAnalytics(req: AuthedRequest, res: Response): Promise<void> {
   if (!(await marketingUser(req, res))) return
   const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
   const range = periodRange(rangeKey, { start: req.query.start as string, end: req.query.end as string })
   const prev = previousRange(range)
-  const submitted = (r: { status: string }) => r.status === 'SUBMITTED'
 
-  const [seoCur, seoPrev, socCur, socPrev, contentTasks, publishedTasks] = await Promise.all([
-    prisma.seoDailyEntry.findMany({ where: { date: inRange(range) } }),
-    prisma.seoDailyEntry.findMany({ where: { date: inRange(prev) } }),
-    prisma.socialDailyEntry.findMany({ where: { date: inRange(range) } }),
-    prisma.socialDailyEntry.findMany({ where: { date: inRange(prev) } }),
-    prisma.marketingTask.findMany({ where: { discipline: 'CONTENT' } }),
-    prisma.marketingTask.findMany({ where: { publishedDate: inRange(range) } }),
+  const [contentTasks, publishedTasks, publishedPrev, blogs, blogsPrev] = await Promise.all([
+    prisma.marketingTask.findMany({ where: { discipline: 'CONTENT' }, select: { status: true } }),
+    prisma.marketingTask.findMany({ where: { publishedDate: inRange(range) }, select: { discipline: true, publishedDate: true } }),
+    prisma.marketingTask.findMany({ where: { publishedDate: inRange(prev) }, select: { discipline: true } }),
+    prisma.blogPost.count({ where: { status: 'PUBLISHED', publishedAt: inRange(range) } }),
+    prisma.blogPost.count({ where: { status: 'PUBLISHED', publishedAt: inRange(prev) } }),
   ])
-
-  const seo = {
-    kpis: [
-      { label: 'Pages Optimized', value: sum(seoCur, (e) => e.pagesOptimized, submitted), format: 'number', delta: pctDelta(sum(seoCur, (e) => e.pagesOptimized, submitted), sum(seoPrev, (e) => e.pagesOptimized, submitted)) },
-      { label: 'Backlinks Built', value: sum(seoCur, (e) => e.backlinksBuilt, submitted), format: 'number', delta: pctDelta(sum(seoCur, (e) => e.backlinksBuilt, submitted), sum(seoPrev, (e) => e.backlinksBuilt, submitted)) },
-      { label: 'Technical Fixes', value: sum(seoCur, (e) => e.technicalFixes, submitted), format: 'number', delta: pctDelta(sum(seoCur, (e) => e.technicalFixes, submitted), sum(seoPrev, (e) => e.technicalFixes, submitted)) },
-    ],
-    trafficTrend: buildSeries(range, seoCur.map((e) => ({ date: dateStringFromDb(e.date), value: e.organicTraffic, status: e.status }))),
-  }
-
-  const social = {
-    kpis: [
-      { label: 'Posts Published', value: sum(socCur, (e) => e.postsPublished, submitted), format: 'number', delta: pctDelta(sum(socCur, (e) => e.postsPublished, submitted), sum(socPrev, (e) => e.postsPublished, submitted)) },
-      { label: 'Reach', value: sum(socCur, (e) => e.reach, submitted), format: 'number', delta: pctDelta(sum(socCur, (e) => e.reach, submitted), sum(socPrev, (e) => e.reach, submitted)) },
-      { label: 'Followers Gained', value: sum(socCur, (e) => e.followersGained, submitted), format: 'number', delta: pctDelta(sum(socCur, (e) => e.followersGained, submitted), sum(socPrev, (e) => e.followersGained, submitted)) },
-    ],
-    engagementTrend: buildSeries(range, socCur.map((e) => ({ date: dateStringFromDb(e.date), value: e.engagement, status: e.status }))),
-  }
+  const count = (rows: { discipline: string }[], d?: string) => rows.filter((t) => !d || t.discipline === d).length
+  const kpi = (label: string, cur: number, before: number) => ({ label, value: cur, format: 'number' as const, delta: pctDelta(cur, before) })
+  const kpis = [
+    kpi('Published (all work)', count(publishedTasks), count(publishedPrev)),
+    kpi('Social posts published', count(publishedTasks, 'SOCIAL'), count(publishedPrev, 'SOCIAL')),
+    kpi('Content published', count(publishedTasks, 'CONTENT'), count(publishedPrev, 'CONTENT')),
+    kpi('Blogs published', blogs, blogsPrev),
+  ]
 
   const STATUSES = ['BACKLOG', 'IN_PROGRESS', 'IN_REVIEW', 'SCHEDULED', 'PUBLISHED']
   const content = {
@@ -126,5 +83,5 @@ export async function marketingAnalytics(req: AuthedRequest, res: Response): Pro
   // Velocity: tasks reaching Published per bucket (all disciplines).
   const velocity = buildSeries(range, publishedTasks.map((t) => ({ date: dateStringFromDb(t.publishedDate!), value: 1 })))
 
-  res.json({ range: { ...range, key: rangeKey }, seo, social, content, velocity: { metricLabel: 'Published', points: velocity } })
+  res.json({ range: { ...range, key: rangeKey }, kpis, content, velocity: { metricLabel: 'Published', points: velocity } })
 }

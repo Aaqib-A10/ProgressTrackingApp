@@ -2,12 +2,13 @@ import { Router } from 'express'
 import { getMyEntry, upsertMyEntry, teamView } from '../controllers/itadController'
 import { itadAnalytics } from '../controllers/analyticsController'
 import { listBids, createBid, updateBid, deleteBid } from '../controllers/bidController'
+import { requireDepartment } from '../middleware/department'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const itadRouter = Router()
 
-itadRouter.use(requireAuth)
+itadRouter.use(requireAuth, requireDepartment('ITAD'))
 itadRouter.get('/entries', asyncHandler(getMyEntry))
 itadRouter.put('/entries', asyncHandler(upsertMyEntry))
 itadRouter.get('/team', asyncHandler(teamView))

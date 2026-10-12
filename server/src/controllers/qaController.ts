@@ -690,86 +690,6 @@ export async function qaUnreadCount(req: AuthedRequest, res: Response): Promise<
 
 // ============================ Analytics ============================
 
-export async function qaAnalytics(req: AuthedRequest, res: Response): Promise<void> {
-  const me = await loadMe(req.user!.id)
-  // QA/Admin: any/all department; Team Lead: own department only.
-  let departmentId: string | undefined
-  const deptType = req.query.department as string | undefined
-  if (me.role === 'TEAM_LEAD') {
-    if (!me.departmentId) {
-      res.status(400).json({ error: 'No department' })
-      return
-    }
-    departmentId = me.departmentId
-  } else if (!isQa(me.role)) {
-    res.status(403).json({ error: 'Forbidden' })
-    return
-  } else if (deptType && QA_DEPTS.includes(deptType as (typeof QA_DEPTS)[number])) {
-    const d = await prisma.department.findUnique({ where: { type: deptType as 'ITAD' | 'CSR' } })
-    departmentId = d?.id
-  }
-
-  const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
-  const range = periodRange(rangeKey, { start: req.query.start as string, end: req.query.end as string })
-  const start = new Date(range.startDate + 'T00:00:00Z')
-  const end = new Date(range.endDate + 'T23:59:59Z')
-
-  const evals = await prisma.qaEvaluation.findMany({
-    where: { status: 'SUBMITTED', ...(departmentId ? { departmentId } : {}), createdAt: { gte: start, lte: end } },
-    include: { agent: true, categories: true },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  const total = evals.length
-  const avgScore = total ? Math.round((evals.reduce((s, e) => s + e.totalScore, 0) / total) * 10) / 10 : 0
-  const passCount = evals.filter((e) => e.passed).length
-
-  // Distribution bands (use each evaluation's stored band)
-  const bands: Record<string, number> = { Excellent: 0, Good: 0, Acceptable: 0, Unacceptable: 0 }
-  for (const e of evals) bands[e.band] = (bands[e.band] ?? 0) + 1
-
-  // Per-agent averages
-  const agentMap = new Map<string, { name: string; scores: number[] }>()
-  for (const e of evals) {
-    const a = agentMap.get(e.agentId) ?? { name: e.agent.name, scores: [] }
-    a.scores.push(e.totalScore)
-    agentMap.set(e.agentId, a)
-  }
-  const agents = [...agentMap.values()]
-    .map((a) => ({ name: a.name, avg: Math.round((a.scores.reduce((s, x) => s + x, 0) / a.scores.length) * 10) / 10, count: a.scores.length }))
-    .sort((a, b) => b.avg - a.avg)
-
-  // Per-category averages
-  const catMap = new Map<string, number[]>()
-  for (const e of evals) for (const c of e.categories) {
-    const arr = catMap.get(c.name) ?? []
-    arr.push(c.scorePct)
-    catMap.set(c.name, arr)
-  }
-  const categories = [...catMap.entries()].map(([name, arr]) => ({ name, avg: Math.round((arr.reduce((s, x) => s + x, 0) / arr.length) * 10) / 10 }))
-
-  // Trend (per-week average)
-  const trendMap = new Map<string, { label: string; scores: number[] }>()
-  for (const e of evals) {
-    const wk = DateTime.fromJSDate(e.createdAt, { zone: 'utc' }).startOf('week')
-    const key = wk.toISODate()!
-    const t = trendMap.get(key) ?? { label: wk.toFormat('LLL d'), scores: [] }
-    t.scores.push(e.totalScore)
-    trendMap.set(key, t)
-  }
-  const trend = [...trendMap.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, t]) => ({ label: t.label, value: Math.round((t.scores.reduce((s, x) => s + x, 0) / t.scores.length) * 10) / 10 }))
-
-  res.json({
-    range: { ...range, key: rangeKey },
-    totals: { evaluations: total, avgScore, passRate: total ? Math.round((passCount / total) * 1000) / 10 : 0 },
-    distribution: Object.entries(bands).map(([name, value]) => ({ name, value })),
-    passFail: [{ name: 'Pass', value: passCount }, { name: 'Fail', value: total - passCount }],
-    agents,
-    categories,
-    trend,
-  })
-}
-
 // ============================ Team Lead QA dashboard ============================
 
 const QA_EXCELLENT = 82
@@ -925,49 +845,6 @@ export async function qaTeamDashboard(req: AuthedRequest, res: Response): Promis
     agents,
     weekly,
   })
-}
-
-// ============================ Top Achiever ============================
-
-/** GET /api/qa/employee-of-month?month=YYYY-MM — per-department winner by avg QA score. */
-export async function employeeOfMonth(req: AuthedRequest, res: Response): Promise<void> {
-  const monthStr = (req.query.month as string) || companyToday().slice(0, 7)
-  const start = DateTime.fromISO(monthStr + '-01', { zone: 'utc' }).startOf('month')
-  const end = start.endOf('month')
-  const MIN_EVALS = 3
-  const MIN_SCORE = 80 // Top Achiever benchmark: only agents averaging >= 80% qualify.
-
-  const evals = await prisma.qaEvaluation.findMany({
-    where: { status: 'SUBMITTED', createdAt: { gte: start.toJSDate(), lte: end.toJSDate() }, department: { type: { in: ['ITAD', 'CSR'] } } },
-    include: { agent: true, department: true },
-  })
-
-  const byDeptAgent = new Map<string, Map<string, { name: string; scores: number[] }>>()
-  for (const e of evals) {
-    const dt = e.department!.type
-    if (!byDeptAgent.has(dt)) byDeptAgent.set(dt, new Map())
-    const am = byDeptAgent.get(dt)!
-    const a = am.get(e.agentId) ?? { name: e.agent.name, scores: [] }
-    a.scores.push(e.totalScore)
-    am.set(e.agentId, a)
-  }
-
-  const winners = QA_DEPTS.map((dept) => {
-    const am = byDeptAgent.get(dept)
-    if (!am) return { department: dept, winner: null }
-    let best: { name: string; avg: number; count: number } | null = null
-    for (const a of am.values()) {
-      if (a.scores.length < MIN_EVALS) continue
-      const avg = a.scores.reduce((s, x) => s + x, 0) / a.scores.length
-      if (!best || avg > best.avg) best = { name: a.name, avg: Math.round(avg * 10) / 10, count: a.scores.length }
-    }
-    // Apply the Top Achiever benchmark: a leading agent below MIN_SCORE doesn't qualify,
-    // but we still surface their score so the UI can explain why there's no achiever.
-    if (best && best.avg < MIN_SCORE) return { department: dept, winner: null, topScore: best.avg }
-    return { department: dept, winner: best }
-  })
-
-  res.json({ month: monthStr, minEvaluations: MIN_EVALS, minScore: MIN_SCORE, winners })
 }
 
 // ============================ QA team (QA-lead oversight) ============================

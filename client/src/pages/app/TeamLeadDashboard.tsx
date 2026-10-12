@@ -13,6 +13,7 @@ import { useAuth } from '../../lib/auth'
 import { formatNumber, formatPercent } from '../../lib/format'
 import { getTeamDashboard, type TeamDashboard, type DashSubmission } from '../../lib/dashboardApi'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
+import { DEPARTMENT_LABEL } from '../../lib/departments'
 
 const RANGE_LABEL: Record<string, string> = {
   today: 'Today',
@@ -45,9 +46,12 @@ export default function TeamLeadDashboard() {
   const fmt = (k: { value: number; format: 'number' | 'percent' }) =>
     k.format === 'percent' ? formatPercent(k.value) : formatNumber(k.value)
 
+  const showStatus = data?.people?.showStatus ?? true
+  // Only a team lead (or the Super Admin) can open someone's profile.
+  const canOpenProfile = user?.role === 'TEAM_LEAD' || user?.role === 'SUPER_ADMIN'
   const subColumns: Column<DashSubmission>[] = [
     { key: 'name', header: 'Team Member', render: (r) => <span className="font-medium text-ink">{r.name}</span> },
-    { key: 'status', header: 'Status', render: (r) => <SubmissionBadge status={r.status} /> },
+    ...(showStatus ? [{ key: 'status', header: 'Status', render: (r: DashSubmission) => <SubmissionBadge status={r.status} /> }] : []),
     {
       key: 'metric',
       header: data?.todaySubmissions[0]?.metricLabel ?? 'Today',
@@ -63,7 +67,7 @@ export default function TeamLeadDashboard() {
       <div>
         <h1 className="text-headline-lg text-ink">Team Performance Overview</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">
-          {user?.department?.replace('_', ' ')} · {RANGE_LABEL[range] ?? 'This Month'}
+          {user?.department ? DEPARTMENT_LABEL[user.department] : ''} · {RANGE_LABEL[range] ?? 'This Month'}
         </p>
       </div>
 
@@ -76,19 +80,23 @@ export default function TeamLeadDashboard() {
           {/* KPI cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {data.kpis.map((k) => (
-              <StatCard key={k.label} label={k.label} value={fmt(k)} delta={k.delta} caption={k.caption} />
+              <StatCard key={k.label} label={k.label} value={fmt(k)} delta={k.now ? undefined : k.delta} caption={k.caption} />
             ))}
           </div>
 
           {/* Trend + breakdown */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card title={`${data.trend.metricLabel} Velocity`} subtitle="Actual vs target" className="lg:col-span-2">
+            <Card
+              title={`${data.trend.metricLabel} over time`}
+              subtitle={data.trend.points.some((p) => p.target !== undefined) ? 'Actual vs target' : 'Team total'}
+              className="lg:col-span-2"
+            >
               <TrendLineChart
                 data={data.trend.points}
                 showTargetSeries={data.trend.points.some((p) => p.target !== undefined)}
               />
             </Card>
-            <Card title="Activity Breakdown">
+            <Card title={data.breakdownTitle ?? 'Activity Breakdown'}>
               {breakdownTotal > 0 ? (
                 <DonutChart data={data.breakdown} centerValue={formatNumber(breakdownTotal)} centerLabel="Total" />
               ) : (
@@ -112,15 +120,15 @@ export default function TeamLeadDashboard() {
 
           {/* Today's submissions */}
           <Card
-            title="Today's Submissions"
-            subtitle={`${data.counts.submitted} of ${data.counts.total} submitted`}
+            title={data.people?.title ?? "Today's Submissions"}
+            subtitle={data.people?.subtitle ?? `${data.counts.submitted} of ${data.counts.total} submitted`}
             flush
           >
             <DataTable
               columns={subColumns}
               rows={data.todaySubmissions}
               getRowId={(r) => r.id}
-              onRowClick={(r) => navigate(`/app/members/${r.id}`)}
+              onRowClick={canOpenProfile ? (r) => navigate(`/app/members/${r.id}`) : undefined}
               emptyMessage="No team members yet."
             />
           </Card>

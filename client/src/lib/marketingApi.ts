@@ -120,9 +120,6 @@ export function createTask(input: CreateTaskInput) {
 export function getTask(id: string) {
   return api.get<{ task: MarketingTask; comments: TaskComment[]; attachments: TaskAttachment[] }>(`/marketing/tasks/${id}`)
 }
-export function listTaskAttachments(taskId: string) {
-  return api.get<{ attachments: TaskAttachment[] }>(`/marketing/tasks/${taskId}/attachments`)
-}
 export function uploadTaskAttachment(taskId: string, file: File) {
   return api.postRaw<{ attachment: TaskAttachment }>(`/marketing/tasks/${taskId}/attachments?name=${encodeURIComponent(file.name)}`, file, file.type || 'application/octet-stream')
 }
@@ -156,17 +153,9 @@ export const PRIORITY_META: Record<Priority, { label: string; tone: BadgeTone; c
 }
 export const PRIORITY_ORDER: Priority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
 
-// ---------- SEO ----------
-export const SEO_METRICS = [
-  { key: 'keywordsTracked', label: 'Keywords Tracked' },
-  { key: 'pagesOptimized', label: 'Pages Optimized' },
-  { key: 'backlinksBuilt', label: 'Backlinks Built' },
-  { key: 'technicalFixes', label: 'Technical Fixes' },
-  { key: 'organicTraffic', label: 'Organic Traffic' },
-] as const
-export type SeoMetricKey = (typeof SEO_METRICS)[number]['key']
+// ---------- SEO daily log (free text) ----------
 export type SeoStatus = 'SUBMITTED' | 'ON_LEAVE' | 'HOLIDAY' | 'OFF'
-export interface SeoEntry extends Record<SeoMetricKey, number> {
+export interface SeoEntry {
   id: string
   date: string
   status: SeoStatus
@@ -176,13 +165,11 @@ export interface SeoEntry extends Record<SeoMetricKey, number> {
 export interface SeoEntryResponse {
   date: string
   entry: SeoEntry | null
-  stats: { avgOrganicTraffic: number }
 }
 export function getSeoEntry(date?: string) {
   return api.get<SeoEntryResponse>(`/marketing/seo/entries${date ? `?date=${date}` : ''}`)
 }
-// SEO daily is now a free-text log; metrics remain accepted (optional) for back-compat.
-export function upsertSeoEntry(input: { status: SeoStatus; body?: string; notes?: string } & Partial<Record<SeoMetricKey, number>>) {
+export function upsertSeoEntry(input: { status: SeoStatus; body?: string; notes?: string }) {
   return api.put<{ entry: SeoEntry }>('/marketing/seo/entries', input)
 }
 
@@ -201,36 +188,6 @@ export function upsertContentEntry(input: { status: SeoStatus; body?: string; no
   return api.put<{ entry: ContentEntry }>('/marketing/content/entries', input)
 }
 
-// ---------- Social ----------
-export const SOCIAL_METRICS = [
-  { key: 'postsPublished', label: 'Posts Published' },
-  { key: 'postsScheduled', label: 'Posts Scheduled' },
-  { key: 'reach', label: 'Reach' },
-  { key: 'engagement', label: 'Engagement' },
-  { key: 'followersGained', label: 'Followers Gained' },
-] as const
-export type SocialMetricKey = (typeof SOCIAL_METRICS)[number]['key']
-export interface SocialEntry extends Record<SocialMetricKey, number> {
-  id: string
-  date: string
-  status: SeoStatus
-  notes: string
-  platformCounts: { tagId: string; posts: number }[]
-}
-export interface SocialEntryResponse {
-  date: string
-  entry: SocialEntry | null
-  platforms: { id: string; name: string }[]
-}
-export function getSocialEntry(date?: string) {
-  return api.get<SocialEntryResponse>(`/marketing/social/entries${date ? `?date=${date}` : ''}`)
-}
-export function upsertSocialEntry(
-  input: Partial<Record<SocialMetricKey, number>> & { status: SeoStatus; notes?: string; platformCounts?: { tagId: string; posts: number }[] },
-) {
-  return api.put<{ entry: SocialEntry }>('/marketing/social/entries', input)
-}
-
 // ---------- Content ----------
 export interface ContentItem {
   id: string
@@ -247,24 +204,6 @@ export function getContentList() {
   return api.get<{ items: ContentItem[] }>('/marketing/content')
 }
 
-// ---------- Calendar ----------
-export interface CalendarEvent {
-  id: string
-  title: string
-  discipline: Discipline
-  date: string
-  type: 'scheduled' | 'published' | 'due'
-}
-export interface CalendarResponse {
-  month: string
-  startDate: string
-  endDate: string
-  events: CalendarEvent[]
-}
-export function getCalendar(month?: string) {
-  return api.get<CalendarResponse>(`/marketing/calendar${month ? `?month=${month}` : ''}`)
-}
-
 // ---------- Analytics ----------
 export interface MktKpi {
   label: string
@@ -279,8 +218,7 @@ export interface MktTrendPoint {
 }
 export interface MarketingAnalyticsData {
   range: { startDate: string; endDate: string; key: string }
-  seo: { kpis: MktKpi[]; trafficTrend: MktTrendPoint[] }
-  social: { kpis: MktKpi[]; engagementTrend: MktTrendPoint[] }
+  kpis: MktKpi[]
   content: { pipeline: { status: TaskStatus; count: number }[]; publishedThisPeriod: number }
   velocity: { metricLabel: string; points: MktTrendPoint[] }
 }
@@ -514,17 +452,6 @@ export const SEARCH_TERM_STATUSES = [
   { key: 'IN_PROGRESS', label: 'In progress', tone: 'warning' },
   { key: 'LIVE', label: 'Live', tone: 'success' },
 ] as const
-
-// ---------- SEO (Google Search Console + GA4) ----------
-export interface SeoSyncResult { brandId: string; name: string; from: string; to: string; days: number; errors: string[] }
-export function syncSeo(input: { brandId?: string; days?: number } = {}) {
-  return api.post<{ from: string; to: string; results: SeoSyncResult[] }>('/marketing/seo/sync', input)
-}
-export interface SeoUploadResult { brandId: string; rowsImported: number; from: string; to: string }
-/** Upload a Search Console / GA4 CSV export as the manual fallback to auto-sync. */
-export function uploadSeoCsv(brandId: string, file: File) {
-  return api.postRaw<SeoUploadResult>(`/marketing/seo/upload?brandId=${brandId}`, file, 'text/csv')
-}
 
 // ---------- Monthly per-brand social stats ----------
 export const SOCIAL_PLATFORMS = [

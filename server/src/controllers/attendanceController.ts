@@ -566,7 +566,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
       res.status(404).json({ error: 'User not found' })
       return
     }
-    if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+    if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
       res.status(403).json({ error: 'Forbidden' })
       return
     }
@@ -940,6 +940,10 @@ export async function getShift(req: AuthedRequest, res: Response): Promise<void>
     res.status(403).json({ error: 'Forbidden' })
     return
   }
+  if (me.role === 'TEAM_LEAD' && !me.departmentId) {
+    res.status(403).json({ error: 'Your account has no department yet' })
+    return
+  }
   const { departmentId } = await editableShiftScope(me)
   const shifts = await prisma.attendanceShift.findMany()
   res.json({
@@ -996,6 +1000,11 @@ export async function putShift(req: AuthedRequest, res: Response): Promise<void>
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
     return
   }
+  // A team lead with no department would otherwise overwrite the company-wide default.
+  if (me.role === 'TEAM_LEAD' && !me.departmentId) {
+    res.status(403).json({ error: 'Your account has no department yet' })
+    return
+  }
   const { departmentId } = await editableShiftScope(me)
   // Null-department can't use upsert on a unique-nullable key — find-then-write.
   const existing = await prisma.attendanceShift.findFirst({ where: { departmentId, userId: null } })
@@ -1019,7 +1028,7 @@ export async function getUserShift(req: AuthedRequest, res: Response): Promise<v
     res.status(404).json({ error: 'User not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -1045,7 +1054,7 @@ export async function putUserShift(req: AuthedRequest, res: Response): Promise<v
     res.status(404).json({ error: 'User not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -1074,7 +1083,7 @@ export async function deleteUserShift(req: AuthedRequest, res: Response): Promis
     res.status(404).json({ error: 'User not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -1117,7 +1126,7 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     res.status(404).json({ error: 'User not found' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -1183,7 +1192,7 @@ async function requireManageableTarget(me: Awaited<ReturnType<typeof loadUser>>,
     res.status(404).json({ error: 'User not found' })
     return null
   }
-  if (me.role === 'TEAM_LEAD' && target.departmentId !== me.departmentId) {
+  if (me.role === 'TEAM_LEAD' && (!me.departmentId || target.departmentId !== me.departmentId)) {
     res.status(403).json({ error: 'Forbidden' })
     return null
   }

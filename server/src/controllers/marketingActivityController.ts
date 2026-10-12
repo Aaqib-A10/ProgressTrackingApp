@@ -17,20 +17,13 @@ async function marketingUser(req: AuthedRequest, res: Response) {
   return null
 }
 
-// ---------- SEO ----------
-const SEO_KEYS = ['keywordsTracked', 'pagesOptimized', 'backlinksBuilt', 'technicalFixes', 'organicTraffic'] as const
-
+// ---------- SEO daily log (free text) ----------
 function serializeSeo(e: SeoDailyEntry) {
   return {
     id: e.id,
     date: dateStringFromDb(e.date),
     status: e.status,
     body: e.body ?? '',
-    keywordsTracked: e.keywordsTracked,
-    pagesOptimized: e.pagesOptimized,
-    backlinksBuilt: e.backlinksBuilt,
-    technicalFixes: e.technicalFixes,
-    organicTraffic: e.organicTraffic,
     notes: e.notes ?? '',
   }
 }
@@ -40,9 +33,7 @@ export async function seoGet(req: AuthedRequest, res: Response): Promise<void> {
   if (!me) return
   const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
   const entry = await prisma.seoDailyEntry.findUnique({ where: { userId_date: { userId: me.id, date: dbDateFromString(dateStr) } } })
-  const recent = await prisma.seoDailyEntry.findMany({ where: { userId: me.id, status: 'SUBMITTED' }, orderBy: { date: 'desc' }, take: 14 })
-  const avgTraffic = recent.length ? Math.round(recent.reduce((a, e) => a + e.organicTraffic, 0) / recent.length) : 0
-  res.json({ date: dateStr, entry: entry ? serializeSeo(entry) : null, stats: { avgOrganicTraffic: avgTraffic } })
+  res.json({ date: dateStr, entry: entry ? serializeSeo(entry) : null })
 }
 
 const seoSchema = z.object({
@@ -50,12 +41,6 @@ const seoSchema = z.object({
   status: z.enum(['SUBMITTED', 'ON_LEAVE', 'HOLIDAY', 'OFF']).default('SUBMITTED'),
   body: z.string().max(5000).optional(),
   notes: z.string().max(2000).optional(),
-  // Metric fields retained (optional) so historical data and any older client still validate.
-  keywordsTracked: z.number().int().min(0).optional(),
-  pagesOptimized: z.number().int().min(0).optional(),
-  backlinksBuilt: z.number().int().min(0).optional(),
-  technicalFixes: z.number().int().min(0).optional(),
-  organicTraffic: z.number().int().min(0).optional(),
 })
 
 export async function seoUpsert(req: AuthedRequest, res: Response): Promise<void> {
@@ -68,94 +53,14 @@ export async function seoUpsert(req: AuthedRequest, res: Response): Promise<void
   }
   const { date, status, body, notes } = parsed.data
   const dateStr = date || (await userToday(me.id, me.departmentId))
-  const metrics: Record<string, number> = {}
-  for (const k of SEO_KEYS) metrics[k] = status === 'SUBMITTED' ? parsed.data[k] ?? 0 : 0
   const bodyVal = status === 'SUBMITTED' ? body ?? null : null
   const dateValue = dbDateFromString(dateStr)
   const entry = await prisma.seoDailyEntry.upsert({
     where: { userId_date: { userId: me.id, date: dateValue } },
-    update: { status, body: bodyVal, notes: notes ?? null, ...metrics },
-    create: { userId: me.id, date: dateValue, status, body: bodyVal, notes: notes ?? null, ...metrics },
+    update: { status, body: bodyVal, notes: notes ?? null },
+    create: { userId: me.id, date: dateValue, status, body: bodyVal, notes: notes ?? null },
   })
   res.json({ entry: serializeSeo(entry) })
-}
-
-// ---------- Social ----------
-const SOCIAL_KEYS = ['postsPublished', 'postsScheduled', 'reach', 'engagement', 'followersGained'] as const
-
-type SocialWithPlatforms = Prisma.SocialDailyEntryGetPayload<{ include: { platformCounts: { include: { tag: true } } } }>
-
-function serializeSocial(e: SocialWithPlatforms) {
-  return {
-    id: e.id,
-    date: dateStringFromDb(e.date),
-    status: e.status,
-    postsPublished: e.postsPublished,
-    postsScheduled: e.postsScheduled,
-    reach: e.reach,
-    engagement: e.engagement,
-    followersGained: e.followersGained,
-    notes: e.notes ?? '',
-    platformCounts: e.platformCounts.map((p) => ({ tagId: p.tagId, posts: p.posts })),
-  }
-}
-
-export async function socialGet(req: AuthedRequest, res: Response): Promise<void> {
-  const me = await marketingUser(req, res)
-  if (!me) return
-  const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'MARKETING' } }))
-  const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
-  const entry = await prisma.socialDailyEntry.findUnique({
-    where: { userId_date: { userId: me.id, date: dbDateFromString(dateStr) } },
-    include: { platformCounts: { include: { tag: true } } },
-  })
-  const platforms = await prisma.tag.findMany({ where: { departmentId: dept?.id, type: 'PLATFORM', isActive: true }, orderBy: { name: 'asc' } })
-  res.json({ date: dateStr, entry: entry ? serializeSocial(entry) : null, platforms: platforms.map((p) => ({ id: p.id, name: p.name })) })
-}
-
-const socialSchema = z.object({
-  date: z.string().optional(),
-  status: z.enum(['SUBMITTED', 'ON_LEAVE', 'HOLIDAY', 'OFF']).default('SUBMITTED'),
-  notes: z.string().max(2000).optional(),
-  postsPublished: z.number().int().min(0).optional(),
-  postsScheduled: z.number().int().min(0).optional(),
-  reach: z.number().int().min(0).optional(),
-  engagement: z.number().int().min(0).optional(),
-  followersGained: z.number().int().min(0).optional(),
-  platformCounts: z.array(z.object({ tagId: z.string(), posts: z.number().int().min(0) })).optional(),
-})
-
-export async function socialUpsert(req: AuthedRequest, res: Response): Promise<void> {
-  const me = await marketingUser(req, res)
-  if (!me) return
-  const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'MARKETING' } }))
-  const parsed = socialSchema.safeParse(req.body)
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
-    return
-  }
-  const { date, status, notes, platformCounts } = parsed.data
-  const dateStr = date || (await userToday(me.id, me.departmentId))
-  const metrics: Record<string, number> = {}
-  for (const k of SOCIAL_KEYS) metrics[k] = status === 'SUBMITTED' ? parsed.data[k] ?? 0 : 0
-  const dateValue = dbDateFromString(dateStr)
-  const entry = await prisma.socialDailyEntry.upsert({
-    where: { userId_date: { userId: me.id, date: dateValue } },
-    update: { status, notes: notes ?? null, ...metrics },
-    create: { userId: me.id, date: dateValue, status, notes: notes ?? null, ...metrics },
-  })
-  // Atomic replace: compute rows, then delete+recreate in one transaction.
-  let rows: { tagId: string; posts: number }[] = []
-  if (status === 'SUBMITTED' && platformCounts?.length) {
-    const valid = new Set((await prisma.tag.findMany({ where: { departmentId: dept?.id, type: 'PLATFORM' } })).map((t) => t.id))
-    rows = platformCounts.filter((p) => p.posts > 0 && valid.has(p.tagId))
-  }
-  await prisma.$transaction([
-    prisma.socialPlatformCount.deleteMany({ where: { entryId: entry.id } }),
-    ...(rows.length ? [prisma.socialPlatformCount.createMany({ data: rows.map((p) => ({ entryId: entry.id, tagId: p.tagId, posts: p.posts })) })] : []),
-  ])
-  const full = await prisma.socialDailyEntry.findUniqueOrThrow({ where: { id: entry.id }, include: { platformCounts: { include: { tag: true } } } })
-  res.json({ entry: serializeSocial(full) })
 }
 
 // ---------- Content daily log (free text) ----------

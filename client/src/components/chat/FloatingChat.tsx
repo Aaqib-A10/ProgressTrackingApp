@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Maximize2, MessagesSquare, X } from 'lucide-react'
-import { ChatThread } from './ChatThread'
-import { ConversationList } from './ConversationList'
+// The chat pop-up's contents download the first time it is opened.
+const ChatThread = lazy(() => import('./ChatThread').then((m) => ({ default: m.ChatThread })))
+const ConversationList = lazy(() => import('./ConversationList').then((m) => ({ default: m.ConversationList })))
 import { useChatUnread } from './useChatUnread'
 import { cn } from '../../lib/cn'
 
@@ -29,7 +30,9 @@ export function FloatingChat({ meId }: { meId: string }) {
             <button type="button" onClick={() => setOpen(false)} className="rounded p-1 text-ink-muted hover:bg-slate-200" aria-label="Close chat"><X size={16} /></button>
           </div>
           <div className="min-h-0 flex-1">
-            {active ? <ChatThread conversationId={active} meId={meId} compact /> : <ConversationList activeId={null} onSelect={setActive} compact />}
+            <Suspense fallback={<div className="p-4 text-body-sm text-ink-muted">Loading…</div>}>
+              {active ? <ChatThread conversationId={active} meId={meId} compact /> : <ConversationList activeId={null} onSelect={setActive} compact />}
+            </Suspense>
           </div>
         </div>
       )}

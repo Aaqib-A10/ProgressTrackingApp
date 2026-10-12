@@ -10,12 +10,15 @@ import {
   listLeave, listLeaveMembers, createLeave, deleteLeave,
   type Holiday, type LeaveRow,
 } from '../../../lib/adminApi'
+import { useAuth } from '../../../lib/auth'
 
 const sel = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
 const LEAVE_TONE = { ON_LEAVE: 'primary', HOLIDAY: 'accent', OFF: 'neutral', WFH: 'success' } as const
 
 export default function AdminLeave() {
   const { addToast } = useToast()
+  // Holidays are company wide, so only the Super Admin adds or removes them; team leads see the list.
+  const canEditHolidays = useAuth().user?.role === 'SUPER_ADMIN'
   const [holidays, setHolidays] = useState<Holiday[]>([])
   const [leave, setLeave] = useState<LeaveRow[]>([])
   const [members, setMembers] = useState<{ id: string; name: string }[]>([])
@@ -80,8 +83,8 @@ export default function AdminLeave() {
       <h1 className="text-headline-lg text-ink">Holidays & Leave</h1>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Holidays */}
-        <Card title="Company Holidays" subtitle="Excluded from averages for everyone">
-          <form onSubmit={addHoliday} className="mb-4 flex items-end gap-2">
+        <Card title="Company Holidays" subtitle={canEditHolidays ? 'Excluded from averages for everyone' : 'Set by the admin for the whole company'}>
+          {canEditHolidays && <form onSubmit={addHoliday} className="mb-4 flex items-end gap-2">
             <div className="flex-1">
               <label className="mb-1 block text-body-sm font-semibold text-ink">Date</label>
               <input type="date" className={sel} value={hDate} onChange={(e) => setHDate(e.target.value)} />
@@ -90,12 +93,12 @@ export default function AdminLeave() {
               <TextField label="Name" value={hName} onChange={(e) => setHName(e.target.value)} placeholder="e.g. Eid" />
             </div>
             <Button type="submit" leadingIcon={<Plus size={16} />}>Add</Button>
-          </form>
+          </form>}
           <ul className="divide-y divide-line">
             {holidays.map((h) => (
               <li key={h.id} className="flex items-center justify-between py-2">
                 <span className="text-body-md text-ink"><span className="tabular-nums text-ink-muted">{h.date}</span> · {h.name}</span>
-                <button onClick={() => removeHoliday(h.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger"><Trash2 size={15} /></button>
+                {canEditHolidays && <button onClick={() => removeHoliday(h.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger"><Trash2 size={15} /></button>}
               </li>
             ))}
             {holidays.length === 0 && <li className="py-3 text-body-sm text-ink-muted">No holidays yet.</li>}

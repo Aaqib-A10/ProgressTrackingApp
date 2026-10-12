@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Mail, Phone, Heart, CheckCircle2, Target, TrendingUp, Users, MessageSquare, ChevronRight } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
@@ -272,11 +272,13 @@ function LeadGenView({ data, summary }: { data: MemberProfileResponse; summary: 
   )
 }
 
+/** Back to wherever this page was opened from (team dashboard, QA list, a notification...). */
 function BackLink() {
+  const navigate = useNavigate()
   return (
-    <Link to="/app/team/not-submitted" className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink">
+    <button type="button" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/app/dashboard'))} className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink">
       <ArrowLeft size={16} /> Back
-    </Link>
+    </button>
   )
 }
 

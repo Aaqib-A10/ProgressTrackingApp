@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Settings, ChevronRight, Search, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -8,6 +8,7 @@ import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
 import { getQaUnreadCount } from '../../lib/qaApi'
 import { filterNav, type NavGroup } from './navConfig'
+import { visiblePoll } from '../../lib/chatApi'
 import { projectsApi } from '../../lib/projectsApi'
 import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
 
@@ -48,7 +49,7 @@ function useIsProjectAdmin(user: CurrentUser): boolean {
 
 export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
   const isProjectAdmin = useIsProjectAdmin(user)
-  const groups = filterNav(user.role, user.department, user.email)
+  const groups = filterNav(user)
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.projectAdminOnly || isProjectAdmin) }))
     .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
   const location = useLocation()
@@ -128,20 +129,15 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
 
-  // Poll unread counts; also refetch on navigation (reading marks as read).
-  useEffect(() => {
-    let active = true
-    const load = () => {
-      getUnreadFeedbackCount().then((r) => active && setUnreadFeedback(r.count)).catch(() => undefined)
-      getQaUnreadCount().then((r) => active && setUnreadQa(r.count)).catch(() => undefined)
-    }
-    load()
-    const timer = setInterval(load, 30000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [location.pathname])
+  // Unread badges: check every minute while the tab is in front, and again after visiting
+  // Feedback or QA (reading there marks things read).
+  const loadUnread = useCallback(() => {
+    getUnreadFeedbackCount().then((r) => setUnreadFeedback(r.count)).catch(() => undefined)
+    getQaUnreadCount().then((r) => setUnreadQa(r.count)).catch(() => undefined)
+  }, [])
+  useEffect(() => { loadUnread(); return visiblePoll(loadUnread, 60000) }, [loadUnread])
+  const readingPage = /^\/app\/(feedback|qa)/.test(location.pathname)
+  useEffect(() => { if (readingPage) loadUnread() }, [location.pathname, readingPage, loadUnread])
 
   const renderItems = (items: typeof groups[number]['items'], nested = false) => (
     <ul className={cn('space-y-0.5', nested && 'ml-3 border-l border-line/60 pl-2')}>

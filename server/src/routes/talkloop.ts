@@ -1,11 +1,12 @@
 import { Router } from 'express'
 import { getMyEntry, upsertMyEntry, teamView, createCountry } from '../controllers/talkloopController'
+import { requireDepartment } from '../middleware/department'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const talkloopRouter = Router()
 
-talkloopRouter.use(requireAuth)
+talkloopRouter.use(requireAuth, requireDepartment('TALKLOOP'))
 talkloopRouter.get('/entries', asyncHandler(getMyEntry))
 talkloopRouter.put('/entries', asyncHandler(upsertMyEntry))
 talkloopRouter.post('/countries', asyncHandler(createCountry))

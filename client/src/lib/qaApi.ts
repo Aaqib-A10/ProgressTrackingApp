@@ -182,19 +182,6 @@ export const acknowledgeEvaluation = (id: string, rebuttal?: string) =>
   api.post<{ ok: true }>(`/qa/evaluations/${id}/acknowledge`, rebuttal ? { rebuttal } : {})
 export const getQaUnreadCount = () => api.get<{ count: number }>('/qa/unread-count')
 
-// ---------- Analytics + Top Achiever ----------
-export interface QaAnalytics {
-  range: { startDate: string; endDate: string; key: RangeKey }
-  totals: { evaluations: number; avgScore: number; passRate: number }
-  distribution: { name: string; value: number }[]
-  passFail: { name: string; value: number }[]
-  agents: { name: string; avg: number; count: number }[]
-  categories: { name: string; avg: number }[]
-  trend: { label: string; value: number }[]
-}
-export const getQaAnalytics = (department: 'ITAD' | 'CSR' | '' , range: RangeKey, custom?: CustomRange | null) =>
-  api.get<QaAnalytics>(`/qa/analytics?${department ? `department=${department}&` : ''}${rangeQuery(range, custom)}`)
-
 // ---------- Team Lead QA dashboard (rich per-agent analytics) ----------
 export interface QaDashAgent {
   id: string
@@ -232,17 +219,6 @@ export interface QaTeamDashboard {
 }
 export const getQaTeamDashboard = (department: 'ITAD' | 'CSR' | '', range: RangeKey, custom?: CustomRange | null) =>
   api.get<QaTeamDashboard>(`/qa/team-dashboard?${department ? `department=${department}&` : ''}${rangeQuery(range, custom)}`)
-
-export interface EmployeeOfMonth {
-  month: string
-  minEvaluations: number
-  /** Top Achiever benchmark — agents must average at least this score to qualify. */
-  minScore: number
-  /** `topScore` is set when a leading agent exists but fell below the benchmark. */
-  winners: { department: string; winner: { name: string; avg: number; count: number } | null; topScore?: number }[]
-}
-export const getEmployeeOfMonth = (month?: string) =>
-  api.get<EmployeeOfMonth>(`/qa/employee-of-month${month ? `?month=${month}` : ''}`)
 
 // ---------- Recording upload (raw audio body) ----------
 export async function uploadRecording(file: File): Promise<{ attachmentId: string; name: string; downloadUrl: string }> {

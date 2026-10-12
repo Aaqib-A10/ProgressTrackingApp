@@ -50,8 +50,8 @@ adminRouter.patch('/tags/:id', teamLeadOrAdmin, asyncHandler(updateTag))
 // Holidays & Leave (TL / Admin). NOTE: GET /holidays is intentionally open to any
 // authenticated user — it's the company-wide holiday calendar shown across the app.
 adminRouter.get('/holidays', asyncHandler(listHolidays))
-adminRouter.post('/holidays', teamLeadOrAdmin, asyncHandler(createHoliday))
-adminRouter.delete('/holidays/:id', teamLeadOrAdmin, asyncHandler(deleteHoliday))
+adminRouter.post('/holidays', superAdmin, asyncHandler(createHoliday))
+adminRouter.delete('/holidays/:id', superAdmin, asyncHandler(deleteHoliday))
 adminRouter.get('/leave', teamLeadOrAdmin, asyncHandler(listLeave))
 adminRouter.get('/leave/members', teamLeadOrAdmin, asyncHandler(listLeaveMembers))
 adminRouter.post('/leave', teamLeadOrAdmin, asyncHandler(createLeave))

@@ -21,12 +21,6 @@ export const DEPARTMENT_LABEL: Record<Department, string> = {
   INVENTORY: 'Inventory',
 }
 
-/** Departments whose agents QA evaluates. */
-export const QA_DEPARTMENTS: { value: Department; label: string }[] = [
-  { value: 'ITAD', label: 'ITAD' },
-  { value: 'CSR', label: 'CSR' },
-]
-
 /** Team a self-registering lead can request — departments + the QA team. */
 export const SIGNUP_TEAM_OPTIONS: { value: Department | 'QA'; label: string }[] = [
   ...DEPARTMENTS,

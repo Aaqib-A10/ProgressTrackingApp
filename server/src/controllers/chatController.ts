@@ -123,6 +123,29 @@ async function unreadByConversation(userId: string): Promise<Map<string, number>
 
 // ---------- Conversations ----------
 
+interface LastMessageRow {
+  conversationId: string
+  userId: string
+  userName: string
+  body: string
+  fileName: string | null
+  fileMime: string | null
+  fileStoredName: string | null
+  deletedAt: Date | null
+  createdAt: Date
+}
+
+/** The newest message of each of these chats (uses the conversationId + seq index). */
+async function lastMessages(ids: string[]): Promise<LastMessageRow[]> {
+  if (!ids.length) return []
+  return prisma.$queryRaw<LastMessageRow[]>`
+    SELECT DISTINCT ON (m."conversationId") m."conversationId", m."userId", u.name AS "userName", m.body,
+      m."fileName", m."fileMime", m."fileStoredName", m."deletedAt", m."createdAt"
+    FROM "ChatMessage" m JOIN "User" u ON u.id = m."userId"
+    WHERE m."conversationId" IN (${Prisma.join(ids)})
+    ORDER BY m."conversationId", m.seq DESC`
+}
+
 /** GET /api/chat/conversations */
 export async function listConversations(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
@@ -134,17 +157,18 @@ export async function listConversations(req: AuthedRequest, res: Response): Prom
         include: {
           project: { select: { key: true, color: true, status: true } },
           members: { include: { user: { select: { id: true, name: true, isActive: true } } } },
-          messages: { orderBy: { seq: 'desc' }, take: 1, include: { user: { select: { name: true } } } },
         },
       },
     },
   })
-  const unread = await unreadByConversation(me.id)
+  // The newest message of each chat in one indexed query (the nested "take 1" loaded every message).
+  const [unread, lastRows] = await Promise.all([unreadByConversation(me.id), lastMessages(mems.map((m) => m.conversationId))])
+  const lastBy = new Map(lastRows.map((r) => [r.conversationId, r]))
   const now = new Date()
   const list = mems.map((m) => {
     const c = m.conversation
     const others = c.members.filter((x) => x.userId !== me.id)
-    const last = c.messages[0]
+    const last = lastBy.get(c.id)
     const title = c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.type === 'PROJECT' ? (c.name ?? c.project?.key ?? 'project') : c.name ?? 'Group'
     return {
       id: c.id,
@@ -155,7 +179,7 @@ export async function listConversations(req: AuthedRequest, res: Response): Prom
       archived: c.project?.status === 'ARCHIVED',
       memberCount: c.members.length,
       other: c.type === 'DIRECT' && others[0] ? { id: others[0].user.id, name: others[0].user.name, presence: presenceOf(others[0].user.id) } : null,
-      lastMessage: last ? { body: last.deletedAt ? 'Message deleted' : last.fileStoredName && !last.body ? fileLabel(last.fileName, last.fileMime) : trunc(last.body, 90), userName: last.user.name, createdAt: last.createdAt.toISOString(), mine: last.userId === me.id } : null,
+      lastMessage: last ? { body: last.deletedAt ? 'Message deleted' : last.fileStoredName && !last.body ? fileLabel(last.fileName, last.fileMime) : trunc(last.body, 90), userName: last.userName, createdAt: last.createdAt.toISOString(), mine: last.userId === me.id } : null,
       lastMessageAt: c.lastMessageAt.toISOString(),
       unread: unread.get(c.id) ?? 0,
       muted: !!m.mutedUntil && m.mutedUntil > now,
@@ -341,8 +365,12 @@ export async function listMessages(req: AuthedRequest, res: Response): Promise<v
       take: 100,
     })
   }
-  const visible = new Set(await visibleProjectIds(me, true))
-  const members = await prisma.chatMember.findMany({ where: { conversationId: m.conversationId }, select: { userId: true, lastReadSeq: true } })
+  // Most polls bring nothing new: only work out project visibility (for project links) when there are messages to show.
+  const [visibleIds, members] = await Promise.all([
+    rows.length || changed.length ? visibleProjectIds(me, true) : Promise.resolve([] as string[]),
+    prisma.chatMember.findMany({ where: { conversationId: m.conversationId }, select: { userId: true, lastReadSeq: true } }),
+  ])
+  const visible = new Set(visibleIds)
   res.json({
     messages: rows.map((r) => serializeMessage(r, visible)),
     changed: changed.map((r) => serializeMessage(r, visible)),

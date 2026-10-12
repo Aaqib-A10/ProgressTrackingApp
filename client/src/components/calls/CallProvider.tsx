@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { callsApi, leaveOnUnload, type ActiveCall } from '../../lib/callsApi'
 import { CallEngine, type CallSnapshot, type Reaction } from '../../lib/callEngine'
@@ -10,7 +10,10 @@ import { chatApi } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import * as desktop from '../../lib/desktopAlerts'
 import { useToast } from '../ui/Toast'
-import { CallWindow } from './CallWindow'
+// The call screen is only needed during a call: it downloads on its own, shortly after the
+// app opens (so joining is still instant), instead of slowing the first load.
+const loadCallWindow = () => import('./CallWindow')
+const CallWindow = lazy(() => loadCallWindow().then((m) => ({ default: m.CallWindow })))
 import { IncomingCalls } from './IncomingCalls'
 
 /**
@@ -105,7 +108,8 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     let alive = true
     const loop = async () => {
       await refreshActive()
-      if (alive) t = window.setTimeout(loop, document.visibilityState === 'visible' ? 3000 : 5000)
+      // Every 4 s while the tab is in front, every 6 s behind other tabs (rings still come through).
+      if (alive) t = window.setTimeout(loop, document.visibilityState === 'visible' ? 4000 : 6000)
     }
     void loop()
     const onVis = () => { if (document.visibilityState === 'visible') void refreshActive() }
@@ -446,11 +450,18 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     setPanel,
   }
 
+  // Fetch the call screen in the background once the app has settled, or straight away when a call rings.
+  useEffect(() => {
+    if (ringing.length || call) { void loadCallWindow(); return }
+    const t = window.setTimeout(() => { void loadCallWindow() }, 6000)
+    return () => window.clearTimeout(t)
+  }, [ringing.length, call])
+
   return (
     <CallsContext.Provider value={value}>
       {children}
       <IncomingCalls calls={ringing} inCall={!!call} onJoin={(c, video) => void joinCall(c.id, c.conversationId, video)} onDecline={decline} />
-      {call && <CallWindow />}
+      {call && <Suspense fallback={null}><CallWindow /></Suspense>}
     </CallsContext.Provider>
   )
 }

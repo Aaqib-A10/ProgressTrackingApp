@@ -3,24 +3,24 @@ import {
   getBoard, createTask, updateTask, deleteTask, getTask, addComment, getTeam,
   listTaskAttachments, uploadTaskAttachment, downloadTaskAttachment, deleteTaskAttachment,
 } from '../controllers/marketingController'
-import { seoGet, seoUpsert, socialGet, socialUpsert, contentList, contentGet, contentUpsert } from '../controllers/marketingActivityController'
-import { calendar, marketingAnalytics, socialPlanner } from '../controllers/marketingViewsController'
+import { seoGet, seoUpsert, contentList, contentGet, contentUpsert } from '../controllers/marketingActivityController'
+import { marketingAnalytics, socialPlanner } from '../controllers/marketingViewsController'
 import { listBrands, createBrand, updateBrand, deleteBrand } from '../controllers/marketingBrandController'
 import { listProfiles, createProfile, updateProfile, deleteProfile } from '../controllers/marketingProfileController'
 import { listSearchTerms, createSearchTerm, updateSearchTerm, deleteSearchTerm } from '../controllers/marketingSearchTermController'
 import { listBusinessSuites, createBusinessSuite, updateBusinessSuite, deleteBusinessSuite } from '../controllers/marketingBusinessSuiteController'
 import { getMonthly, upsertMonthly, compareMonthly, crossBrand } from '../controllers/marketingSocialMonthlyController'
-import { syncSeo, uploadSeoCsv } from '../controllers/marketingSeoController'
 import { listBlogs, createBlog, updateBlog, deleteBlog, blogCounts } from '../controllers/marketingBlogController'
 import { listAds, adsSummary, createAd, updateAd, deleteAd } from '../controllers/marketingAdsController'
 import { getPlan, addPlanItem, updatePlanItem, deletePlanItem } from '../controllers/marketingPlanController'
 import { emailOverview } from '../controllers/marketingEmailController'
+import { requireDepartment } from '../middleware/department'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const marketingRouter = Router()
 
-marketingRouter.use(requireAuth)
+marketingRouter.use(requireAuth, requireDepartment('MARKETING'))
 
 // Kanban board
 marketingRouter.get('/board', asyncHandler(getBoard))
@@ -42,8 +42,6 @@ marketingRouter.delete('/attachments/:id', asyncHandler(deleteTaskAttachment))
 // Sub-department activity
 marketingRouter.get('/seo/entries', asyncHandler(seoGet))
 marketingRouter.put('/seo/entries', asyncHandler(seoUpsert))
-marketingRouter.get('/social/entries', asyncHandler(socialGet))
-marketingRouter.put('/social/entries', asyncHandler(socialUpsert))
 marketingRouter.get('/content', asyncHandler(contentList))
 marketingRouter.get('/content/entries', asyncHandler(contentGet))
 marketingRouter.put('/content/entries', asyncHandler(contentUpsert))
@@ -79,8 +77,6 @@ marketingRouter.get('/social/monthly/compare', asyncHandler(compareMonthly))
 marketingRouter.get('/social/monthly/cross', asyncHandler(crossBrand))
 
 // SEO — Google Search Console + GA4 sync (Phase 1) + manual CSV upload fallback
-marketingRouter.post('/seo/sync', asyncHandler(syncSeo))
-marketingRouter.post('/seo/upload', raw({ type: '*/*', limit: '10mb' }), asyncHandler(uploadSeoCsv))
 
 // Blogs (content inventory + per-brand counts)
 marketingRouter.get('/blogs', asyncHandler(listBlogs))
@@ -106,6 +102,5 @@ marketingRouter.patch('/plan/items/:id', asyncHandler(updatePlanItem))
 marketingRouter.delete('/plan/items/:id', asyncHandler(deletePlanItem))
 
 // Views
-marketingRouter.get('/calendar', asyncHandler(calendar))
 marketingRouter.get('/social/planner', asyncHandler(socialPlanner))
 marketingRouter.get('/analytics', asyncHandler(marketingAnalytics))

@@ -4,12 +4,13 @@ import {
   assignAgent, endAssignment, deleteAssignment,
   listAgents, agentHistory,
 } from '../controllers/rdpController'
+import { requireDepartment } from '../middleware/department'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const rdpRouter = Router()
 
-rdpRouter.use(requireAuth)
+rdpRouter.use(requireAuth, requireDepartment('ECOMMERCE'))
 
 // Literal routes first so they don't get captured by /:id.
 rdpRouter.get('/agents', asyncHandler(listAgents))

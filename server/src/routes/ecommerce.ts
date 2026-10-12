@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { getMyEntry, upsertMyEntry, teamView, getBoard, createTask, updateTask, deleteTask, getTask, addComment, listStock, createStock, assignStock, resolveStock } from '../controllers/ecommerceController'
 import { listMeetingNotes, createMeetingNote, updateMeetingNote, deleteMeetingNote } from '../controllers/meetingNotesController'
+import { requireDepartment } from '../middleware/department'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const ecommerceRouter = Router()
 
-ecommerceRouter.use(requireAuth)
+ecommerceRouter.use(requireAuth, requireDepartment('ECOMMERCE'))
 ecommerceRouter.get('/entries', asyncHandler(getMyEntry))
 ecommerceRouter.put('/entries', asyncHandler(upsertMyEntry))
 ecommerceRouter.get('/team', asyncHandler(teamView))

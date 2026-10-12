@@ -2,12 +2,13 @@ import { Router } from 'express'
 import { getMyEntry, upsertMyEntry, teamView, createVertical } from '../controllers/leadgenController'
 import { getBreakdown, putBreakdown } from '../controllers/leadgenBreakdownController'
 import { leadgenAnalytics } from '../controllers/analyticsController'
+import { requireDepartment } from '../middleware/department'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const leadgenRouter = Router()
 
-leadgenRouter.use(requireAuth)
+leadgenRouter.use(requireAuth, requireDepartment('LEAD_GEN'))
 leadgenRouter.get('/entries', asyncHandler(getMyEntry))
 leadgenRouter.put('/entries', asyncHandler(upsertMyEntry))
 leadgenRouter.post('/verticals', asyncHandler(createVertical))

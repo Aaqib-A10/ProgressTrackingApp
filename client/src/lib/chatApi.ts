@@ -71,7 +71,6 @@ export const chatApi = {
   conversation: (id: string) => api.get<{ conversation: ConversationDetail }>(`/chat/conversations/${id}`),
   openDirect: (userId: string) => api.post<{ conversation: { id: string } }>('/chat/conversations', { type: 'DIRECT', userId }),
   createGroup: (name: string, userIds: string[]) => api.post<{ conversation: { id: string } }>('/chat/conversations', { type: 'GROUP', name, userIds }),
-  updateGroup: (id: string, body: { name?: string; addUserIds?: string[]; removeUserIds?: string[] }) => api.patch(`/chat/conversations/${id}`, body),
   leave: (id: string) => api.post(`/chat/conversations/${id}/leave`),
   projectChannel: (key: string) => api.get<{ conversation: { id: string } }>(`/chat/projects/${encodeURIComponent(key)}`),
   messages: (id: string, q: { after?: number; before?: number; changedSince?: string; limit?: number } = {}) => {
@@ -79,8 +78,6 @@ export const chatApi = {
     return api.get<MessagesResponse>(`/chat/conversations/${id}/messages?${p}`)
   },
   send: (id: string, body: string, opts: { replyToId?: string | null; mentions?: string[] } = {}) => api.post<{ message: ChatMessage }>(`/chat/conversations/${id}/messages`, { body, ...opts }),
-  sendFile: (id: string, file: File, caption = '') =>
-    api.postRaw<{ message: ChatMessage }>(`/chat/conversations/${id}/files?name=${encodeURIComponent(file.name)}&caption=${encodeURIComponent(caption)}`, file, file.type || 'application/octet-stream'),
   edit: (messageId: string, body: string) => api.patch<{ message: ChatMessage }>(`/chat/messages/${messageId}`, { body }),
   remove: (messageId: string) => api.del(`/chat/messages/${messageId}`),
   read: (id: string, seq: number) => api.post<{ lastReadSeq: number }>(`/chat/conversations/${id}/read`, { seq }),

@@ -16,8 +16,8 @@ const STATUS_LABEL: Record<string, string> = {
   PUBLISHED: 'Published',
 }
 
-const kpiCard = (to: string) => (k: MktKpi) =>
-  <StatCard key={k.label} to={to} label={k.label} value={formatNumber(k.value)} delta={k.delta} caption="vs prev period" />
+const kpiCard = (k: MktKpi) =>
+  <StatCard key={k.label} label={k.label} value={formatNumber(k.value)} delta={k.delta} caption="vs prev period" />
 
 export default function MarketingAnalytics() {
   const { range, custom } = useRange()
@@ -41,30 +41,14 @@ export default function MarketingAnalytics() {
     <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">Marketing Analytics</h1>
-        <p className="mt-0.5 text-body-md text-ink-muted">SEO, Social & Content performance + velocity</p>
+        <p className="mt-0.5 text-body-md text-ink-muted">Work published by the team, the content pipeline and velocity. Social numbers per brand are in Social Reports.</p>
       </div>
 
       {loading || !data ? (
         <div className="text-body-md text-ink-muted">Loading…</div>
       ) : (
         <>
-          {/* SEO */}
-          <section className="space-y-4">
-            <h2 className="text-headline-md text-ink">SEO</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">{data.seo.kpis.map(kpiCard('/app/marketing/seo'))}</div>
-            <Card title="Organic Traffic" subtitle="Logged over time">
-              <TrendLineChart data={data.seo.trafficTrend} />
-            </Card>
-          </section>
-
-          {/* Social */}
-          <section className="space-y-4">
-            <h2 className="text-headline-md text-ink">Social Media</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">{data.social.kpis.map(kpiCard('/app/marketing/social'))}</div>
-            <Card title="Engagement" subtitle="Likes, comments, shares">
-              <TrendLineChart data={data.social.engagementTrend} color={CHART.accent} />
-            </Card>
-          </section>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{data.kpis.map(kpiCard)}</div>
 
           {/* Content + velocity */}
           <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">

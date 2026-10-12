@@ -11,6 +11,7 @@ import { useChatUnread } from '../chat/useChatUnread'
 import { RangeSelector, type RangeKey, type CustomRange } from './RangeSelector'
 import { Avatar } from './Sidebar'
 import { ClockWidget } from '../attendance/ClockWidget'
+import { GlobalSearch } from './GlobalSearch'
 
 export interface TopBarProps {
   user: CurrentUser
@@ -42,6 +43,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [mobileSearch, setMobileSearch] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifs, setNotifs] = useState<AppNotification[]>([])
   const [seenKey, setSeenKey] = useState('')
@@ -80,10 +82,14 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         })
         .catch(() => undefined)
     load()
-    const timer = setInterval(load, 30000)
+    // While the tab is hidden, only keep checking if desktop pop-ups are on (that is what they are for).
+    const timer = setInterval(() => { if (document.visibilityState === 'visible' || desktop.active('tasks')) load() }, 30000)
+    const onVis = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVis)
     return () => {
       active = false
       clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVis)
     }
   }, [])
 
@@ -137,14 +143,17 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         <ArrowLeft size={20} />
       </button>
 
-      <div className="relative hidden max-w-md flex-1 md:block">
-        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-        <input
-          type="search"
-          placeholder="Search anything..."
-          className="h-10 w-full rounded-btn border border-line bg-bg pl-10 pr-3 text-body-md text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-        />
-      </div>
+      <GlobalSearch className="hidden max-w-md flex-1 md:block" />
+
+      {/* Small screens: a search button that opens the box across the top. */}
+      <button type="button" onClick={() => setMobileSearch(true)} className="shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink md:hidden" aria-label="Search">
+        <Search size={20} />
+      </button>
+      {mobileSearch && (
+        <div className="fixed inset-x-0 top-0 z-50 border-b border-line bg-card p-3 shadow-overlay md:hidden">
+          <GlobalSearch autoFocus onDone={() => setMobileSearch(false)} />
+        </div>
+      )}
 
       <div className="min-w-0 md:hidden" />
 

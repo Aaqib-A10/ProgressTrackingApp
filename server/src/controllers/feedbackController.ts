@@ -51,11 +51,17 @@ function serializeThread(t: ThreadWithReplies, viewerId: string) {
 
 /** GET /api/notifications uses this — count of threads with unread activity for a user. */
 export async function countUnreadFeedback(userId: string): Promise<number> {
+  // Runs on every bell and sidebar check, so it loads only the dates it compares (no people, no reply text).
   const threads = await prisma.feedback.findMany({
     where: { OR: [{ recipientId: userId }, { authorId: userId }] },
-    include: { author: true, recipient: true, replies: true },
+    select: { authorId: true, recipientId: true, authorReadAt: true, recipientReadAt: true, createdAt: true, replies: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
   })
-  return threads.filter((t) => isUnread(t, userId)).length
+  return threads.filter((t) => {
+    const readAt = userId === t.recipientId ? t.recipientReadAt : userId === t.authorId ? t.authorReadAt : null
+    if (!readAt) return true
+    const latest = t.replies[0]?.createdAt && t.replies[0].createdAt > t.createdAt ? t.replies[0].createdAt : t.createdAt
+    return latest > readAt
+  }).length
 }
 
 /** GET /api/feedback/unread-count — unread thread count for the sidebar badge. */

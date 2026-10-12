@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, AlertTriangle, CheckCircle2, Pencil } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
@@ -143,6 +143,12 @@ export default function QaEvaluationDetail() {
   )
 }
 
+/** Back to wherever this page was opened from (team dashboard, QA list, a notification...). */
 function Back() {
-  return <Link to="/app/qa/my" className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink"><ArrowLeft size={16} /> Back</Link>
+  const navigate = useNavigate()
+  return (
+    <button type="button" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/app/dashboard'))} className="inline-flex items-center gap-1.5 text-body-md font-medium text-ink-muted hover:text-ink">
+      <ArrowLeft size={16} /> Back
+    </button>
+  )
 }

@@ -975,7 +975,7 @@ model Notification {
   readAt     DateTime?
   createdAt  DateTime         @default(now())
 
-  @@index([userId, readAt])
+  @@index([userId, readAt, createdAt(sort: Desc)])
 }
 
 model MarketingTaskComment {

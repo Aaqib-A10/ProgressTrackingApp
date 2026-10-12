@@ -15,14 +15,6 @@ const LEADGEN_COLS: Col[] = [
   { key: 'leadsGenerated', label: 'Leads' }, { key: 'accountsResearched', label: 'Researched' }, { key: 'contactsFound', label: 'Contacts' },
   { key: 'qualifiedMql', label: 'Qualified' }, { key: 'handedToSql', label: 'Handed' },
 ]
-const SEO_COLS: Col[] = [
-  { key: 'keywordsTracked', label: 'Keywords' }, { key: 'pagesOptimized', label: 'Pages' }, { key: 'backlinksBuilt', label: 'Backlinks' },
-  { key: 'technicalFixes', label: 'Fixes' }, { key: 'organicTraffic', label: 'Traffic' },
-]
-const SOCIAL_COLS: Col[] = [
-  { key: 'postsPublished', label: 'Posts' }, { key: 'postsScheduled', label: 'Scheduled' }, { key: 'reach', label: 'Reach' },
-  { key: 'engagement', label: 'Engagement' }, { key: 'followersGained', label: 'Followers' },
-]
 
 function build(entries: Array<{ date: Date; status: string } & Record<string, unknown>>, cols: Col[]) {
   const rows = entries.map((e) => ({
@@ -60,12 +52,6 @@ export async function myReports(req: AuthedRequest, res: Response): Promise<void
   } else if (dept === 'LEAD_GEN') {
     cols = LEADGEN_COLS
     entries = await prisma.leadGenDailyEntry.findMany({ where, ...order })
-  } else if (dept === 'MARKETING' && sub === 'seo') {
-    cols = SEO_COLS
-    entries = await prisma.seoDailyEntry.findMany({ where, ...order })
-  } else if (dept === 'MARKETING' && sub === 'social') {
-    cols = SOCIAL_COLS
-    entries = await prisma.socialDailyEntry.findMany({ where, ...order })
   }
 
   const { rows, totals } = build(entries, cols)

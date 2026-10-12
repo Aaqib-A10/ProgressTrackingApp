@@ -147,7 +147,6 @@ const k = (key: string) => encodeURIComponent(key)
 export const projectsApi = {
   list: (archived = false) => api.get<{ canCreate: boolean; projects: ProjectListItem[] }>(`/projects${archived ? '?archived=1' : ''}`),
   create: (body: { name: string; key: string; description?: string; color?: string; members?: { userId: string; role: PmRole }[] }) => api.post<{ project: Project }>('/projects', body),
-  get: (key: string) => api.get<{ project: Project; perms: ProjectPerms }>(`/projects/${k(key)}`),
   update: (key: string, body: Partial<Pick<Project, 'name' | 'key' | 'description' | 'color' | 'overdueNotifyAdmins' | 'overdueRepeatHours' | 'reminderOffsetsMinutes'>>) => api.patch<{ project: Project }>(`/projects/${k(key)}`, body),
   archive: (key: string, archived: boolean) => api.post<{ project: Project }>(`/projects/${k(key)}/archive`, { archived }),
   board: (key: string, showOldDone = false) => api.get<BoardData>(`/projects/${k(key)}/board${showOldDone ? '?showOldDone=1' : ''}`),

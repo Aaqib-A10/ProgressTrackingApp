@@ -5,6 +5,7 @@ import { companyToday, dbDateFromString, dateStringFromDb, periodRange, previous
 import { sumItad, itadKpis } from '../lib/itad'
 import { sumLeadGen, leadGenKpis } from '../lib/leadgen'
 import { buildSeries, pctDelta, improvementLine } from '../lib/trends'
+import { timeIn } from '../lib/deptDashboards'
 
 const inRange = (r: DateRange) => ({ gte: dbDateFromString(r.startDate), lte: dbDateFromString(r.endDate) })
 const submitted = <T extends { status: string }>(rows: T[]): T[] => rows.filter((e) => e.status === 'SUBMITTED')
@@ -24,7 +25,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
   const prev = previousRange(range)
   const todayValue = dbDateFromString(companyToday())
 
-  const depts = await prisma.department.findMany({ where: { type: { in: ['ITAD', 'LEAD_GEN', 'MARKETING', 'CSR', 'ECOMMERCE'] } } })
+  const depts = await prisma.department.findMany({ where: { type: { in: ['ITAD', 'LEAD_GEN', 'MARKETING', 'CSR', 'ECOMMERCE', 'TALKLOOP', 'INVENTORY'] } } })
   const id = (t: string) => depts.find((d) => d.type === t)?.id
   const headcount = (t: string) => {
     const did = id(t)
@@ -32,11 +33,29 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
   }
   const csrId = id('CSR')
   const ecomId = id('ECOMMERCE')
+  const invId = id('INVENTORY')
+
+  // Talkloop (daily calls) and Inventory (stock requests).
+  const invItem = { departmentId: invId ?? '__none__' }
+  const [tlCur, tlPrev, tlToday, invDone, invDonePrev, invOpen, invItems, hcTalk, hcInv] = await Promise.all([
+    prisma.talkloopDailyEntry.findMany({ where: { date: inRange(range) } }),
+    prisma.talkloopDailyEntry.findMany({ where: { date: inRange(prev) } }),
+    prisma.talkloopDailyEntry.findMany({ where: { date: todayValue } }),
+    prisma.inventoryMovement.count({ where: { item: invItem, status: 'COMPLETED', resolvedAt: timeIn(range) } }),
+    prisma.inventoryMovement.count({ where: { item: invItem, status: 'COMPLETED', resolvedAt: timeIn(prev) } }),
+    prisma.inventoryMovement.count({ where: { item: invItem, status: { in: ['REQUESTED', 'ASSIGNED'] } } }),
+    prisma.inventoryItem.findMany({ where: { ...invItem, active: true }, select: { quantity: true, lowStockAt: true } }),
+    headcount('TALKLOOP'),
+    headcount('INVENTORY'),
+  ])
+  const tlSum = (rows: typeof tlCur) => ({ calls: submitted(rows).reduce((a, e) => a + e.callsMade, 0), demos: submitted(rows).reduce((a, e) => a + e.demosConducted, 0) })
+  const tc = tlSum(tlCur), tp = tlSum(tlPrev)
+  const invLow = invItems.filter((i) => i.quantity <= i.lowStockAt).length
 
   const [
     itadCur, itadPrev, itadToday,
     leadCur, leadPrev, leadToday,
-    socCur, socPrev, socToday, seoToday, mktPubCur, mktPubPrev,
+    posts, postsPrev, contentToday, seoToday, mktPubCur, mktPubPrev,
     ecomCur, ecomPrev, ecomToday, stockOpen,
     csrCur, csrPrev,
     hcItad, hcLead, hcMkt, hcCsr, hcEcom,
@@ -49,9 +68,10 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     prisma.leadGenDailyEntry.findMany({ where: { date: inRange(range) } }),
     prisma.leadGenDailyEntry.findMany({ where: { date: inRange(prev) } }),
     prisma.leadGenDailyEntry.findMany({ where: { date: todayValue } }),
-    prisma.socialDailyEntry.findMany({ where: { date: inRange(range) } }),
-    prisma.socialDailyEntry.findMany({ where: { date: inRange(prev) } }),
-    prisma.socialDailyEntry.findMany({ where: { date: todayValue } }),
+    // Social work is planned and published as SOCIAL tasks (the old social daily log was retired).
+    prisma.marketingTask.count({ where: { discipline: 'SOCIAL', status: 'PUBLISHED', publishedDate: inRange(range) } }),
+    prisma.marketingTask.count({ where: { discipline: 'SOCIAL', status: 'PUBLISHED', publishedDate: inRange(prev) } }),
+    prisma.contentDailyEntry.findMany({ where: { date: todayValue } }),
     prisma.seoDailyEntry.findMany({ where: { date: todayValue } }),
     prisma.marketingTask.count({ where: { status: 'PUBLISHED', publishedDate: inRange(range) } }),
     prisma.marketingTask.count({ where: { status: 'PUBLISHED', publishedDate: inRange(prev) } }),
@@ -77,9 +97,7 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
   // --- Lead Gen ---
   const lt = sumLeadGen(leadCur), lp = sumLeadGen(leadPrev), lk = leadGenKpis(lt), lkp = leadGenKpis(lp)
   // --- Marketing ---
-  const posts = submitted(socCur).reduce((s, e) => s + e.postsPublished, 0)
-  const postsPrev = submitted(socPrev).reduce((s, e) => s + e.postsPublished, 0)
-  const mktToday = new Set([...submitted(socToday).map((e) => e.userId), ...submitted(seoToday).map((e) => e.userId)]).size
+  const mktToday = new Set([...submitted(contentToday).map((e) => e.userId), ...submitted(seoToday).map((e) => e.userId)]).size
   // --- Ecommerce ---
   const ecomListings = submitted(ecomCur).reduce((s, e) => s + e.lines.reduce((t, l) => t + l.listings, 0), 0)
   const ecomListingsPrev = submitted(ecomPrev).reduce((s, e) => s + e.lines.reduce((t, l) => t + l.listings, 0), 0)
@@ -120,8 +138,9 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
       type: 'CSR', name: 'CSR', members: hcCsr, route: '/app/qa/analytics',
       subtitle: `${hcCsr} agents · ${csrCur.length} evaluation${csrCur.length === 1 ? '' : 's'}`,
       headline: [
-        { label: 'QA avg', value: csrAvg, format: 'percent', delta: pctDelta(csrAvg, csrAvgPrev) },
-        { label: 'Pass rate', value: csrPass, format: 'percent', delta: 0 },
+        // Percent cards take a fraction (0.85 shows as 85%).
+        { label: 'QA avg', value: csrAvg / 100, format: 'percent', delta: pctDelta(csrAvg, csrAvgPrev) },
+        { label: 'Pass rate', value: csrPass / 100, format: 'percent', delta: 0 },
       ] as Kpi[],
       improvement: csrCur.length ? improvementLine([{ label: 'QA avg', delta: pctDelta(csrAvg, csrAvgPrev) }]) : 'No QA evaluations logged yet.',
     },
@@ -134,14 +153,32 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
       ] as Kpi[],
       improvement: improvementLine([{ label: 'Listings', delta: pctDelta(ecomListings, ecomListingsPrev) }]),
     },
+    {
+      type: 'TALKLOOP', name: 'Talkloop', members: hcTalk, route: '/app/talkloop/team',
+      subtitle: `${submitted(tlToday).length}/${hcTalk} submitted today`,
+      headline: [
+        { label: 'Calls', value: tc.calls, format: 'number', delta: pctDelta(tc.calls, tp.calls) },
+        { label: 'Demos', value: tc.demos, format: 'number', delta: pctDelta(tc.demos, tp.demos) },
+      ] as Kpi[],
+      improvement: improvementLine([{ label: 'Calls', delta: pctDelta(tc.calls, tp.calls) }, { label: 'Demos', delta: pctDelta(tc.demos, tp.demos) }]),
+    },
+    {
+      type: 'INVENTORY', name: 'Inventory', members: hcInv, route: '/app/inventory/team',
+      subtitle: `${invOpen} open request${invOpen === 1 ? '' : 's'} · ${invLow} low stock`,
+      headline: [
+        { label: 'Requests done', value: invDone, format: 'number', delta: pctDelta(invDone, invDonePrev) },
+        { label: 'Open requests', value: invOpen, format: 'number', delta: 0 },
+      ] as Kpi[],
+      improvement: improvementLine([{ label: 'Requests completed', delta: pctDelta(invDone, invDonePrev) }]),
+    },
   ]
 
   // Company activity trend = submitted entries per bucket across departments with daily forms.
   const activityRows = [
     ...itadCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
     ...leadCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
-    ...socCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
     ...ecomCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
+    ...tlCur.map((e) => ({ date: dateStringFromDb(e.date), value: 1, status: e.status })),
   ]
   const combinedTrend = { metricLabel: 'Submissions', points: buildSeries(range, activityRows) }
 
@@ -151,15 +188,17 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
     { department: 'Marketing', members: hcMkt, submitted: `${mktToday}/${hcMkt}`, primaryLabel: 'Posts', primaryValue: posts, secondary: `${mktPubCur} content published`, delta: pctDelta(posts, postsPrev) },
     { department: 'CSR', members: hcCsr, submitted: '—', primaryLabel: 'Evaluations', primaryValue: csrCur.length, secondary: `${csrAvg}% avg QA`, delta: pctDelta(csrAvg, csrAvgPrev) },
     { department: 'Ecommerce', members: hcEcom, submitted: `${submitted(ecomToday).length}/${hcEcom}`, primaryLabel: 'Listings', primaryValue: ecomListings, secondary: `${stockOpen} open stock`, delta: pctDelta(ecomListings, ecomListingsPrev) },
+    { department: 'Talkloop', members: hcTalk, submitted: `${submitted(tlToday).length}/${hcTalk}`, primaryLabel: 'Calls', primaryValue: tc.calls, secondary: `${tc.demos} demos`, delta: pctDelta(tc.calls, tp.calls) },
+    { department: 'Inventory', members: hcInv, submitted: '—', primaryLabel: 'Requests done', primaryValue: invDone, secondary: `${invOpen} open · ${invLow} low stock`, delta: pctDelta(invDone, invDonePrev) },
   ]
 
   // Company summary (KPI header + alert totals).
   const st = (rows: { status: string }[]) => submitted(rows).length
-  const submittedTodayTotal = st(itadToday) + st(leadToday) + mktToday + st(ecomToday)
-  const formMembers = hcItad + hcLead + hcMkt + hcEcom
+  const submittedTodayTotal = st(itadToday) + st(leadToday) + mktToday + st(ecomToday) + st(tlToday)
+  const formMembers = hcItad + hcLead + hcMkt + hcEcom + hcTalk
   const notSubmitted =
     Math.max(0, hcItad - st(itadToday)) + Math.max(0, hcLead - st(leadToday)) +
-    Math.max(0, hcMkt - mktToday) + Math.max(0, hcEcom - st(ecomToday))
+    Math.max(0, hcMkt - mktToday) + Math.max(0, hcEcom - st(ecomToday)) + Math.max(0, hcTalk - st(tlToday))
   const summary = {
     employees,
     departments: depts.length,
@@ -192,18 +231,20 @@ export async function executiveDashboard(req: AuthedRequest, res: Response): Pro
   const itadTop = topSum(submitted(itadCur), (e) => e.userId, (e) => e.callsDialed)
   const leadTop = topSum(submitted(leadCur), (e) => e.userId, (e) => e.leadsGenerated)
   const ecomTop = topSum(submitted(ecomCur), (e) => e.userId, (e) => e.lines.reduce((s, l) => s + l.listings, 0))
+  const talkTop = topSum(submitted(tlCur), (e) => e.userId, (e) => e.demosConducted)
   const qaAgg = new Map<string, { sum: number; n: number }>()
   for (const e of allQa) { const a = qaAgg.get(e.agentId) ?? { sum: 0, n: 0 }; a.sum += e.totalScore; a.n++; qaAgg.set(e.agentId, a) }
   let qaTop: { id: string; value: number } | null = null
   for (const [pid, a] of qaAgg) { const v = round1(a.sum / a.n); if (!qaTop || v > qaTop.value) qaTop = { id: pid, value: v } }
 
-  const winnerIds = [itadTop, leadTop, ecomTop, qaTop].filter(Boolean).map((t) => t!.id)
+  const winnerIds = [itadTop, leadTop, ecomTop, talkTop, qaTop].filter(Boolean).map((t) => t!.id)
   const winners = winnerIds.length ? await prisma.user.findMany({ where: { id: { in: winnerIds } }, select: { id: true, name: true } }) : []
   const nameOf = (uid?: string) => winners.find((w) => w.id === uid)?.name ?? '—'
   const topPerformers = [
     itadTop && itadTop.value > 0 ? { department: 'ITAD', name: nameOf(itadTop.id), metric: `${itadTop.value} dials` } : null,
     leadTop && leadTop.value > 0 ? { department: 'Lead Gen', name: nameOf(leadTop.id), metric: `${leadTop.value} leads` } : null,
-    ecomTop && ecomTop.value > 0 ? { department: 'Ecommerce', name: nameOf(ecomTop.id), metric: `${ecomTop.value} actions` } : null,
+    ecomTop && ecomTop.value > 0 ? { department: 'Ecommerce', name: nameOf(ecomTop.id), metric: `${ecomTop.value} listings` } : null,
+    talkTop && talkTop.value > 0 ? { department: 'Talkloop', name: nameOf(talkTop.id), metric: `${talkTop.value} demos` } : null,
     qaTop ? { department: 'QA', name: nameOf(qaTop.id), metric: `${qaTop.value}% QA` } : null,
   ].filter(Boolean)
 

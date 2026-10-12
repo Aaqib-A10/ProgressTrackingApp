@@ -34,6 +34,18 @@ function mediapipeWasm(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), mediapipeWasm()],
+  build: {
+    rollupOptions: {
+      output: {
+        // React and the router change rarely: keep them in their own file so a new release
+        // only re-downloads our own code, not the libraries.
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

@@ -13,14 +13,15 @@ async function submittedToday(userId: string, dept?: string | null, sub?: string
   if (dept === 'ITAD') return !!(await prisma.itadDailyEntry.findUnique({ where: key }))
   if (dept === 'LEAD_GEN') return !!(await prisma.leadGenDailyEntry.findUnique({ where: key }))
   if (dept === 'MARKETING' && sub === 'seo') return !!(await prisma.seoDailyEntry.findUnique({ where: key }))
-  if (dept === 'MARKETING' && sub === 'social') return !!(await prisma.socialDailyEntry.findUnique({ where: key }))
+  if (dept === 'MARKETING' && sub === 'content') return !!(await prisma.contentDailyEntry.findUnique({ where: key }))
   if (dept === 'ECOMMERCE') return !!(await prisma.ecommerceDailyEntry.findUnique({ where: key }))
+  if (dept === 'TALKLOOP') return !!(await prisma.talkloopDailyEntry.findUnique({ where: key }))
   return true // no daily form for this user → nothing to remind
 }
 
 /** Does this member's dept/sub have a daily form to submit? Mirrors submittedToday's coverage. */
 function hasDailyForm(dept?: string | null, sub?: string | null): boolean {
-  return dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || (dept === 'MARKETING' && (sub === 'seo' || sub === 'social'))
+  return dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || dept === 'TALKLOOP' || (dept === 'MARKETING' && (sub === 'seo' || sub === 'content'))
 }
 
 /**
@@ -32,14 +33,17 @@ async function submittedTodayIds(ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set()
   const where = { userId: { in: ids }, date: dbDateFromString(companyToday()) }
   const select = { userId: true }
-  const [itad, leadgen, seo, social, ecom] = await Promise.all([
+  const [itad, leadgen, seo, ecom] = await Promise.all([
     prisma.itadDailyEntry.findMany({ where, select }),
     prisma.leadGenDailyEntry.findMany({ where, select }),
     prisma.seoDailyEntry.findMany({ where, select }),
-    prisma.socialDailyEntry.findMany({ where, select }),
     prisma.ecommerceDailyEntry.findMany({ where, select }),
   ])
-  return new Set([...itad, ...leadgen, ...seo, ...social, ...ecom].map((e) => e.userId))
+  const [talk, content] = await Promise.all([
+    prisma.talkloopDailyEntry.findMany({ where, select }),
+    prisma.contentDailyEntry.findMany({ where, select }),
+  ])
+  return new Set([...itad, ...leadgen, ...seo, ...ecom, ...talk, ...content].map((e) => e.userId))
 }
 
 /** GET /api/notifications — contextual notifications derived from live state. */
@@ -50,12 +54,38 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   const sub = me.subDepartment?.slug ?? null
   const notifications: Notif[] = []
 
-  // Delivered @mention notifications (unread) — most recent first, at the top.
-  const mentions = await prisma.notification.findMany({
-    where: { userId: me.id, readAt: null },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-  })
+  const isLead = me.role === 'TEAM_LEAD'
+  const deptType = me.department?.type
+  const none = Promise.resolve(0)
+  // Every check below is independent: run them together (this endpoint is polled by every open tab).
+  const [mentions, needsLog, missing, unreadFeedback, unreadQa, coaching, pending, mine] = await Promise.all([
+    // Delivered @mention / task notifications (unread), most recent first.
+    prisma.notification.findMany({ where: { userId: me.id, readAt: null }, orderBy: { createdAt: 'desc' }, take: 20 }),
+    // Member reminder: haven't logged today.
+    me.role === 'MEMBER' && dept ? submittedToday(me.id, dept, sub).then((done) => !done) : Promise.resolve(false),
+    // TL/Admin: members who haven't submitted today.
+    (isLead || me.role === 'SUPER_ADMIN') && (dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || me.role === 'SUPER_ADMIN')
+      ? (async () => {
+        const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId ?? '__none__' }
+        const members = await prisma.user.findMany({ where: { role: 'MEMBER', isActive: true, ...deptFilter }, select: { id: true, department: { select: { type: true } }, subDepartment: { select: { slug: true } } } })
+        const submitted = await submittedTodayIds(members.map((m) => m.id))
+        return members.filter((m) => hasDailyForm(m.department?.type, m.subDepartment?.slug) && !submitted.has(m.id)).length
+      })()
+      : none,
+    // Unread feedback (members receiving and leads getting replies).
+    countUnreadFeedback(me.id),
+    // QA: agent has new evaluations to read.
+    prisma.qaEvaluation.count({ where: { agentId: me.id, status: 'SUBMITTED', agentReadAt: null } }),
+    // ITAD/CSR Team Lead: team members below target need coaching.
+    isLead && me.departmentId && (deptType === 'ITAD' || deptType === 'CSR')
+      ? prisma.qaEvaluation.count({ where: { departmentId: me.departmentId, status: 'SUBMITTED', coachingNeeded: true, agentAcknowledgedAt: null } })
+      : none,
+    // Ecommerce HOD: out-of-stock requests awaiting assignment.
+    isLead && me.departmentId && deptType === 'ECOMMERCE' ? prisma.stockRequest.count({ where: { departmentId: me.departmentId, status: 'REQUESTED' } }) : none,
+    // Ecommerce agent: stock tasks assigned to me.
+    deptType === 'ECOMMERCE' ? prisma.stockRequest.count({ where: { assignedToId: me.id, status: 'ASSIGNED' } }) : none,
+  ])
+
   for (const m of mentions) {
     notifications.push({
       id: m.id,
@@ -67,66 +97,13 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
       persistent: true,
     })
   }
-
-  // Member reminder: haven't logged today.
-  if (me.role === 'MEMBER' && dept) {
-    if (!(await submittedToday(me.id, dept, sub))) {
-      notifications.push({ id: 'reminder-today', type: 'reminder', title: "Don't forget today's log", body: 'You haven’t submitted your progress for today yet.', date: today })
-    }
-  }
-
-  // TL/Admin: members who haven't submitted today.
-  if ((me.role === 'TEAM_LEAD' || me.role === 'SUPER_ADMIN') && (dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || me.role === 'SUPER_ADMIN')) {
-    const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
-    const members = await prisma.user.findMany({ where: { role: 'MEMBER', isActive: true, ...deptFilter }, include: { department: true, subDepartment: true } })
-    const submitted = await submittedTodayIds(members.map((m) => m.id))
-    const missing = members.filter((m) => hasDailyForm(m.department?.type, m.subDepartment?.slug) && !submitted.has(m.id)).length
-    if (missing > 0) {
-      notifications.push({ id: 'team-missing', type: 'alert', title: `${missing} not submitted`, body: `${missing} team member${missing > 1 ? 's haven’t' : ' hasn’t'} submitted today.`, date: today })
-    }
-  }
-
-  // Unread feedback (works for both members receiving and leads getting replies).
-  const unreadFeedback = await countUnreadFeedback(me.id)
-  if (unreadFeedback > 0) {
-    notifications.push({
-      id: 'feedback-unread',
-      type: 'info',
-      title: 'New feedback',
-      body: `You have ${unreadFeedback} unread feedback message${unreadFeedback > 1 ? 's' : ''}.`,
-      date: today,
-    })
-  }
-
-  // QA: agent has new evaluations to read.
-  const unreadQa = await prisma.qaEvaluation.count({ where: { agentId: me.id, status: 'SUBMITTED', agentReadAt: null } })
-  if (unreadQa > 0) {
-    notifications.push({ id: 'qa-unread', type: 'info', title: 'QA review completed', body: `You have ${unreadQa} new QA evaluation${unreadQa > 1 ? 's' : ''}.`, date: today })
-  }
-
-  // Manager (ITAD/CSR Team Lead): team members below target need coaching.
-  if (me.role === 'TEAM_LEAD' && me.departmentId && (me.department?.type === 'ITAD' || me.department?.type === 'CSR')) {
-    const coaching = await prisma.qaEvaluation.count({ where: { departmentId: me.departmentId, status: 'SUBMITTED', coachingNeeded: true, agentAcknowledgedAt: null } })
-    if (coaching > 0) {
-      notifications.push({ id: 'qa-coaching', type: 'alert', title: 'Coaching needed', body: `${coaching} QA evaluation${coaching > 1 ? 's' : ''} below target in your team.`, date: today })
-    }
-  }
-
-  // Ecommerce HOD: out-of-stock requests awaiting assignment.
-  if (me.role === 'TEAM_LEAD' && me.departmentId && me.department?.type === 'ECOMMERCE') {
-    const pending = await prisma.stockRequest.count({ where: { departmentId: me.departmentId, status: 'REQUESTED' } })
-    if (pending > 0) {
-      notifications.push({ id: 'stock-requests', type: 'alert', title: `${pending} stock request${pending > 1 ? 's' : ''}`, body: `${pending} out-of-stock item${pending > 1 ? 's need' : ' needs'} assignment.`, date: today })
-    }
-  }
-
-  // Ecommerce agent: stock tasks assigned to me.
-  if (me.department?.type === 'ECOMMERCE') {
-    const mine = await prisma.stockRequest.count({ where: { assignedToId: me.id, status: 'ASSIGNED' } })
-    if (mine > 0) {
-      notifications.push({ id: 'stock-assigned', type: 'info', title: 'Stock task assigned', body: `You have ${mine} stock task${mine > 1 ? 's' : ''} to action.`, date: today })
-    }
-  }
+  if (needsLog) notifications.push({ id: 'reminder-today', type: 'reminder', title: "Don't forget today's log", body: 'You haven’t submitted your progress for today yet.', date: today })
+  if (missing > 0) notifications.push({ id: 'team-missing', type: 'alert', title: `${missing} not submitted`, body: `${missing} team member${missing > 1 ? 's haven’t' : ' hasn’t'} submitted today.`, date: today })
+  if (unreadFeedback > 0) notifications.push({ id: 'feedback-unread', type: 'info', title: 'New feedback', body: `You have ${unreadFeedback} unread feedback message${unreadFeedback > 1 ? 's' : ''}.`, date: today })
+  if (unreadQa > 0) notifications.push({ id: 'qa-unread', type: 'info', title: 'QA review completed', body: `You have ${unreadQa} new QA evaluation${unreadQa > 1 ? 's' : ''}.`, date: today })
+  if (coaching > 0) notifications.push({ id: 'qa-coaching', type: 'alert', title: 'Coaching needed', body: `${coaching} QA evaluation${coaching > 1 ? 's' : ''} below target in your team.`, date: today })
+  if (pending > 0) notifications.push({ id: 'stock-requests', type: 'alert', title: `${pending} stock request${pending > 1 ? 's' : ''}`, body: `${pending} out-of-stock item${pending > 1 ? 's need' : ' needs'} assignment.`, date: today })
+  if (mine > 0) notifications.push({ id: 'stock-assigned', type: 'info', title: 'Stock task assigned', body: `You have ${mine} stock task${mine > 1 ? 's' : ''} to action.`, date: today })
 
   // Informational.
   notifications.push({ id: 'welcome', type: 'info', title: 'Reports update live', body: 'Team totals and dashboards refresh as people submit.', date: today })
@@ -134,7 +111,7 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   res.json({ notifications, unread: notifications.length })
 }
 
-const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing' }
+const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', CSR: 'CSR', INVENTORY: 'Inventory' }
 
 /**
  * GET /api/notifications/not-submitted — members who haven't logged today,
@@ -149,7 +126,7 @@ export async function getNotSubmitted(req: AuthedRequest, res: Response): Promis
     return
   }
 
-  const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId }
+  const deptFilter = me.role === 'SUPER_ADMIN' ? {} : { departmentId: me.departmentId ?? '__none__' }
   const members = await prisma.user.findMany({
     where: { role: 'MEMBER', isActive: true, ...deptFilter },
     include: { department: true, subDepartment: true },

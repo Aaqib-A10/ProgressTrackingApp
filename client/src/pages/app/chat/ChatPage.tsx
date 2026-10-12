@@ -34,6 +34,15 @@ export default function ChatPage() {
       .catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not open the project chat') }))
   }, [params, setParams, addToast])
 
+  // ?dm=<userId> (from search): open, or start, the direct chat with that person.
+  useEffect(() => {
+    const dm = params.get('dm')
+    if (!dm) return
+    chatApi.openDirect(dm)
+      .then((r) => { setActive(r.conversation.id); setRefresh((n) => n + 1); setParams({ c: r.conversation.id }, { replace: true }) })
+      .catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not open the chat') }))
+  }, [params, setParams, addToast])
+
   useEffect(() => { const c = params.get('c'); if (c) setActive(c) }, [params])
   useEffect(() => {
     if (!active) { setDetail(null); return }

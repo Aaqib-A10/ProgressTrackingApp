@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ClipboardList, Users, ArrowRight, MessageSquare, LineChart } from 'lucide-react'
+import { ClipboardList, ClipboardCheck, ArrowRight, MessageSquare, LineChart } from 'lucide-react'
+import { canOpen } from '../../lib/access'
 import { useAuth } from '../../lib/auth'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Card } from '../../components/ui/Card'
 import { Badge, FeedbackSentimentBadge } from '../../components/ui/Badge'
 import { listFeedback, type FeedbackThread } from '../../lib/feedbackApi'
 import { fromNow } from '../../lib/datetime'
+import { DEPARTMENT_LABEL } from '../../lib/departments'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 import { AssignedTasksCard } from '../../components/AssignedTasksCard'
 import { TodoList } from '../../components/TodoList'
-
-const TL_ROLES = ['TEAM_LEAD', 'SUB_DEPT_LEAD', 'SUPER_ADMIN']
 
 /** Where this user logs their daily work — Marketing routes to its sub-department page. */
 function logPath(user: CurrentUser): string | null {
@@ -22,26 +22,13 @@ function logPath(user: CurrentUser): string | null {
       return '/app/leadgen/log'
     case 'TALKLOOP':
       return '/app/talkloop/log'
+    case 'ECOMMERCE':
+      return '/app/ecommerce/log'
     case 'MARKETING':
       if (user.subDepartment === 'seo') return '/app/marketing/seo'
-      if (user.subDepartment === 'social') return '/app/marketing/social'
-      return '/app/marketing/content'
-    default:
-      return null
-  }
-}
-
-/** Where this lead sees their team. */
-function teamPath(user: CurrentUser): string | null {
-  switch (user.department) {
-    case 'ITAD':
-      return '/app/itad/team'
-    case 'LEAD_GEN':
-      return '/app/leadgen/team'
-    case 'TALKLOOP':
-      return '/app/talkloop/team'
-    case 'MARKETING':
-      return '/app/marketing/analytics'
+      // Social, Ads and Email have no daily log (Social works in the planner and monthly reports).
+      if (user.subDepartment === 'social' || user.subDepartment === 'ads' || user.subDepartment === 'email') return null
+      return '/app/marketing/content/log'
     default:
       return null
   }
@@ -52,8 +39,6 @@ export default function DashboardHome() {
   if (!user) return null
 
   const log = logPath(user)
-  const team = teamPath(user)
-  const isLead = TL_ROLES.includes(user.role)
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -63,7 +48,7 @@ export default function DashboardHome() {
           <Badge tone="primary">{ROLE_LABEL[user.role]}</Badge>
         </div>
         <p className="mt-1 text-body-md text-ink-muted">
-          {user.department ? `${user.department.replace('_', ' ')} · ` : ''}Here&apos;s where you pick up your work.
+          {user.department ? `${DEPARTMENT_LABEL[user.department]} · ` : ''}Here&apos;s where you pick up your work.
         </p>
       </div>
 
@@ -76,15 +61,15 @@ export default function DashboardHome() {
             desc="Submit your daily entry in under a minute."
           />
         )}
-        {isLead && team && (
+        {canOpen(user, '/app/qa/my') && (
           <QuickAction
-            to={team}
-            icon={<Users size={20} />}
-            title="Team view"
-            desc="See every member's progress and team totals."
+            to="/app/qa/my"
+            icon={<ClipboardCheck size={20} />}
+            title="My QA scores"
+            desc="See how your calls were scored and what to work on."
           />
         )}
-        {!isLead && log && (
+        {canOpen(user, '/app/analytics') && (
           <QuickAction
             to="/app/analytics"
             icon={<LineChart size={20} />}
