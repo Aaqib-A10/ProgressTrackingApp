@@ -272,7 +272,7 @@ async function emailOnly(userId: string, t: DeadlineTask, mail: { subject: strin
     ${lines.map((l) => `<p style="font-size:14px;line-height:1.5;margin:6px 0">${esc(l)}</p>`).join('')}
     <a href="${href}" style="display:inline-block;background:#4F46E5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;margin:14px 0">Open the task</a>
   </div>`
-  await sendMail({ to: u.email, subject: mail.subject, html, text: [...lines, '', href].join('\n') })
+  await sendMail({ to: u.email, subject: mail.subject, html, text: [...lines, '', href].join('\n'), category: 'Projects' })
 }
 
 /** Start the deadline cron (every 5 minutes). Call once on boot. */

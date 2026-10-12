@@ -4,7 +4,7 @@
 #
 # - Gives the database login a NEW password (and puts it in .env).
 # - Makes a NEW login secret (everyone signs in again once).
-# - Asks for the keys that come from outside websites (Groq, Resend, Cloudflare TURN).
+# - Asks for the keys that come from outside websites (Groq, Mailtrap, Cloudflare TURN).
 #   Typing is hidden; press Enter to skip one.
 # - Restarts PulseTrack with the new settings.
 set -euo pipefail
@@ -39,7 +39,7 @@ echo "   new password set for '$ROLE'"
 
 echo "== Keys from outside websites (typing is hidden, Enter = skip)"
 read -rsp "Groq API key (console.groq.com, starts with gsk_): " GROQ; echo
-read -rsp "Resend API key (resend.com, starts with re_): " RESEND; echo
+read -rsp "Mailtrap API token (mailtrap.io, Sending Domains > pulsetrack.online > Integration): " MAILTRAP; echo
 read -rsp "Cloudflare TURN Token ID: " CF_ID; echo
 read -rsp "Cloudflare TURN API Token: " CF_TOKEN; echo
 
@@ -55,7 +55,7 @@ umask 077
   echo 'APP_URL="https://pulsetrack.online"'
   echo 'MAIL_FROM="PulseTrack <noreply@pulsetrack.online>"'
   echo 'MAIL_REPLY_TO="noreply@pulsetrack.online"'
-  [ -n "$RESEND" ] && echo "RESEND_API_KEY=\"$RESEND\""
+  [ -n "$MAILTRAP" ] && echo "MAILTRAP_API_TOKEN=\"$MAILTRAP\""
   [ -n "$GROQ" ] && echo "GROQ_API_KEY=\"$GROQ\""
   [ -n "$CF_ID" ] && echo "CF_TURN_KEY_ID=$CF_ID"
   [ -n "$CF_TOKEN" ] && echo "CF_TURN_API_TOKEN=$CF_TOKEN"

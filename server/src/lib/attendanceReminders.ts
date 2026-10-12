@@ -12,7 +12,7 @@ import { sendAttendanceReminderEmail } from './mail'
  * their effective shift (working days, timezone, start/grace/end — same model as
  * the attendance module) to decide whether a reminder is due right now. A
  * per-user-per-day-per-kind row in AttendanceReminder guarantees each reminder
- * is sent at most once. Emails are best-effort (no-op without RESEND_API_KEY),
+ * is sent at most once. Emails are best-effort (no-op without a mail key),
  * so the selection logic runs the same with or without email configured.
  */
 

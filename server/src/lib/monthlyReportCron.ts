@@ -13,7 +13,7 @@ import { reportRecipients, previousMonth } from '../controllers/reportsControlle
  * REPORT_RECIPIENTS. A per-(month, department) row in SentMonthlyReport is
  * claimed first (unique constraint), so the report is sent exactly once
  * regardless of how many ticks run or restarts happen. Email is best-effort
- * (no-op without RESEND_API_KEY).
+ * (no-op without a mail key).
  */
 const CLAIM_KEY = 'MANAGEMENT'
 
@@ -29,7 +29,7 @@ export async function runMonthlyReportTick(month: string = previousMonth()): Pro
   }
   const report = await buildManagementReport(month)
   const { subject, html, text } = renderManagementReportEmail(report)
-  await sendMail({ to: recipients, subject, html, text })
+  await sendMail({ to: recipients, subject, html, text, category: 'Reports' })
   // eslint-disable-next-line no-console
   console.log(`[monthly-report] sent management ${month} to ${recipients.length} recipient(s)`)
   return { sent: [CLAIM_KEY] }

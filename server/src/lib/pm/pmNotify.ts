@@ -106,6 +106,7 @@ export async function pmNotify(input: PmNotifyInput): Promise<string[]> {
           subject: em.subject,
           html: emailHtml(em.heading, lines, href, em.cta),
           text: [...lines, '', href].join('\n'),
+          category: 'Projects',
         })
       }
     })().catch((e) => {

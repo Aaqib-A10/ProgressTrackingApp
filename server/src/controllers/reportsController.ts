@@ -200,7 +200,7 @@ export async function sendMonthlyReport(req: AuthedRequest, res: Response): Prom
     return
   }
   const { subject, html, text } = renderMonthlyReportEmail(report)
-  await sendMail({ to: recipients, subject, html, text })
+  await sendMail({ to: recipients, subject, html, text, category: 'Reports' })
   res.json({ sent: true, department: departmentType, month, recipients })
 }
 
@@ -241,6 +241,6 @@ export async function sendManagementReport(req: AuthedRequest, res: Response): P
   const month = /^\d{4}-\d{2}$/.test(String(body.month)) ? String(body.month) : previousMonth()
   const report = await buildManagementReport(month)
   const { subject, html, text } = renderManagementReportEmail(report)
-  await sendMail({ to: recipients, subject, html, text })
+  await sendMail({ to: recipients, subject, html, text, category: 'Reports' })
   res.json({ sent: true, month, recipients })
 }
