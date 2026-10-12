@@ -117,7 +117,7 @@ export default function MasterPlan() {
   }
 
   const columns: Column<PlanItem>[] = [
-    { key: 'title', header: 'Task', render: (i) => <span className="font-medium text-ink">{i.title}</span> },
+    { wrap: true, key: 'title', header: 'Task', render: (i) => <span className="font-medium text-ink">{i.title}</span> },
     { key: 'type', header: 'Type', render: (i) => i.taskType ?? '—' },
     { key: 'project', header: 'Project', render: (i) => i.brand?.name ?? 'General' },
     { key: 'stakeholder', header: 'Stakeholder', render: (i) => i.owner?.name ?? i.stakeholder ?? '—' },
@@ -174,7 +174,7 @@ export default function MasterPlan() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-ink">Master Plan</h1>

@@ -559,6 +559,7 @@ export default function MarketingProfiles() {
     { key: 'handle', header: 'Handle', render: (p) => p.handle ?? '—' },
     {
       key: 'url',
+      wrap: true,
       header: 'URL',
       render: (p) =>
         p.url ? (
@@ -595,6 +596,7 @@ export default function MarketingProfiles() {
     { key: 'term', header: 'Search term', render: (t) => <span className="font-medium text-ink">{t.term}</span> },
     {
       key: 'url',
+      wrap: true,
       header: 'URL',
       render: (t) =>
         t.url ? (
@@ -630,7 +632,7 @@ export default function MarketingProfiles() {
   if (loading) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-ink">Profiles &amp; Platforms</h1>
@@ -861,7 +863,7 @@ export default function MarketingProfiles() {
                 columns={[
                   { key: 'name', header: 'Suite', render: (s: BusinessSuite) => <span className="font-medium text-ink">{s.name}</span> },
                   { key: 'bm', header: 'BM ID', render: (s: BusinessSuite) => s.businessManagerId ?? '—' },
-                  { key: 'url', header: 'URL', render: (s: BusinessSuite) => s.url ? <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">Link <ExternalLink size={13} /></a> : '—' },
+                  { wrap: true, key: 'url', header: 'URL', render: (s: BusinessSuite) => s.url ? <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">Link <ExternalLink size={13} /></a> : '—' },
                   { key: 'count', header: 'Profiles', align: 'right', render: (s: BusinessSuite) => formatNumber(s.profileCount) },
                   {
                     key: 'actions', header: '', align: 'right',

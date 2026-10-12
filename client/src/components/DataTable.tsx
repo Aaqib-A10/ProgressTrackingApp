@@ -11,6 +11,8 @@ export interface Column<T> {
   render?: (row: T, index: number) => ReactNode
   className?: string
   headerClassName?: string
+  /** Long text (titles, links) wraps onto more lines instead of widening the table. */
+  wrap?: boolean
 }
 
 export interface DataTableProps<T> {
@@ -85,7 +87,7 @@ export function DataTable<T>({
             <td
               key={col.key}
               className={cn(
-                'whitespace-nowrap px-4 py-3 text-ink',
+                col.wrap ? 'min-w-[16rem] whitespace-normal break-words px-4 py-3 text-ink [overflow-wrap:anywhere]' : 'whitespace-nowrap px-4 py-3 text-ink',
                 col.align === 'right' && 'tabular-nums',
                 alignClass[col.align ?? 'left'],
                 col.className,

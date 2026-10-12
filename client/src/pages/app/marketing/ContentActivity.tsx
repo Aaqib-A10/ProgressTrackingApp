@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Plus } from 'lucide-react'
+import { ExternalLink, Plus } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -65,7 +65,7 @@ export default function ContentActivity() {
   }
 
   const columns: Column<ContentItem>[] = [
-    { key: 'title', header: 'Content Piece', render: (r) => <span className="font-medium text-ink">{r.title}</span> },
+    { key: 'title', header: 'Content Piece', wrap: true, render: (r) => <ContentTitle title={r.title} /> },
     { key: 'type', header: 'Type', render: (r) => (r.contentType ? TYPE_LABEL[r.contentType] : '—') },
     {
       key: 'status',
@@ -89,7 +89,7 @@ export default function ContentActivity() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1600px] space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-headline-lg text-ink">Content Pipeline</h1>
         <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setModalOpen(true)}>New Content</Button>
@@ -120,4 +120,24 @@ export default function ContentActivity() {
       </Modal>
     </div>
   )
+}
+
+/** A title that is just a link (e.g. a Google Doc) shows as a short, clickable label instead of the whole address. */
+function ContentTitle({ title }: { title: string }) {
+  const t = title.trim()
+  if (/^https?:\/\/\S+$/i.test(t)) {
+    let label = t
+    try {
+      const u = new URL(t)
+      label = u.hostname === 'docs.google.com'
+        ? (u.pathname.startsWith('/spreadsheets') ? 'Google Sheet' : u.pathname.startsWith('/presentation') ? 'Google Slides' : 'Google Doc')
+        : u.hostname.replace(/^www\./, '') + (u.pathname.length > 1 ? u.pathname.slice(0, 40) + (u.pathname.length > 40 ? '…' : '') : '')
+    } catch { /* not a valid address: show as text */ }
+    return (
+      <a href={t} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline" title={t}>
+        <ExternalLink size={14} className="shrink-0" /> {label}
+      </a>
+    )
+  }
+  return <span className="font-medium text-ink">{t}</span>
 }

@@ -114,7 +114,7 @@ export default function MarketingBlogs() {
   }
 
   const columns: Column<BlogPost>[] = [
-    { key: 'title', header: 'Title', render: (b) => (b.url ? <a href={b.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">{b.title}</a> : <span className="font-medium text-ink">{b.title}</span>) },
+    { wrap: true, key: 'title', header: 'Title', render: (b) => (b.url ? <a href={b.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">{b.title}</a> : <span className="font-medium text-ink">{b.title}</span>) },
     { key: 'brand', header: 'Brand', render: (b) => b.brand.name },
     { key: 'author', header: 'Author', render: (b) => b.author?.name ?? '—' },
     { key: 'words', header: 'Words', align: 'right', render: (b) => (b.wordCount != null ? formatNumber(b.wordCount) : '—') },
@@ -144,7 +144,7 @@ export default function MarketingBlogs() {
   if (loading) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-ink">Blogs</h1>

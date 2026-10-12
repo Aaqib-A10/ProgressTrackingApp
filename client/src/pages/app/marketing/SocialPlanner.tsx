@@ -156,7 +156,7 @@ export default function SocialPlanner() {
   if (loading) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1600px] space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">Social Planner</h1>
