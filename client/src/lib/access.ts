@@ -62,6 +62,7 @@ export const ACCESS: Record<string, AccessLine[]> = {
   // ---- ITAD
   '/app/itad/log': dept(['ITAD']),
   '/app/itad/bids': dept(['ITAD']),
+  '/app/itad/docs': dept(['ITAD']),
   '/app/itad/team': lead(['ITAD']),
   '/app/itad/analytics': lead(['ITAD']),
 

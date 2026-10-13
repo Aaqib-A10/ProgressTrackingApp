@@ -24,6 +24,7 @@ import { financialsRouter } from './routes/financials'
 import { pushRouter } from './routes/push'
 import { guestRouter } from './routes/guest'
 import { searchRouter } from './routes/search'
+import { docsRouter } from './routes/docs'
 import { talkloopRouter } from './routes/talkloop'
 import { inventoryRouter } from './routes/inventory'
 import { projectsRouter } from './routes/projects'
@@ -97,6 +98,7 @@ export function createApp(): Express {
   app.use('/api/push', pushRouter)
   app.use('/api/guest', guestRouter)
   app.use('/api/search', searchRouter)
+  app.use('/api/docs', docsRouter)
 
   // Fallback 404 for unknown API paths.
   app.use((_req, res) => {

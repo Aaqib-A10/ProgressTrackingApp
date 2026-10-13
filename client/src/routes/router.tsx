@@ -52,6 +52,7 @@ const InventoryList = lazy(() => import('../pages/app/inventory/InventoryList'))
 const InventoryRequests = lazy(() => import('../pages/app/inventory/InventoryRequests'))
 const InventoryTeam = lazy(() => import('../pages/app/inventory/InventoryTeam'))
 const RdpRecords = lazy(() => import('../pages/app/ecommerce/RdpRecords'))
+const DocsLinks = lazy(() => import('../pages/app/itad/DocsLinks'))
 const MarketingTaskRedirect = lazy(() => import('../pages/app/marketing/MarketingTaskRedirect'))
 const MarketingTeam = lazy(() => import('../pages/app/marketing/MarketingTeam'))
 const SeoActivity = lazy(() => import('../pages/app/marketing/SeoActivity'))
@@ -144,6 +145,7 @@ export const router = createBrowserRouter([
       // ITAD
       { path: 'itad/log', element: <ItadDailyLog /> },
       { path: 'itad/bids', element: <BidTracker /> },
+      { path: 'itad/docs', element: <DocsLinks /> },
       { path: 'itad/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadTeamView /></RequireRole> },
       { path: 'itad/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadAnalytics /></RequireRole> },
 

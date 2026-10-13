@@ -248,6 +248,7 @@ model User {
 
   @@index([departmentId])
   @@index([subDepartmentId])
+  savedDocs SavedDoc[] @relation("SavedDocOwner")
 }
 
 /// A user's membership in a department, with the role (and optional Marketing
@@ -2347,4 +2348,26 @@ model AppSecret {
   name      String   @id
   value     String
   createdAt DateTime @default(now())
+}
+
+/// A person's own saved documents and links (Docs & Links): only they can see them.
+model SavedDoc {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("SavedDocOwner", fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  url       String? // a link, or
+  // an uploaded file (stored in uploads/docs)
+  fileStoredName String?
+  fileName       String?
+  fileMime       String?
+  fileSize       Int?
+  brand     String? // brand / company it belongs to
+  category  String   @default("OTHER") // CONTRACT | PRICE_LIST | CERTIFICATE | PROPOSAL | PORTAL | SOP | OTHER
+  notes     String?
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, pinned, updatedAt])
 }

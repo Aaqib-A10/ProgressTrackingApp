@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Trash2, Pencil, TriangleAlert, Bell, BellOff, Search, ShieldCheck } from 'lucide-react'
+import { Plus, Trash2, Pencil, TriangleAlert, Bell, BellOff, Search, ShieldCheck, Users, User } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -8,9 +8,9 @@ import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import { useAuth } from '../../../lib/auth'
 import {
-  listBids, createBid, updateBid, deleteBid,
+  listBids, createBid, updateBid, deleteBid, listTeamActiveBids, findSimilarDeals,
   BID_STATUS_LABEL, BID_TYPE_LABEL, SUBMISSION_LABEL,
-  type Bid, type BidStatus, type BidType, type BidSubmissionType, type BidInput, type BidSummary,
+  type Bid, type BidStatus, type BidType, type BidSubmissionType, type BidInput, type BidSummary, type TeamDeal,
 } from '../../../lib/bidApi'
 
 const STATUSES: BidStatus[] = ['ACTIVE', 'SUBMITTED', 'WON', 'LOST']
@@ -67,11 +67,15 @@ export default function BidTracker() {
   const [editFor, setEditFor] = useState<Bid | null>(null)
   // A bid mid-way through a decision that needs extra input (Won/Lost).
   const [decideFor, setDecideFor] = useState<{ bid: Bid; status: 'WON' | 'LOST' } | null>(null)
+  // "My deals" or the whole team's open deals (who is working on what).
+  const [view, setView] = useState<'mine' | 'team'>('mine')
+  const [teamDeals, setTeamDeals] = useState<TeamDeal[] | null>(null)
 
   function reload() {
     listBids()
       .then((r) => { setBids(r.bids); setSummary(r.summary) })
       .catch(() => { setBids([]); setSummary(null) })
+    listTeamActiveBids().then((r) => setTeamDeals(r.deals)).catch(() => setTeamDeals([]))
   }
   useEffect(reload, [])
 
@@ -199,6 +203,17 @@ export default function BidTracker() {
         <Button leadingIcon={<Plus size={16} />} onClick={() => setAddOpen(true)}>New deal</Button>
       </div>
 
+      <div className="inline-flex rounded-btn border border-line bg-card p-1" role="tablist">
+        <button role="tab" aria-selected={view === 'mine'} onClick={() => setView('mine')} className={'inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'mine' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>
+          <User size={15} /> {user?.role === 'MEMBER' ? 'My deals' : 'All deals'}
+        </button>
+        <button role="tab" aria-selected={view === 'team'} onClick={() => setView('team')} className={'inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'team' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>
+          <Users size={15} /> Team's active deals{teamDeals ? ` (${teamDeals.length})` : ''}
+        </button>
+      </div>
+
+      {view === 'team' ? <TeamDeals deals={teamDeals} /> : <>
+
       {/* Interactive status filter cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Active Opportunities" count={summary?.active ?? 0} tone="primary" active={filter === 'ACTIVE'} onClick={() => setFilter(filter === 'ACTIVE' ? null : 'ACTIVE')} />
@@ -250,9 +265,10 @@ export default function BidTracker() {
           <DataTable columns={columns} rows={filtered} getRowId={(b) => b.id} emptyMessage={filter || extraFilters ? 'No deals match these filters.' : 'No deals yet. Add your first opportunity.'} />
         )}
       </Card>
+      </>}
 
-      {addOpen && <BidFormModal agentName={user?.name ?? ''} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); reload() }} />}
-      {editFor && <BidFormModal bid={editFor} agentName={user?.name ?? ''} onClose={() => setEditFor(null)} onSaved={() => { setEditFor(null); reload() }} />}
+      {addOpen && <BidFormModal agentName={user?.name ?? ''} teamDeals={teamDeals ?? []} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); reload() }} />}
+      {editFor && <BidFormModal bid={editFor} agentName={user?.name ?? ''} teamDeals={teamDeals ?? []} onClose={() => setEditFor(null)} onSaved={() => { setEditFor(null); reload() }} />}
       {decideFor && (
         <DecisionModal
           bid={decideFor.bid}
@@ -290,7 +306,7 @@ function toLocalInput(iso: string): string {
 }
 
 /** Create/edit form. Agent is auto-filled from the session (locked) on new bids. */
-function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; agentName: string; onClose: () => void; onSaved: () => void }) {
+function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: Bid | null; agentName: string; teamDeals: TeamDeal[]; onClose: () => void; onSaved: () => void }) {
   const { addToast } = useToast()
   const editing = !!bid
   const [title, setTitle] = useState(bid?.title ?? '')
@@ -359,6 +375,7 @@ function BidFormModal({ bid, agentName, onClose, onSaved }: { bid?: Bid | null; 
       footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={submit} disabled={saving}>{editing ? 'Save changes' : 'Add bid'}</Button></>}
     >
       <form onSubmit={submit} className="space-y-4">
+        <SimilarDealsWarning deals={findSimilarDeals(teamDeals, { title, company }, bid?.id)} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Bid title" required>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. County IT asset liquidation" className={inputCls} />
@@ -532,5 +549,64 @@ function Field({ label, required, children }: { label: string; required?: boolea
       </span>
       {children}
     </label>
+  )
+}
+
+/** Someone already has an open deal that looks like this one: say who, before it is saved. */
+function SimilarDealsWarning({ deals }: { deals: TeamDeal[] }) {
+  if (!deals.length) return null
+  return (
+    <div className="rounded-btn border border-warning/40 bg-warning/10 p-3 text-body-sm text-ink" role="alert">
+      <p className="flex items-center gap-1.5 font-semibold text-warning"><TriangleAlert size={15} /> Someone may already be working on this</p>
+      <ul className="mt-1.5 space-y-1">
+        {deals.map((d) => (
+          <li key={d.id}>
+            <span className="font-medium">{d.title}</span> · {d.company}{d.district ? ` · ${d.district}` : ''}
+            <span className="text-ink-muted"> · {d.mine ? 'your deal' : d.agentName} · {BID_STATUS_LABEL[d.status]} · due {fmtDate(d.dueDate)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1.5 text-ink-muted">Check with them before adding it, so two people don't work on the same deal.</p>
+    </div>
+  )
+}
+
+/** Every open deal in the ITAD team and who owns it (read only). */
+function TeamDeals({ deals }: { deals: TeamDeal[] | null }) {
+  const [q, setQ] = useState('')
+  const [agent, setAgent] = useState('')
+  const agents = useMemo(() => [...new Map((deals ?? []).map((d) => [d.agentId, d.agentName])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [deals])
+  const rows = useMemo(() => {
+    const t = q.trim().toLowerCase()
+    return (deals ?? []).filter((d) => (!agent || d.agentId === agent) && (!t || [d.title, d.company, d.district, d.agentName, `#${d.number}`].some((f) => f.toLowerCase().includes(t))))
+  }, [deals, q, agent])
+  const cols: Column<TeamDeal>[] = [
+    { key: 'title', header: 'Deal', wrap: true, render: (d) => (
+      <div>
+        <div className="font-medium text-ink">{d.title}</div>
+        <div className="text-body-sm text-ink-muted"><span className="font-semibold uppercase">{BID_TYPE_LABEL[d.type]}</span> · #{d.number}</div>
+      </div>
+    ) },
+    { key: 'company', header: 'Company', wrap: true, render: (d) => <span>{d.company}{d.district && d.district.trim().toLowerCase() !== d.company.trim().toLowerCase() ? <span className="block text-body-sm text-ink-muted">{d.district}</span> : null}</span> },
+    { key: 'agent', header: 'Working on it', render: (d) => d.mine ? <Badge tone="primary">You</Badge> : <span className="font-medium text-ink">{d.agentName}</span> },
+    { key: 'status', header: 'Status', render: (d) => <Badge tone={STATUS_TONE[d.status]}>{BID_STATUS_LABEL[d.status]}</Badge> },
+    { key: 'due', header: 'Due', align: 'right', render: (d) => fmtDue(d.dueDate) },
+  ]
+  return (
+    <Card flush>
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+        <div className="relative min-w-[200px] flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Check if a deal is taken: search title, company, district or person…" className="h-9 w-full rounded-btn border border-line bg-bg pl-9 pr-3 text-body-sm text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
+        </div>
+        <select value={agent} onChange={(e) => setAgent(e.target.value)} className={filterCls} aria-label="Filter by person">
+          <option value="">Everyone</option>
+          {agents.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select>
+        <span className="text-body-sm text-ink-muted">Active and submitted deals of the whole ITAD team</span>
+      </div>
+      {!deals ? <p className="px-4 py-8 text-center text-body-md text-ink-muted">Loading…</p>
+        : <DataTable columns={cols} rows={rows} getRowId={(d) => d.id} emptyMessage={q || agent ? 'Nobody is working on a deal like that.' : 'No open deals in the team.'} />}
+    </Card>
   )
 }

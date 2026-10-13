@@ -270,3 +270,38 @@ export async function deleteBid(req: AuthedRequest, res: Response): Promise<void
   await prisma.bid.delete({ where: { id: existing.id } })
   res.status(204).end()
 }
+
+/**
+ * GET /api/itad/bids/team-active — every deal the ITAD team is working on right now
+ * (Active and Submitted), with who owns it, so two people never chase the same deal.
+ * Everyone in ITAD sees this list; prices stay private to the owner and leads.
+ */
+export async function teamActiveBids(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (!isItad(me)) {
+    res.status(403).json({ error: 'ITAD access only' })
+    return
+  }
+  const dept = me.department?.type === 'ITAD' ? me.department : await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  const bids = await prisma.bid.findMany({
+    where: { departmentId: dept?.id ?? '__none__', status: { in: ['ACTIVE', 'SUBMITTED'] } },
+    orderBy: [{ dueDate: 'asc' }],
+    select: { id: true, number: true, title: true, company: true, district: true, type: true, status: true, dueDate: true, createdAt: true, agentId: true, agent: { select: { name: true } } },
+  })
+  res.json({
+    deals: bids.map((b) => ({
+      id: b.id,
+      number: b.number,
+      title: b.title,
+      company: b.company,
+      district: b.district ?? '',
+      type: b.type,
+      status: b.status,
+      dueDate: b.dueDate.toISOString(),
+      createdAt: b.createdAt.toISOString(),
+      agentId: b.agentId,
+      agentName: b.agent?.name ?? '—',
+      mine: b.agentId === me.id,
+    })),
+  })
+}

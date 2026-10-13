@@ -34,6 +34,7 @@ import {
   PhoneCall,
   History,
   FolderKanban,
+  FolderOpen,
   MessagesSquare,
   LayoutGrid,
   type LucideIcon,
@@ -132,6 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Daily Log', to: '/app/itad/log', icon: Phone, hideFor: HIDE_FROM_SA },
       { label: 'Deal Tracker', to: '/app/itad/bids', icon: Briefcase, hideFor: HIDE_FROM_SA },
+      { label: 'Docs & Links', to: '/app/itad/docs', icon: FolderOpen, hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/itad/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Analytics', to: '/app/itad/analytics', icon: LineChart },
     ],
