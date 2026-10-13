@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMe, checkIn, checkOut, startBreak, endBreak, history, teamView, exportTeamAttendanceCsv, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, removeLeave, ipCheck } from '../controllers/attendanceController'
+import { getMe, checkIn, checkOut, startOvertime, startBreak, endBreak, history, teamView, exportTeamAttendanceCsv, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, removeLeave, ipCheck } from '../controllers/attendanceController'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 
@@ -11,6 +11,7 @@ attendanceRouter.use(requireAuth)
 attendanceRouter.get('/me', asyncHandler(getMe))
 attendanceRouter.post('/check-in', asyncHandler(checkIn))
 attendanceRouter.post('/check-out', asyncHandler(checkOut))
+attendanceRouter.post('/overtime', asyncHandler(startOvertime))
 attendanceRouter.post('/break/start', asyncHandler(startBreak))
 attendanceRouter.post('/break/end', asyncHandler(endBreak))
 attendanceRouter.get('/ip-check', asyncHandler(ipCheck))

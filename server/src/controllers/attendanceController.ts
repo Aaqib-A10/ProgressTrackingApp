@@ -9,6 +9,7 @@ import { isOvernight, shiftMinutes, shiftDayString, belongsToPreviousShift, time
 import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { sendCsv } from '../lib/csv'
+import { shiftSpanMin, autoCheckoutAt, overtimeMinutes, OVERTIME_MAX_MIN } from '../lib/overtime'
 import type { Role, DepartmentType } from '@prisma/client'
 
 type DayWithBreaks = Prisma.AttendanceDayGetPayload<{ include: { breaks: true } }>
@@ -195,6 +196,21 @@ function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
     earlyLeave: day?.checkOutAt ? isEarlyLeave(day.checkOutAt, shift) : false,
     requiredMin: shift.requiredMinutes,
     completed: worked != null && worked >= shift.requiredMinutes,
+    ...overtimeInfo(day, shift, now),
+  }
+}
+
+/** Overtime and the automatic check-out time, for the clock and history. */
+function overtimeInfo(day: DayWithBreaks | null, shift: Shift, now: Date) {
+  if (!day?.checkInAt) return { overtime: false, overtimeMin: 0, autoCheckoutAt: null, autoCheckoutLabel: null, shiftHoursMin: null }
+  const span = shiftSpanMin(shift, dateStringFromDb(day.date))
+  const auto = day.checkOutAt ? null : autoCheckoutAt(day.checkInAt, span, day.overtimeAt)
+  return {
+    overtime: !!day.overtimeAt,
+    overtimeMin: overtimeMinutes(day, span, now),
+    autoCheckoutAt: auto?.toISOString() ?? null,
+    autoCheckoutLabel: auto ? clockLabel(auto, shift) : null,
+    shiftHoursMin: span,
   }
 }
 
@@ -226,6 +242,9 @@ async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
     offLabel, // 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | null — clocking blocked when set
     offName: holiday?.name ?? null,
     workMode: isWfh ? 'WFH' : null, // WFH is a worked day: clocking stays enabled
+    overtimeMaxMin: OVERTIME_MAX_MIN,
+    // The server's clock: the widget counts from this, so a computer whose clock is wrong still shows the right time worked.
+    serverNow: now.toISOString(),
   }
 }
 
@@ -445,6 +464,30 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
   res.json(await buildMePayload(me))
 }
 
+/** POST /api/attendance/overtime — keep working after the shift's hours (no automatic check-out at the end of the shift). */
+export async function startOvertime(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  const now = new Date()
+  const shift = await resolveShift(me.id, me.departmentId)
+  const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
+  const blocked = await attendanceGuard(req, me, isWfh)
+  if (blocked) {
+    res.status(403).json({ error: blocked })
+    return
+  }
+  const existing = await findToday(me.id, shift)
+  if (!existing?.checkInAt) {
+    res.status(409).json({ error: 'Check in first.' })
+    return
+  }
+  if (existing.checkOutAt) {
+    res.status(409).json({ error: 'You have already checked out for today.' })
+    return
+  }
+  if (!existing.overtimeAt) await prisma.attendanceDay.update({ where: { id: existing.id }, data: { overtimeAt: now } })
+  res.json(await buildMePayload(me))
+}
+
 /** POST /api/attendance/break/start */
 export async function startBreak(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
@@ -545,6 +588,7 @@ function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: s
     completed: worked != null && worked >= shift.requiredMinutes,
     shortMin: worked == null ? null : Math.max(0, shift.requiredMinutes - worked),
     note: day?.note ?? null, // TL/Admin per-day comment (feedback)
+    overtimeMin: day ? overtimeInfo(day, shift, now).overtimeMin : 0,
   }
 }
 
@@ -717,7 +761,7 @@ export async function exportTeamAttendanceCsv(req: AuthedRequest, res: Response)
   }
   const holidayByDate = new Map(holidays.map((h) => [dateStringFromDb(h.date), h.name]))
 
-  const rows: (string | number)[][] = [['Date', 'Member', 'Department', 'Status', 'Check-in', 'Check-out', 'Worked', 'Break', 'Late']]
+  const rows: (string | number)[][] = [['Date', 'Member', 'Department', 'Status', 'Check-in', 'Check-out', 'Worked', 'Break', 'Late', 'Overtime']]
 
   for (const member of members) {
     const shift = shiftByUser.get(member.id)!
@@ -748,6 +792,7 @@ export async function exportTeamAttendanceCsv(req: AuthedRequest, res: Response)
         hm(row.workedMin),
         row.label === 'PRESENT' ? hm(row.breakMin) : '',
         row.label === 'PRESENT' ? (row.late ? 'Yes' : 'No') : '',
+        row.overtimeMin ? hm(row.overtimeMin) : '',
       ])
     }
   }
@@ -873,6 +918,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     const present = md.filter((d) => d.checkInAt)
     const totalWorkedMin = present.reduce((s, d) => s + (workedMinutes(d, now) ?? 0), 0)
     const totalBreakMin = present.reduce((s, d) => s + breakMinutes(d, d.checkOutAt ?? now), 0)
+    const totalOvertimeMin = present.reduce((s, d) => s + overtimeInfo(d, shift, now).overtimeMin, 0)
     const lateDays = present.filter((d) => d.checkInAt && isLate(d.checkInAt, shift)).length
     const completedShifts = present.filter((d) => { const w = workedMinutes(d, now); return w != null && w >= shift.requiredMinutes }).length
     const inMins = present.filter((d) => d.checkInAt).map((d) => localMinutes(d.checkInAt!, shift))
@@ -891,6 +937,8 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       leaveDays: leaveCount.get(m.id) ?? 0,
       totalWorkedMin,
       totalBreakMin,
+      totalOvertimeMin,
+      todayOvertime: !!today?.overtimeAt && !today.checkOutAt,
       avgCheckIn,
       shiftRequiredMin: shift.requiredMinutes,
       hasOverride: shifts.some((s) => s.userId === m.id),

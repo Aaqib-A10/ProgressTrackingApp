@@ -38,6 +38,13 @@ export interface TodayState {
   earlyLeave: boolean
   requiredMin: number
   completed: boolean
+  /** "Start overtime" was pressed: no automatic check-out at the end of the shift hours. */
+  overtime: boolean
+  overtimeMin: number
+  /** When PulseTrack will check this session out by itself (null once checked out). */
+  autoCheckoutAt: string | null
+  autoCheckoutLabel: string | null
+  shiftHoursMin: number | null
 }
 
 export interface MeResponse {
@@ -49,6 +56,9 @@ export interface MeResponse {
   offName: string | null
   /** 'WFH' on a work-from-home day — clocking stays enabled, shown as a badge. */
   workMode: 'WFH' | null
+  overtimeMaxMin: number
+  /** The server's clock when this was sent (the widget counts from it, not the computer's clock). */
+  serverNow: string
 }
 
 export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'WFH' | 'WEEKLY_OFF' | 'ABSENT'
@@ -67,6 +77,7 @@ export interface AttendanceDayRow {
   completed: boolean
   shortMin: number | null
   note: string | null
+  overtimeMin: number
 }
 
 export interface AttendanceSummary {
@@ -98,6 +109,8 @@ export interface TeamAttendanceRow {
   leaveDays: number
   totalWorkedMin: number
   totalBreakMin: number
+  totalOvertimeMin: number
+  todayOvertime: boolean
   avgCheckIn: string | null
   shiftRequiredMin: number
   hasOverride: boolean
@@ -167,6 +180,7 @@ export const clockCheckIn = () => api.post<MeResponse>('/attendance/check-in')
 export const clockCheckOut = () => api.post<MeResponse>('/attendance/check-out')
 export const clockStartBreak = (type: BreakType = 'BREAK') => api.post<MeResponse>('/attendance/break/start', { type })
 export const clockEndBreak = () => api.post<MeResponse>('/attendance/break/end')
+export const clockStartOvertime = () => api.post<MeResponse>('/attendance/overtime')
 
 export function getAttendanceHistory(range: RangeKey, custom?: CustomRange | null, userId?: string) {
   const q = rangeQuery(range, custom)

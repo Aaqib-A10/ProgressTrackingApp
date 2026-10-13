@@ -542,6 +542,9 @@ model AttendanceDay {
   checkInMobile  Boolean?
   checkOutUa     String?
   checkOutMobile Boolean?
+  // Set when the person chose "Start overtime": they are not checked out when the shift's
+  // hours are up, and the time after that counts as overtime.
+  overtimeAt     DateTime?
   note           String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -944,6 +947,7 @@ enum NotificationType {
   CHAT_MESSAGE
   TASK_REVIEW
   MEETING
+  AUTO_CHECKOUT
 }
 
 enum BreakType {

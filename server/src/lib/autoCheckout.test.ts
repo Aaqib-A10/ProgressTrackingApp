@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { autoCheckoutDue, shiftEndForDate, shiftEndInstant, AUTO_CHECKOUT_GRACE_MIN } from './autoCheckout'
+import { autoCheckoutDueAt, shiftEndForDate, shiftEndInstant } from './autoCheckout'
+import { shiftSpanMin, overtimeMinutes, OVERTIME_MAX_MIN } from './overtime'
 import type { ShiftWindow } from './shiftDay'
 
 // 2026-07-08 is a Wednesday. Shifts pin an explicit UTC timezone for determinism.
@@ -22,36 +23,44 @@ describe('shiftEndInstant', () => {
   })
 })
 
-describe('autoCheckoutDue', () => {
-  const end = shiftEndForDate(day(), '2026-07-08') // 17:00Z
-  const checkIn = at('2026-07-08T09:00:00Z')
+describe('shift length', () => {
+  it('is the start-to-end span, overnight included', () => {
+    expect(shiftSpanMin(day(), '2026-07-08')).toBe(8 * 60)
+    expect(shiftSpanMin({ startTime: '09:00', endTime: '18:00' }, '2026-07-08')).toBe(9 * 60)
+    expect(shiftSpanMin(night(), '2026-07-08')).toBe(9 * 60)
+  })
+})
 
-  it('is NOT due before shift end', () => {
-    expect(autoCheckoutDue(day(), end, at('2026-07-08T16:30:00Z'), checkIn, null)).toBe(false)
+describe('autoCheckoutDueAt: checked out when the shift hours are complete', () => {
+  const nine = { startTime: '09:00', endTime: '18:00', timeZone: 'UTC' }
+  const checkInAt = at('2026-07-08T09:30:00Z') // came in late
+  const open = { checkInAt, checkOutAt: null, overtimeAt: null }
+
+  it('not before 9 hours on the clock', () => {
+    expect(autoCheckoutDueAt(nine, '2026-07-08', open, at('2026-07-08T18:29:00Z'))).toBeNull()
   })
-  it('is NOT due within the grace window after shift end', () => {
-    expect(autoCheckoutDue(day(), end, at('2026-07-08T17:30:00Z'), checkIn, null)).toBe(false)
+  it('at 9 hours, at that exact moment (not at shift end, not when the sweep runs)', () => {
+    expect(autoCheckoutDueAt(nine, '2026-07-08', open, at('2026-07-08T18:31:00Z'))?.toISOString()).toBe('2026-07-08T18:30:00.000Z')
   })
-  it('is due exactly at shift end + grace', () => {
-    const t = at(`2026-07-08T${17 + AUTO_CHECKOUT_GRACE_MIN / 60}:00:00Z`) // 18:00
-    expect(autoCheckoutDue(day(), end, t, checkIn, null)).toBe(true)
+  it('with overtime on: keeps going, closed only after the overtime limit', () => {
+    const ot = { ...open, overtimeAt: at('2026-07-08T18:00:00Z') }
+    expect(autoCheckoutDueAt(nine, '2026-07-08', ot, at('2026-07-08T21:00:00Z'))).toBeNull()
+    const limit = new Date(checkInAt.getTime() + (9 * 60 + OVERTIME_MAX_MIN) * 60_000)
+    expect(autoCheckoutDueAt(nine, '2026-07-08', ot, new Date(limit.getTime() + 60_000))?.toISOString()).toBe(limit.toISOString())
   })
-  it('is due well after shift end + grace', () => {
-    expect(autoCheckoutDue(day(), end, at('2026-07-08T21:00:00Z'), checkIn, null)).toBe(true)
+  it('never for a session already closed or never opened', () => {
+    expect(autoCheckoutDueAt(nine, '2026-07-08', { ...open, checkOutAt: at('2026-07-08T17:00:00Z') }, at('2026-07-09T09:00:00Z'))).toBeNull()
+    expect(autoCheckoutDueAt(nine, '2026-07-08', { checkInAt: null, checkOutAt: null, overtimeAt: null }, at('2026-07-09T09:00:00Z'))).toBeNull()
   })
-  it('is NOT due when not checked in', () => {
-    expect(autoCheckoutDue(day(), end, at('2026-07-08T21:00:00Z'), null, null)).toBe(false)
+})
+
+describe('overtimeMinutes', () => {
+  const checkInAt = at('2026-07-08T09:00:00Z')
+  it('counts the time after the 9 hours, minus breaks in that time', () => {
+    const d = { checkInAt, checkOutAt: at('2026-07-08T20:30:00Z'), overtimeAt: at('2026-07-08T17:55:00Z'), breaks: [{ startAt: at('2026-07-08T19:00:00Z'), endAt: at('2026-07-08T19:20:00Z') }] }
+    expect(overtimeMinutes(d, 9 * 60, at('2026-07-08T21:00:00Z'))).toBe(150 - 20)
   })
-  it('is NOT due when already checked out', () => {
-    expect(autoCheckoutDue(day(), end, at('2026-07-08T21:00:00Z'), checkIn, at('2026-07-08T17:00:00Z'))).toBe(false)
-  })
-  it('is NOT due when check-in was AFTER shift end (would record a negative duration)', () => {
-    expect(autoCheckoutDue(day(), end, at('2026-07-08T21:00:00Z'), at('2026-07-08T18:53:00Z'), null)).toBe(false)
-  })
-  it('overnight: not due at 04:30 (within grace), due at 05:00 (end + 1h)', () => {
-    const nEnd = shiftEndForDate(night(), '2026-07-08') // 2026-07-09 04:00Z
-    const nIn = at('2026-07-08T19:00:00Z')
-    expect(autoCheckoutDue(night(), nEnd, at('2026-07-09T04:30:00Z'), nIn, null)).toBe(false)
-    expect(autoCheckoutDue(night(), nEnd, at('2026-07-09T05:00:00Z'), nIn, null)).toBe(true)
+  it('is zero without overtime', () => {
+    expect(overtimeMinutes({ checkInAt, checkOutAt: at('2026-07-08T20:00:00Z'), overtimeAt: null, breaks: [] }, 9 * 60, at('2026-07-08T21:00:00Z'))).toBe(0)
   })
 })

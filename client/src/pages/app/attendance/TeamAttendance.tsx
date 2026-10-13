@@ -138,6 +138,7 @@ export default function TeamAttendance() {
     { key: 'leave', header: 'Leave', align: 'right', render: (r) => r.leaveDays },
     { key: 'worked', header: 'Worked', align: 'right', render: (r) => formatMinutes(r.totalWorkedMin) },
     { key: 'break', header: 'Break', align: 'right', render: (r) => formatMinutes(r.totalBreakMin) },
+    { key: 'overtime', header: 'Overtime', align: 'right', render: (r) => (r.totalOvertimeMin ? <span className="font-medium text-primary">{formatMinutes(r.totalOvertimeMin)}</span> : '—') },
     { key: 'avg', header: 'Avg in', align: 'right', render: (r) => r.avgCheckIn ?? '—' },
     {
       key: 'edit',

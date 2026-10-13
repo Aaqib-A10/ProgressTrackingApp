@@ -47,6 +47,7 @@ export default function MyAttendance() {
     { key: 'checkOut', header: 'Check out', align: 'right', render: (r) => (r.checkOut ? <span className={r.earlyLeave ? 'font-semibold text-warning' : ''}>{r.checkOut}</span> : '—') },
     { key: 'worked', header: 'Worked', align: 'right', render: (r) => formatMinutes(r.workedMin) },
     { key: 'break', header: 'Break', align: 'right', render: (r) => (r.breakMin ? formatMinutes(r.breakMin) : '—') },
+    { key: 'overtime', header: 'Overtime', align: 'right', render: (r) => (r.overtimeMin ? <span className="font-medium text-primary">{formatMinutes(r.overtimeMin)}</span> : '—') },
     {
       key: 'flags',
       header: 'Flags',
