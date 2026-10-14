@@ -54,12 +54,15 @@ export interface MeResponse {
   /** When set, clocking is blocked (leave/off/holiday). */
   offLabel: OffLabel | null
   offName: string | null
-  /** 'WFH' on a work-from-home day — clocking stays enabled, shown as a badge. */
-  workMode: 'WFH' | null
+  /** 'WFH' on a day marked work from home, 'REMOTE' when the person always works from home.
+   *  Clocking works from any network; shown as a badge. */
+  workMode: WorkMode | null
   overtimeMaxMin: number
   /** The server's clock when this was sent (the widget counts from it, not the computer's clock). */
   serverNow: string
 }
+
+export type WorkMode = 'WFH' | 'REMOTE'
 
 /** NOT_YET: today, a working day, no check-in yet (the day is still open). */
 export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'WFH' | 'WEEKLY_OFF' | 'ABSENT' | 'NOT_YET'
@@ -79,6 +82,8 @@ export interface AttendanceDayRow {
   shortMin: number | null
   note: string | null
   overtimeMin: number
+  /** Worked from home that day (marked WFH, or always works from home). */
+  wfh?: boolean
 }
 
 export interface AttendanceSummary {
@@ -125,6 +130,12 @@ export interface TeamAttendanceRow {
   breakOverToday: boolean
   lateThisMonth: number
   graceLimitExceeded: boolean
+  /** Always works from home: can check in from any network. */
+  remote: boolean
+  /** Working from home today (a WFH day, or always remote). */
+  workModeToday: WorkMode | null
+  /** Days marked work from home in the period. */
+  wfhDays: number
 }
 
 export interface TeamBoardEntry {
@@ -133,6 +144,7 @@ export interface TeamBoardEntry {
   department: string
   state: ClockState
   checkIn: string | null
+  workMode: WorkMode | null
 }
 
 export interface TeamAttendanceResponse {
@@ -170,8 +182,12 @@ export const putUserShift = (userId: string, input: Shift) => api.put<{ override
 export const clearUserShift = (userId: string) => api.del<void>(`/attendance/shift/user/${userId}`)
 
 export type LeaveMarkType = 'ON_LEAVE' | 'OFF' | 'WFH'
-export const markLeave = (userId: string, date: string, input: { type: LeaveMarkType; note?: string }) =>
-  api.put<{ leave: { date: string; type: LeaveMarkType; note: string } }>(`/attendance/${userId}/leave/${date}`, input)
+/** Mark one day, or a run of days with `until` (only the person's working days are marked). */
+export const markLeave = (userId: string, date: string, input: { type: LeaveMarkType; note?: string; until?: string }) =>
+  api.put<{ leave: { date: string; type: LeaveMarkType; note: string }; dates: string[] }>(`/attendance/${userId}/leave/${date}`, input)
+/** Always works from home (true) or back to office rules (false). TL for their department, or Super Admin. */
+export const setAttendanceRemote = (userId: string, remote: boolean) =>
+  api.put<{ userId: string; remote: boolean }>(`/attendance/${userId}/remote`, { remote })
 export const removeLeave = (userId: string, date: string) => api.del<void>(`/attendance/${userId}/leave/${date}`)
 export const correctAttendanceDay = (userId: string, date: string, input: { checkIn?: string | null; checkOut?: string | null; note?: string | null }) =>
   api.patch<{ day: { date: string; checkIn: string | null; checkOut: string | null } }>(`/attendance/${userId}/${date}`, input)
@@ -195,4 +211,36 @@ export function formatMinutes(min: number | null | undefined): string {
   const m = min % 60
   if (h === 0) return `${m}m`
   return `${h}h ${String(m).padStart(2, '0')}m`
+}
+
+// ---------- Work from home requests (employee asks, Team Lead decides) ----------
+export type WfhRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+export interface WfhRequest {
+  id: string
+  userId: string
+  name: string
+  startDate: string
+  endDate: string
+  /** The working days asked for (yyyy-MM-dd). */
+  days: string[]
+  reason: string
+  status: WfhRequestStatus
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionNote: string | null
+  createdAt: string
+}
+export const askWorkFromHome = (input: { startDate: string; endDate?: string; reason: string }) =>
+  api.post<{ request: WfhRequest }>('/attendance/wfh-requests', input)
+export const myWfhRequests = () => api.get<{ requests: WfhRequest[] }>('/attendance/wfh-requests/mine')
+export const cancelWfhRequest = (id: string) => api.del<void>(`/attendance/wfh-requests/${id}`)
+export const teamWfhRequests = (status: 'PENDING' | 'ALL' = 'PENDING') => api.get<{ requests: WfhRequest[] }>(`/attendance/wfh-requests/team?status=${status}`)
+export const decideWfhRequest = (id: string, approve: boolean, note?: string) =>
+  api.post<{ request: WfhRequest; marked: string[] }>(`/attendance/wfh-requests/${id}/decision`, { approve, note })
+
+/** "Oct 16" or "Oct 16 to Oct 19 · 2 working days". */
+export function wfhSpan(r: Pick<WfhRequest, 'startDate' | 'endDate' | 'days'>): string {
+  const f = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  if (r.startDate === r.endDate) return f(r.startDate)
+  return `${f(r.startDate)} to ${f(r.endDate)} · ${r.days.length} working ${r.days.length === 1 ? 'day' : 'days'}`
 }

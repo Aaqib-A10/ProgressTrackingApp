@@ -73,7 +73,7 @@ function pickShiftFor(rows: ShiftRow[], userId: string, departmentId: string | n
 }
 
 /** Resolve one employee's effective shift (user → department → company). */
-async function resolveShift(userId: string, departmentId: string | null): Promise<Shift> {
+export async function resolveShift(userId: string, departmentId: string | null): Promise<Shift> {
   const rows = await prisma.attendanceShift.findMany({
     where: { OR: [{ userId }, { departmentId }, { userId: null, departmentId: null }] },
   })
@@ -241,7 +241,8 @@ async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
     shift,
     offLabel, // 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | null — clocking blocked when set
     offName: holiday?.name ?? null,
-    workMode: isWfh ? 'WFH' : null, // WFH is a worked day: clocking stays enabled
+    // WFH is a worked day: clocking stays enabled from any network. REMOTE = always works from home.
+    workMode: isWfh ? 'WFH' : me.attendanceRemote ? 'REMOTE' : null,
     overtimeMaxMin: OVERTIME_MAX_MIN,
     // The server's clock: the widget counts from this, so a computer whose clock is wrong still shows the right time worked.
     serverNow: now.toISOString(),
@@ -315,7 +316,7 @@ async function officeNetworkBlock(ip: string, role: Role, isRemote: boolean): Pr
   const nets = await prisma.officeNetwork.findMany({ where: { isActive: true }, select: { cidr: true } })
   if (nets.length === 0) return null // allowlist not configured — allow everyone
   if (ipAllowed(ip, nets.map((n) => n.cidr))) return null
-  return 'You must be on the office network to record attendance.'
+  return 'You must be on the office network to record attendance. Working from home? Ask your Team Lead with "Request work from home" on My Attendance.'
 }
 
 /**
@@ -552,12 +553,12 @@ function weekdayOfDate(dateStr: string): number {
 }
 
 /** Is this calendar date a scheduled working day for the shift (vs a weekly off day)? */
-function isWorkingDate(dateStr: string, shift: Shift): boolean {
+export function isWorkingDate(dateStr: string, shift: Shift): boolean {
   return shift.workingDays.includes(weekdayOfDate(dateStr))
 }
 
 /** Inclusive list of YYYY-MM-DD strings from start to end. */
-function eachDateStr(startStr: string, endStr: string): string[] {
+export function eachDateStr(startStr: string, endStr: string): string[] {
   const out: string[] = []
   let d = DateTime.fromISO(startStr)
   const end = DateTime.fromISO(endStr)
@@ -569,7 +570,7 @@ function eachDateStr(startStr: string, endStr: string): string[] {
 }
 
 /** A merged per-day history row (attendance + leave/holiday + weekly off). */
-function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: string | null, offName: string | null, shift: Shift, now: Date, todayStr?: string) {
+function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: string | null, offName: string | null, shift: Shift, now: Date, todayStr?: string, remote = false) {
   // No check-in and no explicit off/holiday: a scheduled working day is ABSENT,
   // a non-working weekday is the person's recurring WEEKLY_OFF. Today's working
   // day without a check-in is NOT_YET: the day is still open, so not absent.
@@ -592,6 +593,8 @@ function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: s
     shortMin: worked == null ? null : Math.max(0, shift.requiredMinutes - worked),
     note: day?.note ?? null, // TL/Admin per-day comment (feedback)
     overtimeMin: day ? overtimeInfo(day, shift, now).overtimeMin : 0,
+    // Worked from home that day: marked Work From Home, or the person always works from home.
+    wfh: offLabel === 'WFH' || (remote && !!day?.checkInAt),
   }
 }
 
@@ -622,7 +625,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
   const now = new Date()
 
-  const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { departmentId: true } })
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { departmentId: true, attendanceRemote: true } })
   const shift = await resolveShift(targetId, target.departmentId)
   // Resolve the period in the member's own shift timezone — attendance is bucketed
   // per shift-day, so a company-tz window drifts once the two diverge (a US shift
@@ -665,6 +668,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
         shift,
         now,
         todayStr,
+        target.attendanceRemote,
       ),
     )
 
@@ -888,10 +892,14 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   // Live "today" per member (their shift-day), same anchoring as the board.
   const todayDateByUser = new Map([...shiftByUser].map(([id, sh]) => [id, shiftDayString(sh, now)]))
   const todayValues = [...new Set(todayDateByUser.values())].map(dbDateFromString)
-  const todayDays = await prisma.attendanceDay.findMany({
-    where: { userId: { in: memberIds }, date: { in: todayValues } },
-    include: { breaks: true },
-  })
+  const [todayDays, todayLeaves] = await Promise.all([
+    prisma.attendanceDay.findMany({
+      where: { userId: { in: memberIds }, date: { in: todayValues } },
+      include: { breaks: true },
+    }),
+    prisma.leaveDay.findMany({ where: { userId: { in: memberIds }, date: { in: todayValues }, type: 'WFH' }, select: { userId: true, date: true } }),
+  ])
+  const wfhToday = new Set(todayLeaves.filter((l) => dateStringFromDb(l.date) === todayDateByUser.get(l.userId)).map((l) => l.userId))
 
   // Keep only records inside each member's own shift-tz window.
   const inRange = (userId: string, date: Date): boolean => {
@@ -907,7 +915,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     daysByUser.set(d.userId, list)
   }
   const leaveCount = new Map<string, number>()
-  for (const l of leaves) if (inRange(l.userId, l.date)) leaveCount.set(l.userId, (leaveCount.get(l.userId) ?? 0) + 1)
+  for (const l of leaves) if (inRange(l.userId, l.date) && l.type !== 'WFH') leaveCount.set(l.userId, (leaveCount.get(l.userId) ?? 0) + 1)
   const todayByUser = new Map<string, DayWithBreaks>()
   for (const d of todayDays) {
     if (dateStringFromDb(d.date) === todayDateByUser.get(d.userId)) todayByUser.set(d.userId, d)
@@ -962,10 +970,14 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       breakOverToday: regBreakToday > shift.breakAllowanceMin,
       lateThisMonth,
       graceLimitExceeded: lateThisMonth > 3,
+      // Work from home: today marked WFH, or always works from home (check-in from any network).
+      remote: m.attendanceRemote,
+      workModeToday: (wfhToday.has(m.id) ? 'WFH' : m.attendanceRemote ? 'REMOTE' : null) as 'WFH' | 'REMOTE' | null,
+      wfhDays: leaves.filter((l) => l.userId === m.id && l.type === 'WFH' && inRange(l.userId, l.date)).length,
     }
   })
 
-  const board = rows.map((r) => ({ userId: r.userId, name: r.name, department: r.department, state: r.todayState, checkIn: r.todayCheckIn }))
+  const board = rows.map((r) => ({ userId: r.userId, name: r.name, department: r.department, state: r.todayState, checkIn: r.todayCheckIn, workMode: r.workModeToday }))
   const count = (s: LiveState) => board.filter((b) => b.state === s).length
 
   res.json({
@@ -1257,7 +1269,13 @@ async function requireManageableTarget(me: Awaited<ReturnType<typeof loadUser>>,
   return target
 }
 
-const leaveSchema = z.object({ type: z.enum(['ON_LEAVE', 'OFF', 'WFH']), note: z.string().max(300).optional() })
+const leaveSchema = z.object({
+  type: z.enum(['ON_LEAVE', 'OFF', 'WFH']),
+  note: z.string().max(300).optional(),
+  /** Last date of a run (inclusive), e.g. work from home Monday to Friday. Only the person's working days are marked. */
+  until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+})
+const MAX_LEAVE_RUN_DAYS = 62
 
 /** PUT /api/attendance/:userId/leave/:date — TL/Admin marks a member On Leave / Off. */
 export async function markLeave(req: AuthedRequest, res: Response): Promise<void> {
@@ -1270,19 +1288,74 @@ export async function markLeave(req: AuthedRequest, res: Response): Promise<void
     res.status(400).json({ error: 'Pick a leave type (On Leave / Off / WFH).' })
     return
   }
-  if (date > companyToday()) {
-    // future leave is fine; nothing to guard
+  const { type, note, until } = parsed.data
+  if (type === 'WFH' && me.role === 'TEAM_LEAD' && userId === me.id) {
+    res.status(403).json({ error: 'A Team Lead cannot mark their own work from home. Ask a Super Admin.' })
+    return
   }
-  const dateValue = dbDateFromString(date)
-  const leave = await prisma.leaveDay.upsert({
-    where: { userId_date: { userId, date: dateValue } },
-    update: { type: parsed.data.type, note: parsed.data.note ?? null },
-    create: { userId, date: dateValue, type: parsed.data.type, note: parsed.data.note ?? null },
-  })
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ error: 'Pick a valid date.' })
+    return
+  }
+  // One date, or a run of dates (only the person's working days in it).
+  let dates = [date]
+  if (until && until !== date) {
+    if (until < date) {
+      res.status(400).json({ error: 'The "until" date must be on or after the first date.' })
+      return
+    }
+    const all = eachDateStr(date, until)
+    if (all.length > MAX_LEAVE_RUN_DAYS) {
+      res.status(400).json({ error: `Mark at most ${MAX_LEAVE_RUN_DAYS} days at a time.` })
+      return
+    }
+    const shift = await resolveShift(userId, target.departmentId)
+    dates = all.filter((d) => isWorkingDate(d, shift))
+    if (dates.length === 0) {
+      res.status(400).json({ error: 'There are no working days in those dates.' })
+      return
+    }
+  }
+  const saved = await prisma.$transaction(
+    dates.map((d) => {
+      const dateValue = dbDateFromString(d)
+      return prisma.leaveDay.upsert({
+        where: { userId_date: { userId, date: dateValue } },
+        update: { type, note: note ?? null },
+        create: { userId, date: dateValue, type, note: note ?? null },
+      })
+    }),
+  )
   await prisma.auditLog.create({
-    data: { userId: me.id, entityType: 'LeaveDay', entityId: leave.id, action: 'UPDATE', after: { userId, date, type: parsed.data.type } },
+    data: { userId: me.id, entityType: 'LeaveDay', entityId: saved[0].id, action: 'UPDATE', after: { userId, date, until: until ?? date, days: dates.length, type } },
   })
-  res.json({ leave: { date, type: leave.type, note: leave.note ?? '' } })
+  res.json({ leave: { date, type, note: note ?? '' }, dates })
+}
+
+/**
+ * PUT /api/attendance/:userId/remote { remote } — TL (own department) or Super Admin sets
+ * "always works from home": the person can check in and out from any network, every day.
+ * For some days only, mark those days Work From Home instead.
+ */
+export async function setRemote(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  const { userId } = req.params
+  const target = await requireManageableTarget(me, userId, res)
+  if (!target) return
+  if (me.role === 'TEAM_LEAD' && userId === me.id) {
+    res.status(403).json({ error: 'A Team Lead cannot change their own work from home setting. Ask a Super Admin.' })
+    return
+  }
+  const remote = req.body?.remote
+  if (typeof remote !== 'boolean') {
+    res.status(400).json({ error: 'remote (true or false) is required' })
+    return
+  }
+  await prisma.user.update({ where: { id: userId }, data: { attendanceRemote: remote } })
+  await prisma.auditLog.create({
+    data: { userId: me.id, entityType: 'User', entityId: userId, action: 'UPDATE', after: { attendanceRemote: remote } },
+  })
+  res.json({ userId, remote })
 }
 
 /** DELETE /api/attendance/:userId/leave/:date — remove a leave/off mark. */

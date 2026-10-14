@@ -6,6 +6,7 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
+import { MyWfhRequests } from '../../../components/attendance/WfhRequests'
 import { getAttendanceHistory, formatMinutes, type AttendanceDayRow, type HistoryResponse, type HistoryLabel } from '../../../lib/attendanceApi'
 
 const LABEL_META: Record<HistoryLabel, { tone: BadgeTone; text: string }> = {
@@ -43,7 +44,16 @@ export default function MyAttendance() {
 
   const columns: Column<AttendanceDayRow>[] = [
     { key: 'date', header: 'Date', render: (r) => <span className="font-medium text-ink">{fmtDate(r.date)}</span> },
-    { key: 'label', header: 'Status', render: (r) => <Badge tone={LABEL_META[r.label].tone} dot>{r.label === 'HOLIDAY' && r.offName ? r.offName : LABEL_META[r.label].text}</Badge> },
+    {
+      key: 'label',
+      header: 'Status',
+      render: (r) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <Badge tone={LABEL_META[r.label].tone} dot>{r.label === 'HOLIDAY' && r.offName ? r.offName : LABEL_META[r.label].text}</Badge>
+          {r.wfh && r.label !== 'WFH' && <Badge tone="accent">WFH</Badge>}
+        </div>
+      ),
+    },
     { key: 'checkIn', header: 'Check in', align: 'right', render: (r) => (r.checkIn ? <span className={r.late ? 'font-semibold text-warning' : ''}>{r.checkIn}</span> : '—') },
     { key: 'checkOut', header: 'Check out', align: 'right', render: (r) => (r.checkOut ? <span className={r.earlyLeave ? 'font-semibold text-warning' : ''}>{r.checkOut}</span> : '—') },
     { key: 'worked', header: 'Worked', align: 'right', render: (r) => formatMinutes(r.workedMin) },
@@ -85,6 +95,8 @@ export default function MyAttendance() {
           <StatCard label="Days present" value={s.presentDays} caption={`${s.leaveDays} leave · ${s.weeklyOffDays} off · ${s.holidayDays} holiday`} icon={<CalendarCheck size={16} />} />
         </div>
       )}
+
+      <MyWfhRequests />
 
       <Card flush>
         {loading ? (

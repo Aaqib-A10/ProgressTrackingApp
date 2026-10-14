@@ -206,8 +206,8 @@ export function ClockWidget() {
       >
         <span className={'h-2 w-2 rounded-full ' + meta.dot + (today.state === 'IN' ? ' animate-pulse' : '')} />
         <span className="hidden text-body-sm font-semibold text-ink sm:inline">{pillText}</span>
-        {workMode === 'WFH' && (
-          <span className="hidden items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[11px] font-semibold text-accent sm:inline-flex" title="Working from home">
+        {workMode && (
+          <span className="hidden items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[11px] font-semibold text-accent sm:inline-flex" title={workMode === 'REMOTE' ? 'You work from home: check in from anywhere' : 'Work from home today: check in from anywhere'}>
             <House size={11} /> WFH
           </span>
         )}

@@ -245,10 +245,12 @@ model User {
   chatMemberships   ChatMember[]         @relation("ChatMemberships")
   chatMessagesSent  ChatMessage[]        @relation("ChatMessagesSent")
   pushSubscriptions PushSubscription[]
+  savedDocs         SavedDoc[]           @relation("SavedDocOwner")
+  wfhRequests       WfhRequest[]         @relation("WfhRequester")
+  wfhDecisions      WfhRequest[]         @relation("WfhDecider")
 
   @@index([departmentId])
   @@index([subDepartmentId])
-  savedDocs SavedDoc[] @relation("SavedDocOwner")
 }
 
 /// A user's membership in a department, with the role (and optional Marketing
@@ -949,6 +951,8 @@ enum NotificationType {
   TASK_REVIEW
   MEETING
   AUTO_CHECKOUT
+  WFH_REQUESTED
+  WFH_DECIDED
 }
 
 enum BreakType {
@@ -2352,22 +2356,51 @@ model AppSecret {
 
 /// A person's own saved documents and links (Docs & Links): only they can see them.
 model SavedDoc {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation("SavedDocOwner", fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  url       String? // a link, or
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("SavedDocOwner", fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  url            String? // a link, or
   // an uploaded file (stored in uploads/docs)
   fileStoredName String?
   fileName       String?
   fileMime       String?
   fileSize       Int?
-  brand     String? // brand / company it belongs to
-  category  String   @default("OTHER") // CONTRACT | PRICE_LIST | CERTIFICATE | PROPOSAL | PORTAL | SOP | OTHER
-  notes     String?
-  pinned    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  brand          String? // brand / company it belongs to
+  category       String   @default("OTHER") // CONTRACT | PRICE_LIST | CERTIFICATE | PROPOSAL | PORTAL | SOP | OTHER
+  notes          String?
+  pinned         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([userId, pinned, updatedAt])
+}
+
+enum WfhRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// An employee asks their Team Lead to work from home on some dates. Approved -> those working
+/// days are marked Work From Home (LeaveDay WFH), so check-in works from any network.
+model WfhRequest {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation("WfhRequester", fields: [userId], references: [id], onDelete: Cascade)
+  startDate    DateTime         @db.Date
+  endDate      DateTime         @db.Date
+  /// The working days in the range, worked out when the request was made (yyyy-MM-dd).
+  days         String[]
+  reason       String
+  status       WfhRequestStatus @default(PENDING)
+  decidedById  String?
+  decidedBy    User?            @relation("WfhDecider", fields: [decidedById], references: [id])
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime         @default(now())
+
+  @@index([userId, status])
+  @@index([status, createdAt])
 }

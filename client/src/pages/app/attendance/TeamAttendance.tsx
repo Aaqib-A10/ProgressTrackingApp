@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2, Download, MessageSquare } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { TeamWfhInbox } from '../../../components/attendance/WfhRequests'
+import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2, Download, MessageSquare, House } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -22,6 +24,7 @@ import {
   clearUserShift,
   markLeave,
   removeLeave,
+  setAttendanceRemote,
   formatMinutes,
   type LeaveMarkType,
   type ClockState,
@@ -80,6 +83,9 @@ export default function TeamAttendance() {
   const [dept, setDept] = useState<'ALL' | Department>('ALL')
   // Only Super Admins pick a department; when they view "All" the roster is grouped per department.
   const groupByDept = isAdmin && dept === 'ALL'
+  // Opened from a "asks to work from home" notice: the requests card is outlined.
+  const [params] = useSearchParams()
+  const wfhFocus = params.get('wfh') === '1'
 
   function reload() {
     setLoading(true)
@@ -109,6 +115,9 @@ export default function TeamAttendance() {
         <div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium text-ink">{r.name}</span>
+            {r.workModeToday && (
+              <Badge tone="accent"><House size={11} className="mr-0.5 inline" />{r.workModeToday === 'REMOTE' ? 'Works from home' : 'WFH today'}</Badge>
+            )}
             {r.hasOverride && <Badge tone="primary">Custom hours</Badge>}
             {r.graceLimitExceeded ? (
               <Badge tone="danger">Grace limit · {r.lateThisMonth}</Badge>
@@ -216,6 +225,8 @@ export default function TeamAttendance() {
         </div>
       </div>
 
+      <TeamWfhInbox onDecided={reload} highlight={wfhFocus} />
+
       {s && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <MiniStat icon={<LogIn size={18} />} label="Working now" value={s.inNow} tone="bg-success/10 text-success" />
@@ -239,6 +250,7 @@ export default function TeamAttendance() {
                       {initials(b.name)}
                     </span>
                     <span className="text-body-sm font-medium text-ink">{b.name.split(' ')[0]}</span>
+                    {b.workMode && <span title="Working from home"><House size={13} className="text-accent" /></span>}
                     <span className={'h-2 w-2 rounded-full ' + dotColor(b.state)} title={STATE_META[b.state].label} />
                   </div>
                 ))}
@@ -538,6 +550,7 @@ function todayISO(): string {
 function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => void }) {
   const { addToast } = useToast()
   const [date, setDate] = useState(todayISO())
+  const [until, setUntil] = useState('')
   const [type, setType] = useState<LeaveMarkType>('ON_LEAVE')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -546,10 +559,12 @@ function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => voi
     if (!date) return
     setSaving(true)
     try {
-      await markLeave(userId, date, { type, note: note.trim() || undefined })
+      const r = await markLeave(userId, date, { type, note: note.trim() || undefined, until: until && until !== date ? until : undefined })
       const typeLabel = type === 'ON_LEAVE' ? 'On Leave' : type === 'WFH' ? 'Work From Home' : 'Off'
-      addToast({ type: 'success', message: `Marked ${typeLabel} for ${date}.` })
+      const n = r.dates?.length ?? 1
+      addToast({ type: 'success', message: n > 1 ? `Marked ${typeLabel} for ${n} working days (${date} to ${until}).` : `Marked ${typeLabel} for ${date}.` })
       setNote('')
+      setUntil('')
       onChanged()
     } catch (e) {
       addToast({ type: 'error', message: errMsg(e, 'Could not mark leave.') })
@@ -562,10 +577,11 @@ function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => voi
     <div className="mb-4 rounded-card border border-line bg-bg p-3">
       <div className="mb-2 flex items-center gap-2">
         <CalendarOff size={16} className="text-ink-muted" />
-        <span className="text-body-md font-semibold text-ink">Mark leave / off</span>
+        <span className="text-body-md font-semibold text-ink">Mark leave, off or work from home</span>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
+        <Field label="From"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
+        <Field label="Until (optional)"><input type="date" value={until} min={date} onChange={(e) => setUntil(e.target.value)} className={inputCls} /></Field>
         <Field label="Type">
           <select value={type} onChange={(e) => setType(e.target.value as LeaveMarkType)} className={inputCls}>
             <option value="ON_LEAVE">On Leave</option>
@@ -579,7 +595,37 @@ function LeaveCard({ userId, onChanged }: { userId: string; onChanged: () => voi
         </label>
         <Button size="sm" onClick={mark} disabled={saving}>Mark</Button>
       </div>
-      <p className="mt-2 text-body-sm text-ink-muted">They can't clock in on a leave/off day, and it's excluded from worked-hours averages. Work From Home still lets them clock in (off-network) and counts as a worked day.</p>
+      <p className="mt-2 text-body-sm text-ink-muted">They can't clock in on a leave/off day, and it's excluded from worked-hours averages. Work From Home lets them check in and out from any network (not just the office) and counts as a worked day. With an "until" date, only their working days are marked.</p>
+    </div>
+  )
+}
+
+/** "Always works from home": check in from any network every day, until switched off. */
+function RemoteCard({ userId, remote, onChanged }: { userId: string; remote: boolean; onChanged: () => void }) {
+  const { addToast } = useToast()
+  const [on, setOn] = useState(remote)
+  const [saving, setSaving] = useState(false)
+  async function flip() {
+    setSaving(true)
+    try {
+      await setAttendanceRemote(userId, !on)
+      setOn(!on)
+      addToast({ type: 'success', message: !on ? 'They can now check in from anywhere, every day.' : 'Back to office rules: check in from the office network.' })
+      onChanged()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not change the work from home setting.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-card border border-line bg-bg p-3">
+      <House size={16} className="mt-0.5 shrink-0 text-accent" />
+      <div className="min-w-0 flex-1">
+        <p className="text-body-md font-semibold text-ink">Always works from home</p>
+        <p className="text-body-sm text-ink-muted">On: they check in and out from any network, every day, and you see their hours here as usual. For a few days only, mark those days Work From Home below instead.</p>
+      </div>
+      <Toggle checked={on} onChange={flip} disabled={saving} label="Always works from home" />
     </div>
   )
 }
@@ -638,6 +684,7 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
   return (
     <Modal open onClose={onClose} title={member.name} size="lg">
       <WorkingHoursCard userId={member.userId} onChanged={() => { loadRows(); onCorrected() }} />
+      <RemoteCard userId={member.userId} remote={member.remote} onChanged={onCorrected} />
       <LeaveCard userId={member.userId} onChanged={() => { loadRows(); onCorrected() }} />
       <p className="mb-3 text-body-sm text-ink-muted">Attendance history — click a day to correct times, or remove a leave day.</p>
       {rows == null ? (
@@ -651,6 +698,7 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
               <div className="flex items-center gap-3 px-3 py-2.5">
                 <div className="w-28 shrink-0 text-body-sm font-medium text-ink">{fmtDate(r.date)}</div>
                 <Badge tone={r.label === 'PRESENT' ? 'success' : r.label === 'ABSENT' ? 'danger' : 'neutral'}>{r.label === 'PRESENT' ? 'Present' : r.label === 'ABSENT' ? 'Absent' : r.label === 'HOLIDAY' ? 'Holiday' : r.label === 'ON_LEAVE' ? 'Leave' : r.label === 'WFH' ? 'WFH' : r.label === 'WEEKLY_OFF' ? 'Weekly Off' : r.label === 'NOT_YET' ? 'Not checked in yet' : 'Off'}</Badge>
+                {r.wfh && r.label !== 'WFH' && <Badge tone="accent">WFH</Badge>}
                 <div className="flex-1 text-body-sm tabular-nums text-ink-muted">
                   {r.checkIn ?? '—'} → {r.checkOut ?? '—'} · {formatMinutes(r.workedMin)}
                   {r.late && <span className="ml-2 text-warning">Late</span>}
