@@ -16,6 +16,7 @@ const LABEL_META: Record<HistoryLabel, { tone: BadgeTone; text: string }> = {
   WFH: { tone: 'accent', text: 'Work From Home' },
   WEEKLY_OFF: { tone: 'neutral', text: 'Weekly Off' },
   ABSENT: { tone: 'danger', text: 'Absent' },
+  NOT_YET: { tone: 'neutral', text: 'Not checked in yet' },
 }
 
 function fmtDate(iso: string): string {
@@ -23,7 +24,7 @@ function fmtDate(iso: string): string {
 }
 
 export default function MyAttendance() {
-  const { range, custom } = useRange()
+  const { range, custom, setRange } = useRange()
   const { addToast } = useToast()
   const [data, setData] = useState<HistoryResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -58,6 +59,7 @@ export default function MyAttendance() {
           {r.label === 'PRESENT' && r.completed && <Badge tone="success">Full shift</Badge>}
           {r.label === 'PRESENT' && !r.completed && r.shortMin != null && r.shortMin > 0 && <Badge tone="neutral">Short {formatMinutes(r.shortMin)}</Badge>}
           {!r.late && !r.earlyLeave && !r.completed && r.label === 'PRESENT' && (r.shortMin == null || r.shortMin === 0) && <span className="text-body-sm text-ink-muted">On time</span>}
+          {r.label === 'NOT_YET' && data && <span className="text-body-sm text-ink-muted">Shift starts {data.shift.startTime}</span>}
         </div>
       ),
     },
@@ -92,7 +94,17 @@ export default function MyAttendance() {
             columns={columns}
             rows={data?.rows ?? []}
             getRowId={(r) => r.date}
-            emptyMessage="No attendance records in this period yet."
+            emptyMessage={
+              <div className="space-y-3">
+                <p>No attendance records in this period.</p>
+                {(range === 'today' || range === 'week') && (
+                  <div className="flex justify-center gap-2">
+                    {range === 'today' && <button type="button" onClick={() => setRange('week')} className="rounded-btn border border-line px-3 py-1.5 text-body-sm font-medium text-ink hover:bg-slate-50">Show this week</button>}
+                    <button type="button" onClick={() => setRange('month')} className="rounded-btn border border-line px-3 py-1.5 text-body-sm font-medium text-ink hover:bg-slate-50">Show this month</button>
+                  </div>
+                )}
+              </div>
+            }
             renderRowBanner={(r) =>
               r.note ? (
                 <div className="flex items-start gap-1.5 rounded-btn bg-primary/5 px-3 py-1.5 text-body-sm">

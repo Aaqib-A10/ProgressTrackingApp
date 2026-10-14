@@ -61,7 +61,8 @@ export interface MeResponse {
   serverNow: string
 }
 
-export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'WFH' | 'WEEKLY_OFF' | 'ABSENT'
+/** NOT_YET: today, a working day, no check-in yet (the day is still open). */
+export type HistoryLabel = 'PRESENT' | 'ON_LEAVE' | 'OFF' | 'HOLIDAY' | 'WFH' | 'WEEKLY_OFF' | 'ABSENT' | 'NOT_YET'
 
 export interface AttendanceDayRow {
   date: string

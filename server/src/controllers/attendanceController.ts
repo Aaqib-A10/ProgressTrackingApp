@@ -569,10 +569,13 @@ function eachDateStr(startStr: string, endStr: string): string[] {
 }
 
 /** A merged per-day history row (attendance + leave/holiday + weekly off). */
-function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: string | null, offName: string | null, shift: Shift, now: Date) {
+function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: string | null, offName: string | null, shift: Shift, now: Date, todayStr?: string) {
   // No check-in and no explicit off/holiday: a scheduled working day is ABSENT,
-  // a non-working weekday is the person's recurring WEEKLY_OFF.
-  const label = day?.checkInAt ? 'PRESENT' : offLabel ?? (isWorkingDate(dateStr, shift) ? 'ABSENT' : 'WEEKLY_OFF')
+  // a non-working weekday is the person's recurring WEEKLY_OFF. Today's working
+  // day without a check-in is NOT_YET: the day is still open, so not absent.
+  const label = day?.checkInAt
+    ? 'PRESENT'
+    : offLabel ?? (isWorkingDate(dateStr, shift) ? (dateStr === todayStr ? 'NOT_YET' : 'ABSENT') : 'WEEKLY_OFF')
   const worked = day ? workedMinutes(day, now) : null
   return {
     date: dateStr,
@@ -624,7 +627,11 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   // Resolve the period in the member's own shift timezone — attendance is bucketed
   // per shift-day, so a company-tz window drifts once the two diverge (a US shift
   // vs Karachi). Keeps history in step with the team view and the live clock.
-  const range = periodRange(rangeKey, { now, zone: shift.timeZone || COMPANY_TZ, start: req.query.start as string, end: req.query.end as string })
+  // "Today" is the shift's own day: for a night shift at 02:00 that is still the
+  // date the shift started, so the open shift shows instead of an empty page.
+  const todayStr = shiftDayString(shift, now)
+  const calendar = periodRange(rangeKey, { now, zone: shift.timeZone || COMPANY_TZ, start: req.query.start as string, end: req.query.end as string })
+  const range = rangeKey === 'today' ? { startDate: todayStr, endDate: todayStr } : calendar
   const startValue = dbDateFromString(range.startDate)
   const endValue = dbDateFromString(range.endDate)
 
@@ -645,6 +652,8 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   // the range — so a full week shows (we still don't fabricate absent working days).
   const dates = new Set<string>([...dayByDate.keys(), ...leaveByDate.keys(), ...holidayByDate.keys()])
   for (const ds of eachDateStr(range.startDate, range.endDate)) if (!isWorkingDate(ds, shift)) dates.add(ds)
+  // Today always shows, even before check-in ("Not checked in yet"), so the page is never blank.
+  if (todayStr >= range.startDate && todayStr <= range.endDate) dates.add(todayStr)
   const rows = [...dates]
     .sort((a, b) => (a < b ? 1 : -1))
     .map((d) =>
@@ -655,6 +664,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
         holidayByDate.get(d) ?? null,
         shift,
         now,
+        todayStr,
       ),
     )
 
