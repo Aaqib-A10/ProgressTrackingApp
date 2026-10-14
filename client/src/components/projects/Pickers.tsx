@@ -29,19 +29,20 @@ export function Popover({ trigger, children, align = 'left', width = 'w-64', dis
 }
 
 /** Multi-select of project members (assignees). */
-export function PeoplePicker({ people, value, onChange, disabled, placeholder = 'Unassigned' }: { people: PersonRef[]; value: string[]; onChange: (ids: string[]) => void; disabled?: boolean; placeholder?: string }) {
+export function PeoplePicker({ people, value, onChange, disabled, placeholder = 'Unassigned', popoverWidth }: { people: PersonRef[]; value: string[]; onChange: (ids: string[]) => void; disabled?: boolean; placeholder?: string; /** e.g. 'w-full' to match the box in a narrow panel */ popoverWidth?: string }) {
   const [q, setQ] = useState('')
   const selected = people.filter((p) => value.includes(p.id))
   const list = people.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
   return (
     <Popover
+      width={popoverWidth}
       disabled={disabled}
       trigger={(open) => (
         <button type="button" disabled={disabled} className={cn('flex min-h-10 w-full items-center gap-2 rounded-btn border bg-card px-2.5 py-1.5 text-left text-body-md', open ? 'border-primary ring-4 ring-primary/10' : 'border-line', disabled && 'cursor-not-allowed bg-slate-50')}>
           {selected.length === 0 ? <span className="flex-1 text-ink-muted">{placeholder}</span> : (
             <span className="flex flex-1 flex-wrap gap-1">
               {selected.map((p) => (
-                <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-0.5 pr-2 text-body-sm text-ink">
+                <span key={p.id} className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-slate-100 py-0.5 pl-0.5 pr-2 text-body-sm text-ink">
                   <PersonAvatar person={p} size={18} />{p.name}
                 </span>
               ))}
@@ -77,13 +78,14 @@ export function PeoplePicker({ people, value, onChange, disabled, placeholder = 
 }
 
 /** Multi-select of project labels, with inline "create label". */
-export function LabelPicker({ labels, value, onChange, onCreate, disabled }: { labels: Label[]; value: string[]; onChange: (ids: string[]) => void; onCreate?: (name: string) => Promise<Label | null>; disabled?: boolean }) {
+export function LabelPicker({ labels, value, onChange, onCreate, disabled, popoverWidth }: { labels: Label[]; value: string[]; onChange: (ids: string[]) => void; onCreate?: (name: string) => Promise<Label | null>; disabled?: boolean; popoverWidth?: string }) {
   const [q, setQ] = useState('')
   const selected = labels.filter((l) => value.includes(l.id))
   const list = labels.filter((l) => !q || l.name.toLowerCase().includes(q.toLowerCase()))
   const exact = labels.some((l) => l.name.toLowerCase() === q.trim().toLowerCase())
   return (
     <Popover
+      width={popoverWidth}
       disabled={disabled}
       trigger={(open) => (
         <button type="button" disabled={disabled} className={cn('flex min-h-10 w-full items-center gap-2 rounded-btn border bg-card px-2.5 py-1.5 text-left text-body-md', open ? 'border-primary ring-4 ring-primary/10' : 'border-line', disabled && 'cursor-not-allowed bg-slate-50')}>

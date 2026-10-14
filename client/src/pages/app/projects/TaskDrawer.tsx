@@ -98,7 +98,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
     const overdueMs = task.isOverdue && task.dueAt ? Date.now() - new Date(task.dueAt).getTime() : 0
     const pendingExt = task.extensionRequests.find((x) => x.status === 'PENDING')
     return (
-      <div className="flex flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="flex flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_440px]">
       <div className="space-y-6 p-5 sm:p-6 lg:overflow-y-auto lg:p-8">
         {task.isOverdue && (
           <div className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 px-3 py-2 text-body-sm text-danger">
@@ -256,40 +256,40 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
       </div>
 
       {/* Details panel: status, people, dates, priority, labels, watchers, extension. */}
-      <aside className="space-y-4 border-t border-line bg-slate-50/70 p-5 sm:p-6 lg:overflow-y-auto lg:border-l lg:border-t-0">
+      <aside className="space-y-4 border-t border-line bg-slate-50/70 p-5 sm:p-7 lg:overflow-y-auto lg:border-l lg:border-t-0">
         <h3 className="text-label-md uppercase text-ink-muted">Details</h3>
           {/* Fields */}
-          <dl className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 text-body-md">
+          <dl className="grid grid-cols-[100px_minmax(0,1fr)] items-center gap-x-4 gap-y-3.5 text-body-md">
             <dt className="text-ink-muted">Status</dt>
             <dd>
-              <select value={task.columnId} disabled={!perms.canMove} onChange={(e) => move(e.target.value)} className={cn(fieldCls, 'h-9')} aria-label="Status">
+              <select value={task.columnId} disabled={!perms.canMove} onChange={(e) => move(e.target.value)} className={cn(fieldCls, 'h-10')} aria-label="Status">
                 {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </dd>
             <dt className="text-ink-muted">Assigned by</dt>
             <dd className="flex items-center gap-2"><PersonAvatar person={task.createdBy} size={22} />{task.createdBy.name} <span className="text-body-sm text-ink-muted">· {fmtAgo(task.createdAt)}</span></dd>
             <dt className="text-ink-muted">Assigned to</dt>
-            <dd><PeoplePicker people={people} value={task.assignees.map((a) => a.id)} onChange={(ids) => patch({ assigneeIds: ids })} disabled={!canEdit} /></dd>
+            <dd><PeoplePicker popoverWidth="w-full" people={people} value={task.assignees.map((a) => a.id)} onChange={(ids) => patch({ assigneeIds: ids })} disabled={!canEdit} /></dd>
             <dt className="text-ink-muted">Start date</dt>
-            <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="Start date" /></dd>
+            <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(fieldCls, 'h-10')} aria-label="Start date" /></dd>
             <dt className="text-ink-muted">End date</dt>
             <dd className="flex items-center gap-2">
-              <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="End date (due)" />
+              <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(fieldCls, 'h-10')} aria-label="End date (due)" />
               {perms.canChangeDue && task.dueAt && <button type="button" className="text-body-sm text-ink-muted hover:text-danger" onClick={() => patch({ dueAt: null })}>Clear</button>}
             </dd>
             <dt className="text-ink-muted">Priority</dt>
             <dd>
-              <select value={task.priority} disabled={!canEdit} onChange={(e) => patch({ priority: e.target.value as PmPriority })} className={cn(fieldCls, 'h-9')} aria-label="Priority">
+              <select value={task.priority} disabled={!canEdit} onChange={(e) => patch({ priority: e.target.value as PmPriority })} className={cn(fieldCls, 'h-10')} aria-label="Priority">
                 {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
               </select>
             </dd>
             <dt className="text-ink-muted">Labels</dt>
             <dd>
-              <LabelPicker labels={labels} value={task.labels.map((l) => l.id)} disabled={!canEdit} onChange={(ids) => patch({ labelIds: ids })}
+              <LabelPicker popoverWidth="w-full" labels={labels} value={task.labels.map((l) => l.id)} disabled={!canEdit} onChange={(ids) => patch({ labelIds: ids })}
                 onCreate={async (name) => { try { const r = await projectsApi.createLabel(task.projectKey, { name }); onLabelCreated(r.label); return r.label } catch (e) { addToast({ type: 'error', message: errMsg(e) }); return null } }} />
             </dd>
             <dt className="text-ink-muted">Estimate</dt>
-            <dd className="flex items-center gap-2"><input type="number" min={0} step={0.5} defaultValue={task.estimateHours ?? ''} key={`e${task.estimateHours}`} disabled={!canEdit} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== task.estimateHours) patch({ estimateHours: v }) }} className={cn(fieldCls, 'h-9 w-28')} aria-label="Estimate in hours" /><span className="text-body-sm text-ink-muted">hours</span></dd>
+            <dd className="flex items-center gap-2"><input type="number" min={0} step={0.5} defaultValue={task.estimateHours ?? ''} key={`e${task.estimateHours}`} disabled={!canEdit} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== task.estimateHours) patch({ estimateHours: v }) }} className={cn(fieldCls, 'h-10 w-32')} aria-label="Estimate in hours" /><span className="text-body-sm text-ink-muted">hours</span></dd>
             <dt className="text-ink-muted">Watching</dt>
             <dd className="flex items-center gap-2">
               <span className="flex -space-x-1.5">{task.watchers.slice(0, 6).map((w) => <PersonAvatar key={w.id} person={w} size={22} ring />)}</span>
