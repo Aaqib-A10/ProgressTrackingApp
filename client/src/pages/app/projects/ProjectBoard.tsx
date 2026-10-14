@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ClipboardCheck, Columns3, List, MessagesSquare, Plus, Search, Settings2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Columns3, List, MessagesSquare, Plus, Search, Settings2, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/Toast'
 import { AvatarStack, PRIORITIES, PRIORITY_META, fieldCls } from '../../../components/projects/pmUi'
@@ -11,6 +11,7 @@ import { cn } from '../../../lib/cn'
 import { BoardView } from './BoardView'
 import { ListView } from './ListView'
 import { ReviewsView } from './ReviewsView'
+import { CompletedView } from './CompletedView'
 import { CreateTaskModal } from './CreateTaskModal'
 import { ProjectPicture } from '../../../components/ui/Pictures'
 import { TaskDrawer } from './TaskDrawer'
@@ -42,7 +43,7 @@ export default function ProjectBoard() {
   const version = useRef(0)
   const inFlight = useRef(false)
 
-  const view = params.get('view') === 'list' ? 'list' : params.get('view') === 'reviews' ? 'reviews' : 'board'
+  const view = params.get('view') === 'list' ? 'list' : params.get('view') === 'reviews' ? 'reviews' : params.get('view') === 'completed' ? 'completed' : 'board'
   const q = params.get('q') ?? ''
   const assignee = params.get('assignee') ?? ''
   const priority = params.get('priority') ?? ''
@@ -194,6 +195,7 @@ export default function ProjectBoard() {
             <button type="button" role="tab" aria-selected={view === 'board'} onClick={() => setParam('view', null)} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'board' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><Columns3 size={14} /> Board</button>
             <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => setParam('view', 'list')} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'list' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><List size={14} /> List</button>
             <button type="button" role="tab" aria-selected={view === 'reviews'} onClick={() => setParam('view', 'reviews')} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'reviews' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><ClipboardCheck size={14} /> Reviews</button>
+            <button type="button" role="tab" aria-selected={view === 'completed'} onClick={() => setParam('view', 'completed')} title="Every finished task, including ones tucked away from the board" className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'completed' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><CheckCircle2 size={14} /> Completed</button>
           </div>
           <Button size="sm" variant="secondary" leadingIcon={<MessagesSquare size={15} />} onClick={() => navigate(`/app/chat?project=${project.key}`)}>Chat</Button>
           {perms.canManage && <Button size="sm" variant="secondary" leadingIcon={<Settings2 size={15} />} onClick={() => navigate(`/app/projects/${project.key}/settings`)}>Settings</Button>}
@@ -221,7 +223,7 @@ export default function ProjectBoard() {
           <input type="checkbox" checked={mine} onChange={(e) => setParam('mine', e.target.checked ? '1' : null)} className="h-3.5 w-3.5 accent-primary" /> Only my tasks
         </label>
         {filtersOn && (
-          <button type="button" onClick={() => { const n = new URLSearchParams(); if (view === 'list') n.set('view', 'list'); setParams(n, { replace: true }) }} className="inline-flex h-8 items-center gap-1 px-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>
+          <button type="button" onClick={() => { const n = new URLSearchParams(); if (view !== 'board') n.set('view', view); setParams(n, { replace: true }) }} className="inline-flex h-8 items-center gap-1 px-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>
         )}
         <span className="ml-auto text-body-sm text-ink-muted">{filtered.length} of {data.tasks.length} tasks</span>
       </div>
@@ -234,6 +236,8 @@ export default function ProjectBoard() {
           <p className="text-body-md text-ink-muted">{perms.canContribute ? 'Create the first task and assign it to someone on the team.' : 'Tasks will appear here when the team adds them.'}</p>
           {perms.canContribute && <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setCreating(true)}>Create the first task</Button>}
         </div>
+      ) : view === 'completed' ? (
+        <CompletedView tasks={filtered} columns={data.columns} onOpen={(c) => setParam('task', c)} />
       ) : view === 'board' ? (
         <BoardView
           columns={data.columns}
@@ -246,6 +250,7 @@ export default function ProjectBoard() {
           onQuickAdd={perms.canContribute && project.status === 'ACTIVE' && !filtersOn ? quickAdd : null}
           onAddTask={perms.canContribute && project.status === 'ACTIVE' ? (colId) => { setCreateInColumn(colId); setCreating(true) } : null}
           onDragState={(d) => { dragging.current = d; version.current++ }}
+          showAllDone={filtersOn}
         />
       ) : (
         <ListView projectKey={project.key} tasks={filtered} columns={data.columns} members={data.members} canManage={perms.canManage} onOpen={(c) => setParam('task', c)} onChanged={() => load()} />

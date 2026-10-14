@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowRight, CheckSquare, GripVertical, MessageSquare, Paperclip, Plus } from 'lucide-react'
+import { ArrowRight, CheckSquare, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Plus } from 'lucide-react'
 import type { BoardColumn, TaskCard } from '../../../lib/projectsApi'
 import { AvatarStack, DueChip, PriorityIcon } from '../../../components/projects/pmUi'
 import { LabelChip } from '../../../components/projects/Pickers'
@@ -32,13 +32,24 @@ import { cn } from '../../../lib/cn'
  * The parent owns the data; this component reports the final drop as
  * onMoveTask(taskId, columnId, beforeId, afterId) where before/after are the
  * neighbouring cards (by id) at the drop spot.
+ *
+ * Done columns stay short: a task finished more than DONE_VISIBLE_HOURS ago is tucked away
+ * (not deleted). "Show N older" opens them again; List view, search and reports still have all.
  */
+
+export const DONE_VISIBLE_HOURS = 24
+const DONE_VISIBLE_MS = DONE_VISIBLE_HOURS * 60 * 60 * 1000
+/** Finished long enough ago to tuck away from the board. */
+function isOldDone(t: TaskCard, now: number): boolean {
+  const at = t.completedAt ?? t.updatedAt
+  return !!at && now - new Date(at).getTime() > DONE_VISIBLE_MS
+}
 
 const colKey = (id: string) => `col:${id}`
 const isColKey = (id: string) => id.startsWith('col:')
 const colIdOf = (id: string) => id.slice(4)
 
-export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTask, onReorderColumns, onQuickAdd, onAddTask, onDragState }: {
+export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTask, onReorderColumns, onQuickAdd, onAddTask, onDragState, showAllDone = false }: {
   columns: BoardColumn[]
   tasks: TaskCard[]
   canMove: boolean
@@ -50,6 +61,8 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
   /** Open the full "New task" form with this column preselected (used instead of the inline quick add). */
   onAddTask?: ((columnId: string) => void) | null
   onDragState: (dragging: boolean) => void
+  /** Show every finished task (e.g. while searching or filtering). */
+  showAllDone?: boolean
 }) {
   // Local mirror of "which column holds which card ids, in order" so cards can
   // hop columns while dragging; rebuilt from props whenever not dragging.
@@ -63,6 +76,8 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
   const [colOrder, setColOrder] = useState<string[] | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const startCol = useRef<string | null>(null)
+  // Cards dropped into a done column here stay in view until the next reload brings their finish time.
+  const justDone = useRef(new Set<string>())
   const view = items ?? grouped
   const order = colOrder ?? columns.map((c) => c.id)
   const byId = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks])
@@ -162,6 +177,7 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
     const original = grouped[startCol.current ?? col] ?? []
     const unchanged = startCol.current === col && original.indexOf(a) === idx
     finish()
+    if (!unchanged && columns.find((c) => c.id === col)?.category === 'DONE') justDone.current.add(a)
     if (!unchanged) onMoveTask(a, col, before, after)
   }
 
@@ -175,7 +191,7 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
         <SortableContext items={orderedCols.map((c) => colKey(c.id))} strategy={horizontalListSortingStrategy}>
           <div className="flex min-h-[60vh] snap-x snap-mandatory items-start gap-3 sm:snap-none xl:gap-2.5">
             {orderedCols.map((c) => (
-              <Column key={c.id} column={c} ids={view[c.id] ?? []} byId={byId} canMove={canMove} canDragColumn={canManage} onOpen={onOpen} onQuickAdd={onQuickAdd} onAddTask={onAddTask ?? null} />
+              <Column key={c.id} column={c} ids={view[c.id] ?? []} byId={byId} canMove={canMove} canDragColumn={canManage} onOpen={onOpen} onQuickAdd={onQuickAdd} onAddTask={onAddTask ?? null} showAllDone={showAllDone} keep={justDone.current} activeId={activeId} />
             ))}
           </div>
         </SortableContext>
@@ -187,7 +203,7 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
   )
 }
 
-function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd, onAddTask }: {
+function Column({ column, ids: allIds, byId, canMove, canDragColumn, onOpen, onQuickAdd, onAddTask, showAllDone, keep, activeId }: {
   column: BoardColumn
   ids: string[]
   byId: Map<string, TaskCard>
@@ -196,20 +212,30 @@ function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd,
   onOpen: (code: string) => void
   onQuickAdd: ((columnId: string, title: string) => Promise<void>) | null
   onAddTask: ((columnId: string) => void) | null
+  showAllDone: boolean
+  keep: Set<string>
+  activeId: string | null
 }) {
+  const [showOld, setShowOld] = useState(false)
+  // Done column: tuck away tasks finished more than a day ago (still in List view and reports).
+  const now = Date.now()
+  const tucked = column.category === 'DONE' && !showAllDone
+    ? allIds.filter((id) => { const t = byId.get(id); return !!t && isOldDone(t, now) && !keep.has(id) && id !== activeId })
+    : []
+  const ids = showOld || tucked.length === 0 ? allIds : allIds.filter((id) => !tucked.includes(id))
   const sortable = useSortable({ id: colKey(column.id), data: { type: 'column' }, disabled: !canDragColumn })
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: column.id, data: { type: 'zone' } })
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
-  const over = column.wipLimit != null && ids.length > column.wipLimit
+  const over = column.wipLimit != null && allIds.length > column.wipLimit
   const style = { transform: CSS.Translate.toString(sortable.transform), transition: sortable.transition }
 
   return (
     <section
       ref={sortable.setNodeRef}
       style={style}
-      aria-label={`${column.name} column, ${ids.length} tasks`}
+      aria-label={`${column.name} column, ${allIds.length} tasks`}
       className={cn('flex w-[85vw] max-w-[300px] shrink-0 snap-start flex-col rounded-card border bg-slate-50/80 sm:w-64 xl:w-auto xl:min-w-0 xl:max-w-none xl:flex-1 xl:basis-0', isOver ? 'border-primary/40 bg-primary/5' : 'border-line', sortable.isDragging && 'opacity-40')}
     >
       <header className="flex items-center gap-2 px-3 pb-1 pt-2.5 xl:px-2.5">
@@ -221,7 +247,7 @@ function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd,
         <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: column.color ?? '#94A3B8' }} />
         <h2 className="flex-1 truncate text-label-md uppercase text-ink">{column.name}</h2>
         <span className={cn('rounded-full px-2 text-body-sm font-semibold tabular-nums', over ? 'bg-danger/10 text-danger' : 'bg-slate-200 text-ink-muted')} title={column.wipLimit != null ? `Work in progress limit ${column.wipLimit}` : undefined}>
-          {ids.length}{column.wipLimit != null ? `/${column.wipLimit}` : ''}
+          {allIds.length}{column.wipLimit != null ? `/${column.wipLimit}` : ''}
         </span>
       </header>
       <div ref={dropRef} className="flex min-h-[96px] flex-1 flex-col gap-2 p-2 xl:gap-1.5 xl:p-1.5">
@@ -231,7 +257,21 @@ function Column({ column, ids, byId, canMove, canDragColumn, onOpen, onQuickAdd,
             return t ? <SortableCard key={id} task={t} canMove={canMove} onOpen={onOpen} /> : null
           })}
         </SortableContext>
-        {ids.length === 0 && !adding && <p className="px-1 py-4 text-center text-body-sm text-ink-muted">{canMove ? 'Drop tasks here' : 'No tasks'}</p>}
+        {ids.length === 0 && !adding && (
+          <p className="px-1 py-4 text-center text-body-sm text-ink-muted">
+            {tucked.length > 0 ? 'Nothing finished in the last day' : canMove ? 'Drop tasks here' : 'No tasks'}
+          </p>
+        )}
+        {tucked.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowOld((v) => !v)}
+            className="flex items-center justify-center gap-1 rounded-btn border border-dashed border-line px-2 py-1.5 text-body-sm font-medium text-ink-muted hover:border-primary/40 hover:text-primary"
+            title={`Tasks finished more than ${DONE_VISIBLE_HOURS} hours ago are tucked away to keep the board short. They are never deleted: see the Completed tab.`}
+          >
+            {showOld ? <><ChevronUp size={14} /> Hide older</> : <><ChevronDown size={14} /> Show {tucked.length} older</>}
+          </button>
+        )}
       </div>
       {onAddTask ? (
         <div className="px-2 pb-2">

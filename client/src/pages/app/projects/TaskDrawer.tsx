@@ -13,7 +13,9 @@ import { errMsg, projectsApi, type ActivityRow, type BoardColumn, type Label, ty
 import { cn } from '../../../lib/cn'
 
 /**
- * Right-side task drawer (deep link: /app/projects/:key?task=CODE). Every field
+ * Task window, centred and large (deep link: /app/projects/:key?task=CODE): the work on the
+ * left (title, description, checklist, files, reviews, comments), the details on the right
+ * (status, people, dates, priority, labels, watchers). One column on phones. Every field
  * saves on change; permissions come from the server so the UI matches exactly
  * what the API will accept.
  */
@@ -96,7 +98,8 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
     const overdueMs = task.isOverdue && task.dueAt ? Date.now() - new Date(task.dueAt).getTime() : 0
     const pendingExt = task.extensionRequests.find((x) => x.status === 'PENDING')
     return (
-      <div className="space-y-5 p-5">
+      <div className="flex flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-6 p-5 sm:p-6 lg:overflow-y-auto lg:p-8">
         {task.isOverdue && (
           <div className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 px-3 py-2 text-body-sm text-danger">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -116,67 +119,6 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             className="w-full resize-none rounded-btn border border-transparent px-1 py-0.5 text-headline-md text-ink hover:border-line focus:border-primary focus:outline-none"
           />
         ) : <h2 className="text-headline-md text-ink">{task.title}</h2>}
-
-        {/* Fields */}
-        <dl className="grid grid-cols-[110px_1fr] items-center gap-x-3 gap-y-2.5 text-body-md">
-          <dt className="text-ink-muted">Status</dt>
-          <dd>
-            <select value={task.columnId} disabled={!perms.canMove} onChange={(e) => move(e.target.value)} className={cn(fieldCls, 'h-9')} aria-label="Status">
-              {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </dd>
-          <dt className="text-ink-muted">Assigned by</dt>
-          <dd className="flex items-center gap-2"><PersonAvatar person={task.createdBy} size={22} />{task.createdBy.name} <span className="text-body-sm text-ink-muted">· {fmtAgo(task.createdAt)}</span></dd>
-          <dt className="text-ink-muted">Assigned to</dt>
-          <dd><PeoplePicker people={people} value={task.assignees.map((a) => a.id)} onChange={(ids) => patch({ assigneeIds: ids })} disabled={!canEdit} /></dd>
-          <dt className="text-ink-muted">Start date</dt>
-          <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="Start date" /></dd>
-          <dt className="text-ink-muted">End date</dt>
-          <dd className="flex items-center gap-2">
-            <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="End date (due)" />
-            {perms.canChangeDue && task.dueAt && <button type="button" className="text-body-sm text-ink-muted hover:text-danger" onClick={() => patch({ dueAt: null })}>Clear</button>}
-          </dd>
-          <dt className="text-ink-muted">Priority</dt>
-          <dd>
-            <select value={task.priority} disabled={!canEdit} onChange={(e) => patch({ priority: e.target.value as PmPriority })} className={cn(fieldCls, 'h-9')} aria-label="Priority">
-              {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
-            </select>
-          </dd>
-          <dt className="text-ink-muted">Labels</dt>
-          <dd>
-            <LabelPicker labels={labels} value={task.labels.map((l) => l.id)} disabled={!canEdit} onChange={(ids) => patch({ labelIds: ids })}
-              onCreate={async (name) => { try { const r = await projectsApi.createLabel(task.projectKey, { name }); onLabelCreated(r.label); return r.label } catch (e) { addToast({ type: 'error', message: errMsg(e) }); return null } }} />
-          </dd>
-          <dt className="text-ink-muted">Estimate</dt>
-          <dd className="flex items-center gap-2"><input type="number" min={0} step={0.5} defaultValue={task.estimateHours ?? ''} key={`e${task.estimateHours}`} disabled={!canEdit} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== task.estimateHours) patch({ estimateHours: v }) }} className={cn(fieldCls, 'h-9 w-28')} aria-label="Estimate in hours" /><span className="text-body-sm text-ink-muted">hours</span></dd>
-          <dt className="text-ink-muted">Watching</dt>
-          <dd className="flex items-center gap-2">
-            <span className="flex -space-x-1.5">{task.watchers.slice(0, 6).map((w) => <PersonAvatar key={w.id} person={w} size={22} ring />)}</span>
-            {task.watchers.some((w) => w.id === meId)
-              ? <button type="button" className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink" onClick={() => projectsApi.watch(code, false).then(load)}><BellOff size={13} /> Stop watching</button>
-              : <button type="button" className="inline-flex items-center gap-1 text-body-sm text-primary" onClick={() => projectsApi.watch(code, true).then(load)}><Bell size={13} /> Watch</button>}
-          </dd>
-        </dl>
-
-        {/* Extension */}
-        {(pendingExt || perms.canRequestExtension) && (
-          <div className="rounded-btn border border-line bg-bg p-3">
-            {pendingExt ? (
-              <div className="space-y-2 text-body-sm">
-                <p className="text-ink"><b>{pendingExt.requestedBy.name}</b> asked to move the due date to <b>{fmtDateTime(pendingExt.requestedDueAt)}</b>.</p>
-                <p className="text-ink-muted">"{pendingExt.reason}"</p>
-                {perms.canDecideExtension ? (
-                  <DecideExtension id={pendingExt.id} onDone={async () => { await load(); const r = await projectsApi.task(code); onChanged(r.task) }} />
-                ) : <p className="text-ink-muted">Waiting for the assigner or a project admin to decide.</p>}
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-3 text-body-sm">
-                <span className="text-ink-muted">Need more time?</span>
-                <Button size="sm" variant="secondary" leadingIcon={<CalendarClock size={14} />} onClick={() => setExtOpen(true)}>Request extension</Button>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Description */}
         <section>
@@ -312,6 +254,73 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
           )}
         </section>
       </div>
+
+      {/* Details panel: status, people, dates, priority, labels, watchers, extension. */}
+      <aside className="space-y-4 border-t border-line bg-slate-50/70 p-5 sm:p-6 lg:overflow-y-auto lg:border-l lg:border-t-0">
+        <h3 className="text-label-md uppercase text-ink-muted">Details</h3>
+          {/* Fields */}
+          <dl className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 text-body-md">
+            <dt className="text-ink-muted">Status</dt>
+            <dd>
+              <select value={task.columnId} disabled={!perms.canMove} onChange={(e) => move(e.target.value)} className={cn(fieldCls, 'h-9')} aria-label="Status">
+                {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </dd>
+            <dt className="text-ink-muted">Assigned by</dt>
+            <dd className="flex items-center gap-2"><PersonAvatar person={task.createdBy} size={22} />{task.createdBy.name} <span className="text-body-sm text-ink-muted">· {fmtAgo(task.createdAt)}</span></dd>
+            <dt className="text-ink-muted">Assigned to</dt>
+            <dd><PeoplePicker people={people} value={task.assignees.map((a) => a.id)} onChange={(ids) => patch({ assigneeIds: ids })} disabled={!canEdit} /></dd>
+            <dt className="text-ink-muted">Start date</dt>
+            <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="Start date" /></dd>
+            <dt className="text-ink-muted">End date</dt>
+            <dd className="flex items-center gap-2">
+              <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(fieldCls, 'h-9')} aria-label="End date (due)" />
+              {perms.canChangeDue && task.dueAt && <button type="button" className="text-body-sm text-ink-muted hover:text-danger" onClick={() => patch({ dueAt: null })}>Clear</button>}
+            </dd>
+            <dt className="text-ink-muted">Priority</dt>
+            <dd>
+              <select value={task.priority} disabled={!canEdit} onChange={(e) => patch({ priority: e.target.value as PmPriority })} className={cn(fieldCls, 'h-9')} aria-label="Priority">
+                {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
+              </select>
+            </dd>
+            <dt className="text-ink-muted">Labels</dt>
+            <dd>
+              <LabelPicker labels={labels} value={task.labels.map((l) => l.id)} disabled={!canEdit} onChange={(ids) => patch({ labelIds: ids })}
+                onCreate={async (name) => { try { const r = await projectsApi.createLabel(task.projectKey, { name }); onLabelCreated(r.label); return r.label } catch (e) { addToast({ type: 'error', message: errMsg(e) }); return null } }} />
+            </dd>
+            <dt className="text-ink-muted">Estimate</dt>
+            <dd className="flex items-center gap-2"><input type="number" min={0} step={0.5} defaultValue={task.estimateHours ?? ''} key={`e${task.estimateHours}`} disabled={!canEdit} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== task.estimateHours) patch({ estimateHours: v }) }} className={cn(fieldCls, 'h-9 w-28')} aria-label="Estimate in hours" /><span className="text-body-sm text-ink-muted">hours</span></dd>
+            <dt className="text-ink-muted">Watching</dt>
+            <dd className="flex items-center gap-2">
+              <span className="flex -space-x-1.5">{task.watchers.slice(0, 6).map((w) => <PersonAvatar key={w.id} person={w} size={22} ring />)}</span>
+              {task.watchers.some((w) => w.id === meId)
+                ? <button type="button" className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink" onClick={() => projectsApi.watch(code, false).then(load)}><BellOff size={13} /> Stop watching</button>
+                : <button type="button" className="inline-flex items-center gap-1 text-body-sm text-primary" onClick={() => projectsApi.watch(code, true).then(load)}><Bell size={13} /> Watch</button>}
+            </dd>
+          </dl>
+
+          {/* Extension */}
+          {(pendingExt || perms.canRequestExtension) && (
+            <div className="rounded-btn border border-line bg-bg p-3">
+              {pendingExt ? (
+                <div className="space-y-2 text-body-sm">
+                  <p className="text-ink"><b>{pendingExt.requestedBy.name}</b> asked to move the due date to <b>{fmtDateTime(pendingExt.requestedDueAt)}</b>.</p>
+                  <p className="text-ink-muted">"{pendingExt.reason}"</p>
+                  {perms.canDecideExtension ? (
+                    <DecideExtension id={pendingExt.id} onDone={async () => { await load(); const r = await projectsApi.task(code); onChanged(r.task) }} />
+                  ) : <p className="text-ink-muted">Waiting for the assigner or a project admin to decide.</p>}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 text-body-sm">
+                  <span className="text-ink-muted">Need more time?</span>
+                  <Button size="sm" variant="secondary" leadingIcon={<CalendarClock size={14} />} onClick={() => setExtOpen(true)}>Request extension</Button>
+                </div>
+              )}
+            </div>
+          )}
+
+      </aside>
+      </div>
     )
   })()
 
@@ -325,13 +334,19 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
     try { await load(); const r = await projectsApi.task(code); onChanged(r.task) } finally { setUploading(false) }
   }
 
+  const status = task ? columns.find((c) => c.id === task.columnId) : null
   return createPortal(
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 animate-fade-in bg-ink/30" onClick={onClose} />
-      <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={task ? `${task.code} ${task.title}` : 'Task'} className="relative flex h-full w-full max-w-[620px] animate-slide-in-right flex-col bg-card shadow-overlay focus:outline-none">
-        <div className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-3">
+    <div className="fixed inset-0 z-40 flex items-center justify-center sm:p-4 lg:p-8">
+      <div className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={task ? `${task.code} ${task.title}` : 'Task'} className="relative flex h-full w-full max-w-6xl animate-scale-in flex-col overflow-hidden bg-card shadow-overlay focus:outline-none sm:h-[92vh] sm:rounded-card">
+        <div className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-3 sm:px-6">
           <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-body-sm font-semibold text-ink-muted">{code}</span>
           {task && <span className="truncate text-body-sm text-ink-muted">{task.projectName}</span>}
+          {status && (
+            <span className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-body-sm font-medium text-ink sm:inline-flex">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color ?? '#94A3B8' }} />{status.name}
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-1">
             <IconBtn label="Copy link" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/app/projects/${task?.projectKey ?? code.split('-')[0]}?task=${code}`); addToast({ type: 'success', message: 'Link copied' }) }}><Link2 size={16} /></IconBtn>
             <IconBtn label="Share to chat" onClick={() => navigate(`/app/chat?share=${encodeURIComponent(code)}`)}><MessagesSquare size={16} /></IconBtn>
@@ -340,7 +355,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             <IconBtn label="Close" onClick={onClose}><X size={18} /></IconBtn>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto lg:overflow-hidden">{body}</div>
       </div>
 
       {extOpen && task && <ExtensionModal code={code} dueAt={task.dueAt} onClose={() => setExtOpen(false)} onDone={() => { setExtOpen(false); load() }} />}
