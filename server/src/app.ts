@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser'
 import { healthRouter } from './routes/health'
 import { authRouter } from './routes/auth'
 import { itadRouter } from './routes/itad'
+import { dialerRouter } from './routes/dialer'
 import { leadgenRouter } from './routes/leadgen'
 import { dashboardRouter } from './routes/dashboard'
 import { reportsRouter } from './routes/reports'
@@ -66,6 +67,8 @@ export function createApp(): Express {
     }),
   )
   // Cap JSON bodies to blunt memory-pressure DoS from oversized payloads.
+  // Lead Dialer imports carry a whole CRM export (a few thousand rows), so they get a bigger limit.
+  app.use('/api/dialer/imports', express.json({ limit: '25mb' }))
   app.use(express.json({ limit: '1mb' }))
   app.use(cookieParser())
 
@@ -73,6 +76,7 @@ export function createApp(): Express {
   app.use('/api', healthRouter)
   app.use('/api/auth', authRouter)
   app.use('/api/itad', itadRouter)
+  app.use('/api/dialer', dialerRouter)
   app.use('/api/leadgen', leadgenRouter)
   app.use('/api/dashboard', dashboardRouter)
   app.use('/api/reports', reportsRouter)

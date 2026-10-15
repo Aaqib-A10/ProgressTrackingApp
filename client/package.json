@@ -15,10 +15,13 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@mediapipe/tasks-vision": "0.10.21",
     "@sapphi-red/web-noise-suppressor": "0.3.5",
+    "@types/papaparse": "5.5.2",
     "lucide-react": "^1.20.0",
+    "papaparse": "5.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
+    "read-excel-file": "9.3.10",
     "recharts": "^2.15.0"
   },
   "devDependencies": {

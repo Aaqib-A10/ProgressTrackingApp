@@ -248,6 +248,9 @@ model User {
   savedDocs         SavedDoc[]           @relation("SavedDocOwner")
   wfhRequests       WfhRequest[]         @relation("WfhRequester")
   wfhDecisions      WfhRequest[]         @relation("WfhDecider")
+  dialerLeads       DialerLead[]         @relation("DialerLeadOwner")
+  dialerImports     DialerImport[]       @relation("DialerImporter")
+  dialerActions     DialerAction[]       @relation("DialerActor")
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -2403,4 +2406,126 @@ model WfhRequest {
 
   @@index([userId, status])
   @@index([status, createdAt])
+}
+
+/// ---------------------------------------------------------------------------
+/// Lead Dialer (ITAD, Oct 2026). Reps export their own leads from the CRM and import them
+/// here; the dashboard shows who can be called now (US regions open from Pakistan at night),
+/// where leads are stuck, follow-ups that went quiet, and the funnel. Each rep sees only their
+/// own leads. History, snoozes and notes live here and survive every import.
+/// ---------------------------------------------------------------------------
+
+model DialerLead {
+  id              String    @id @default(cuid())
+  ownerId         String
+  owner           User      @relation("DialerLeadOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  /// The value used to recognise the lead between imports: CRM lead ID, else email, else company + phone.
+  matchKey        String
+  externalId      String?
+  company         String
+  contactName     String?
+  email           String?
+  phone           String?
+  city            String?
+  stateRaw        String?
+  /// Full state name, cleaned on import (CA and California are the same). Null = unknown.
+  state           String?
+  /// A state filled in on the dashboard (Fix data). Used until the CRM sends a state itself.
+  stateOverride   String?
+  /// ET, CT, MT, PT, or AZ (Arizona: Pacific hours in US summer, Mountain in winter).
+  region          String?
+  /// The state sits in two time zones: the city or area code settles it.
+  verifyZone      Boolean   @default(false)
+  /// Region picked by the rep for a split-state lead.
+  zoneOverride    String?
+  industry        String?
+  status          String
+  stage           Int
+  /// Highest stage this lead has ever reached (for "ever reached" funnel counts).
+  maxStage        Int
+  source          String?
+  /// Created / assigned date from the export, if mapped.
+  leadDate        DateTime?
+  /// Last activity / modified date from the export, if mapped.
+  lastActivityAt  DateTime?
+  /// When the dashboard saw the status change (between two imports).
+  statusChangedAt DateTime?
+  /// In the rep's latest import. Leads that dropped out of the export are kept but hidden.
+  inLatestImport  Boolean   @default(true)
+  /// Another rep already holds this lead: waits for a manager, kept out of the counts.
+  duplicate       Boolean   @default(false)
+  /// A manager decided another rep keeps this lead (it stays hidden from this rep's counts).
+  dupResolved     Boolean   @default(false)
+  sentToLeadGen   Boolean   @default(false)
+  snoozeUntil     DateTime?
+  callLaterAt     DateTime?
+  lastActionAt    DateTime?
+  raw             Json?
+  firstImportId   String?
+  lastImportId    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  actions DialerAction[]
+  changes DialerStatusChange[]
+
+  @@unique([ownerId, matchKey])
+  @@index([matchKey])
+  @@index([ownerId, inLatestImport])
+}
+
+model DialerImport {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation("DialerImporter", fields: [userId], references: [id], onDelete: Cascade)
+  fileName        String
+  /// The file's column names, joined: a change is flagged before the next import.
+  headerSignature String
+  mapping         Json
+  rowCount        Int
+  /// Added / changed / unchanged / new industries / moved forward or back / top changes / warnings.
+  summary         Json
+  /// The rep's funnel after this import (funnel history).
+  funnel          Json
+  createdAt       DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Change log: every status change per lead, kept for good.
+model DialerStatusChange {
+  id         String     @id @default(cuid())
+  leadId     String
+  lead       DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromStatus String?
+  toStatus   String
+  fromStage  Int?
+  toStage    Int
+  importId   String?
+  createdAt  DateTime   @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+/// What a rep did on the dashboard: Call now, Call later, Snooze, Log note, state fixed, back to lead gen.
+model DialerAction {
+  id        String     @id @default(cuid())
+  leadId    String
+  lead      DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation("DialerActor", fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  note      String?
+  at        DateTime?
+  createdAt DateTime   @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+/// One row ("default"): stage map, follow-up rules, highlight thresholds, calling slots.
+model DialerSettings {
+  id          String   @id
+  data        Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }

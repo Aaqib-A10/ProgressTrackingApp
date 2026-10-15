@@ -132,6 +132,7 @@ export const NAV_GROUPS: NavGroup[] = [
     color: '#4F46E5',
     items: [
       { label: 'Daily Log', to: '/app/itad/log', icon: Phone, hideFor: HIDE_FROM_SA },
+      { label: 'Lead Dialer', to: '/app/itad/dialer', icon: PhoneCall },
       { label: 'Deal Tracker', to: '/app/itad/bids', icon: Briefcase, hideFor: HIDE_FROM_SA },
       { label: 'Docs & Links', to: '/app/itad/docs', icon: FolderOpen, hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/itad/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
