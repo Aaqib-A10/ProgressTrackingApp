@@ -133,28 +133,22 @@ export function splitLines(text: string): string[] {
 
 /** Plain text of a list of entries, ready to paste into WhatsApp, email or a report. */
 export function entriesToText(heading: string, entries: WorkEntry[]): string {
-  const groups: { label: string; status: WorkStatus }[] = [
-    { label: 'Done', status: 'DONE' },
-    { label: 'In progress', status: 'IN_PROGRESS' },
-    { label: 'To do', status: 'PLANNED' },
-  ]
-  const out: string[] = [heading]
-  for (const g of groups) {
-    const rows = entries.filter((e) => e.status === g.status)
-    if (!rows.length) continue
-    out.push('', `${g.label} (${rows.length})`)
-    rows.forEach((e, i) => {
-      const extra = [e.quantity != null ? `${e.quantity} items` : '', e.hours != null ? `${e.hours} h` : '', e.tag ?? '', e.blocked ? 'needs help' : ''].filter(Boolean).join(', ')
-      const [first, ...rest] = e.title.split(/\r?\n/)
-      out.push(`${i + 1}. ${first}${extra ? ` (${extra})` : ''}`)
-      for (const l of rest) if (l.trim()) out.push(`    ${l.trim()}`)
-      if (e.details) for (const l of e.details.split(/\r?\n/)) if (l.trim()) out.push(`    ${l.trim()}`)
-    })
-  }
+  // One numbered list, no section headings: done work first, then anything still open
+  // (marked "in progress" or "to do" so it is not read as finished).
+  const order: Record<WorkStatus, number> = { DONE: 0, IN_PROGRESS: 1, PLANNED: 2 }
+  const note: Record<WorkStatus, string> = { DONE: '', IN_PROGRESS: 'in progress', PLANNED: 'to do' }
+  const out: string[] = [heading, '']
+  ;[...entries].sort((a, b) => order[a.status] - order[b.status]).forEach((e, i) => {
+    const extra = [note[e.status], e.quantity != null ? `${e.quantity} items` : '', e.hours != null ? `${e.hours} h` : '', e.tag ?? '', e.blocked ? 'needs help' : ''].filter(Boolean).join(', ')
+    const [first, ...rest] = e.title.split(/\r?\n/)
+    out.push(`${i + 1}. ${first}${extra ? ` (${extra})` : ''}`)
+    for (const l of rest) if (l.trim()) out.push(`    ${l.trim()}`)
+    if (e.details) for (const l of e.details.split(/\r?\n/)) if (l.trim()) out.push(`    ${l.trim()}`)
+  })
   const hours = entries.reduce((t, e) => t + (e.hours ?? 0), 0)
   const qty = entries.reduce((t, e) => t + (e.quantity ?? 0), 0)
   if (hours || qty) out.push('', `Total: ${[hours ? `${+hours.toFixed(2)} h` : '', qty ? `${qty} items` : ''].filter(Boolean).join(', ')}`)
-  if (entries.length === 0) out.push('', 'Nothing logged.')
+  if (entries.length === 0) out.push('Nothing logged.')
   return out.join('\n')
 }
 
