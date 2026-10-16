@@ -98,7 +98,7 @@ export default function MyTodo() {
 
   async function copyAll() {
     const name = whoName ?? user?.name ?? ''
-    await copyText(entriesToText(`*${name ? `${name}, ` : ''}${periodLabel(period, start)}*`, here))
+    await copyText(entriesToText(`${name ? `${name}, ` : ''}${periodLabel(period, start)}`, here))
     addToast({ type: 'success', message: `Copied ${here.length} item${here.length === 1 ? '' : 's'}. Paste it anywhere.` })
   }
 

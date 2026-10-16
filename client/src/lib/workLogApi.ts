@@ -133,23 +133,23 @@ export function splitLines(text: string): string[] {
 
 /** Plain text of a list of entries, ready to paste into WhatsApp, email or a report. */
 export function entriesToText(heading: string, entries: WorkEntry[]): string {
-  const groups: { label: string; mark: string; status: WorkStatus }[] = [
-    { label: 'Done', mark: '✅', status: 'DONE' },
-    { label: 'In progress', mark: '🔄', status: 'IN_PROGRESS' },
-    { label: 'To do', mark: '⬜', status: 'PLANNED' },
+  const groups: { label: string; status: WorkStatus }[] = [
+    { label: 'Done', status: 'DONE' },
+    { label: 'In progress', status: 'IN_PROGRESS' },
+    { label: 'To do', status: 'PLANNED' },
   ]
   const out: string[] = [heading]
   for (const g of groups) {
     const rows = entries.filter((e) => e.status === g.status)
     if (!rows.length) continue
     out.push('', `${g.label} (${rows.length})`)
-    for (const e of rows) {
+    rows.forEach((e, i) => {
       const extra = [e.quantity != null ? `${e.quantity} items` : '', e.hours != null ? `${e.hours} h` : '', e.tag ?? '', e.blocked ? 'needs help' : ''].filter(Boolean).join(', ')
       const [first, ...rest] = e.title.split(/\r?\n/)
-      out.push(`${g.mark} ${first}${extra ? ` (${extra})` : ''}`)
+      out.push(`${i + 1}. ${first}${extra ? ` (${extra})` : ''}`)
       for (const l of rest) if (l.trim()) out.push(`    ${l.trim()}`)
       if (e.details) for (const l of e.details.split(/\r?\n/)) if (l.trim()) out.push(`    ${l.trim()}`)
-    }
+    })
   }
   const hours = entries.reduce((t, e) => t + (e.hours ?? 0), 0)
   const qty = entries.reduce((t, e) => t + (e.quantity ?? 0), 0)

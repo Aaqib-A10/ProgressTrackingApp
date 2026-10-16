@@ -53,8 +53,8 @@ export function TeamTodo({ period, start, isSuperAdmin, onOpenPerson }: { period
   async function copyReport() {
     const label = periodLabel(period, start)
     const parts = [`Team to-dos, ${label}`, `${logged.length} of ${data!.members.length} logged, ${totals.done} done${totals.hours ? `, ${+totals.hours.toFixed(2)} h` : ''}${totals.qty ? `, ${totals.qty} items` : ''}`]
-    for (const m of logged) parts.push('', '────────', entriesToText(`*${m.name}*`, m.entries))
-    if (missing.length) parts.push('', '────────', `Not logged: ${missing.map((m) => m.name + (onLeave(m) ? ' (on leave)' : '')).join(', ')}`)
+    for (const m of logged) parts.push('', '', entriesToText(m.name, m.entries))
+    if (missing.length) parts.push('', '', `Not logged: ${missing.map((m) => m.name + (onLeave(m) ? ' (on leave)' : '')).join(', ')}`)
     await copyText(parts.join('\n'))
     addToast({ type: 'success', message: 'Team report copied. Paste it anywhere.' })
   }
