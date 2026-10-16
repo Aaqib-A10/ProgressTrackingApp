@@ -20,6 +20,7 @@ import { feedbackRouter } from './routes/feedback'
 import { qaRouter } from './routes/qa'
 import { attachmentsRouter } from './routes/attachments'
 import { todosRouter } from './routes/todos'
+import { worklogRouter } from './routes/worklog'
 import { tasksRouter } from './routes/tasks'
 import { financialsRouter } from './routes/financials'
 import { pushRouter } from './routes/push'
@@ -91,6 +92,7 @@ export function createApp(): Express {
   app.use('/api/qa', qaRouter)
   app.use('/api/attachments', attachmentsRouter)
   app.use('/api/todos', todosRouter)
+  app.use('/api/worklog', worklogRouter)
   app.use('/api/tasks', tasksRouter)
   app.use('/api/financials', financialsRouter)
   app.use('/api/talkloop', talkloopRouter)

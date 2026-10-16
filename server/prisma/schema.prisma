@@ -251,6 +251,7 @@ model User {
   dialerLeads       DialerLead[]         @relation("DialerLeadOwner")
   dialerImports     DialerImport[]       @relation("DialerImporter")
   dialerActions     DialerAction[]       @relation("DialerActor")
+  workLogs          WorkLogEntry[]       @relation("WorkLogOwner")
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -2528,4 +2529,45 @@ model DialerSettings {
   data        Json
   updatedById String?
   updatedAt   DateTime @updatedAt
+}
+
+/// My To-Do: Day / Week / Month / Year (Oct 2026). Plan ahead or log what was already done, on any
+/// date, past or future (a "done list"). The owner edits; their Team Lead and Super Admins can
+/// read entries not marked private.
+enum WorkLogPeriod {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum WorkLogStatus {
+  PLANNED
+  DONE
+}
+
+model WorkLogEntry {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation("WorkLogOwner", fields: [userId], references: [id], onDelete: Cascade)
+  period      WorkLogPeriod
+  /// First day of the period: the day itself, the Monday, the 1st of the month, or 1 January.
+  periodStart DateTime      @db.Date
+  title       String
+  details     String?
+  status      WorkLogStatus @default(PLANNED)
+  doneAt      DateTime?
+  /// Time spent, optional (e.g. 1.5).
+  hours       Float?
+  /// How many, optional (e.g. 25 listings uploaded).
+  quantity    Int?
+  tag         String?
+  /// Only the owner sees it (hidden from their Team Lead).
+  private     Boolean       @default(false)
+  order       Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId, periodStart])
+  @@index([userId, period, periodStart])
 }
