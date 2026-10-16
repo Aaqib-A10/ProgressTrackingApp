@@ -225,33 +225,35 @@ model User {
   brandProfilesOwned    BrandProfile[]       @relation("BrandProfileOwner")
 
   // Projects + chat
-  pmProjectsOwned   PmProject[]          @relation("PmProjectOwner")
-  pmMemberships     PmProjectMember[]    @relation("PmMemberships")
-  pmTasksCreated    PmTask[]             @relation("PmTaskCreator")
-  pmAssignments     PmTaskAssignee[]     @relation("PmAssignments")
-  pmWatching        PmTaskWatcher[]      @relation("PmWatching")
-  pmComments        PmComment[]          @relation("PmCommentAuthor")
-  pmReviews         PmReview[]           @relation("PmReviewer")
-  chatCallsStarted  ChatCall[]           @relation("ChatCallsStarted")
+  pmProjectsOwned     PmProject[]          @relation("PmProjectOwner")
+  pmMemberships       PmProjectMember[]    @relation("PmMemberships")
+  pmTasksCreated      PmTask[]             @relation("PmTaskCreator")
+  pmAssignments       PmTaskAssignee[]     @relation("PmAssignments")
+  pmWatching          PmTaskWatcher[]      @relation("PmWatching")
+  pmComments          PmComment[]          @relation("PmCommentAuthor")
+  pmReviews           PmReview[]           @relation("PmReviewer")
+  chatCallsStarted    ChatCall[]           @relation("ChatCallsStarted")
   /// Profile picture last changed (file: uploads/avatars/user-<id>.jpg).
-  avatarAt          DateTime?
-  meetingsOrganized Meeting[]            @relation("MeetingsOrganized")
-  meetingAttendance MeetingAttendee[]    @relation("MeetingAttendance")
-  pmAttachments     PmAttachment[]       @relation("PmAttachmentUploader")
-  pmActivity        PmActivity[]         @relation("PmActivityActor")
-  pmExtRequested    PmExtensionRequest[] @relation("PmExtRequester")
-  pmExtDecided      PmExtensionRequest[] @relation("PmExtDecider")
-  pmNotifyPref      PmNotifyPref?        @relation("PmNotifyPref")
-  chatMemberships   ChatMember[]         @relation("ChatMemberships")
-  chatMessagesSent  ChatMessage[]        @relation("ChatMessagesSent")
-  pushSubscriptions PushSubscription[]
-  savedDocs         SavedDoc[]           @relation("SavedDocOwner")
-  wfhRequests       WfhRequest[]         @relation("WfhRequester")
-  wfhDecisions      WfhRequest[]         @relation("WfhDecider")
-  dialerLeads       DialerLead[]         @relation("DialerLeadOwner")
-  dialerImports     DialerImport[]       @relation("DialerImporter")
-  dialerActions     DialerAction[]       @relation("DialerActor")
-  workLogs          WorkLogEntry[]       @relation("WorkLogOwner")
+  avatarAt            DateTime?
+  meetingsOrganized   Meeting[]            @relation("MeetingsOrganized")
+  meetingAttendance   MeetingAttendee[]    @relation("MeetingAttendance")
+  pmAttachments       PmAttachment[]       @relation("PmAttachmentUploader")
+  pmActivity          PmActivity[]         @relation("PmActivityActor")
+  pmExtRequested      PmExtensionRequest[] @relation("PmExtRequester")
+  pmExtDecided        PmExtensionRequest[] @relation("PmExtDecider")
+  pmNotifyPref        PmNotifyPref?        @relation("PmNotifyPref")
+  chatMemberships     ChatMember[]         @relation("ChatMemberships")
+  chatMessagesSent    ChatMessage[]        @relation("ChatMessagesSent")
+  pushSubscriptions   PushSubscription[]
+  savedDocs           SavedDoc[]           @relation("SavedDocOwner")
+  wfhRequests         WfhRequest[]         @relation("WfhRequester")
+  wfhDecisions        WfhRequest[]         @relation("WfhDecider")
+  dialerLeads         DialerLead[]         @relation("DialerLeadOwner")
+  dialerImports       DialerImport[]       @relation("DialerImporter")
+  dialerActions       DialerAction[]       @relation("DialerActor")
+  workLogs            WorkLogEntry[]       @relation("WorkLogOwner")
+  workLogReviews      WorkLogReview[]      @relation("WorkLogReviewOwner")
+  workLogReviewsGiven WorkLogReview[]      @relation("WorkLogReviewer")
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -957,6 +959,7 @@ enum NotificationType {
   AUTO_CHECKOUT
   WFH_REQUESTED
   WFH_DECIDED
+  WORKLOG_REVIEW
 }
 
 enum BreakType {
@@ -2543,6 +2546,7 @@ enum WorkLogPeriod {
 
 enum WorkLogStatus {
   PLANNED
+  IN_PROGRESS
   DONE
 }
 
@@ -2564,10 +2568,36 @@ model WorkLogEntry {
   tag         String?
   /// Only the owner sees it (hidden from their Team Lead).
   private     Boolean       @default(false)
+  /// Stuck, needs help from the Team Lead. Shown at the top of the team view.
+  blocked     Boolean       @default(false)
   order       Int           @default(0)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   @@index([userId, periodStart])
   @@index([userId, period, periodStart])
+}
+
+enum WorkLogRating {
+  GOOD
+  NEEDS_WORK
+}
+
+/// A Team Lead's review of one person's day, week, month or year in My To-Do: seen, with an
+/// optional rating and comment (like work report confirmation in other ERPs).
+model WorkLogReview {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation("WorkLogReviewOwner", fields: [userId], references: [id], onDelete: Cascade)
+  period      WorkLogPeriod
+  periodStart DateTime       @db.Date
+  reviewerId  String
+  reviewer    User           @relation("WorkLogReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  rating      WorkLogRating?
+  comment     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([userId, period, periodStart])
+  @@index([reviewerId])
 }

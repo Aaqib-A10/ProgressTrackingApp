@@ -3,7 +3,7 @@ import { api } from './api'
 /** My To-Do: Day / Week / Month / Year entries. Dates are plain yyyy-MM-dd (no time zone). */
 
 export type WorkPeriod = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
-export type WorkStatus = 'PLANNED' | 'DONE'
+export type WorkStatus = 'PLANNED' | 'IN_PROGRESS' | 'DONE'
 export interface WorkEntry {
   id: string
   userId: string
@@ -17,6 +17,7 @@ export interface WorkEntry {
   quantity: number | null
   tag: string | null
   private: boolean
+  blocked: boolean
   order: number
   createdAt: string
   updatedAt: string
@@ -29,17 +30,55 @@ export interface WorkEntryInput {
   quantity?: number | null
   tag?: string | null
   private?: boolean
+  blocked?: boolean
   period?: WorkPeriod
   date?: string
 }
 
+export type WorkRating = 'GOOD' | 'NEEDS_WORK'
+export interface WorkReview {
+  id: string
+  userId: string
+  period: WorkPeriod
+  periodStart: string
+  reviewerId: string
+  reviewerName: string
+  rating: WorkRating | null
+  comment: string | null
+  updatedAt: string
+}
+export interface TeamMember {
+  id: string
+  name: string
+  department: string | null
+  departmentType: string | null
+  entries: WorkEntry[]
+  done: number
+  inProgress: number
+  planned: number
+  blocked: number
+  hours: number
+  quantity: number
+  leaveDays: string[]
+  review: WorkReview | null
+}
+export interface TeamWorkLog {
+  period: WorkPeriod
+  start: string
+  end: string
+  holidays: { date: string; name: string }[]
+  members: TeamMember[]
+}
+
 export const workLogApi = {
-  list: (from: string, to: string, userId?: string) => api.get<{ entries: WorkEntry[]; readOnly: boolean }>(`/worklog?from=${from}&to=${to}${userId ? `&userId=${encodeURIComponent(userId)}` : ''}`),
+  list: (from: string, to: string, userId?: string) => api.get<{ entries: WorkEntry[]; reviews: WorkReview[]; readOnly: boolean; canReview: boolean }>(`/worklog?from=${from}&to=${to}${userId ? `&userId=${encodeURIComponent(userId)}` : ''}`),
   people: () => api.get<{ people: { id: string; name: string; department: string | null }[] }>('/worklog/people'),
   create: (body: WorkEntryInput & { period: WorkPeriod; date: string; title: string }) => api.post<{ entry: WorkEntry }>('/worklog', body),
   update: (id: string, body: WorkEntryInput) => api.patch<{ entry: WorkEntry }>(`/worklog/${id}`, body),
   carry: (id: string) => api.post<{ entry: WorkEntry }>(`/worklog/${id}/carry`),
   remove: (id: string) => api.del<void>(`/worklog/${id}`),
+  team: (period: WorkPeriod, date: string, department?: string) => api.get<TeamWorkLog>(`/worklog/team?period=${period}&date=${date}${department ? `&department=${department}` : ''}`),
+  review: (body: { userId: string; period: WorkPeriod; date: string; rating?: WorkRating | null; comment?: string | null; clear?: boolean }) => api.put<{ review: WorkReview | null }>('/worklog/review', body),
 }
 
 // ------------------------------------------------------------------ dates (local calendar, yyyy-MM-dd)
@@ -85,6 +124,46 @@ export function periodLabel(period: WorkPeriod, start: string): string {
   }
   if (period === 'MONTH') return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   return String(d.getFullYear())
+}
+
+/** Split pasted text into separate items: one per non-empty line, without the bullet or number. */
+export function splitLines(text: string): string[] {
+  return text.split(/\r?\n/).map((l) => l.replace(/^\s*(?:[•●▪◦*\-–—]+|\d{1,3}[.)])\s*/, '').trim()).filter(Boolean)
+}
+
+/** Plain text of a list of entries, ready to paste into WhatsApp, email or a report. */
+export function entriesToText(heading: string, entries: WorkEntry[]): string {
+  const groups: { label: string; mark: string; status: WorkStatus }[] = [
+    { label: 'Done', mark: '✅', status: 'DONE' },
+    { label: 'In progress', mark: '🔄', status: 'IN_PROGRESS' },
+    { label: 'To do', mark: '⬜', status: 'PLANNED' },
+  ]
+  const out: string[] = [heading]
+  for (const g of groups) {
+    const rows = entries.filter((e) => e.status === g.status)
+    if (!rows.length) continue
+    out.push('', `${g.label} (${rows.length})`)
+    for (const e of rows) {
+      const extra = [e.quantity != null ? `${e.quantity} items` : '', e.hours != null ? `${e.hours} h` : '', e.tag ?? '', e.blocked ? 'needs help' : ''].filter(Boolean).join(', ')
+      const [first, ...rest] = e.title.split(/\r?\n/)
+      out.push(`${g.mark} ${first}${extra ? ` (${extra})` : ''}`)
+      for (const l of rest) if (l.trim()) out.push(`    ${l.trim()}`)
+      if (e.details) for (const l of e.details.split(/\r?\n/)) if (l.trim()) out.push(`    ${l.trim()}`)
+    }
+  }
+  const hours = entries.reduce((t, e) => t + (e.hours ?? 0), 0)
+  const qty = entries.reduce((t, e) => t + (e.quantity ?? 0), 0)
+  if (hours || qty) out.push('', `Total: ${[hours ? `${+hours.toFixed(2)} h` : '', qty ? `${qty} items` : ''].filter(Boolean).join(', ')}`)
+  if (entries.length === 0) out.push('', 'Nothing logged.')
+  return out.join('\n')
+}
+
+/** Copy text to the clipboard (falls back for older browsers). */
+export async function copyText(text: string): Promise<void> {
+  try { await navigator.clipboard.writeText(text); return } catch { /* fall back */ }
+  const ta = document.createElement('textarea')
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'
+  document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove()
 }
 
 /** Tag ideas per department (people can type any tag). */

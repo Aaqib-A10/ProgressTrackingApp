@@ -74,4 +74,66 @@ describe('work log', () => {
     await add(w.itadMember, { period: 'DECADE', date: '2026-10-10', title: 'x' }).expect(400)
     await list(w.itadMember, 'from=2026-10-10&to=2026-01-01').expect(400)
   })
+
+  it('keeps long, multi-line entries whole', async () => {
+    const text = 'Worked on returns report & reviewed feedback\n• eBay & Temu platforms\nUpdated variation listings and single listing pricing\n- eBay SJ\n' + 'x'.repeat(600)
+    const e = (await add(w.itadMember, { period: 'DAY', date: '2026-10-09', title: text }).expect(201)).body.entry
+    expect(e.title).toBe(text)
+    await add(w.itadMember, { period: 'DAY', date: '2026-10-09', title: 'y'.repeat(3001) }).expect(400)
+  })
+})
+
+describe('team view and reviews', () => {
+  it('lead sees the team for a period: entries, needs help, leave, and nothing private', async () => {
+    await add(w.itadMember, { period: 'DAY', date: '2026-10-14', title: 'Called 60 leads', status: 'DONE', quantity: 60, hours: 4 }).expect(201)
+    const stuck = (await add(w.itadMember, { period: 'DAY', date: '2026-10-14', title: 'Quote for Acme', blocked: true }).expect(201)).body.entry
+    expect(stuck.blocked).toBe(true)
+    await add(w.itadMember, { period: 'DAY', date: '2026-10-14', title: 'Secret', private: true }).expect(201)
+    await add(w.itadMember, { period: 'WEEK', date: '2026-10-14', title: 'Close 2 deals' }).expect(201)
+
+    const day = await request(app).get('/api/worklog/team?period=DAY&date=2026-10-14').set(...auth(w.itadLead)).expect(200)
+    const me = day.body.members.find((m: { id: string }) => m.id === w.itadMember.id)
+    expect(me.entries.map((e: { title: string }) => e.title)).toEqual(['Called 60 leads', 'Quote for Acme'])
+    expect(me).toMatchObject({ done: 1, planned: 1, blocked: 1, hours: 4, quantity: 60 })
+    expect(day.body.members.some((m: { id: string }) => m.id === w.leadgenMember.id)).toBe(false) // other department
+    expect(day.body.members.some((m: { id: string }) => m.id === w.itadLead.id)).toBe(false) // not themselves
+
+    // A week includes its day entries and the week goal.
+    const week = await request(app).get('/api/worklog/team?period=WEEK&date=2026-10-14').set(...auth(w.itadLead)).expect(200)
+    expect(week.body.members.find((m: { id: string }) => m.id === w.itadMember.id).entries.map((e: { title: string }) => e.title)).toEqual(expect.arrayContaining(['Called 60 leads', 'Close 2 deals']))
+
+    // Finishing clears "needs help".
+    const fixed = await request(app).patch(`/api/worklog/${stuck.id}`).set(...auth(w.itadMember)).send({ status: 'DONE' }).expect(200)
+    expect(fixed.body.entry.blocked).toBe(false)
+
+    // In progress counts as started, not done.
+    const ip = (await add(w.itadMember, { period: 'DAY', date: '2026-10-14', title: 'Updating 40 prices', status: 'IN_PROGRESS' }).expect(201)).body.entry
+    expect(ip).toMatchObject({ status: 'IN_PROGRESS', doneAt: null })
+    const t2 = await request(app).get('/api/worklog/team?period=DAY&date=2026-10-14').set(...auth(w.itadLead)).expect(200)
+    expect(t2.body.members.find((m: { id: string }) => m.id === w.itadMember.id)).toMatchObject({ done: 2, inProgress: 1, planned: 1, blocked: 0 })
+
+    await request(app).get('/api/worklog/team?period=DAY&date=2026-10-14').set(...auth(w.itadMember)).expect(403)
+    const sa = await request(app).get('/api/worklog/team?period=DAY&date=2026-10-14&department=ITAD').set(...auth(w.superAdmin)).expect(200)
+    expect(sa.body.members.some((m: { id: string }) => m.id === w.itadMember.id)).toBe(true)
+  })
+
+  it('lead reviews a day; the person sees it and is notified; others cannot review', async () => {
+    const r = await request(app).put('/api/worklog/review').set(...auth(w.itadLead)).send({ userId: w.itadMember.id, period: 'DAY', date: '2026-10-14', rating: 'GOOD', comment: 'Nice work on the calls' }).expect(200)
+    expect(r.body.review).toMatchObject({ rating: 'GOOD', comment: 'Nice work on the calls', periodStart: '2026-10-14' })
+    const n = await prisma.notification.findFirst({ where: { userId: w.itadMember.id, type: 'WORKLOG_REVIEW' } })
+    expect(n?.link).toBe('/app/todo?period=DAY&date=2026-10-14')
+
+    const mine = await list(w.itadMember, 'from=2026-10-01&to=2026-10-31').expect(200)
+    expect(mine.body.reviews).toHaveLength(1)
+    expect(mine.body.reviews[0]).toMatchObject({ rating: 'GOOD', reviewerName: expect.any(String) })
+
+    const team = await request(app).get('/api/worklog/team?period=DAY&date=2026-10-14').set(...auth(w.itadLead)).expect(200)
+    expect(team.body.members.find((m: { id: string }) => m.id === w.itadMember.id).review.rating).toBe('GOOD')
+
+    await request(app).put('/api/worklog/review').set(...auth(w.itadMember)).send({ userId: w.itadMember.id, period: 'DAY', date: '2026-10-14', rating: 'GOOD' }).expect(403)
+    await request(app).put('/api/worklog/review').set(...auth(w.leadgenLead)).send({ userId: w.itadMember.id, period: 'DAY', date: '2026-10-14', rating: 'GOOD' }).expect(403)
+    await request(app).put('/api/worklog/review').set(...auth(w.leadgenMember)).send({ userId: w.leadgenLead.id, period: 'DAY', date: '2026-10-14' }).expect(403)
+    await request(app).put('/api/worklog/review').set(...auth(w.itadLead)).send({ userId: w.itadMember.id, period: 'DAY', date: '2026-10-14', clear: true }).expect(200)
+    expect((await list(w.itadMember, 'from=2026-10-01&to=2026-10-31')).body.reviews).toHaveLength(0)
+  })
 })
