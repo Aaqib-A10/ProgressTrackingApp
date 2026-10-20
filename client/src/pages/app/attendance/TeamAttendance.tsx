@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TeamRegister } from './TeamRegister'
 import { useSearchParams } from 'react-router-dom'
 import { TeamWfhInbox } from '../../../components/attendance/WfhRequests'
 import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2, Download, MessageSquare, House } from 'lucide-react'
@@ -86,6 +87,7 @@ export default function TeamAttendance() {
   // Opened from a "asks to work from home" notice: the requests card is outlined.
   const [params] = useSearchParams()
   const wfhFocus = params.get('wfh') === '1'
+  const [tab, setTab] = useState<'overview' | 'register'>(() => (params.get('view') === 'register' ? 'register' : 'overview'))
 
   function reload() {
     setLoading(true)
@@ -227,6 +229,16 @@ export default function TeamAttendance() {
 
       <TeamWfhInbox onDecided={reload} highlight={wfhFocus} />
 
+      <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'overview'} onClick={() => setTab('overview')} className={'h-8 rounded-md px-4 text-body-sm font-semibold ' + (tab === 'overview' ? 'bg-ink text-white' : 'text-ink-muted hover:text-ink')}>Overview</button>
+        <button type="button" role="tab" aria-selected={tab === 'register'} onClick={() => setTab('register')} className={'h-8 rounded-md px-4 text-body-sm font-semibold ' + (tab === 'register' ? 'bg-ink text-white' : 'text-ink-muted hover:text-ink')}>Register: in and out by day</button>
+      </div>
+
+      {tab === 'register' ? (
+        <TeamRegister department={isAdmin && dept !== 'ALL' ? dept : undefined} groupByDept={groupByDept} onOpenPerson={(id) => { const r = data?.rows.find((x) => x.userId === id); if (r) setSelected(r) }} />
+      ) : (
+      <>
+
       {s && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <MiniStat icon={<LogIn size={18} />} label="Working now" value={s.inNow} tone="bg-success/10 text-success" />
@@ -283,6 +295,9 @@ export default function TeamAttendance() {
           />
         )}
       </Card>
+
+      </>
+      )}
 
       {shiftOpen && data && (
         <ShiftModal current={data.shift} scope={data.scope} onClose={() => setShiftOpen(false)} onSaved={(shift) => { setData({ ...data, shift }); setShiftOpen(false) }} />

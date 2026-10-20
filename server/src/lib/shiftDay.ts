@@ -51,9 +51,23 @@ export function overnightCutoffMinutes(shift: Pick<ShiftWindow, 'startTime' | 'e
   return end + Math.floor((start - end) / 2)
 }
 
-/** Does local minute `nowMin` still belong to the overnight shift that began the evening before? */
+/**
+ * For a day shift: the local minute after midnight before which work still belongs to the
+ * previous day. It is the middle of the off-duty gap (11:00 to 20:00 -> 03:30; 09:00 to 18:00
+ * -> 01:30), so someone who worked past midnight (in 00:19, out 04:05) is filed on the day that
+ * shift belonged to, and the next morning's check-in is not blocked by a finished "today".
+ * 0 when the gap's middle falls before midnight (a very early shift): nothing moves back.
+ */
+export function dayCutoffMinutes(shift: Pick<ShiftWindow, 'startTime' | 'endTime'>): number {
+  const end = shiftMinutes(shift.endTime)
+  const start = shiftMinutes(shift.startTime)
+  const mid = end + Math.floor((start + 1440 - end) / 2)
+  return mid >= 1440 ? mid - 1440 : 0
+}
+
+/** Does local minute `nowMin` still belong to the shift that began the day before? */
 export function belongsToPreviousShift(shift: ShiftWindow, nowMin: number): boolean {
-  return isOvernight(shift) && nowMin < overnightCutoffMinutes(shift)
+  return isOvernight(shift) ? nowMin < overnightCutoffMinutes(shift) : nowMin < dayCutoffMinutes(shift)
 }
 
 /**
@@ -63,7 +77,8 @@ export function belongsToPreviousShift(shift: ShiftWindow, nowMin: number): bool
  * taken after midnight resolves to the same attendance day as the evening
  * check-in (instead of silently starting a new, unfindable day).
  *
- * Day shift, tz Pacific, 02:00 local  -> that day (normal).
+ * Day shift 09:00–17:00, 02:00 local  -> that day (after the 01:00 split).
+ * Day shift 11:00–20:00, 00:19 local  -> yesterday (worked past midnight).
  * Night shift 19:00–04:00, 21:00 local -> that day (shift started this evening).
  * Night shift 19:00–04:00, 02:00 local -> yesterday (still the evening's shift).
  * Night shift 19:00–04:00, 18:30 local -> that day (early check-in for tonight).

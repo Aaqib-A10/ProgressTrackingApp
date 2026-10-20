@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMe, checkIn, checkOut, startOvertime, startBreak, endBreak, history, teamView, exportTeamAttendanceCsv, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, setRemote, removeLeave, ipCheck } from '../controllers/attendanceController'
+import { getMe, checkIn, checkOut, startOvertime, startBreak, endBreak, history, teamView, exportTeamAttendanceCsv, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, setRemote, removeLeave, ipCheck, register } from '../controllers/attendanceController'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import { createWfhRequest, myWfhRequests, cancelWfhRequest, teamWfhRequests, decideWfhRequest } from '../controllers/wfhRequestController'
@@ -29,6 +29,8 @@ attendanceRouter.get('/history', asyncHandler(history))
 
 // Team board + shift config + corrections (TL / Super Admin).
 attendanceRouter.get('/team', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(teamView))
+// Every member x every day: check in, check out, hours, status (the attendance register).
+attendanceRouter.get('/register', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(register))
 // Literal must precede the `/:userId/...` param routes below.
 attendanceRouter.get('/team.csv', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(exportTeamAttendanceCsv))
 attendanceRouter.get('/shift', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(getShift))

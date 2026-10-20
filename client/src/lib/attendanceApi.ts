@@ -204,6 +204,33 @@ export function getAttendanceHistory(range: RangeKey, custom?: CustomRange | nul
   return api.get<HistoryResponse>(`/attendance/history?${q}${userId ? `&userId=${userId}` : ''}`)
 }
 
+/** History between two dates. `all` lists every day up to today (missed working days as Absent). */
+export function getAttendanceHistoryBetween(start: string, end: string, opts: { all?: boolean; userId?: string } = {}) {
+  return api.get<HistoryResponse>(`/attendance/history?range=custom&start=${start}&end=${end}${opts.all ? '&all=1' : ''}${opts.userId ? `&userId=${opts.userId}` : ''}`)
+}
+
+// ---------- Register (TL / Admin): every member x every day ----------
+export interface RegisterMember {
+  userId: string
+  name: string
+  department: string
+  departmentType: string | null
+  shift: { startTime: string; endTime: string; requiredMinutes: number }
+  hasOverride: boolean
+  /** One per date in `dates`; null = future or before the person joined. */
+  cells: (AttendanceDayRow | null)[]
+  totals: { present: number; absent: number; leave: number; late: number; leftEarly: number; fullShifts: number; workedMin: number; overtimeMin: number; avgCheckIn: string | null }
+}
+export interface RegisterResponse {
+  start: string
+  end: string
+  dates: string[]
+  scope: 'COMPANY' | 'DEPARTMENT'
+  members: RegisterMember[]
+}
+export const getAttendanceRegister = (start: string, end: string, department?: string) =>
+  api.get<RegisterResponse>(`/attendance/register?start=${start}&end=${end}${department ? `&department=${department}` : ''}`)
+
 /** "2h 15m" from a minute count. */
 export function formatMinutes(min: number | null | undefined): string {
   if (min == null) return '—'

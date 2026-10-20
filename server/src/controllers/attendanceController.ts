@@ -121,6 +121,17 @@ function isEarlyLeave(checkOutAt: Date, shift: Shift): boolean {
   return shiftAxisMinutes(checkOutAt, eff) < shiftEndMinutes(eff)
 }
 
+/**
+ * Left early = checked out before the shift's end time AND did not work the full required
+ * hours. Someone who came in early and completed their hours (in 08:40, out 17:40 on a 09:00 to
+ * 18:00 shift) has not left early. One rule for the clock, My Attendance and the team views.
+ */
+export function leftEarly(checkOutAt: Date | null | undefined, workedMin: number | null, shift: Shift): boolean {
+  if (!checkOutAt) return false
+  if (workedMin != null && workedMin >= shift.requiredMinutes) return false
+  return isEarlyLeave(checkOutAt, shift)
+}
+
 /** Total break minutes; an open break is counted up to `now`. */
 function breakMinutes(day: DayWithBreaks, now: Date): number {
   let ms = 0
@@ -193,7 +204,7 @@ function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
     brbAllowanceMin: shift.brbAllowanceMin,
     breakAllowanceMin: shift.breakAllowanceMin,
     late: day?.checkInAt ? isLate(day.checkInAt, shift) : false,
-    earlyLeave: day?.checkOutAt ? isEarlyLeave(day.checkOutAt, shift) : false,
+    earlyLeave: leftEarly(day?.checkOutAt, worked, shift),
     requiredMin: shift.requiredMinutes,
     completed: worked != null && worked >= shift.requiredMinutes,
     ...overtimeInfo(day, shift, now),
@@ -232,7 +243,11 @@ async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
   // stale checked-out row would show "Done" and hide the check-in button, locking
   // the person out (the reconcile only runs on check-in, which they can't reach).
   // The record itself is moved on the next check-in (reconcileStaleCheckIn).
-  const day = dayRaw?.checkInAt && shiftDayString(shift, dayRaw.checkInAt) !== dateStr ? null : dayRaw
+  const todays = dayRaw?.checkInAt && shiftDayString(shift, dayRaw.checkInAt) !== dateStr ? null : dayRaw
+  // Still working on a session that began the day before (past the split point): show it, so
+  // the person sees "Working" and can check out.
+  const open = todays?.checkInAt ? null : await findCurrent(me.id, shift, now)
+  const day = open && open.id !== dayRaw?.id && open.checkInAt && !open.checkOutAt ? open : todays
   const isWfh = leave?.type === 'WFH'
   const offLabel = leave && !isWfh ? leave.type : holiday ? 'HOLIDAY' : null
   return {
@@ -266,6 +281,24 @@ async function findToday(userId: string, shift: Shift): Promise<DayWithBreaks | 
 }
 
 /**
+ * The session to act on for check-out, breaks and overtime: today's if it has a check-in,
+ * otherwise a session still OPEN from the day before (someone worked past the split point,
+ * e.g. in at 00:19 and out at 04:05 on an 11:00 to 20:00 shift). Without this the check-out
+ * said "You are not checked in" and the session stayed open until the automatic check-out.
+ */
+async function findCurrent(userId: string, shift: Shift, now: Date = new Date()): Promise<DayWithBreaks | null> {
+  const today = await findToday(userId, shift)
+  if (today?.checkInAt) return today
+  const prevStr = DateTime.fromISO(shiftDayString(shift, now)).minus({ days: 1 }).toISODate()!
+  const prev = await prisma.attendanceDay.findUnique({
+    where: { userId_date: { userId, date: dbDateFromString(prevStr) } },
+    include: { breaks: { orderBy: { startAt: 'asc' } } },
+  })
+  if (prev?.checkInAt && !prev.checkOutAt && (now.getTime() - prev.checkInAt.getTime()) / 3600000 <= MAX_LIVE_HOURS) return prev
+  return today
+}
+
+/**
  * Self-healing guard for a shift timezone/hours change. A session recorded under
  * an old timezone can end up bucketed onto today's date and then wrongly block a
  * new check-in ("already checked in today"). When the stored check-in actually
@@ -287,6 +320,10 @@ async function reconcileStaleCheckIn(userId: string, existing: DayWithBreaks, sh
     // (earliest check-in, latest check-out), move its breaks, then vacate today.
     const ins = [clash.checkInAt, existing.checkInAt].filter((d): d is Date => !!d)
     const outs = [clash.checkOutAt, existing.checkOutAt].filter((d): d is Date => !!d)
+    // Closed sessions that do not overlap: the gap between the first's check-out and the
+    // second's check-in.
+    const [first, second] = clash.checkInAt && existing.checkInAt && clash.checkInAt <= existing.checkInAt ? [clash, existing] : [existing, clash]
+    const gap = first.checkOutAt && second.checkInAt && second.checkInAt > first.checkOutAt ? { from: first.checkOutAt, to: second.checkInAt } : null
     // Atomic: merge times, reparent breaks, and vacate today's slot together so a
     // mid-sequence failure can't leave reparented breaks or a half-merged day.
     await prisma.$transaction([
@@ -298,6 +335,9 @@ async function reconcileStaleCheckIn(userId: string, existing: DayWithBreaks, sh
         },
       }),
       prisma.breakEntry.updateMany({ where: { dayId: existing.id }, data: { dayId: clash.id } }),
+      // Two separate sessions (out at 20:00, back in at 00:19): the time between them is not
+      // work. Record it as time away so worked hours stay right.
+      ...(gap ? [prisma.breakEntry.create({ data: { dayId: clash.id, type: 'BREAK', startAt: gap.from, endAt: gap.to } })] : []),
       prisma.attendanceDay.update({ where: { id: existing.id }, data: { checkInAt: null, checkOutAt: null, checkInIp: null, checkOutIp: null } }),
     ])
   }
@@ -450,7 +490,7 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
   }
   const ip = getClientIp(req)
 
-  const existing = await findToday(me.id, shift)
+  const existing = await findCurrent(me.id, shift, now)
   if (!existing?.checkInAt) {
     res.status(409).json({ error: 'You are not checked in.' })
     return
@@ -476,7 +516,7 @@ export async function startOvertime(req: AuthedRequest, res: Response): Promise<
     res.status(403).json({ error: blocked })
     return
   }
-  const existing = await findToday(me.id, shift)
+  const existing = await findCurrent(me.id, shift, now)
   if (!existing?.checkInAt) {
     res.status(409).json({ error: 'Check in first.' })
     return
@@ -503,7 +543,7 @@ export async function startBreak(req: AuthedRequest, res: Response): Promise<voi
     return
   }
 
-  const existing = await findToday(me.id, shift)
+  const existing = await findCurrent(me.id, shift, now)
   if (!existing?.checkInAt) {
     res.status(409).json({ error: 'Check in before taking a break.' })
     return
@@ -536,7 +576,7 @@ export async function endBreak(req: AuthedRequest, res: Response): Promise<void>
     return
   }
 
-  const existing = await findToday(me.id, shift)
+  const existing = await findCurrent(me.id, shift, now)
   const open = existing?.breaks.find((b) => !b.endAt)
   if (!open) {
     res.status(409).json({ error: 'No break is running.' })
@@ -587,10 +627,10 @@ function historyRow(dateStr: string, day: DayWithBreaks | undefined, offLabel: s
     workedMin: worked,
     breakMin: day ? breakMinutes(day, day.checkOutAt ?? now) : 0,
     late: day?.checkInAt ? isLate(day.checkInAt, shift) : false,
-    earlyLeave: day?.checkOutAt ? isEarlyLeave(day.checkOutAt, shift) : false,
+    earlyLeave: leftEarly(day?.checkOutAt, worked, shift),
     requiredMin: shift.requiredMinutes,
     completed: worked != null && worked >= shift.requiredMinutes,
-    shortMin: worked == null ? null : Math.max(0, shift.requiredMinutes - worked),
+    shortMin: worked == null || !day?.checkOutAt ? null : Math.max(0, shift.requiredMinutes - worked),
     note: day?.note ?? null, // TL/Admin per-day comment (feedback)
     overtimeMin: day ? overtimeInfo(day, shift, now).overtimeMin : 0,
     // Worked from home that day: marked Work From Home, or the person always works from home.
@@ -625,7 +665,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   const rangeKey = ((req.query.range as RangeKey) || 'month') as RangeKey
   const now = new Date()
 
-  const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { departmentId: true, attendanceRemote: true } })
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { departmentId: true, attendanceRemote: true, createdAt: true } })
   const shift = await resolveShift(targetId, target.departmentId)
   // Resolve the period in the member's own shift timezone — attendance is bucketed
   // per shift-day, so a company-tz window drifts once the two diverge (a US shift
@@ -657,6 +697,12 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   for (const ds of eachDateStr(range.startDate, range.endDate)) if (!isWorkingDate(ds, shift)) dates.add(ds)
   // Today always shows, even before check-in ("Not checked in yet"), so the page is never blank.
   if (todayStr >= range.startDate && todayStr <= range.endDate) dates.add(todayStr)
+  // all=1 (My Attendance history, calendar): every day of the period up to today, so a missed
+  // working day shows as Absent. Not before the person joined or before attendance started.
+  if (req.query.all === '1') {
+    const from = await attendanceFloor(target.createdAt, shift)
+    for (const ds of eachDateStr(range.startDate, range.endDate)) if (ds >= from && ds <= todayStr) dates.add(ds)
+  }
   const rows = [...dates]
     .sort((a, b) => (a < b ? 1 : -1))
     .map((d) =>
@@ -694,6 +740,84 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
       avgCheckIn: avgCheckInMin == null ? null : minToHHmm(avgCheckInMin),
     },
   })
+}
+
+/** First day a person can be counted absent: the later of the day they joined and the first
+ *  attendance record anyone has (the day attendance went live). */
+let goLiveCache: { at: number; date: string | null } | null = null
+async function attendanceFloor(createdAt: Date, shift: Shift): Promise<string> {
+  if (!goLiveCache || Date.now() - goLiveCache.at > 3600_000) {
+    const first = await prisma.attendanceDay.findFirst({ orderBy: { date: 'asc' }, select: { date: true } })
+    goLiveCache = { at: Date.now(), date: first ? dateStringFromDb(first.date) : null }
+  }
+  const joined = shiftDayString(shift, createdAt)
+  return goLiveCache.date && goLiveCache.date > joined ? goLiveCache.date : joined
+}
+
+/**
+ * GET /api/attendance/register?start=&end=&department= — Team Lead (their department) or Super
+ * Admin: every member x every day of the period with check in, check out, hours, status and
+ * flags. Days in the future or before someone joined are null.
+ */
+export async function register(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') { res.status(403).json({ error: 'Forbidden' }); return }
+  const start = String(req.query.start ?? '')
+  const end = String(req.query.end ?? '')
+  const re = /^\d{4}-\d{2}-\d{2}$/
+  if (!re.test(start) || !re.test(end) || end < start) { res.status(400).json({ error: 'Pick a date range.' }); return }
+  if (DateTime.fromISO(end).diff(DateTime.fromISO(start), 'days').days > 62) { res.status(400).json({ error: 'Pick two months or less.' }); return }
+  let departmentId: string | undefined
+  if (me.role === 'SUPER_ADMIN' && req.query.department) {
+    const d = await prisma.department.findUnique({ where: { type: String(req.query.department) as DepartmentType } })
+    departmentId = d?.id ?? '__none__'
+  }
+  const members = await scopedMembers(me, departmentId)
+  const ids = members.map((m) => m.id)
+  const now = new Date()
+  const startValue = dbDateFromString(start)
+  const endValue = dbDateFromString(end)
+  const [shifts, days, leaves, holidays] = await Promise.all([
+    prisma.attendanceShift.findMany(),
+    prisma.attendanceDay.findMany({ where: { userId: { in: ids }, date: { gte: startValue, lte: endValue } }, include: { breaks: { orderBy: { startAt: 'asc' } } } }),
+    prisma.leaveDay.findMany({ where: { userId: { in: ids }, date: { gte: startValue, lte: endValue } } }),
+    prisma.holiday.findMany({ where: { date: { gte: startValue, lte: endValue } } }),
+  ])
+  const dates = eachDateStr(start, end)
+  const holidayByDate = new Map(holidays.map((h) => [dateStringFromDb(h.date), h.name]))
+  const out = []
+  for (const m of members) {
+    const shift = pickShiftFor(shifts, m.id, m.departmentId)
+    const todayStr = shiftDayString(shift, now)
+    const floor = await attendanceFloor(m.createdAt, shift)
+    const dayBy = new Map(days.filter((d) => d.userId === m.id).map((d) => [dateStringFromDb(d.date), d]))
+    const leaveBy = new Map(leaves.filter((l) => l.userId === m.id).map((l) => [dateStringFromDb(l.date), l.type as string]))
+    const cells = dates.map((ds) => {
+      const day = dayBy.get(ds)
+      if (!day?.checkInAt && (ds > todayStr || ds < floor)) return null
+      return historyRow(ds, day, leaveBy.get(ds) ?? (holidayByDate.has(ds) ? 'HOLIDAY' : null), holidayByDate.get(ds) ?? null, shift, now, todayStr, m.attendanceRemote)
+    })
+    const present = cells.filter((c) => c?.label === 'PRESENT')
+    const ins = present.map((c) => (c!.checkIn ? shiftMinutes(c!.checkIn) : null)).filter((v): v is number => v != null)
+    out.push({
+      userId: m.id, name: m.name, department: m.department?.name ?? '—', departmentType: m.department?.type ?? null,
+      shift: { startTime: shift.startTime, endTime: shift.endTime, requiredMinutes: shift.requiredMinutes },
+      hasOverride: shifts.some((x) => x.userId === m.id),
+      cells,
+      totals: {
+        present: present.length,
+        absent: cells.filter((c) => c?.label === 'ABSENT').length,
+        leave: cells.filter((c) => c?.label === 'ON_LEAVE' || c?.label === 'OFF').length,
+        late: present.filter((c) => c!.late).length,
+        leftEarly: present.filter((c) => c!.earlyLeave).length,
+        fullShifts: present.filter((c) => c!.completed).length,
+        workedMin: present.reduce((t, c) => t + (c!.workedMin ?? 0), 0),
+        overtimeMin: present.reduce((t, c) => t + (c!.overtimeMin ?? 0), 0),
+        avgCheckIn: ins.length ? minToHHmm(Math.round(ins.reduce((a, b) => a + b, 0) / ins.length)) : null,
+      },
+    })
+  }
+  res.json({ start, end, dates, scope: me.role === 'SUPER_ADMIN' ? 'COMPANY' : 'DEPARTMENT', members: out })
 }
 
 function minToHHmm(min: number): string {
