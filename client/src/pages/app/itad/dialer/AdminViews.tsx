@@ -6,57 +6,91 @@ import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerSettings, type DuplicateGroup, type ImportRecord, type RegionCode } from '../../../../lib/dialerApi'
 import { REGIONS, REGION_META, num, pct } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
-import { Panel, errMsg } from './ui'
+import { InfoTip, Pager, Panel, errMsg, usePaged } from './ui'
 import { ImportSummaryView } from './ImportSummaryView'
 
 /** History (funnel history + every import's summary), Duplicates (manager) and Settings. */
 
-export function HistoryView({ rep, refreshKey }: { rep: string; refreshKey: string }) {
+export function HistoryView({ rep, refreshKey, onOpenLeads }: { rep: string; refreshKey: string; onOpenLeads: (title: string, ids: string[], fallback: { id: string; company: string }[]) => void }) {
+  const { addToast } = useToast()
   const [rows, setRows] = useState<ImportRecord[] | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+  const [showChart, setShowChart] = useState(true)
   useEffect(() => { dialerApi.imports(rep).then((r) => { setRows(r.imports); setOpen(r.imports[0]?.id ?? null) }).catch(() => setRows([])) }, [rep, refreshKey])
+  const p = usePaged(rows ?? [], 25)
   if (!rows) return <div className="h-40 animate-pulse rounded-card bg-slate-100" />
   if (rows.length === 0) return <Panel><p className="py-6 text-center text-body-md text-ink-muted">No imports yet. Import your CRM export to start the history.</p></Panel>
-  const chart = [...rows].reverse().map((r) => ({
+  const crm = rows.filter((r) => (r.summary.listName ?? 'CRM') === 'CRM')
+  const rate = (v: number | null) => (v != null ? +(v * 100).toFixed(1) : null)
+  const chart = [...crm].reverse().map((r) => ({
     at: new Date(r.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
-    'Connect rate': r.funnel.connectRate != null ? +(r.funnel.connectRate * 100).toFixed(1) : null,
-    'Win rate': r.funnel.winRate != null ? +(r.funnel.winRate * 100).toFixed(1) : null,
-    'Positive rate': r.funnel.positiveRate != null ? +(r.funnel.positiveRate * 100).toFixed(1) : null,
+    'Attempt rate': rate(r.funnel.attemptRate), 'Connect rate': rate(r.funnel.connectRate), 'Win rate': rate(r.funnel.winRate), 'Positive rate': rate(r.funnel.positiveRate),
   }))
+  const few = crm.length < 5
+  async function openChange(id: string, from: string, to: string) {
+    try {
+      const r = await dialerApi.importChanges(id, from, to)
+      onOpenLeads(`${from} → ${to}`, r.leads.map((x) => x.leadId), r.leads.map((x) => ({ id: x.leadId, company: x.company })))
+    } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not open those leads') }) }
+  }
+  const LINES: [string, string][] = [['Attempt rate', '#94A3B8'], ['Connect rate', '#4F46E5'], ['Win rate', '#22C55E'], ['Positive rate', '#F59E0B']]
   return (
     <div className="space-y-4">
-      <Panel title="Funnel history · is the connect rate rising or falling?">
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chart} margin={{ top: 8, right: 16, bottom: 0, left: -12 }}>
-              <CartesianGrid stroke="#E2E8F0" vertical={false} />
-              <XAxis dataKey="at" tick={{ fontSize: 11, fill: '#64748B' }} />
-              <YAxis unit="%" tick={{ fontSize: 11, fill: '#64748B' }} />
-              <Tooltip formatter={(v: number) => `${v}%`} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="Connect rate" stroke="#0F766E" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-              <Line type="monotone" dataKey="Win rate" stroke="#4F46E5" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-              <Line type="monotone" dataKey="Positive rate" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} connectNulls />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <p className="mt-2 text-[11px] text-ink-muted">One point per import. The export holds only the current status, so importing at the start of every shift gives the finest history.</p>
+      <Panel title="Rates after each import" info="The four funnel rates in %, one point per import of your CRM export (other lists are left out). Until there are about five imports a table is clearer than a chart. Import at the start of every shift for the finest history."
+        action={!few ? <button type="button" onClick={() => setShowChart((v) => !v)} className="text-body-sm font-semibold text-primary">{showChart ? 'Show as table' : 'Show as chart'}</button> : undefined}>
+        {few || !showChart ? (
+          <div className="-mx-1 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-body-sm">
+              <thead className="text-[11px] uppercase text-ink-muted"><tr><th className="px-2 py-1.5">Import</th><th className="px-2 text-right">Leads</th>{LINES.map(([k]) => <th key={k} className="px-2 text-right">{k}</th>)}</tr></thead>
+              <tbody className="divide-y divide-line">
+                {crm.map((r, i) => {
+                  const prev = crm[i + 1]
+                  return (
+                    <tr key={r.id}>
+                      <td className="px-2 py-1.5 text-ink">{new Date(r.createdAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</td>
+                      <td className="px-2 text-right tabular-nums text-ink">{num(r.funnel.total)}</td>
+                      {(['attemptRate', 'connectRate', 'winRate', 'positiveRate'] as const).map((k) => {
+                        const d = prev && r.funnel[k] != null && prev.funnel[k] != null ? r.funnel[k]! - prev.funnel[k]! : null
+                        return <td key={k} className="px-2 text-right tabular-nums text-ink">{pct(r.funnel[k])}{d != null && Math.abs(d) >= 0.0005 && <span className={cn('ml-1 text-[11px]', d > 0 ? 'text-success' : 'text-danger')}>{d > 0 ? '+' : ''}{(d * 100).toFixed(1)}</span>}</td>
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {few && <p className="mt-2 text-[11px] text-ink-muted">A chart appears from the fifth import.</p>}
+          </div>
+        ) : (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chart} margin={{ top: 8, right: 16, bottom: 0, left: -12 }}>
+                <CartesianGrid stroke="#E2E8F0" vertical={false} />
+                <XAxis dataKey="at" tick={{ fontSize: 11, fill: '#64748B' }} />
+                <YAxis unit="%" domain={[0, 'auto']} tick={{ fontSize: 11, fill: '#64748B' }} />
+                <Tooltip formatter={(v: number) => `${v}%`} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {LINES.map(([k, c]) => <Line key={k} type="monotone" dataKey={k} stroke={c} strokeWidth={2} dot={{ r: 4, strokeWidth: 0, fill: c }} activeDot={{ r: 6 }} connectNulls />)}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </Panel>
-      <Panel title={`Imports · ${rows.length}`}>
+      <Panel title={`Imports · ${rows.length}`} info="Every import is kept with its summary. Click a status change to see the leads behind it.">
         <ul className="divide-y divide-line">
-          {rows.map((r) => (
+          {p.rows.map((r) => (
             <li key={r.id} className="py-2">
               <button type="button" onClick={() => setOpen(open === r.id ? null : r.id)} className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 text-left text-body-sm">
                 {open === r.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 <b className="text-ink">{new Date(r.createdAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</b>
-                <span className="text-ink-muted">{r.user.name} · {r.fileName}</span>
-                <span className="text-ink">{num(r.summary.leads)} leads · +{r.summary.added} new · {r.summary.changed} changed · {r.summary.movedForward} forward</span>
+                <span className="text-ink-muted">{r.user.name} · {r.fileName}{(r.summary.listName ?? 'CRM') !== 'CRM' ? ` · ${r.summary.listName}` : ''}</span>
+                <span className="text-ink">{num(r.summary.leads)} leads · +{r.summary.added} new · {r.summary.movedForward} forward</span>
                 <span className="ml-auto text-ink-muted">Connect {pct(r.funnel.connectRate)} · Win {pct(r.funnel.winRate)}</span>
               </button>
-              {open === r.id && <div className="mt-3"><ImportSummaryView s={r.summary} /></div>}
+              {open === r.id && <div className="mt-3"><ImportSummaryView s={r.summary} onOpenChange={(from, to) => openChange(r.id, from, to)} /></div>}
             </li>
           ))}
         </ul>
+        <Pager p={p} />
       </Panel>
     </div>
   )
@@ -65,6 +99,7 @@ export function HistoryView({ rep, refreshKey }: { rep: string; refreshKey: stri
 export function DuplicatesView({ onChanged }: { onChanged: () => void }) {
   const { addToast } = useToast()
   const [rows, setRows] = useState<DuplicateGroup[] | null>(null)
+  const pd = usePaged(rows ?? [])
   const load = () => { dialerApi.duplicates().then((r) => setRows(r.duplicates)).catch(() => setRows([])) }
   useEffect(load, [])
   async function keep(g: DuplicateGroup, ownerId: string, name: string) {
@@ -75,7 +110,7 @@ export function DuplicatesView({ onChanged }: { onChanged: () => void }) {
     <Panel title={`Same lead in two reps' files · ${rows.length}`}>
       {rows.length === 0 ? <p className="py-6 text-center text-body-md text-success">No duplicates. Every lead has one owner.</p> : (
         <ul className="divide-y divide-line">
-          {rows.map((g) => (
+          {pd.rows.map((g) => (
             <li key={g.matchKey} className="py-3">
               <p className="text-body-md font-semibold text-ink">{g.company}</p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -90,12 +125,47 @@ export function DuplicatesView({ onChanged }: { onChanged: () => void }) {
           ))}
         </ul>
       )}
+      <Pager p={pd} />
       <p className="mt-3 text-[11px] text-ink-muted">The other reps' copies are hidden from their counts and stay hidden on later imports. Also reassign the lead in the CRM so the exports agree.</p>
     </Panel>
   )
 }
 
 const inp = 'h-9 rounded-btn border border-line bg-card px-2 text-body-sm text-ink focus:border-primary focus:outline-none disabled:bg-slate-50'
+
+/** Each rep's own follow-up days (within 3 to 60), with "reset to default". */
+function MyFollowUpDays({ defaults, onSaved }: { defaults: Record<string, number>; onSaved: () => void }) {
+  const { addToast } = useToast()
+  const [mine, setMine] = useState<Record<string, number> | null>(null)
+  const [limits, setLimits] = useState({ min: 3, max: 60 })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { dialerApi.prefs().then((r) => { setMine(r.prefs.followUp); setLimits(r.limits) }).catch(() => setMine({})) }, [])
+  if (!mine) return null
+  const statuses = Object.keys(defaults)
+  async function save(next: Record<string, number>, msg: string) {
+    setBusy(true)
+    try { const r = await dialerApi.savePrefs({ followUp: next }); setMine(r.prefs.followUp); addToast({ type: 'success', message: msg }); onSaved() } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save') }) } finally { setBusy(false) }
+  }
+  const bad = Object.values(mine).some((d) => d < limits.min || d > limits.max || !Number.isFinite(d))
+  return (
+    <Panel title="My follow-up alert days" info={`Your own alert days, ${limits.min} to ${limits.max}. They only change your follow-up list; the company default is shown beside each.`}>
+      <div className="space-y-2">
+        {statuses.map((st) => (
+          <div key={st} className="flex items-center gap-2 text-body-sm">
+            <span className="w-32 text-ink">{st}</span>
+            <input type="number" min={limits.min} max={limits.max} value={mine[st] ?? defaults[st]} onChange={(e) => setMine({ ...mine, [st]: Number(e.target.value) })} className={cn(inp, 'w-20', mine[st] != null && mine[st] !== defaults[st] && 'border-primary font-semibold')} />
+            <span className="text-ink-muted">days · default {defaults[st]}</span>
+          </div>
+        ))}
+      </div>
+      {bad && <p className="mt-2 text-body-sm text-danger">Pick {limits.min} to {limits.max} days.</p>}
+      <div className="mt-3 flex gap-2">
+        <Button size="sm" disabled={busy || bad} onClick={() => save(Object.fromEntries(Object.entries(mine).filter(([k, v]) => v !== defaults[k])), 'Your follow-up days are saved.')}>Save mine</Button>
+        <Button size="sm" variant="secondary" leadingIcon={<RotateCcw size={13} />} disabled={busy || !Object.keys(mine).length} onClick={() => save({}, 'Back to the default days.')}>Reset to default</Button>
+      </div>
+    </Panel>
+  )
+}
 
 export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boolean; onSaved: () => void; extraStatuses: string[] }) {
   const { addToast } = useToast()
@@ -112,7 +182,8 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
   }
   return (
     <div className="space-y-4">
-      {!canEdit && <p className="rounded-btn bg-slate-100 px-3 py-2 text-body-sm text-ink-muted">Only an ITAD Team Lead or Super Admin can change these. You can see how the numbers are worked out.</p>}
+      <MyFollowUpDays defaults={s.followUp} onSaved={onSaved} />
+      <h2 className="flex items-center gap-1.5 pt-2 text-label-md uppercase tracking-wide text-ink-muted">Company settings<InfoTip>{canEdit ? 'These change everyone\'s numbers.' : 'Only an ITAD Team Lead or Super Admin can change these. You can see how the numbers are worked out.'}</InfoTip></h2>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Stage of each status (changes everyone's numbers)">
           <table className="w-full text-body-sm">
@@ -135,7 +206,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
         </Panel>
 
         <div className="space-y-4">
-          <Panel title="Follow-up alert after (days without activity)">
+          <Panel title="Follow-up alert after (company default)">
             <div className="space-y-2">
               {Object.entries(s.followUp).map(([st, d]) => (
                 <div key={st} className="flex items-center gap-2 text-body-sm">
@@ -164,7 +235,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
         </div>
       </div>
 
-      <Panel title="Calling slots">
+      <Panel title="Calling hours">
         <div className="mb-3 flex flex-wrap gap-4 text-body-sm">
           {([['FIXED_PKT', 'Fixed PKT slots', "The rep's hours stay the same; the lead's local time shifts when the US changes its clocks."], ['FIXED_LOCAL', 'Fixed local hours', "The lead's local hours stay the same; the PKT slots shift by an hour."]] as const).map(([v, label, hint]) => (
             <label key={v} className={cn('flex max-w-sm cursor-pointer gap-2 rounded-btn border p-3', s.clockMode === v ? 'border-primary bg-primary/5' : 'border-line')}>
@@ -174,13 +245,24 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
           ))}
           <label className="flex items-center gap-2 text-ink"><input type="checkbox" disabled={!canEdit} checked={s.weekdaysOnly} onChange={(e) => set('weekdaysOnly', e.target.checked)} className="h-4 w-4 accent-primary" /> Closed at weekends (lead's local day)</label>
         </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-body-sm">
+          <span className="font-semibold text-ink">Prime time (lead's clock)</span>
+          {(s.primeTimes ?? []).map((pt, i) => (
+            <span key={i} className="inline-flex items-center gap-1">
+              <input type="time" disabled={!canEdit} value={pt.start} onChange={(e) => set('primeTimes', s.primeTimes.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))} className={inp} />
+              to
+              <input type="time" disabled={!canEdit} value={pt.end} onChange={(e) => set('primeTimes', s.primeTimes.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))} className={inp} />
+            </span>
+          ))}
+        </div>
+        <label className="mb-3 flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" disabled={!canEdit} checked={s.earthzoneTick} onChange={(e) => set('earthzoneTick', e.target.checked)} className="h-4 w-4 accent-primary" /> Mark leads "needs Earthzone update" when something is added in the dialer<InfoTip>Off: reps don't double-enter, but then Earthzone and Metriq hold different information.</InfoTip></label>
         <div className="-mx-1 overflow-x-auto">
           <table className="w-full min-w-[720px] text-body-sm">
             <thead className="text-[11px] uppercase text-ink-muted"><tr><th className="px-1 py-1 text-left">Region</th><th className="px-1 text-left">PKT start</th><th className="px-1 text-left">PKT end</th><th className="px-1 text-left">Local start</th><th className="px-1 text-left">Local end</th><th className="px-1 text-left">Best hours (from management)</th></tr></thead>
             <tbody className="divide-y divide-line">
               {REGIONS.map((r: RegionCode) => (
                 <tr key={r}>
-                  <td className="px-1 py-1.5"><span className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold', REGION_META[r].tone)}>{r}</span> <span className="text-ink">{REGION_META[r].name}</span></td>
+                  <td className="px-1 py-1.5"><span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-ink">{r}</span> <span className="text-ink">{REGION_META[r].name}</span></td>
                   {(['pktStart', 'pktEnd', 'localStart', 'localEnd'] as const).map((k) => (
                     <td key={k} className="px-1"><input type="time" disabled={!canEdit || (s.clockMode === 'FIXED_PKT' ? k.startsWith('local') : k.startsWith('pkt'))} value={s.slots[r][k]} onChange={(e) => set('slots', { ...s.slots, [r]: { ...s.slots[r], [k]: e.target.value } })} className={inp} /></td>
                   ))}
@@ -190,7 +272,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] text-ink-muted">The team's rotation: 7 PM to midnight PKT Eastern and Central, midnight to 2 AM Mountain, 2 to 4 AM Pacific. With fixed PKT slots only the PKT times count; with fixed local hours only the local times count.</p>
+        <p className="mt-2 text-[11px] text-ink-muted">Calling hours: 9 AM to 5 PM on the lead's clock in every region. With fixed local hours only the local times count; with fixed PKT slots only the PKT times count.</p>
       </Panel>
 
       {canEdit && (

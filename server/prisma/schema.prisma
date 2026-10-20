@@ -251,6 +251,8 @@ model User {
   dialerLeads         DialerLead[]         @relation("DialerLeadOwner")
   dialerImports       DialerImport[]       @relation("DialerImporter")
   dialerActions       DialerAction[]       @relation("DialerActor")
+  dialerNotes         DialerNote[]         @relation("DialerNoteAuthor")
+  dialerPrefs         DialerUserPrefs?     @relation("DialerPrefsOwner")
   workLogs            WorkLogEntry[]       @relation("WorkLogOwner")
   workLogReviews      WorkLogReview[]      @relation("WorkLogReviewOwner")
   workLogReviewsGiven WorkLogReview[]      @relation("WorkLogReviewer")
@@ -2443,6 +2445,11 @@ model DialerLead {
   /// Region picked by the rep for a split-state lead.
   zoneOverride    String?
   industry        String?
+  /// From the CRM export when mapped.
+  website         String?
+  companySize     String?
+  /// Which list the lead came from: "CRM" (the SMB export) or another list the rep imports (Vendors...).
+  listName        String    @default("CRM")
   status          String
   stage           Int
   /// Highest stage this lead has ever reached (for "ever reached" funnel counts).
@@ -2465,6 +2472,19 @@ model DialerLead {
   callLaterAt     DateTime?
   lastActionAt    DateTime?
   raw             Json?
+  /// Added here (never touched by an import): extra contact details the rep keeps in the dialer.
+  phone2          String?
+  email2          String?
+  linkedin        String?
+  decisionMaker   String?
+  bestTime        String?
+  tags            String[]  @default([])
+  /// Something added here should also go into Earthzone (the CRM); cleared with "Done in Earthzone".
+  needsCrmUpdate  Boolean   @default(false)
+  crmUpdateWhat   String?
+  /// Follow-up tracker: dropped from follow-ups (until the status changes), or kept in the 90+ day backlog.
+  followUpDropped Boolean   @default(false)
+  backlogKeptAt   DateTime?
   firstImportId   String?
   lastImportId    String?
   createdAt       DateTime  @default(now())
@@ -2472,6 +2492,7 @@ model DialerLead {
 
   actions DialerAction[]
   changes DialerStatusChange[]
+  notes   DialerNote[]
 
   @@unique([ownerId, matchKey])
   @@index([matchKey])
@@ -2524,6 +2545,31 @@ model DialerAction {
   createdAt DateTime   @default(now())
 
   @@index([leadId, createdAt])
+}
+
+/// A note on a lead: author, time, pinned, edited, optional next-action date (feeds follow-ups).
+model DialerNote {
+  id           String     @id @default(cuid())
+  leadId       String
+  lead         DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation("DialerNoteAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  text         String
+  pinned       Boolean    @default(false)
+  nextActionAt DateTime?
+  editedAt     DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([userId, createdAt])
+}
+
+/// Each rep's own dialer settings: saved views (filter sets) and follow-up alert days (3 to 60).
+model DialerUserPrefs {
+  userId    String   @id
+  user      User     @relation("DialerPrefsOwner", fields: [userId], references: [id], onDelete: Cascade)
+  data      Json
+  updatedAt DateTime @updatedAt
 }
 
 /// One row ("default"): stage map, follow-up rules, highlight thresholds, calling slots.

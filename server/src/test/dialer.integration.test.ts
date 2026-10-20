@@ -99,7 +99,8 @@ describe('import and dashboard', () => {
     const d = (await data(w.itadMember)).body.leads
     const h = d.find((l: { company: string }) => l.company === 'Harbor Cold Storage')
     expect(h.snoozeUntil).not.toBeNull() // snooze survived the import
-    expect(h.actionCount).toBe(2)
+    expect(h.actionCount).toBe(1) // the snooze; the note is kept as a note
+    expect(h.noteCount).toBe(1)
     const ns = d.find((l: { company: string }) => l.company === 'No State Co')
     expect(ns).toMatchObject({ stateOverride: 'Florida', region: 'ET' }) // the fix survived a blank CRM state
     expect(d.find((l: { company: string }) => l.company === 'Dallas DC')).toBeUndefined()

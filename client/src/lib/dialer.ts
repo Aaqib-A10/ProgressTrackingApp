@@ -70,6 +70,10 @@ export interface RegionWindow {
   /** The same slot on the lead's clock. */
   localSlot: string
   weekend: boolean
+  /** Inside the best hours to call (10 to 11 AM, 2 to 4 PM on the lead's clock). */
+  prime: boolean
+  /** Open, and closes within the hour. */
+  closingSoon: boolean
 }
 
 /**
@@ -99,8 +103,10 @@ export function regionWindow(region: RegionCode, s: DialerSettings, now: Date): 
   const wd = parts(zone, now).weekday
   const weekend = s.weekdaysOnly && (wd === 'Sat' || wd === 'Sun')
   if (weekend) { open = false; minutesUntilOpen = -1 } // shown as "Weekend, opens Monday"
+  const local = parts(zone, now).minutes
+  const prime = open && (s.primeTimes ?? []).some((p) => local >= toMin(p.start) && local < toMin(p.end))
   return {
-    region, open, minutesLeft, minutesUntilOpen,
+    region, open, minutesLeft: open ? minutesLeft : 0, minutesUntilOpen, prime, closingSoon: open && minutesLeft <= 60,
     localTime: clock(zone, now),
     pktSlot: `${fmtMin(pktStart)} – ${fmtMin(pktStart + len)}`,
     localSlot: `${fmtMin(localStart)} – ${fmtMin(localStart + len)}`,
@@ -132,23 +138,68 @@ export const lastActivity = (l: DialerLead) => l.lastActivityAt ?? l.statusChang
 export const daysSince = (iso: string, now: Date) => Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 86400000))
 
 export interface FollowUp { lead: DialerLead; days: number; threshold: number; severity: 'due' | 'late'; callBackDue: boolean }
+/** Follow-up days for one lead: the owner's own setting, else the company's. */
+export type FollowUpDays = Record<string, Record<string, number>> | undefined
+const thresholdOf = (l: DialerLead, s: DialerSettings, by: FollowUpDays) => by?.[l.ownerId]?.[l.status] ?? s.followUp[l.status]
 /**
  * Leads reached or interested that went quiet (plan section 6). Finished statuses (Not
  * Interested, Not Qualified, DNC) and Working On never appear. A call-back whose time has
  * come is listed first.
  */
-export function followUps(leads: DialerLead[], s: DialerSettings, now: Date): FollowUp[] {
+export function followUps(leads: DialerLead[], s: DialerSettings, now: Date, by?: FollowUpDays): FollowUp[] {
   const out: FollowUp[] = []
   for (const l of leads) {
-    if (l.duplicate || isClosed(l, s)) continue
+    if (l.duplicate || isClosed(l, s) || l.followUpDropped) continue
     const callBackDue = !!l.callLaterAt && !isFuture(l.callLaterAt, now)
-    const threshold = s.followUp[l.status]
+    const threshold = thresholdOf(l, s, by)
     if (!callBackDue && (threshold == null || isSnoozed(l, now))) continue
     const days = daysSince(lastActivity(l), now)
     if (!callBackDue && days < threshold) continue
     out.push({ lead: l, days, threshold: threshold ?? 0, severity: threshold && days >= threshold * 2 ? 'late' : 'due', callBackDue })
   }
   return out.sort((a, b) => Number(b.callBackDue) - Number(a.callBackDue) || b.days - a.days)
+}
+
+/** Order in the follow-up tracker: Pipeline, then Interested, then Connected, then the rest; oldest first in each. */
+const FU_ORDER: Record<string, number> = { Pipeline: 0, Interested: 1, Connected: 2 }
+export const byFollowUpOrder = (a: { lead: DialerLead; days: number }, b: { lead: DialerLead; days: number }) =>
+  (FU_ORDER[a.lead.status] ?? 3) - (FU_ORDER[b.lead.status] ?? 3) || b.days - a.days
+
+export interface FollowUpTabs { overdue: FollowUp[]; dueToday: FollowUp[]; scheduled: FollowUp[]; snoozed: FollowUp[]; done: FollowUp[]; backlog: FollowUp[]; dropped: DialerLead[] }
+/**
+ * The follow-up tracker's tabs. "Today" is the rep's working day (from noon Pakistan time).
+ * Overdue: the follow-up days have passed, or a call back from before today. Due today: a call
+ * back set for today. Scheduled: a call back after today. Snoozed: hidden until a date. Done:
+ * worked on today. Backlog: 90+ days quiet (its own bucket, not in Overdue), unless kept recently.
+ */
+export function followUpTabs(leads: DialerLead[], s: DialerSettings, now: Date, dayStart: Date, actedIds: Set<string>, by?: FollowUpDays): FollowUpTabs {
+  const dayEnd = dayStart.getTime() + 86400000
+  const t: FollowUpTabs = { overdue: [], dueToday: [], scheduled: [], snoozed: [], done: [], backlog: [], dropped: [] }
+  for (const l of leads) {
+    if (l.duplicate) continue
+    const threshold = thresholdOf(l, s, by)
+    const days = daysSince(lastActivity(l), now)
+    const item = (callBackDue = false): FollowUp => ({ lead: l, days, threshold: threshold ?? 0, severity: threshold && days >= threshold * 2 ? 'late' : 'due', callBackDue })
+    // Every lead worked on today is "done", whatever its status.
+    if (actedIds.has(l.id)) { t.done.push(item()); continue }
+    if (isClosed(l, s)) continue
+    if (l.followUpDropped) { t.dropped.push(l); continue }
+    const cb = l.callLaterAt ? new Date(l.callLaterAt).getTime() : null
+    if (cb != null) {
+      if (cb >= dayEnd) { t.scheduled.push(item()); continue }
+      if (cb >= dayStart.getTime()) { t.dueToday.push(item(cb <= now.getTime())); continue }
+      t.overdue.push(item(true)); continue
+    }
+    if (isFuture(l.snoozeUntil, now)) { if (threshold != null) t.snoozed.push(item()); continue }
+    if (threshold == null || days < threshold) continue
+    const kept = l.backlogKeptAt && now.getTime() - new Date(l.backlogKeptAt).getTime() < 30 * 86400000
+    if (days >= 90 && !kept) t.backlog.push(item())
+    else t.overdue.push(item())
+  }
+  for (const k of ['overdue', 'dueToday', 'scheduled', 'snoozed', 'done', 'backlog'] as const) t[k].sort(byFollowUpOrder)
+  t.dueToday.sort((a, b) => new Date(a.lead.callLaterAt!).getTime() - new Date(b.lead.callLaterAt!).getTime())
+  t.scheduled.sort((a, b) => new Date(a.lead.callLaterAt!).getTime() - new Date(b.lead.callLaterAt!).getTime())
+  return t
 }
 
 // ------------------------------------------------------------------ numbers
@@ -166,8 +217,8 @@ export function funnelOf(leads: DialerLead[], ever = false): FunnelNumbers {
 export const pct = (v: number | null | undefined, digits = 1) => (v == null ? 'n/a' : `${(v * 100).toFixed(digits)}%`)
 export const num = (n: number) => n.toLocaleString('en-US')
 
-export interface Filters { state: string; region: string; industry: string; status: string; rep: string; source: string; date: string }
-export const NO_FILTERS: Filters = { state: '', region: '', industry: '', status: '', rep: '', source: '', date: '' }
+export interface Filters { state: string; region: string; industry: string; status: string; rep: string; list: string; date: string }
+export const NO_FILTERS: Filters = { state: '', region: '', industry: '', status: '', rep: '', list: '', date: '' }
 
 export function applyFilters(leads: DialerLead[], f: Filters, now: Date): DialerLead[] {
   const cutoff = f.date ? now.getTime() - Number(f.date) * 86400000 : null
@@ -177,7 +228,7 @@ export function applyFilters(leads: DialerLead[], f: Filters, now: Date): Dialer
     if (f.industry && (l.industry ?? '(no industry)') !== f.industry) return false
     if (f.status && l.status !== f.status) return false
     if (f.rep && l.ownerId !== f.rep) return false
-    if (f.source && (l.source ?? '(no source)') !== f.source) return false
+    if (f.list && l.listName !== f.list) return false
     if (cutoff != null && new Date(l.leadDate ?? l.createdAt).getTime() < cutoff) return false
     return true
   })
@@ -244,3 +295,73 @@ export const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-U
 
 /** State names for the Fix data picker (the server checks them against its states-by-region table). */
 export const US_STATES = ['Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming']
+
+// ------------------------------------------------------------------ All leads: search, filters, saved views
+
+const onlyDigits = (v: string | null | undefined) => (v ?? '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '')
+/** One box: name, company, phone (formatting ignored, so 5551234567 finds (555) 123-4567), email or city. */
+export function matchesSearch(l: DialerLead, q: string): boolean {
+  const t = q.trim().toLowerCase()
+  if (!t) return true
+  const d = onlyDigits(t)
+  if (d.length >= 3 && (onlyDigits(l.phone).includes(d) || onlyDigits(l.phone2).includes(d))) return true
+  return [l.company, l.contactName, l.email, l.email2, l.city, l.decisionMaker, l.externalId].some((v) => v && v.toLowerCase().includes(t))
+}
+
+/**
+ * Days in the current status. When Metriq saw the status change (a later import), count from
+ * then; when the status is the same as the first time the lead was imported, Metriq cannot know
+ * when it started, so use the CRM's last activity (or the lead date).
+ */
+export function daysInStatus(l: DialerLead, now: Date): number {
+  const seenChange = l.statusChangedAt && new Date(l.statusChangedAt).getTime() - new Date(l.createdAt).getTime() > 60000
+  return daysSince(seenChange ? l.statusChangedAt! : l.lastActivityAt ?? l.leadDate ?? l.createdAt, now)
+}
+
+/** Ready-made views. Each agent sees only their own leads, so none of them needs per-agent setup. */
+export const PRESET_VIEWS: { id: string; name: string; hint: string }[] = [
+  { id: 'all', name: 'All leads', hint: 'Every lead in your latest import.' },
+  { id: 'pipeline', name: 'My pipeline', hint: 'Interested and Pipeline leads.' },
+  { id: 'never', name: 'Never attempted', hint: 'Assigned and New Data: the freshest, easiest first dials.' },
+  { id: 'stuck', name: 'Stuck', hint: 'Voicemail Sent or Contact Attempted with no change for 7 days or more.' },
+  { id: 'nostate', name: 'No state', hint: 'Leads that need fixing before they count in a region.' },
+  { id: 'changed', name: 'Changed since last import', hint: 'The status changed in your latest import.' },
+  { id: 'earthzone', name: 'Needs Earthzone update', hint: 'Something added here should also go into Earthzone.' },
+]
+
+export interface LeadFilters { preset?: string; q?: string; state?: string; region?: string; industry?: string; status?: string; stage?: string; inStatus?: string; updated?: string; notes?: string; list?: string; tag?: string; rep?: string }
+
+export function presetMatch(l: DialerLead, preset: string | undefined, now: Date, lastImport: { id: string; at: Date } | null): boolean {
+  switch (preset) {
+    case 'pipeline': return l.status === 'Interested' || l.status === 'Pipeline'
+    case 'never': return l.status === 'Assigned' || l.status === 'New Data'
+    case 'stuck': return (l.status === 'Voicemail Sent' || l.status === 'Contact Attempted') && daysInStatus(l, now) >= 7
+    case 'nostate': return !leadState(l)
+    case 'changed':
+      // In the latest import, not new in it, and its status changed at that import.
+      return !!lastImport && !!l.statusChangedAt && l.lastImportId === lastImport.id && l.firstImportId !== lastImport.id && new Date(l.statusChangedAt).getTime() >= lastImport.at.getTime() - 5000
+    case 'earthzone': return l.needsCrmUpdate
+    default: return true
+  }
+}
+
+export function filterLeads(leads: DialerLead[], f: LeadFilters, now: Date, lastImport: { id: string; at: Date } | null): DialerLead[] {
+  return leads.filter((l) => {
+    if (l.duplicate) return false
+    if (!presetMatch(l, f.preset, now, lastImport)) return false
+    if (f.q && !matchesSearch(l, f.q)) return false
+    if (f.state && (leadState(l) ?? '(no state)') !== f.state) return false
+    if (f.region && (leadRegion(l, now) ?? '') !== f.region) return false
+    if (f.industry && (l.industry ?? '(no industry)') !== f.industry) return false
+    if (f.status && l.status !== f.status) return false
+    if (f.stage && String(l.stage) !== f.stage) return false
+    if (f.inStatus && daysInStatus(l, now) < Number(f.inStatus)) return false
+    if (f.updated && daysSince(lastActivity(l), now) > Number(f.updated)) return false
+    if (f.notes === 'yes' && !l.noteCount) return false
+    if (f.notes === 'no' && l.noteCount) return false
+    if (f.list && l.listName !== f.list) return false
+    if (f.tag && !l.tags.includes(f.tag)) return false
+    if (f.rep && l.ownerId !== f.rep) return false
+    return true
+  })
+}

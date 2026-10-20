@@ -4,7 +4,7 @@ import { num, pct } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 
 /** What an import changed (plan section 10). Used right after an import and in History. */
-export function ImportSummaryView({ s }: { s: ImportSummary }) {
+export function ImportSummaryView({ s, onOpenChange }: { s: ImportSummary; onOpenChange?: (from: string, to: string) => void }) {
   const tiles: [string, number, string?][] = [
     ['Added', s.added, 'new leads'],
     ['Changed', s.changed],
@@ -32,7 +32,13 @@ export function ImportSummaryView({ s }: { s: ImportSummary }) {
           <p className="mb-1.5 text-body-sm font-semibold text-ink">Top status changes</p>
           {s.topChanges.length === 0 ? <p className="text-body-sm text-ink-muted">No status changes.</p> : (
             <ul className="space-y-1 text-body-sm">
-              {s.topChanges.map((c) => <li key={c.from + c.to} className="flex justify-between gap-2"><span className="text-ink">{c.from} → {c.to}</span><b className="tabular-nums text-ink">{c.count}</b></li>)}
+              {s.topChanges.map((c) => (
+                <li key={c.from + c.to}>
+                  {onOpenChange
+                    ? <button type="button" onClick={() => onOpenChange(c.from, c.to)} className="flex w-full justify-between gap-2 rounded px-1 text-left hover:bg-slate-50"><span className="text-primary hover:underline">{c.from} → {c.to}</span><b className="tabular-nums text-ink">{c.count}</b></button>
+                    : <span className="flex justify-between gap-2"><span className="text-ink">{c.from} → {c.to}</span><b className="tabular-nums text-ink">{c.count}</b></span>}
+                </li>
+              ))}
             </ul>
           )}
         </div>

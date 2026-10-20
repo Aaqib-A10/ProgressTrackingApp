@@ -24,7 +24,10 @@ export const DEFAULT_STAGE_MAP: Record<string, number> = {
 }
 
 export interface Slot { pktStart: string; pktEnd: string; localStart: string; localEnd: string }
+export interface TimeSpan { start: string; end: string }
 export interface DialerSettingsData {
+  /** 2 = calling hours 9 to 5 local with prime time (ITAD request, Oct 2026). Older stored settings are upgraded. */
+  version: number
   stageMap: Record<string, number>
   /** Statuses never counted as dialable and never followed up (finished, or already being handled). */
   closed: string[]
@@ -42,23 +45,39 @@ export interface DialerSettingsData {
   minSegment: number
   /** US businesses are closed at weekends: regions show closed on Saturday and Sunday (lead's local day). */
   weekdaysOnly: boolean
+  /** Best moments to call, on the lead's local clock (mid morning and after lunch). */
+  primeTimes: TimeSpan[]
+  /** Mark leads whose details were added here so the rep also updates Earthzone (the CRM). */
+  earthzoneTick: boolean
 }
 
+/** Each rep may set their own follow-up days within these limits. */
+export const FOLLOW_UP_MIN = 3
+export const FOLLOW_UP_MAX = 60
+
+// Calling hours: 9 AM to 5 PM on the lead's own clock for every region (the PKT times are only
+// shown for reference in fixed-local mode). Prime time 10 to 11 AM and 2 to 4 PM local.
+const LOCAL_9_TO_5: Record<'ET' | 'CT' | 'MT' | 'PT', Slot> = {
+  ET: { pktStart: '18:00', pktEnd: '02:00', localStart: '09:00', localEnd: '17:00' },
+  CT: { pktStart: '19:00', pktEnd: '03:00', localStart: '09:00', localEnd: '17:00' },
+  MT: { pktStart: '20:00', pktEnd: '04:00', localStart: '09:00', localEnd: '17:00' },
+  PT: { pktStart: '21:00', pktEnd: '05:00', localStart: '09:00', localEnd: '17:00' },
+}
+const PRIME = '10 to 11 AM and 2 to 4 PM'
+
 export const DEFAULT_SETTINGS: DialerSettingsData = {
+  version: 2,
   stageMap: DEFAULT_STAGE_MAP,
   closed: ['Not Interested', 'Not Qualified', 'DNC', 'Working On'],
   followUp: { Connected: 30, Interested: 14, Pipeline: 7 },
   highlight: { amberPct: 30, redPct: 50, redCount: 50 },
-  slots: {
-    ET: { pktStart: '19:00', pktEnd: '00:00', localStart: '10:00', localEnd: '15:00' },
-    CT: { pktStart: '19:00', pktEnd: '00:00', localStart: '09:00', localEnd: '14:00' },
-    MT: { pktStart: '00:00', pktEnd: '02:00', localStart: '13:00', localEnd: '15:00' },
-    PT: { pktStart: '02:00', pktEnd: '04:00', localStart: '14:00', localEnd: '16:00' },
-  },
-  clockMode: 'FIXED_PKT',
-  peak: { ET: '', CT: '', MT: '', PT: '' },
+  slots: LOCAL_9_TO_5,
+  clockMode: 'FIXED_LOCAL',
+  peak: { ET: PRIME, CT: PRIME, MT: PRIME, PT: PRIME },
   minSegment: 20,
   weekdaysOnly: true,
+  primeTimes: [{ start: '10:00', end: '11:00' }, { start: '14:00', end: '16:00' }],
+  earthzoneTick: true,
 }
 
 const CANON = new Map<string, string>(STATUSES.map((s) => [s.toLowerCase(), s]))
@@ -104,7 +123,9 @@ export function funnel(stages: number[]): FunnelNumbers {
 
 /** Merge stored settings over the defaults (so new settings get a default value). */
 export function withDefaults(stored: unknown): DialerSettingsData {
-  const s = (stored && typeof stored === 'object' ? stored : {}) as Partial<DialerSettingsData>
+  const s = { ...((stored && typeof stored === 'object' ? stored : {}) as Partial<DialerSettingsData>) }
+  // Settings saved before version 2 used the old PKT rotation: move them to 9 to 5 local.
+  if ((s.version ?? 1) < 2) { delete s.slots; delete s.clockMode; delete s.peak; s.version = 2 }
   return {
     ...DEFAULT_SETTINGS,
     ...s,

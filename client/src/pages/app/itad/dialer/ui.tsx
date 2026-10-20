@@ -1,13 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { BellOff, Clock3, MessageSquarePlus, Phone, X } from 'lucide-react'
+import { BellOff, ChevronLeft, ChevronRight, Clock3, Info, MessageSquarePlus, Phone, Pin } from 'lucide-react'
 import { Modal } from '../../../../components/ui/Modal'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
-import { dialerApi, type DialerLead, type LeadDetail, type RegionCode } from '../../../../lib/dialerApi'
-import { REGION_META, REGIONS, leadRegion, leadState, lastActivity, shortDate, daysSince } from '../../../../lib/dialer'
+import { dialerApi, type DialerLead, type RegionCode } from '../../../../lib/dialerApi'
+import { REGION_META, leadRegion, leadState, lastActivity, shortDate, daysSince } from '../../../../lib/dialer'
 
-/** Small pieces shared by the Lead Dialer screens. */
+/**
+ * Small pieces shared by the Lead Dialer screens. Colour rules (ITAD, Oct 2026): red means act
+ * now or overdue, amber means watch, green means open or good; everything else is neutral grey,
+ * and the brand colour is only for buttons and the active tab.
+ */
 
 export function errMsg(e: unknown, fallback: string): string {
   const m = (e as { message?: string })?.message
@@ -15,34 +19,46 @@ export function errMsg(e: unknown, fallback: string): string {
   try { return (JSON.parse(m) as { error?: string }).error || fallback } catch { return m }
 }
 
+/** ⓘ with the explanation on hover (or tap). The first view shows only numbers, labels and colour. */
+export function InfoTip({ children, className, side = 'top' }: { children: ReactNode; className?: string; side?: 'top' | 'bottom' }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <span className={cn('relative inline-flex align-middle', className)} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button type="button" aria-label="What this means" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }} onBlur={() => setOpen(false)} className="rounded-full text-ink-muted/70 hover:text-ink focus:text-ink focus:outline-none">
+        <Info size={13} />
+      </button>
+      {open && (
+        <span role="tooltip" className={cn('absolute left-1/2 z-50 w-64 -translate-x-1/2 rounded-btn border border-line bg-card px-3 py-2 text-left text-[12px] font-normal normal-case leading-snug tracking-normal text-ink shadow-overlay', side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5')}>
+          {children}
+        </span>
+      )}
+    </span>
+  )
+}
+
 export function RegionBadge({ lead, region, now }: { lead?: DialerLead; region?: RegionCode | null; now?: Date }) {
   const r = region ?? (lead ? leadRegion(lead, now ?? new Date()) : null)
-  if (!r) return <span className="rounded px-1.5 py-0.5 text-[11px] font-bold text-ink-muted ring-1 ring-line">?</span>
+  if (!r) return <span className="rounded px-1.5 py-0.5 text-[11px] font-bold text-ink-muted ring-1 ring-line" title="No state yet">?</span>
   const verify = lead?.verifyZone && !lead.zoneOverride
   const az = lead?.region === 'AZ' && !lead.zoneOverride
   return (
-    <span className={cn('inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-bold', REGION_META[r].tone)} title={verify ? 'This state sits in two time zones: check the city' : az ? 'Arizona: Pacific hours in US summer, Mountain in winter' : REGION_META[r].name}>
+    <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-ink" title={verify ? 'This state sits in two time zones: check the city' : az ? 'Arizona: Pacific hours in US summer, Mountain in winter' : REGION_META[r].name}>
       {r}{verify ? '?' : az ? '*' : ''}
     </span>
   )
 }
 
-const STATUS_TONE: Record<number, string> = {
-  1: 'bg-slate-100 text-ink-muted',
-  2: 'bg-warning/10 text-warning',
-  3: 'bg-primary/10 text-primary',
-  4: 'bg-success/10 text-success',
-}
+/** Status pill: neutral, except positive (green). */
 export function StatusPill({ lead }: { lead: Pick<DialerLead, 'status' | 'stage'> }) {
-  return <span className={cn('inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', STATUS_TONE[lead.stage] ?? STATUS_TONE[1])}>{lead.status}</span>
+  return <span className={cn('inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', lead.stage >= 4 ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted')}>{lead.status}</span>
 }
 
-export function Panel({ title, action, children, className }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({ title, info, action, children, className }: { title?: ReactNode; info?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn('rounded-card border border-line bg-card p-4 sm:p-5', className)}>
       {(title || action) && (
         <div className="mb-3 flex items-center justify-between gap-3">
-          {title && <h2 className="text-label-md uppercase tracking-wide text-ink-muted">{title}</h2>}
+          {title && <h2 className="flex items-center gap-1.5 text-label-md uppercase tracking-wide text-ink-muted">{title}{info && <InfoTip>{info}</InfoTip>}</h2>}
           {action}
         </div>
       )}
@@ -51,14 +67,53 @@ export function Panel({ title, action, children, className }: { title?: ReactNod
   )
 }
 
-const inputCls = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
-const toLocalInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+// ------------------------------------------------------------------ numbered pages
 
-type ActionKind = 'CALL_LATER' | 'SNOOZE' | 'NOTE'
-/** Call now · Call later · Snooze · Log note (plan 4c). Snoozes and notes survive new imports. */
-export function LeadActions({ lead, onDone, compact }: { lead: DialerLead; onDone: () => void; compact?: boolean }) {
+export function usePaged<T>(items: T[], initialSize = 25) {
+  const [page, setPage] = useState(1)
+  const [size, setSize] = useState(initialSize)
+  const pages = Math.max(1, Math.ceil(items.length / size))
+  useEffect(() => { if (page > pages) setPage(pages) }, [page, pages])
+  const cur = Math.min(page, pages)
+  return { rows: items.slice((cur - 1) * size, cur * size), page: cur, pages, size, setPage, setSize: (n: number) => { setSize(n); setPage(1) }, total: items.length }
+}
+
+/** 1 2 3 … pages with a 25 / 50 / 100 choice, used on every list. */
+export function Pager({ p, className }: { p: ReturnType<typeof usePaged<unknown>>; className?: string }) {
+  if (p.total <= 25) return null
+  const nums: (number | '…')[] = []
+  for (let i = 1; i <= p.pages; i++) {
+    if (i === 1 || i === p.pages || Math.abs(i - p.page) <= 1) nums.push(i)
+    else if (nums[nums.length - 1] !== '…') nums.push('…')
+  }
+  const from = (p.page - 1) * p.size + 1
+  return (
+    <div className={cn('flex flex-wrap items-center justify-between gap-2 pt-3 text-body-sm', className)}>
+      <span className="text-ink-muted">{from.toLocaleString()} to {Math.min(p.total, p.page * p.size).toLocaleString()} of {p.total.toLocaleString()}</span>
+      <div className="flex items-center gap-1">
+        <button type="button" disabled={p.page === 1} onClick={() => p.setPage(p.page - 1)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 disabled:opacity-40" aria-label="Previous page"><ChevronLeft size={15} /></button>
+        {nums.map((n, i) => n === '…' ? <span key={`e${i}`} className="px-1 text-ink-muted">…</span> : (
+          <button key={n} type="button" onClick={() => p.setPage(n)} className={cn('min-w-[30px] rounded-btn px-2 py-1 font-semibold tabular-nums', n === p.page ? 'bg-primary text-white' : 'text-ink hover:bg-slate-100')}>{n}</button>
+        ))}
+        <button type="button" disabled={p.page === p.pages} onClick={() => p.setPage(p.page + 1)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 disabled:opacity-40" aria-label="Next page"><ChevronRight size={15} /></button>
+        <select value={p.size} onChange={(e) => p.setSize(Number(e.target.value))} className="ml-2 h-8 rounded-btn border border-line bg-card px-1.5 text-body-sm text-ink" aria-label="Rows per page">
+          {[25, 50, 100].map((n) => <option key={n} value={n}>{n} per page</option>)}
+        </select>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------ actions
+
+const inputCls = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
+export const toLocalInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+
+type ActionKind = 'CALL_LATER' | 'SNOOZE'
+/** Call now · Call later · Snooze · Log note. Snoozes and notes survive new imports. */
+export function LeadActions({ lead, onDone, compact, onNote }: { lead: Pick<DialerLead, 'id' | 'company' | 'phone'>; onDone: () => void; compact?: boolean; onNote?: () => void }) {
   const { addToast } = useToast()
-  const [open, setOpen] = useState<ActionKind | null>(null)
+  const [open, setOpen] = useState<ActionKind | 'NOTE' | null>(null)
   const [busy, setBusy] = useState(false)
   async function callNow() {
     setBusy(true)
@@ -72,165 +127,135 @@ export function LeadActions({ lead, onDone, compact }: { lead: DialerLead; onDon
   const btn = cn('inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-btn border px-2.5 text-body-sm font-semibold transition-colors', compact && 'h-7 px-2')
   return (
     <div className={cn('flex items-center gap-1.5', compact ? 'flex-nowrap' : 'flex-wrap')} onClick={(e) => e.stopPropagation()}>
-      <button type="button" disabled={busy} onClick={callNow} className={cn(btn, 'border-[#0F766E] bg-[#0F766E] text-white hover:bg-[#0F766E]/90')}><Phone size={13} />Call now</button>
+      <button type="button" disabled={busy} onClick={callNow} className={cn(btn, 'border-primary bg-primary text-white hover:bg-primary/90')}><Phone size={13} />Call now</button>
       <button type="button" onClick={() => setOpen('CALL_LATER')} className={cn(btn, 'border-line bg-card text-ink hover:bg-slate-50')}><Clock3 size={13} />Call later</button>
       <button type="button" onClick={() => setOpen('SNOOZE')} className={cn(btn, 'border-line bg-card text-ink hover:bg-slate-50')}><BellOff size={13} />Snooze</button>
-      <button type="button" onClick={() => setOpen('NOTE')} className={cn(btn, 'border-line bg-card text-ink hover:bg-slate-50')}><MessageSquarePlus size={13} />Log note</button>
-      {open && <ActionModal lead={lead} kind={open} onClose={() => setOpen(null)} onDone={() => { setOpen(null); onDone() }} />}
+      <button type="button" onClick={() => (onNote ? onNote() : setOpen('NOTE'))} className={cn(btn, 'border-line bg-card text-ink hover:bg-slate-50')}><MessageSquarePlus size={13} />Log note</button>
+      {open === 'NOTE' && <NoteModal lead={lead} onClose={() => setOpen(null)} onDone={() => { setOpen(null); onDone() }} />}
+      {open && open !== 'NOTE' && <ActionModal lead={lead} kind={open} onClose={() => setOpen(null)} onDone={() => { setOpen(null); onDone() }} />}
     </div>
   )
 }
 
-function ActionModal({ lead, kind, onClose, onDone }: { lead: DialerLead; kind: ActionKind; onClose: () => void; onDone: () => void }) {
+function ActionModal({ lead, kind, onClose, onDone }: { lead: Pick<DialerLead, 'id' | 'company'>; kind: ActionKind; onClose: () => void; onDone: () => void }) {
   const { addToast } = useToast()
   const now = new Date()
   const [when, setWhen] = useState(toLocalInput(new Date(now.getTime() + (kind === 'SNOOZE' ? 3 * 86400000 : 2 * 3600000))))
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
-  const title = kind === 'CALL_LATER' ? 'Call later' : kind === 'SNOOZE' ? 'Snooze' : 'Log note'
+  const title = kind === 'CALL_LATER' ? 'Call later' : 'Snooze'
   async function save(at?: Date) {
     setBusy(true)
     try {
       const t = at ?? new Date(when)
-      await dialerApi.action(lead.id, kind === 'NOTE' ? { kind, note: note.trim() } : { kind, at: t.toISOString(), note: note.trim() || undefined })
-      addToast({ type: 'success', message: kind === 'NOTE' ? 'Note saved.' : kind === 'CALL_LATER' ? `Call back set for ${t.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : `Snoozed until ${t.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.` })
+      await dialerApi.action(lead.id, { kind, at: t.toISOString(), note: note.trim() || undefined })
+      addToast({ type: 'success', message: kind === 'CALL_LATER' ? `Call back set for ${t.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : `Snoozed until ${t.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}.` })
       onDone()
     } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save') }) } finally { setBusy(false) }
   }
   return (
-    <Modal open onClose={onClose} title={`${title} · ${lead.company}`} size="sm" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button disabled={busy || (kind === 'NOTE' && !note.trim())} onClick={() => save()}>Save</Button></>}>
+    <Modal open onClose={onClose} title={`${title} · ${lead.company}`} size="sm" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button disabled={busy} onClick={() => save()}>Save</Button></>}>
       <div className="space-y-3">
-        {kind !== 'NOTE' && (
-          <>
-            {kind === 'SNOOZE' && (
-              <div className="flex flex-wrap gap-1.5">
-                {[1, 3, 7, 14].map((d) => (
-                  <button key={d} type="button" disabled={busy} onClick={() => save(new Date(now.getTime() + d * 86400000))} className="rounded-full border border-line px-3 py-1 text-body-sm font-medium text-ink hover:border-primary hover:text-primary">{d === 1 ? '1 day' : d === 7 ? '1 week' : d === 14 ? '2 weeks' : `${d} days`}</button>
-                ))}
-              </div>
-            )}
-            <label className="block">
-              <span className="mb-1 block text-body-sm font-semibold text-ink">{kind === 'CALL_LATER' ? 'Call back at (your time)' : 'Hide until'}</span>
-              <input type="datetime-local" value={when} min={toLocalInput(now)} onChange={(e) => setWhen(e.target.value)} className={inputCls} />
-            </label>
-          </>
+        {kind === 'SNOOZE' && (
+          <div className="flex flex-wrap gap-1.5">
+            {[1, 3, 7, 14, 30].map((d) => (
+              <button key={d} type="button" disabled={busy} onClick={() => save(new Date(now.getTime() + d * 86400000))} className="rounded-full border border-line px-3 py-1 text-body-sm font-medium text-ink hover:border-primary hover:text-primary">{d === 1 ? '1 day' : d === 7 ? '1 week' : d === 14 ? '2 weeks' : `${d} days`}</button>
+            ))}
+          </div>
         )}
         <label className="block">
-          <span className="mb-1 block text-body-sm font-semibold text-ink">{kind === 'NOTE' ? 'Note' : 'Note (optional)'}</span>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} autoFocus={kind === 'NOTE'} className="w-full rounded-btn border border-line bg-card px-3 py-2 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder={kind === 'NOTE' ? 'What happened, what was agreed…' : ''} />
+          <span className="mb-1 block text-body-sm font-semibold text-ink">{kind === 'CALL_LATER' ? 'Call back at (your time)' : 'Hide until'}</span>
+          <input type="datetime-local" value={when} min={toLocalInput(now)} onChange={(e) => setWhen(e.target.value)} className={inputCls} />
         </label>
-        <p className="text-body-sm text-ink-muted">Saved on the dashboard against this lead. New imports never erase it. Update the status in the CRM as usual.</p>
+        <label className="block">
+          <span className="mb-1 block text-body-sm font-semibold text-ink">Reason (optional)</span>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={2000} className="w-full rounded-btn border border-line bg-card px-3 py-2 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
+        </label>
       </div>
     </Modal>
   )
 }
 
-/** A list of leads (e.g. one state's leads in one status), each opening its detail. */
-export function LeadsListModal({ title, leads, now, onClose, onOpen, showOwner }: { title: string; leads: DialerLead[]; now: Date; onClose: () => void; onOpen: (id: string) => void; showOwner?: boolean }) {
-  const [limit, setLimit] = useState(50)
+/** A note with an optional next-action date and pin, from a list (the side panel has its own box). */
+export function NoteModal({ lead, onClose, onDone }: { lead: Pick<DialerLead, 'id' | 'company'>; onClose: () => void; onDone: () => void }) {
+  const { addToast } = useToast()
+  const [text, setText] = useState('')
+  const [next, setNext] = useState('')
+  const [pinned, setPinned] = useState(false)
+  const [busy, setBusy] = useState(false)
+  async function save() {
+    setBusy(true)
+    try {
+      await dialerApi.addNote(lead.id, { text: text.trim(), pinned, nextActionAt: next ? new Date(next).toISOString() : null })
+      addToast({ type: 'success', message: next ? 'Note saved. The lead comes back in follow-ups on that date.' : 'Note saved.' })
+      onDone()
+    } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save the note') }) } finally { setBusy(false) }
+  }
+  return (
+    <Modal open onClose={onClose} title={`Log note · ${lead.company}`} size="sm" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button disabled={busy || !text.trim()} onClick={save}>Save note</Button></>}>
+      <NoteFields text={text} setText={setText} next={next} setNext={setNext} pinned={pinned} setPinned={setPinned} autoFocus />
+    </Modal>
+  )
+}
+
+export function NoteFields({ text, setText, next, setNext, pinned, setPinned, autoFocus }: { text: string; setText: (v: string) => void; next: string; setNext: (v: string) => void; pinned: boolean; setPinned: (v: boolean) => void; autoFocus?: boolean }) {
+  const quick = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(19, 0, 0, 0); setNext(toLocalInput(d)) }
+  return (
+    <div className="space-y-2.5">
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={4000} autoFocus={autoFocus} placeholder="What happened, what was agreed…" className="w-full rounded-btn border border-line bg-card px-3 py-2 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
+      <div className="flex flex-wrap items-center gap-1.5 text-body-sm">
+        <span className="text-ink-muted">Next action</span>
+        {[1, 3, 7].map((d) => <button key={d} type="button" onClick={() => quick(d)} className="rounded-full border border-line px-2.5 py-0.5 text-ink hover:border-primary hover:text-primary">in {d} day{d > 1 ? 's' : ''}</button>)}
+        <input type="datetime-local" value={next} onChange={(e) => setNext(e.target.value)} className="h-8 rounded-btn border border-line bg-card px-2 text-body-sm text-ink" aria-label="Next action date" />
+        {next && <button type="button" onClick={() => setNext('')} className="text-ink-muted hover:text-ink">clear</button>}
+      </div>
+      <label className="flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="h-4 w-4 accent-primary" /><Pin size={13} /> Pin to the top of the lead</label>
+    </div>
+  )
+}
+
+/** A list of leads (e.g. one state's leads in one status), each opening the side panel. */
+export function LeadsListModal({ title, leads, now, onClose, onOpen, showOwner }: { title: string; leads: DialerLead[]; now: Date; onClose: () => void; onOpen: (id: string, ids: string[]) => void; showOwner?: boolean }) {
+  const p = usePaged(leads)
+  const ids = leads.map((l) => l.id)
   return (
     <Modal open onClose={onClose} title={`${title} · ${leads.length}`} size="xl">
       {leads.length === 0 ? <p className="py-6 text-center text-body-md text-ink-muted">No leads here.</p> : (
         <div className="max-h-[65vh] overflow-y-auto">
-          <table className="w-full text-left text-body-sm">
-            <thead className="sticky top-0 bg-card text-[11px] uppercase text-ink-muted">
-              <tr><th className="py-2 pr-3">Lead</th><th className="pr-3">Phone</th><th className="pr-3">City / State</th><th className="pr-3">Region</th><th className="pr-3">Status</th><th className="pr-3">Last activity</th>{showOwner && <th className="pr-3">Rep</th>}</tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {leads.slice(0, limit).map((l) => (
-                <tr key={l.id} onClick={() => onOpen(l.id)} className="cursor-pointer hover:bg-slate-50">
-                  <td className="py-2 pr-3"><p className="font-semibold text-ink">{l.company}</p>{l.contactName && <p className="text-ink-muted">{l.contactName}</p>}</td>
-                  <td className="pr-3 tabular-nums text-ink">{l.phone ?? '—'}</td>
-                  <td className="pr-3 text-ink">{[l.city, leadState(l)].filter(Boolean).join(', ') || '—'}</td>
-                  <td className="pr-3"><RegionBadge lead={l} now={now} /></td>
-                  <td className="pr-3"><StatusPill lead={l} /></td>
-                  <td className="pr-3 text-ink-muted">{shortDate(lastActivity(l))} · {daysSince(lastActivity(l), now)}d</td>
-                  {showOwner && <td className="pr-3 text-ink-muted">{l.ownerName}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {leads.length > limit && <div className="py-3 text-center"><Button size="sm" variant="secondary" onClick={() => setLimit((n) => n + 100)}>Show {Math.min(100, leads.length - limit)} more</Button></div>}
+          <LeadTable leads={p.rows} now={now} showOwner={showOwner} onOpen={(id) => onOpen(id, ids)} />
+          <Pager p={p} />
         </div>
       )}
     </Modal>
   )
 }
 
-const KIND_LABEL: Record<string, string> = { CALL_NOW: 'Called', CALL_LATER: 'Call later set', SNOOZE: 'Snoozed', NOTE: 'Note', CLEAR: 'Snooze cleared', STATE_FIX: 'State fixed', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate' }
-
-/** One lead: details, status path, notes and actions, zone for split states. */
-export function LeadDetailModal({ id, now, onClose, onChanged }: { id: string; now: Date; onClose: () => void; onChanged: () => void }) {
-  const { addToast } = useToast()
-  const [d, setD] = useState<LeadDetail | null>(null)
-  const load = () => { dialerApi.lead(id).then(setD).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not open the lead') })) }
-  useEffect(load, [id]) // eslint-disable-line react-hooks/exhaustive-deps
-  const changed = () => { load(); onChanged() }
-  const l = d?.lead
+/** The standard lead rows: name, phone, place, region, status, last activity; a pinned note shows on hover. */
+export function LeadTable({ leads, now, showOwner, onOpen, extra }: { leads: DialerLead[]; now: Date; showOwner?: boolean; onOpen: (id: string) => void; extra?: { header: string; cell: (l: DialerLead) => ReactNode } }) {
   return (
-    <Modal open onClose={onClose} title={l ? l.company : 'Lead'} size="xl">
-      {!l ? <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-5 animate-pulse rounded bg-slate-100" />)}</div> : (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusPill lead={l} />
-              <RegionBadge lead={l} now={now} />
-              {l.verifyZone && !l.zoneOverride && <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-semibold text-warning">verify zone</span>}
-              {(l.snoozeUntil && new Date(l.snoozeUntil) > now) && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-ink-muted">Snoozed until {shortDate(l.snoozeUntil)}</span>}
-              {(l.callLaterAt && new Date(l.callLaterAt) > now) && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">Call back {new Date(l.callLaterAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span>}
-            </div>
-            <LeadActions lead={l} onDone={changed} />
-            {(l.snoozeUntil || l.callLaterAt) && <button type="button" className="text-body-sm text-primary hover:underline" onClick={() => dialerApi.action(l.id, { kind: 'CLEAR' }).then(changed)}>Clear snooze / call back</button>}
-            <section>
-              <h3 className="mb-2 text-body-md font-semibold text-ink">Notes and actions</h3>
-              {d.actions.length === 0 ? <p className="text-body-sm text-ink-muted">Nothing yet.</p> : (
-                <ul className="space-y-2">
-                  {d.actions.map((a) => (
-                    <li key={a.id} className="rounded-btn border border-line px-3 py-2 text-body-sm">
-                      <div className="flex items-center gap-2"><b className="text-ink">{KIND_LABEL[a.kind] ?? a.kind}</b><span className="text-ink-muted">{a.user.name} · {new Date(a.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>{a.at && <span className="text-ink-muted">→ {new Date(a.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}</div>
-                      {a.note && <p className="mt-0.5 whitespace-pre-wrap text-ink">{a.note}</p>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            <section>
-              <h3 className="mb-2 text-body-md font-semibold text-ink">Status path</h3>
-              <ol className="flex flex-wrap items-center gap-1.5 text-body-sm">
-                {d.changes.map((c, i) => (
-                  <li key={c.id} className="flex items-center gap-1.5">
-                    {i > 0 && <span className="text-ink-muted">→</span>}
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-ink">{c.toStatus}</span>
-                    <span className="text-[11px] text-ink-muted">{shortDate(c.createdAt)}</span>
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-1 text-[11px] text-ink-muted">Seen at each import. If a status changed twice between two imports, only the later one shows.</p>
-            </section>
-          </div>
-          <aside className="space-y-2 rounded-card border border-line bg-slate-50/70 p-4 text-body-sm">
-            {([
-              ['Contact', l.contactName], ['Phone', l.phone], ['Email', l.email], ['City', l.city], ['State', leadState(l) ? `${leadState(l)}${l.stateOverride ? ' (fixed here)' : ''}` : 'Unknown'],
-              ['Industry', l.industry], ['Source', l.source], ['Lead ID', l.externalId], ['Owner', l.ownerName || undefined],
-              ['Last activity', l.lastActivityAt ? new Date(l.lastActivityAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not in export'],
-            ] as [string, string | null | undefined][]).filter(([k, v]) => k !== 'Owner' || v).map(([k, v]) => (
-              <div key={k} className="flex gap-2"><span className="w-24 shrink-0 text-ink-muted">{k}</span><span className="min-w-0 break-words text-ink">{v || '—'}</span></div>
-            ))}
-            {(l.verifyZone || l.zoneOverride) && (
-              <div className="border-t border-line pt-2">
-                <p className="mb-1 font-semibold text-ink">Time zone for this lead</p>
-                <div className="flex flex-wrap gap-1">
-                  {REGIONS.map((r) => (
-                    <button key={r} type="button" onClick={() => dialerApi.fix(l.id, { zone: l.zoneOverride === r ? null : r }).then(changed)} className={cn('rounded px-2 py-1 text-[11px] font-bold', l.zoneOverride === r ? REGION_META[r].tone : 'bg-card text-ink-muted ring-1 ring-line hover:text-ink')}>{r}</button>
-                  ))}
-                </div>
-                <p className="mt-1 text-[11px] text-ink-muted">{leadState(l)} sits in two time zones. The city or area code usually settles it.</p>
-              </div>
-            )}
-          </aside>
-        </div>
-      )}
-      {l && <button type="button" onClick={onClose} className="sr-only"><X /></button>}
-    </Modal>
+    <div className="-mx-1 overflow-x-auto">
+      <table className="w-full min-w-[760px] text-left text-body-sm">
+        <thead className="sticky top-0 bg-card text-[11px] uppercase text-ink-muted">
+          <tr><th className="px-2 py-2">Lead</th><th className="px-2">Phone</th><th className="px-2">City / State</th><th className="px-2">Region</th><th className="px-2">Status</th><th className="px-2">Last activity</th>{showOwner && <th className="px-2">Rep</th>}{extra && <th className="px-2">{extra.header}</th>}</tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {leads.map((l) => (
+            <tr key={l.id} onClick={() => onOpen(l.id)} className="cursor-pointer hover:bg-slate-50" title={l.pinnedNote ? `Pinned note: ${l.pinnedNote}` : undefined}>
+              <td className="px-2 py-2">
+                <p className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning" title={`Update Earthzone: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</p>
+                {l.contactName && <p className="text-ink-muted">{l.contactName}</p>}
+              </td>
+              <td className="whitespace-nowrap px-2 tabular-nums text-ink">{l.phone ?? '—'}</td>
+              <td className="px-2 text-ink">{[l.city, leadState(l)].filter(Boolean).join(', ') || '—'}</td>
+              <td className="px-2"><RegionBadge lead={l} now={now} /></td>
+              <td className="px-2"><StatusPill lead={l} /></td>
+              <td className="whitespace-nowrap px-2 text-ink-muted">{shortDate(lastActivity(l))} · {daysSince(lastActivity(l), now)}d</td>
+              {showOwner && <td className="px-2 text-ink-muted">{l.ownerName}</td>}
+              {extra && <td className="px-2" onClick={(e) => e.stopPropagation()}>{extra.cell(l)}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

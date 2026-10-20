@@ -4,14 +4,14 @@ import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerLead, type RegionCode } from '../../../../lib/dialerApi'
 import { REGIONS, REGION_META, US_STATES, leadState, segments } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
-import { Panel, StatusPill, errMsg } from './ui'
+import { Pager, Panel, StatusPill, errMsg, usePaged } from './ui'
 
 /**
  * Fix data (plan 4d and 5): leads with no state stay out of the region counts and the state
  * table until fixed. The rep adds the state (suggested from the phone area code when it can
  * be), or sends the lead back to lead gen. Split-state leads can get their zone here too.
  */
-export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads: DialerLead[]; onOpenLead: (id: string) => void; onChanged: () => void; showOwner: boolean }) {
+export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads: DialerLead[]; onOpenLead: (id: string, ids?: string[]) => void; onChanged: () => void; showOwner: boolean }) {
   const { addToast } = useToast()
   const [busy, setBusy] = useState<string | null>(null)
   const [showSplit, setShowSplit] = useState(false)
@@ -20,6 +20,8 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
   const open = noState.filter((l) => !l.sentToLeadGen)
   const sent = noState.filter((l) => l.sentToLeadGen)
   const split = live.filter((l) => l.verifyZone && !l.zoneOverride && leadState(l))
+  const po = usePaged(open)
+  const openIds = open.map((l) => l.id)
 
   async function fix(l: DialerLead, body: Parameters<typeof dialerApi.fix>[1], done: string) {
     setBusy(l.id)
@@ -45,9 +47,9 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
             <table className="w-full min-w-[860px] text-left text-body-sm">
               <thead className="text-[11px] uppercase text-ink-muted"><tr><th className="px-2 py-2">Lead</th><th className="px-2">Phone</th><th className="px-2">City</th><th className="px-2">Status</th>{showOwner && <th className="px-2">Rep</th>}<th className="px-2">Set the state</th><th className="px-2" /></tr></thead>
               <tbody className="divide-y divide-line">
-                {open.map((l) => (
+                {po.rows.map((l) => (
                   <tr key={l.id}>
-                    <td className="px-2 py-2"><button type="button" onClick={() => onOpenLead(l.id)} className="font-semibold text-ink hover:underline">{l.company}</button>{l.stateRaw && <p className="text-[11px] text-ink-muted">CRM says "{l.stateRaw}"</p>}</td>
+                    <td className="px-2 py-2"><button type="button" onClick={() => onOpenLead(l.id, openIds)} className="font-semibold text-ink hover:underline">{l.company}</button>{l.stateRaw && <p className="text-[11px] text-ink-muted">CRM says "{l.stateRaw}"</p>}</td>
                     <td className="px-2 tabular-nums text-ink">{l.phone ?? '—'}</td>
                     <td className="px-2 text-ink">{l.city ?? '—'}</td>
                     <td className="px-2"><StatusPill lead={l} /></td>
@@ -55,7 +57,7 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
                     <td className="px-2">
                       <div className="flex items-center gap-1.5">
                         {l.suggestedState && (
-                          <button type="button" disabled={busy === l.id} onClick={() => fix(l, { state: l.suggestedState }, `${l.company}: state set to ${l.suggestedState}`)} className="inline-flex items-center gap-1 rounded-btn bg-primary/10 px-2 py-1 text-[12px] font-semibold text-primary hover:bg-primary/15" title="From the phone area code">
+                          <button type="button" disabled={busy === l.id} onClick={() => fix(l, { state: l.suggestedState }, `${l.company}: state set to ${l.suggestedState}`)} className="inline-flex items-center gap-1 rounded-btn bg-slate-100 px-2 py-1 text-[12px] font-semibold text-ink hover:bg-slate-200" title="From the phone area code">
                             <Check size={12} />{l.suggestedState}
                           </button>
                         )}
@@ -70,9 +72,10 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
                 ))}
               </tbody>
             </table>
+            <Pager p={po} />
           </div>
         )}
-        <p className="mt-3 text-[11px] text-ink-muted">A state set here is kept until the CRM sends one itself. Tell lead gen to correct the source so the next export has it.</p>
+        <p className="mt-3 text-[11px] text-ink-muted">A state set here is kept until the CRM sends one itself, and the lead is marked "needs Earthzone update" so the CRM gets it too.</p>
       </Panel>
 
       {sent.length > 0 && (
@@ -98,7 +101,7 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
                 <span className="text-ink-muted">{[l.city, leadState(l)].filter(Boolean).join(', ')}</span>
                 <span className="flex gap-1">
                   {REGIONS.map((r: RegionCode) => (
-                    <button key={r} type="button" disabled={busy === l.id} onClick={() => fix(l, { zone: r }, `${l.company}: ${REGION_META[r].name} time`)} className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold ring-1 ring-line hover:text-ink', l.region === r ? REGION_META[r].soft : 'text-ink-muted')}>{r}</button>
+                    <button key={r} type="button" disabled={busy === l.id} onClick={() => fix(l, { zone: r }, `${l.company}: ${REGION_META[r].name} time`)} className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold ring-1 ring-line hover:text-ink', l.region === r ? 'bg-slate-100 text-ink' : 'text-ink-muted')}>{r}</button>
                   ))}
                 </span>
               </li>

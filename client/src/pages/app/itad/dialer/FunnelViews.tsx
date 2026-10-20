@@ -2,27 +2,29 @@ import { useMemo, useState } from 'react'
 import type { DialerLead, DialerSettings } from '../../../../lib/dialerApi'
 import { funnelOf, leadRegion, leadState, num, pct, segments, type Segment } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
-import { Panel } from './ui'
+import { InfoTip, Pager, Panel, usePaged } from './ui'
 
 /** Funnel full view and the industry funnel (plan 4e and 7). Same filters as the dashboard. */
 
-const MEANINGS: [string, string][] = [
-  ['Total', 'all the leads on your list.'],
-  ['Attempted+', 'leads we have tried to reach at least once.'],
-  ['Connected+', 'leads where we spoke to the person.'],
-  ['Positive', 'leads that showed interest or moved into the pipeline.'],
-  ['Attempt rate', 'of all leads, how many we have tried.'],
-  ['Connect rate', 'of the leads we tried, how many we reached.'],
-  ['Win rate', 'of the people we spoke to, how many turned positive.'],
-  ['Positive rate', 'of all leads, how many turned positive.'],
-]
+/** What each number means: shown in the ⓘ beside its label. */
+const MEANS: Record<string, string> = {
+  Total: 'All the leads on your list.',
+  'New / Assigned': 'Stage 1: leads not tried yet (Assigned, New Data, or no status).',
+  'Attempted+': 'Stage 2 and up: leads we have tried to reach at least once.',
+  'Connected+': 'Stage 3 and up: leads where we spoke to the person.',
+  Positive: 'Stage 4: leads that showed interest or moved into the pipeline.',
+  'Attempt rate': 'Of all leads, how many we have tried. Attempted+ ÷ Total.',
+  'Connect rate': 'Of the leads we tried, how many we reached. Connected+ ÷ Attempted+.',
+  'Win rate': 'Of the people we spoke to, how many turned positive. Positive ÷ Connected+.',
+  'Positive rate': 'Of all leads, how many turned positive. Positive ÷ Total.',
+}
+const Label = ({ k }: { k: string }) => <span className="inline-flex items-center gap-1">{k}<InfoTip>{MEANS[k]}</InfoTip></span>
 
-type By = 'state' | 'industry' | 'region' | 'rep' | 'source' | 'status'
+type By = 'state' | 'industry' | 'region' | 'rep' | 'status'
 
 export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: DialerLead[]; settings: DialerSettings; now: Date; showReps: boolean; onPick: (by: By, key: string) => void }) {
   const [ever, setEver] = useState(false)
   const [by, setBy] = useState<By>('state')
-  const [limit, setLimit] = useState(15)
   const live = useMemo(() => leads.filter((l) => !l.duplicate), [leads])
   const f = funnelOf(live, ever)
   const keyOf = (l: DialerLead): string => {
@@ -31,11 +33,12 @@ export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: 
       case 'industry': return l.industry ?? '(no industry)'
       case 'region': return leadRegion(l, now) ?? 'No region'
       case 'rep': return l.ownerName || 'Unknown'
-      case 'source': return l.source ?? '(no source)'
       case 'status': return l.status
     }
   }
   const segs = segments(live, keyOf, ever)
+  const pg = usePaged(segs)
+  const stage1 = live.filter((l) => (ever ? Math.max(l.maxStage, l.stage) : l.stage) <= 1).length
   const bar = (n: number) => `${f.total ? (n / f.total) * 100 : 0}%`
   const top = (fn: (l: DialerLead) => string | null) => segments(live.filter((l) => fn(l)), (l) => fn(l)!).slice(0, 10)
 
@@ -52,35 +55,28 @@ export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Stages">
           <ul className="space-y-3">
-            {([['Total', f.total], ['Attempted+', f.attempted], ['Connected+', f.connected], ['Positive', f.positive]] as const).map(([label, n], i) => (
+            {([['Total', f.total], ['New / Assigned', stage1], ['Attempted+', f.attempted], ['Connected+', f.connected], ['Positive', f.positive]] as const).map(([label, n], i) => (
               <li key={label}>
-                <div className="mb-1 flex justify-between text-body-sm"><span className="font-semibold text-ink">{label}</span><span className="tabular-nums text-ink">{num(n)}{i > 0 && <span className="text-ink-muted"> · {pct(f.total ? n / f.total : null)}</span>}</span></div>
-                <div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#0F766E]" style={{ width: bar(n), opacity: 1 - i * 0.18 }} /></div>
+                <div className="mb-1 flex justify-between text-body-sm"><span className="font-semibold text-ink"><Label k={label} /></span><span className="tabular-nums text-ink">{num(n)}{i > 0 && <span className="text-ink-muted"> · {pct(f.total ? n / f.total : null)}</span>}</span></div>
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className={cn('h-full rounded-full', label === 'Positive' ? 'bg-success' : 'bg-slate-400')} style={{ width: bar(n) }} /></div>
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-[11px] text-ink-muted">Percentages here are the share of total leads.</p>
         </Panel>
-        <Panel title="How each rate is calculated">
+        <Panel title="Rates" info="Percentages beside the stages are the share of total leads. The rates below divide each stage by the one before it.">
           <table className="w-full text-body-sm">
             <thead className="text-[11px] uppercase text-ink-muted"><tr><th className="py-1 text-left">Rate</th><th className="text-left">Formula</th><th className="text-right">Value</th></tr></thead>
             <tbody className="divide-y divide-line">
               {([['Attempt rate', 'Attempted+ ÷ Total', f.attemptRate], ['Connect rate', 'Connected+ ÷ Attempted+', f.connectRate], ['Win rate', 'Positive ÷ Connected+', f.winRate], ['Positive rate', 'Positive ÷ Total', f.positiveRate]] as const).map(([k, form, v]) => (
-                <tr key={k}><td className="py-2 font-semibold text-ink">{k}</td><td className="text-ink-muted">{form}</td><td className="text-right font-bold tabular-nums text-ink">{pct(v)}</td></tr>
+                <tr key={k}><td className="py-2 font-semibold text-ink"><Label k={k} /></td><td className="text-ink-muted">{form}</td><td className="text-right font-bold tabular-nums text-ink">{pct(v)}</td></tr>
               ))}
             </tbody>
           </table>
-          <p className="mt-3 text-[11px] text-ink-muted">
-            Stage 2 = Attempted (includes {stagesOf(settings, 2).join(', ')}). Stage 3 = Connected (includes {stagesOf(settings, 3).join(', ')}). Stage 4 = Positive ({stagesOf(settings, 4).join(', ')}). The stage list is set by an admin in Settings.
+          <p className="mt-3 flex items-center gap-1 text-[11px] text-ink-muted">Which statuses are in each stage
+            <InfoTip>Stage 1 New / Assigned: {stagesOf(settings, 1).join(', ')}. Stage 2 Attempted: {stagesOf(settings, 2).join(', ')}. Stage 3 Connected: {stagesOf(settings, 3).join(', ')}. Stage 4 Positive: {stagesOf(settings, 4).join(', ')}. An admin sets this in Settings.</InfoTip>
           </p>
         </Panel>
       </div>
-
-      <Panel title="What the numbers mean">
-        <ul className="grid gap-x-8 gap-y-1 text-body-sm sm:grid-cols-2">
-          {MEANINGS.map(([k, v]) => <li key={k}><b className="text-ink">{k}</b> <span className="text-ink-muted">– {v}</span></li>)}
-        </ul>
-      </Panel>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <TopList title="Top industries by leads" segs={top((l) => l.industry)} onPick={(k) => onPick('industry', k)} />
@@ -90,17 +86,17 @@ export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: 
 
       <Panel
         title={`By ${by}`}
+        info={`Rates for groups under ${settings.minSegment} leads show n/a, so small samples don't mislead. Click a row to filter the dashboard by it.`}
         action={
           <div className="flex flex-wrap gap-1">
-            {(['state', 'industry', 'region', ...(showReps ? ['rep'] : []), 'source', 'status'] as By[]).map((b) => (
-              <button key={b} type="button" onClick={() => { setBy(b); setLimit(15) }} className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize', by === b ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:text-ink')}>{b}</button>
+            {(['state', 'industry', 'region', ...(showReps ? ['rep'] : []), 'status'] as By[]).map((b) => (
+              <button key={b} type="button" onClick={() => { setBy(b); pg.setPage(1) }} className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize', by === b ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:text-ink')}>{b}</button>
             ))}
           </div>
         }
       >
-        <SegmentTable segs={segs.slice(0, limit)} totals={f} min={settings.minSegment} onPick={by === 'rep' || by === 'region' ? undefined : (k) => onPick(by, k)} />
-        {segs.length > limit && <div className="mt-3 text-center"><button type="button" onClick={() => setLimit((n) => n + 25)} className="rounded-full border border-line px-4 py-1.5 text-body-sm font-semibold text-ink hover:bg-slate-50">Show {Math.min(25, segs.length - limit)} more</button></div>}
-        <p className="mt-3 text-[11px] text-ink-muted">Rates for groups under {settings.minSegment} leads show n/a. Click a row to filter the dashboard by it.</p>
+        <SegmentTable segs={pg.rows} totals={f} min={settings.minSegment} onPick={by === 'rep' || by === 'region' ? undefined : (k) => onPick(by, k)} />
+        <Pager p={pg} />
       </Panel>
     </div>
   )
@@ -116,7 +112,7 @@ function TopList({ title, segs, onPick }: { title: string; segs: Segment[]; onPi
         {segs.map((s) => (
           <li key={s.key}>
             <button type="button" onClick={() => onPick(s.key)} className="relative flex w-full items-center justify-between overflow-hidden rounded px-2 py-1 text-left text-body-sm hover:bg-slate-50">
-              <span className="absolute inset-y-0 left-0 bg-[#0F766E]/10" style={{ width: `${(s.leads.length / max) * 100}%` }} />
+              <span className="absolute inset-y-0 left-0 bg-slate-200/70" style={{ width: `${(s.leads.length / max) * 100}%` }} />
               <span className="relative truncate text-ink">{s.key}</span>
               <span className="relative font-semibold tabular-nums text-ink">{num(s.leads.length)}</span>
             </button>
@@ -195,9 +191,8 @@ export function IndustriesView({ leads, settings, now, showReps, picked, onPickI
         </select>
         <span className="text-[11px] text-ink-muted">into "All other", so small samples don't mislead.</span>
       </div>
-      <Panel title="Industry funnel · connectivity and all stats">
+      <Panel title="Industry funnel" info="Connect rate is green at 50% or more and amber under 40%. Stuck (Contact Attempted + Voicemail Sent) turns amber at 30% and red at 50%: those leads were tried but not converted. Click an industry to see its states and statuses.">
         <SegmentTable segs={rows} totals={funnelOf(live)} min={settings.minSegment} stuck onPick={(k) => { if (!k.startsWith('All other')) onPickIndustry(k) }} />
-        <p className="mt-3 text-[11px] text-ink-muted">Connect rate is green at 50% or more and amber under 40%. Stuck (Contact Attempted + Voicemail Sent) turns amber at 30% and red at 50%: those leads were tried but not converted. Click an industry to see its states, statuses{showReps ? ' and reps' : ''}.</p>
       </Panel>
       {picked && pickedLeads.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-3">

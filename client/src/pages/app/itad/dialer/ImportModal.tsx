@@ -28,6 +28,8 @@ const SYNONYMS: Record<ImportField, string[]> = {
   source: ['source', 'lead source'],
   leadDate: ['created', 'created date', 'created at', 'date created', 'created time', 'assigned date', 'date assigned'],
   lastActivity: ['last modified', 'modified', 'modified date', 'last activity', 'last activity date', 'updated', 'last updated', 'updated at', 'modified time', 'last touched'],
+  website: ['website', 'web site', 'url', 'company website', 'domain'],
+  companySize: ['company size', 'size', 'employees', 'no. of employees', 'number of employees', 'employee count', 'headcount'],
 }
 
 function autoMap(headers: string[], saved: Record<string, string | null> | null): Record<ImportField, string | null> {
@@ -43,7 +45,7 @@ function autoMap(headers: string[], saved: Record<string, string | null> | null)
 }
 
 type Cell = string | number | null
-async function readFile(file: File): Promise<{ headers: string[]; rows: Cell[][] }> {
+export async function readFile(file: File): Promise<{ headers: string[]; rows: Cell[][] }> {
   const name = file.name.toLowerCase()
   let table: Cell[][]
   if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
@@ -64,7 +66,7 @@ async function readFile(file: File): Promise<{ headers: string[]; rows: Cell[][]
   return { headers, rows }
 }
 
-export function ImportModal({ saved, onClose, onImported }: { saved: { headerSignature: string; mapping: Record<string, string | null> } | null; onClose: () => void; onImported: () => void }) {
+export function ImportModal({ saved, onClose, onImported, lists, needsCrm }: { saved: { headerSignature: string; mapping: Record<string, string | null> } | null; onClose: () => void; onImported: () => void; lists: string[]; needsCrm: number }) {
   const { addToast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<{ name: string; headers: string[]; rows: Cell[][] } | null>(null)
@@ -73,6 +75,10 @@ export function ImportModal({ saved, onClose, onImported }: { saved: { headerSig
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportSummary | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  // Which list this file is: the CRM export (SMB leads) or another list kept apart (Vendors...).
+  const [list, setList] = useState('CRM')
+  const [newList, setNewList] = useState('')
+  const listName = list === '__new' ? newList.trim() : list
 
   async function pick(f: File | undefined) {
     if (!f) return
@@ -99,7 +105,7 @@ export function ImportModal({ saved, onClose, onImported }: { saved: { headerSig
     if (!file || !mapping) return
     setBusy(true)
     try {
-      const r = await dialerApi.importLeads({ fileName: file.name, headers: file.headers, mapping, rows: file.rows })
+      const r = await dialerApi.importLeads({ fileName: file.name, headers: file.headers, mapping, rows: file.rows, listName: listName || 'CRM' })
       setResult(r.import.summary)
       onImported()
     } catch (e) {
@@ -110,6 +116,7 @@ export function ImportModal({ saved, onClose, onImported }: { saved: { headerSig
   if (result) {
     return (
       <Modal open onClose={onClose} title="Import done" size="xl" footer={<Button onClick={onClose}>Back to dashboard</Button>}>
+        {needsCrm > 0 && <p className="mb-3 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm text-ink">Reminder: <b>{needsCrm}</b> lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an Earthzone update (see Leads, "Needs Earthzone update").</p>}
         <ImportSummaryView s={result} />
       </Modal>
     )
@@ -121,7 +128,7 @@ export function ImportModal({ saved, onClose, onImported }: { saved: { headerSig
       onClose={onClose}
       title="Import my leads"
       size="xl"
-      footer={file ? <><Button variant="secondary" onClick={() => { setFile(null); setMapping(null) }}>Choose another file</Button><Button disabled={busy || missing.length > 0 || noKey} onClick={run}>{busy ? 'Importing…' : `Import ${file.rows.length.toLocaleString()} rows`}</Button></> : undefined}
+      footer={file ? <><Button variant="secondary" onClick={() => { setFile(null); setMapping(null) }}>Choose another file</Button><Button disabled={busy || missing.length > 0 || noKey || (list === '__new' && !newList.trim())} onClick={run}>{busy ? 'Importing…' : `Import ${file.rows.length.toLocaleString()} rows`}</Button></> : undefined}
     >
       {!file ? (
         <div className="space-y-4">
@@ -147,6 +154,17 @@ export function ImportModal({ saved, onClose, onImported }: { saved: { headerSig
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2 text-body-sm text-ink-muted"><Upload size={14} /><b className="text-ink">{file.name}</b> · {file.rows.length.toLocaleString()} rows · {file.headers.length} columns</div>
+          <div className="flex flex-wrap items-center gap-2 rounded-btn border border-line bg-slate-50 px-3 py-2 text-body-sm">
+            <span className="font-semibold text-ink">This file is</span>
+            <select value={list} onChange={(e) => setList(e.target.value)} className="h-8 rounded-btn border border-line bg-card px-2 text-body-sm text-ink">
+              <option value="CRM">My CRM export (SMB leads)</option>
+              {lists.filter((x) => x !== 'CRM').map((x) => <option key={x} value={x}>{x}</option>)}
+              <option value="__new">Another list (vendors…)</option>
+            </select>
+            {list === '__new' && <input value={newList} onChange={(e) => setNewList(e.target.value)} maxLength={40} placeholder="Name it, e.g. Vendors" className="h-8 w-44 rounded-btn border border-line bg-card px-2 text-body-sm text-ink" />}
+            <span className="text-ink-muted">Lists are kept apart: importing one never hides leads from another.</span>
+          </div>
+          {needsCrm > 0 && <p className="text-body-sm text-warning">{needsCrm} lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an Earthzone update. Update Earthzone before exporting, so this import brings it back.</p>}
           {columnsChanged && (
             <div className="flex items-start gap-2 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm text-ink">
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" />
