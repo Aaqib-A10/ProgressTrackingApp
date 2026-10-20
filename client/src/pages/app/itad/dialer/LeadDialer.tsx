@@ -4,7 +4,7 @@ import { AlertTriangle, FileUp, PhoneCall, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead } from '../../../../lib/dialerApi'
-import { NO_FILTERS, PKT, REGIONS, applyFilters, clock, followUpTabs, leadState, type Filters } from '../../../../lib/dialer'
+import { NO_FILTERS, PKT, REGIONS, applyFilters, clock, followUpTabs, latestActedToday, leadState, type Filters } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { DashboardView } from './DashboardView'
 import { FollowUpsView } from './FollowUpsView'
@@ -64,7 +64,7 @@ export default function LeadDialer() {
   const fuDays = data?.followUpByOwner
   const fuCount = useMemo(() => {
     if (!data) return 0
-    const t = followUpTabs(leads, data.settings, now, new Date(data.dayStart), new Set(data.actedToday.map((a) => a.leadId)), fuDays)
+    const t = followUpTabs(leads, data.settings, now, new Date(data.dayStart), latestActedToday(data.actedToday), fuDays)
     return t.overdue.length + t.dueToday.filter((x) => x.callBackDue).length
   }, [data, leads, now, fuDays])
   const noStateCount = leads.filter((l) => !leadState(l) && !l.duplicate && !l.sentToLeadGen).length

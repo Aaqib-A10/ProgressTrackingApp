@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { ArrowDown, ArrowRight, ArrowUp, Copy } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, Copy, Zap } from 'lucide-react'
 import type { DialerData, DialerLead, DialerSettings, RegionCode } from '../../../../lib/dialerApi'
-import { REGIONS, REGION_META, STATUS_COLUMNS, fmtSpan, followUpTabs, funnelOf, isDialable, leadRegion, leadState, num, pct, regionWindow, segments, stateTable, usDaylight, type Filters, type StatusColumn, columnOf, type FollowUpDays } from '../../../../lib/dialer'
+import { REGIONS, REGION_META, STATUS_COLUMNS, fmtSpan, followUpTabs, latestActedToday, funnelOf, isDialable, leadRegion, leadState, num, pct, regionWindow, segments, stateTable, usDaylight, type Filters, type StatusColumn, columnOf, type FollowUpDays } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { InfoTip, Panel, RegionBadge } from './ui'
 
@@ -27,11 +27,12 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
   const f = funnelOf(live)
   // Same list as the Follow-ups tab badge: overdue, then call backs due today.
   const fu = useMemo(() => {
-    const t = followUpTabs(leads, settings, now, new Date(data.dayStart), new Set(data.actedToday.map((a) => a.leadId)), followUpDays)
+    const t = followUpTabs(leads, settings, now, new Date(data.dayStart), latestActedToday(data.actedToday), followUpDays)
     return [...t.overdue, ...t.dueToday.filter((x) => x.callBackDue)]
   }, [leads, settings, now, followUpDays, data.dayStart, data.actedToday])
   const table = useMemo(() => stateTable(leads, settings, now), [leads, settings, now])
   const windows = REGIONS.map((r) => regionWindow(r, settings, now))
+  const primeNow = windows.filter((w) => w.prime)
   const ready = (r: RegionCode) => live.filter((l) => leadRegion(l, now) === r && isDialable(l, settings, now))
   const prime = (settings.primeTimes ?? []).map((p) => `${fmt12(p.start)} to ${fmt12(p.end)}`).join(' and ')
 
@@ -39,21 +40,44 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
     <div className="space-y-4">
       {/* Who can I call right now */}
       <Panel title="Who can I call right now" info={<>Calling hours are 9 AM to 5 PM on the lead's own clock in every region{prime ? <>; prime time is {prime}</> : null}. Each lead's region comes from its state; Arizona follows {usDaylight(now) ? 'Pacific' : 'Mountain'} hours right now. Do-Not-Call, finished, snoozed and duplicate leads are never counted.</>}>
+        {primeNow.length > 0 && (
+          <button type="button" onClick={() => onOpenLeads(`Prime time: ${primeNow.map((w) => REGION_META[w.region].name).join(' and ')}`, primeNow.flatMap((w) => ready(w.region)))}
+            className="mb-3 flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-card bg-success px-4 py-3 text-left text-white shadow-sm hover:bg-success/90">
+            <Zap size={20} className="shrink-0 fill-white" />
+            <span className="text-body-lg font-bold">Prime time now: {primeNow.map((w) => `${REGION_META[w.region].name} (${fmtSpan(w.primeLeft ?? 0)} left)`).join(' · ')}</span>
+            <span className="text-body-md text-white/90">{num(primeNow.reduce((t, w) => t + ready(w.region).length, 0))} leads. Call these first.</span>
+            <span className="ml-auto inline-flex items-center gap-1 text-body-sm font-semibold">Open leads <ArrowRight size={14} /></span>
+          </button>
+        )}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {windows.map((w) => {
             const list = ready(w.region)
-            const tone = w.open ? (w.closingSoon ? 'amber' : 'green') : 'grey'
+            const tone = w.prime ? 'prime' : w.open ? (w.closingSoon ? 'amber' : 'green') : 'grey'
             return (
               <button key={w.region} type="button" onClick={() => onOpenLeads(`${REGION_META[w.region].name}: leads to dial`, list)}
-                className={cn('rounded-card border p-4 text-left transition-shadow hover:shadow-overlay', tone === 'green' ? 'border-success/40 bg-success/[0.05]' : tone === 'amber' ? 'border-warning/50 bg-warning/[0.06]' : 'border-line bg-card')}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-ink">{w.region} · {REGION_META[w.region].name}</span>
-                  <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', tone === 'green' ? 'bg-success/15 text-success' : tone === 'amber' ? 'bg-warning/15 text-warning' : 'bg-slate-100 text-ink-muted')}>
-                    {w.open ? (w.closingSoon ? `Closes in ${fmtSpan(w.minutesLeft)}` : w.prime ? 'Prime time' : 'Open now') : w.weekend ? 'Weekend' : `Opens in ${fmtSpan(w.minutesUntilOpen)}`}
-                  </span>
+                className={cn('relative overflow-hidden rounded-card text-left transition-shadow hover:shadow-overlay',
+                  tone === 'prime' ? 'border-2 border-success bg-success/[0.12] shadow-[0_0_0_4px_rgba(34,197,94,0.15)]' : tone === 'green' ? 'border border-success/40 bg-success/[0.05]' : tone === 'amber' ? 'border border-warning/50 bg-warning/[0.06]' : 'border border-line bg-card')}>
+                {tone === 'prime' && (
+                  <div className="flex items-center gap-1.5 bg-success px-4 py-1.5 text-[12px] font-bold uppercase tracking-wide text-white">
+                    <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-white" /></span>
+                    <Zap size={13} className="fill-white" /> Prime time · {fmtSpan(w.primeLeft ?? 0)} left
+                  </div>
+                )}
+                <div className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={cn('rounded px-2 py-0.5 text-[11px] font-bold', tone === 'prime' ? 'bg-success/20 text-ink' : 'bg-slate-100 text-ink')}>{w.region} · {REGION_META[w.region].name}</span>
+                    {tone !== 'prime' && (
+                      <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', tone === 'green' ? 'bg-success/15 text-success' : tone === 'amber' ? 'bg-warning/15 text-warning' : 'bg-slate-100 text-ink-muted')}>
+                        {w.open ? (w.closingSoon ? `Closes in ${fmtSpan(w.minutesLeft)}` : 'Open now') : w.weekend ? 'Weekend' : `Opens in ${fmtSpan(w.minutesUntilOpen)}`}
+                      </span>
+                    )}
+                  </div>
+                  <p className={cn('mt-2 font-bold leading-none tabular-nums text-ink', tone === 'prime' ? 'text-[32px]' : 'text-[28px]')}>{w.localTime}</p>
+                  <p className="mt-2 text-body-md text-ink"><b className="tabular-nums">{num(list.length)}</b> to dial</p>
+                  {tone !== 'prime' && w.primeIn != null && w.primeIn <= 180 && (
+                    <p className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-success"><Zap size={12} className="fill-success" />Prime in {fmtSpan(w.primeIn)}</p>
+                  )}
                 </div>
-                <p className="mt-2 text-[28px] font-bold leading-none tabular-nums text-ink">{w.localTime}</p>
-                <p className="mt-2 text-body-md text-ink"><b className="tabular-nums">{num(list.length)}</b> to dial</p>
               </button>
             )
           })}

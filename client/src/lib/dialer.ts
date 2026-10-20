@@ -74,6 +74,9 @@ export interface RegionWindow {
   prime: boolean
   /** Open, and closes within the hour. */
   closingSoon: boolean
+  /** In prime time: minutes until it ends. Not in prime time: minutes until the next prime time today (null if none). */
+  primeLeft: number | null
+  primeIn: number | null
 }
 
 /**
@@ -104,9 +107,14 @@ export function regionWindow(region: RegionCode, s: DialerSettings, now: Date): 
   const weekend = s.weekdaysOnly && (wd === 'Sat' || wd === 'Sun')
   if (weekend) { open = false; minutesUntilOpen = -1 } // shown as "Weekend, opens Monday"
   const local = parts(zone, now).minutes
-  const prime = open && (s.primeTimes ?? []).some((p) => local >= toMin(p.start) && local < toMin(p.end))
+  const spans = (s.primeTimes ?? []).map((p) => ({ a: toMin(p.start), b: toMin(p.end) }))
+  const span = spans.find((p) => local >= p.a && local < p.b)
+  const prime = open && !!span
+  const nextPrime = weekend ? undefined : spans.filter((p) => p.a > local).sort((x, y) => x.a - y.a)[0]
   return {
     region, open, minutesLeft: open ? minutesLeft : 0, minutesUntilOpen, prime, closingSoon: open && minutesLeft <= 60,
+    primeLeft: prime && span ? span.b - local : null,
+    primeIn: !prime && nextPrime ? nextPrime.a - local : null,
     localTime: clock(zone, now),
     pktSlot: `${fmtMin(pktStart)} – ${fmtMin(pktStart + len)}`,
     localSlot: `${fmtMin(localStart)} – ${fmtMin(localStart + len)}`,
@@ -166,13 +174,23 @@ export const byFollowUpOrder = (a: { lead: DialerLead; days: number }, b: { lead
   (FU_ORDER[a.lead.status] ?? 3) - (FU_ORDER[b.lead.status] ?? 3) || b.days - a.days
 
 export interface FollowUpTabs { overdue: FollowUp[]; dueToday: FollowUp[]; scheduled: FollowUp[]; snoozed: FollowUp[]; done: FollowUp[]; backlog: FollowUp[]; dropped: DialerLead[] }
+/** What a rep did to each lead today: the latest action kind per lead (CALL_NOW, CALL_LATER, SNOOZE, NOTE...). */
+export function latestActedToday(acted: { leadId: string; kind: string; at: string }[]): Map<string, string> {
+  const m = new Map<string, { kind: string; at: string }>()
+  for (const a of acted) { const cur = m.get(a.leadId); if (!cur || a.at > cur.at) m.set(a.leadId, a) }
+  return new Map([...m].map(([id, a]) => [id, a.kind]))
+}
 /**
  * The follow-up tracker's tabs. "Today" is the rep's working day (from noon Pakistan time).
- * Overdue: the follow-up days have passed, or a call back from before today. Due today: a call
- * back set for today. Scheduled: a call back after today. Snoozed: hidden until a date. Done:
- * worked on today. Backlog: 90+ days quiet (its own bucket, not in Overdue), unless kept recently.
+ *  - Scheduled: a call back after today (Call later, or a note's next-action date).
+ *  - Due today: a call back set for today. Overdue: a call back from before today, or the
+ *    follow-up days have passed. Backlog: 90+ days quiet (its own bucket), unless kept recently.
+ *  - Snoozed: hidden until a date (Snooze). A lead the rep just called (Call now) is not
+ *    "snoozed": it is done for today and comes back tomorrow if the CRM shows no update.
+ *  - Done today: every lead worked on today, whatever happened to it (a log; a snoozed or
+ *    scheduled lead also shows in its own tab).
  */
-export function followUpTabs(leads: DialerLead[], s: DialerSettings, now: Date, dayStart: Date, actedIds: Set<string>, by?: FollowUpDays): FollowUpTabs {
+export function followUpTabs(leads: DialerLead[], s: DialerSettings, now: Date, dayStart: Date, acted: Map<string, string>, by?: FollowUpDays): FollowUpTabs {
   const dayEnd = dayStart.getTime() + 86400000
   const t: FollowUpTabs = { overdue: [], dueToday: [], scheduled: [], snoozed: [], done: [], backlog: [], dropped: [] }
   for (const l of leads) {
@@ -180,8 +198,8 @@ export function followUpTabs(leads: DialerLead[], s: DialerSettings, now: Date, 
     const threshold = thresholdOf(l, s, by)
     const days = daysSince(lastActivity(l), now)
     const item = (callBackDue = false): FollowUp => ({ lead: l, days, threshold: threshold ?? 0, severity: threshold && days >= threshold * 2 ? 'late' : 'due', callBackDue })
-    // Every lead worked on today is "done", whatever its status.
-    if (actedIds.has(l.id)) { t.done.push(item()); continue }
+    const kind = acted.get(l.id)
+    if (kind) t.done.push(item())
     if (isClosed(l, s)) continue
     if (l.followUpDropped) { t.dropped.push(l); continue }
     const cb = l.callLaterAt ? new Date(l.callLaterAt).getTime() : null
@@ -190,15 +208,22 @@ export function followUpTabs(leads: DialerLead[], s: DialerSettings, now: Date, 
       if (cb >= dayStart.getTime()) { t.dueToday.push(item(cb <= now.getTime())); continue }
       t.overdue.push(item(true)); continue
     }
-    if (isFuture(l.snoozeUntil, now)) { if (threshold != null) t.snoozed.push(item()); continue }
+    if (isFuture(l.snoozeUntil, now)) {
+      // Call now holds the lead until tomorrow; that is "done", not a snooze the rep chose.
+      if (kind !== 'CALL_NOW') t.snoozed.push(item())
+      continue
+    }
+    if (kind) continue // worked on today: cleared from Overdue
     if (threshold == null || days < threshold) continue
     const kept = l.backlogKeptAt && now.getTime() - new Date(l.backlogKeptAt).getTime() < 30 * 86400000
     if (days >= 90 && !kept) t.backlog.push(item())
     else t.overdue.push(item())
   }
-  for (const k of ['overdue', 'dueToday', 'scheduled', 'snoozed', 'done', 'backlog'] as const) t[k].sort(byFollowUpOrder)
-  t.dueToday.sort((a, b) => new Date(a.lead.callLaterAt!).getTime() - new Date(b.lead.callLaterAt!).getTime())
-  t.scheduled.sort((a, b) => new Date(a.lead.callLaterAt!).getTime() - new Date(b.lead.callLaterAt!).getTime())
+  for (const k of ['overdue', 'done', 'backlog'] as const) t[k].sort(byFollowUpOrder)
+  const at = (iso: string | null) => (iso ? new Date(iso).getTime() : 0)
+  t.dueToday.sort((a, b) => at(a.lead.callLaterAt) - at(b.lead.callLaterAt))
+  t.scheduled.sort((a, b) => at(a.lead.callLaterAt) - at(b.lead.callLaterAt))
+  t.snoozed.sort((a, b) => at(a.lead.snoozeUntil) - at(b.lead.snoozeUntil))
   return t
 }
 

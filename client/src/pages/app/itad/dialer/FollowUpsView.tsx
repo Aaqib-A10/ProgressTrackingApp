@@ -3,7 +3,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead, type DialerSettings } from '../../../../lib/dialerApi'
-import { followUpTabs, lastActivity, leadState, shortDate, type FollowUp, type FollowUpDays } from '../../../../lib/dialer'
+import { followUpTabs, latestActedToday, leadState, type FollowUp, type FollowUpDays } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { InfoTip, Pager, RegionBadge, StatusPill, LeadActions, errMsg, usePaged } from './ui'
 
@@ -26,7 +26,7 @@ const TABS: { k: Tab; label: string; info: string }[] = [
 
 export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChanged, showOwner, followUpDays }: { data: DialerData; leads: DialerLead[]; settings: DialerSettings; now: Date; onOpenLead: (id: string, ids: string[]) => void; onChanged: () => void; showOwner: boolean; followUpDays: FollowUpDays }) {
   const { addToast } = useToast()
-  const acted = useMemo(() => new Set(data.actedToday.map((a) => a.leadId)), [data.actedToday])
+  const acted = useMemo(() => latestActedToday(data.actedToday), [data.actedToday])
   const tabs = useMemo(() => followUpTabs(leads, settings, now, new Date(data.dayStart), acted, followUpDays), [leads, settings, now, data.dayStart, acted, followUpDays])
   const [tab, setTab] = useState<Tab>('overdue')
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -95,7 +95,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
                 <tr>
                   {tab === 'backlog' && <th className="w-8 px-2"><input type="checkbox" checked={allPicked} onChange={(e) => setPicked((s) => { const n = new Set(s); pageIds.forEach((id) => (e.target.checked ? n.add(id) : n.delete(id))); return n })} className="h-4 w-4 accent-primary" aria-label="Pick this page" /></th>}
                   <th className="px-2 py-2">Lead</th><th className="px-2">State</th><th className="px-2">Region</th><th className="px-2">Status</th>
-                  <th className="px-2">{tab === 'dueToday' || tab === 'scheduled' || tab === 'overdue' ? 'Call back / quiet' : tab === 'snoozed' ? 'Snoozed until' : 'Last activity'}</th>
+                  <th className="px-2">{tab === 'dueToday' || tab === 'scheduled' ? 'Call back at' : tab === 'overdue' ? 'Call back / quiet' : tab === 'snoozed' ? 'Snoozed until' : tab === 'done' ? 'Today' : 'Last activity'}</th>
                   {showOwner && <th className="px-2">Rep</th>}<th className="px-2">Actions</th>
                 </tr>
               </thead>
@@ -110,7 +110,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
                     <td className="px-2 text-ink">{leadState(x.lead) ?? '—'}</td>
                     <td className="px-2"><RegionBadge lead={x.lead} now={now} /></td>
                     <td className="px-2"><StatusPill lead={x.lead} /></td>
-                    <td className="whitespace-nowrap px-2">{whenCell(x, tab, now)}</td>
+                    <td className="whitespace-nowrap px-2">{whenCell(x, tab, now, acted.get(x.lead.id))}</td>
                     {showOwner && <td className="px-2 text-ink-muted">{x.lead.ownerName}</td>}
                     <td className="px-2"><LeadActions lead={x.lead} onDone={onChanged} compact /></td>
                   </tr>
@@ -126,14 +126,15 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
   )
 }
 
-function whenCell(x: FollowUp, tab: Tab, now: Date) {
+const DID: Record<string, string> = { CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', NOTE: 'Note added', KEEP: 'Kept', DROP: 'Dropped', CLEAR: 'Snooze cleared', EDIT: 'Details added', STATE_FIX: 'State corrected', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill' }
+function whenCell(x: FollowUp, tab: Tab, now: Date, did?: string) {
   const l = x.lead
   const t = (iso: string) => new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
   if (l.callLaterAt && (tab === 'dueToday' || tab === 'scheduled' || (tab === 'overdue' && x.callBackDue))) {
     const late = new Date(l.callLaterAt).getTime() <= now.getTime()
     return <span className={cn('font-semibold', late ? 'text-danger' : 'text-ink')}>{t(l.callLaterAt)}</span>
   }
-  if (tab === 'snoozed' && l.snoozeUntil) return <span className="text-ink-muted">{shortDate(l.snoozeUntil)}</span>
-  if (tab === 'done') return <span className="text-ink-muted">{shortDate(lastActivity(l))}</span>
+  if (tab === 'snoozed' && l.snoozeUntil) return <span className="text-ink">{t(l.snoozeUntil)}</span>
+  if (tab === 'done') return <span className="font-semibold text-success">{DID[did ?? ''] ?? 'Worked on'}</span>
   return <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold', x.severity === 'late' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning')}>{x.days} days quiet</span>
 }

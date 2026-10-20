@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Pencil, Pin, PinOff, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Maximize2, Minimize2, Pencil, Pin, PinOff, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
@@ -36,6 +36,9 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
   const { addToast } = useToast()
   const [d, setD] = useState<LeadDetail | null>(null)
   const [noteFocus, setNoteFocus] = useState(0)
+  // Full view: the lead fills the screen (details on the left, notes and timeline on the right). Remembered.
+  const [full, setFullState] = useState(() => { try { return localStorage.getItem('dialer.panel.full') === '1' } catch { return false } })
+  const setFull = (v: boolean) => { setFullState(v); try { localStorage.setItem('dialer.panel.full', v ? '1' : '0') } catch { /* ignore */ } }
   const load = () => { dialerApi.lead(id).then(setD).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not open the lead') })) }
   useEffect(() => { setD(null); load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
   const changed = () => { load(); onChanged() }
@@ -46,12 +49,13 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
     const k = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest('input,textarea,select')) return
       if (e.key === 'Escape') onClose()
+      if (e.key === 'f' || e.key === 'F') setFull(!full)
       if (e.key === 'ArrowDown' && next) onNavigate(next)
       if (e.key === 'ArrowUp' && prev) onNavigate(prev)
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [next, prev, onClose, onNavigate])
+  }, [next, prev, onClose, onNavigate, full]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fromList = lookup(id)
   const l: DialerLead | null = d ? { ownerName: fromList?.ownerName ?? '', actionCount: d.actions.length, noteCount: d.notes.length, pinnedNote: d.notes.find((n) => n.pinned)?.text ?? null, ...d.lead } as DialerLead : fromList ?? null
@@ -65,10 +69,10 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
   return (
     <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={l?.company ?? 'Lead'}>
       <div className="absolute inset-0 bg-ink/20" onClick={onClose} />
-      <aside className="absolute right-0 top-0 flex h-full w-full max-w-[500px] flex-col bg-card shadow-overlay animate-[slideIn_.18s_ease-out]">
+      <aside className={cn('absolute flex flex-col bg-card shadow-overlay animate-[slideIn_.18s_ease-out]', full ? 'inset-0' : 'right-0 top-0 h-full w-full max-w-[500px]')}>
         <style>{'@keyframes slideIn{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}'}</style>
         {/* Header */}
-        <div className="border-b border-line px-5 pb-3 pt-4">
+        <div className={cn('border-b border-line px-5 pb-3 pt-4', full && 'sm:px-8')}>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h2 className="truncate text-headline-md font-bold text-ink">{l?.company ?? 'Loading…'}</h2>
@@ -78,6 +82,9 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
               {ids.length > 1 && <span className="mr-1 text-[11px] tabular-nums text-ink-muted">{idx + 1} of {ids.length}</span>}
               <button type="button" disabled={!prev} onClick={() => prev && onNavigate(prev)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 disabled:opacity-30" aria-label="Previous lead" title="Previous lead (↑)"><ChevronLeft size={18} /></button>
               <button type="button" disabled={!next} onClick={() => next && onNavigate(next)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 disabled:opacity-30" aria-label="Next lead" title="Next lead (↓)"><ChevronRight size={18} /></button>
+              <button type="button" onClick={() => setFull(!full)} className="inline-flex items-center gap-1 rounded-btn px-2 py-1.5 text-body-sm font-semibold text-ink-muted hover:bg-slate-100 hover:text-ink" title={full ? 'Back to the side panel (F)' : 'Open in full view (F)'}>
+                {full ? <><Minimize2 size={16} /> Side panel</> : <><Maximize2 size={16} /> Full view</>}
+              </button>
               <button type="button" onClick={onClose} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100" aria-label="Close"><X size={18} /></button>
             </div>
           </div>
@@ -93,9 +100,10 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
           {l && <div className="mt-3"><LeadActions lead={l} onDone={changed} onNote={() => setNoteFocus((n) => n + 1)} /></div>}
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+        <div className={cn('flex-1 overflow-y-auto px-5 py-4', full && 'sm:px-8')}>
           {!l || !d ? <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-6 animate-pulse rounded bg-slate-100" />)}</div> : (
-            <>
+            <div className={cn(full ? 'mx-auto grid max-w-[1400px] items-start gap-4 lg:grid-cols-2' : 'space-y-3')}>
+            <div className="space-y-3">
               {l.needsCrmUpdate && (
                 <div className="flex items-center justify-between gap-3 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm">
                   <span className="text-ink"><b>Update Earthzone:</b> {l.crmUpdateWhat || 'details added here'}</span>
@@ -139,7 +147,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
 
               <Group name="status" title="Status">
                 <div className="flex flex-wrap items-center gap-2 py-1"><StatusPill lead={l} /><span className="text-ink-muted">{daysInStatus(l, now)} days in this status</span></div>
-                {(l.snoozeUntil && new Date(l.snoozeUntil) > now) && <p className="py-0.5 text-ink">Snoozed until {shortDate(l.snoozeUntil)}</p>}
+                {(l.snoozeUntil && new Date(l.snoozeUntil) > now) && <p className="py-0.5 text-ink">Snoozed until {new Date(l.snoozeUntil).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
                 {l.callLaterAt && <p className="py-0.5 text-ink">Call back {new Date(l.callLaterAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
                 {l.followUpDropped && <p className="py-0.5 text-ink-muted">Dropped from follow-ups until the status changes. <button type="button" className="font-semibold text-primary" onClick={() => dialerApi.followUpBulk([l.id], 'UNDROP').then(changed)}>Undo</button></p>}
                 {(l.snoozeUntil || l.callLaterAt) && <button type="button" className="text-body-sm font-semibold text-primary" onClick={() => dialerApi.action(l.id, { kind: 'CLEAR' }).then(changed)}>Clear snooze / call back</button>}
@@ -156,13 +164,15 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
               </Group>
 
               <AddedHere lead={l} settings={settings} onSave={edit} />
-
+            </div>
+            <div className="space-y-3">
               <NotesGroup lead={l} notes={d.notes} meId={meId} settings={settings} focusKey={noteFocus} onChanged={changed} />
 
               <Group name="timeline" title="Timeline" defaultOpen={false}>
                 <Timeline d={d} createdAt={l.createdAt} />
               </Group>
-            </>
+            </div>
+            </div>
           )}
         </div>
       </aside>
