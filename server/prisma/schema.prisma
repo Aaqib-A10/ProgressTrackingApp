@@ -256,6 +256,7 @@ model User {
   workLogs            WorkLogEntry[]       @relation("WorkLogOwner")
   workLogReviews      WorkLogReview[]      @relation("WorkLogReviewOwner")
   workLogReviewsGiven WorkLogReview[]      @relation("WorkLogReviewer")
+  blockedCheckIns     BlockedCheckIn[]
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -575,6 +576,19 @@ model OfficeNetwork {
   cidr      String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+/// A check-in refused because the network was not on the office list. Shown to Super
+/// Admins on Office Networks with one click to allow the address (or its whole range).
+model BlockedCheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip        String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([ip])
 }
 
 enum ReminderKind {
@@ -962,6 +976,7 @@ enum NotificationType {
   WFH_REQUESTED
   WFH_DECIDED
   WORKLOG_REVIEW
+  NETWORK_BLOCKED
 }
 
 enum BreakType {

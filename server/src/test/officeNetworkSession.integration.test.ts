@@ -25,6 +25,7 @@ beforeAll(async () => {
 afterEach(() => { vi.useRealTimers() })
 afterAll(async () => {
   await prisma.officeNetwork.deleteMany({ where: { id: { in: nets } } })
+  await prisma.blockedCheckIn.deleteMany({})
   await prisma.$disconnect()
 })
 
@@ -61,9 +62,38 @@ describe('office network during a running session', () => {
     expect(bad.status).toBe(400)
     const ok = await request(app).post('/api/admin/office-networks').set(...auth(w.superAdmin)).send({ label: 'Office IPv6', cidr: OFFICE_V6 })
     expect(ok.status).toBeLessThan(300)
-    nets.push(ok.body.id ?? ok.body.network?.id)
+    nets.push(ok.body.network.id)
     at('2026-10-13T09:10')
     await clock(w.leadgenMember, 'check-in', '2400:adc1:1a2:3b00::99').expect(200)
+  })
+
+  it('a refused check-in is listed for the admin, the admin is told, and Allow range lets the person in', async () => {
+    at('2026-10-14T09:05')
+    const NEW_LINE = '119.73.100.25'
+    const r = await clock(w.itadMember, 'check-in', NEW_LINE).expect(403)
+    expect(r.body.error).toContain(NEW_LINE)
+    await clock(w.itadMember, 'check-in', NEW_LINE).expect(403) // tried again
+
+    const note = await prisma.notification.findMany({ where: { userId: w.superAdmin.id, type: 'NETWORK_BLOCKED', entityId: NEW_LINE } })
+    expect(note).toHaveLength(1) // once, not per attempt
+    expect(note[0].link).toBe('/app/admin/networks')
+
+    const list = await request(app).get('/api/admin/office-networks').set(...auth(w.superAdmin)).set('CF-Connecting-IP', '119.73.100.40').expect(200)
+    const row = list.body.blocked.find((b: { ip: string }) => b.ip === NEW_LINE)
+    expect(row).toMatchObject({ count: 2, range: '119.73.100.0/24' })
+    expect(row.people).toHaveLength(1)
+    expect(list.body.you).toMatchObject({ ip: '119.73.100.40', allowed: false, range: '119.73.100.0/24' })
+
+    // Team Leads cannot allow networks.
+    await request(app).post('/api/admin/office-networks/allow').set(...auth(w.itadLead)).send({ ip: NEW_LINE, wholeRange: true }).expect(403)
+    const ok = await request(app).post('/api/admin/office-networks/allow').set(...auth(w.superAdmin)).send({ ip: NEW_LINE, wholeRange: true }).expect(201)
+    expect(ok.body.network.cidr).toBe('119.73.100.0/24')
+    nets.push(ok.body.network.id)
+
+    // The provider moves the office to another address in the range: still fine.
+    await clock(w.itadMember, 'check-in', '119.73.100.77').expect(200)
+    const after = await request(app).get('/api/admin/office-networks').set(...auth(w.superAdmin)).expect(200)
+    expect(after.body.blocked.find((b: { ip: string }) => b.ip === NEW_LINE)).toBeUndefined()
   })
 
   it('a phone is still refused mid session', async () => {

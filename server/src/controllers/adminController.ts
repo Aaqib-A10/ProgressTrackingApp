@@ -7,7 +7,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { hashPassword, signInviteToken } from '../lib/auth'
 import { sendInviteEmail } from '../lib/mail'
 import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
-import { isValidCidr } from '../lib/ip'
+import { getClientIp, ipAllowed, isValidCidr, suggestRange } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 
 function loadUser(id: string) {
@@ -1009,10 +1009,30 @@ export async function listAttendanceActivity(req: AuthedRequest, res: Response):
 export async function listOfficeNetworks(req: AuthedRequest, res: Response): Promise<void> {
   if (!(await requireSuperAdmin(req, res))) return
   const networks = await prisma.officeNetwork.findMany({ orderBy: { createdAt: 'asc' } })
+  const active = networks.filter((n) => n.isActive).map((n) => n.cidr)
+  // Check-ins refused in the last 7 days, one row per address not allowed yet.
+  const since = new Date(Date.now() - 7 * 86_400_000)
+  const rows = await prisma.blockedCheckIn.findMany({
+    where: { createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    select: { ip: true, createdAt: true, user: { select: { name: true } } },
+    take: 2000,
+  })
+  const byIp = new Map<string, { ip: string; count: number; people: string[]; lastAt: Date }>()
+  for (const r of rows) {
+    if (active.length && ipAllowed(r.ip, active)) continue
+    const g = byIp.get(r.ip) ?? { ip: r.ip, count: 0, people: [], lastAt: r.createdAt }
+    g.count++
+    if (!g.people.includes(r.user.name)) g.people.push(r.user.name)
+    byIp.set(r.ip, g)
+  }
+  const yourIp = getClientIp(req)
   res.json({
     networks: networks.map((n) => ({ id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive })),
     // When empty, enforcement is off (everyone can check in) — surfaced in the UI.
     enforced: networks.some((n) => n.isActive),
+    blocked: [...byIp.values()].map((g) => ({ ...g, lastAt: g.lastAt.toISOString(), range: suggestRange(g.ip) })),
+    you: { ip: yourIp, allowed: active.length === 0 || ipAllowed(yourIp, active), range: suggestRange(yourIp) },
   })
 }
 
@@ -1033,6 +1053,26 @@ export async function createOfficeNetwork(req: AuthedRequest, res: Response): Pr
     return
   }
   const n = await prisma.officeNetwork.create({ data: { label: parsed.data.label, cidr: parsed.data.cidr } })
+  res.status(201).json({ network: { id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive } })
+}
+
+/**
+ * POST /api/admin/office-networks/allow { ip, wholeRange?, label? } — allow an address
+ * seen on a refused check-in (or the admin's own), or its whole range. Adding something
+ * already covered is a no-op.
+ */
+export async function allowOfficeNetwork(req: AuthedRequest, res: Response): Promise<void> {
+  if (!(await requireSuperAdmin(req, res))) return
+  const parsed = z.object({ ip: z.string().trim().min(2).max(64), wholeRange: z.boolean().optional(), label: z.string().trim().max(80).optional() }).safeParse(req.body)
+  if (!parsed.success || !isValidCidr(parsed.data.ip) || parsed.data.ip.includes('/')) {
+    res.status(400).json({ error: 'Not a valid address.' })
+    return
+  }
+  const cidr = parsed.data.wholeRange ? suggestRange(parsed.data.ip)! : parsed.data.ip
+  const existing = await prisma.officeNetwork.findFirst({ where: { cidr } })
+  const n = existing
+    ? await prisma.officeNetwork.update({ where: { id: existing.id }, data: { isActive: true } })
+    : await prisma.officeNetwork.create({ data: { label: parsed.data.label || (parsed.data.wholeRange ? 'Office range' : 'Office line'), cidr } })
   res.status(201).json({ network: { id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive } })
 }
 

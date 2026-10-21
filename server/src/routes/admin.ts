@@ -6,7 +6,7 @@ import {
   listTags, createTag, updateTag,
   listHolidays, createHoliday, deleteHoliday,
   listLeave, listLeaveMembers, createLeave, deleteLeave,
-  listOfficeNetworks, createOfficeNetwork, updateOfficeNetwork, deleteOfficeNetwork,
+  listOfficeNetworks, createOfficeNetwork, allowOfficeNetwork, updateOfficeNetwork, deleteOfficeNetwork,
   listLoginEvents, listAuditLog, listAttendanceActivity,
 } from '../controllers/adminController'
 import { requireAuth, requireRole } from '../middleware/auth'
@@ -66,5 +66,6 @@ adminRouter.get('/attendance-activity', teamLeadOrAdmin, asyncHandler(listAttend
 // Office networks — IP allowlist for attendance (Super Admin)
 adminRouter.get('/office-networks', superAdmin, asyncHandler(listOfficeNetworks))
 adminRouter.post('/office-networks', superAdmin, asyncHandler(createOfficeNetwork))
+adminRouter.post('/office-networks/allow', superAdmin, asyncHandler(allowOfficeNetwork))
 adminRouter.patch('/office-networks/:id', superAdmin, asyncHandler(updateOfficeNetwork))
 adminRouter.delete('/office-networks/:id', superAdmin, asyncHandler(deleteOfficeNetwork))

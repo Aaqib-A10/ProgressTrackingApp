@@ -130,8 +130,19 @@ export interface OfficeNetwork {
   cidr: string
   isActive: boolean
 }
+export interface BlockedNetwork { ip: string; count: number; people: string[]; lastAt: string; range: string | null }
+export interface OfficeNetworksResponse {
+  networks: OfficeNetwork[]
+  enforced: boolean
+  /** Check-ins refused in the last 7 days, one row per address not allowed yet. */
+  blocked: BlockedNetwork[]
+  /** The address this admin is on right now. */
+  you: { ip: string; allowed: boolean; range: string | null }
+}
 export const listOfficeNetworks = () =>
-  api.get<{ networks: OfficeNetwork[]; enforced: boolean }>('/admin/office-networks')
+  api.get<OfficeNetworksResponse>('/admin/office-networks')
+export const allowOfficeNetwork = (input: { ip: string; wholeRange?: boolean; label?: string }) =>
+  api.post<{ network: OfficeNetwork }>('/admin/office-networks/allow', input)
 export const createOfficeNetwork = (input: { label: string; cidr: string }) =>
   api.post<{ network: OfficeNetwork }>('/admin/office-networks', input)
 export const setOfficeNetworkActive = (id: string, isActive: boolean) =>

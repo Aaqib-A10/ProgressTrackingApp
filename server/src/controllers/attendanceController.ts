@@ -356,7 +356,7 @@ async function officeNetworkBlock(ip: string, role: Role, isRemote: boolean): Pr
   const nets = await prisma.officeNetwork.findMany({ where: { isActive: true }, select: { cidr: true } })
   if (nets.length === 0) return null // allowlist not configured — allow everyone
   if (ipAllowed(ip, nets.map((n) => n.cidr))) return null
-  return `You must be on the office network to check in (this network is ${ip || 'unknown'}). If you are in the office, send this address to your admin to add under Office networks. Working from home? Ask your Team Lead with "Request work from home" on My Attendance.`
+  return `You must be on the office network to check in. This network (${ip || 'unknown'}) is not on the office list yet. Your admin has been told and can allow it in one click; try again after that. Working from home? Ask your Team Lead with "Request work from home" on My Attendance.`
 }
 
 /**
@@ -413,6 +413,38 @@ async function sessionGuard(req: AuthedRequest, me: Awaited<ReturnType<typeof lo
   return null
 }
 
+/**
+ * A check-in refused by the office network: keep it for the Office Networks page and tell
+ * the Super Admins (once per address per 30 minutes) so they can allow it in one click.
+ * Best effort: a failure here never changes the answer the person gets.
+ */
+async function recordBlockedCheckIn(me: Awaited<ReturnType<typeof loadUser>>, ip: string): Promise<void> {
+  try {
+    await prisma.blockedCheckIn.create({ data: { userId: me.id, ip } })
+    const recent = await prisma.notification.findFirst({
+      where: { type: 'NETWORK_BLOCKED', entityId: ip, createdAt: { gte: new Date(Date.now() - 30 * 60_000) } },
+      select: { id: true },
+    })
+    if (recent) return
+    const admins = await prisma.user.findMany({ where: { role: 'SUPER_ADMIN', isActive: true }, select: { id: true } })
+    if (!admins.length) return
+    await prisma.notification.createMany({
+      data: admins.map((a) => ({
+        userId: a.id,
+        actorId: me.id,
+        type: 'NETWORK_BLOCKED' as const,
+        title: `${me.name} could not check in`,
+        body: `Network ${ip} is not on the office list. If it is the office, allow it on Office Networks.`,
+        link: '/app/admin/networks',
+        entityType: 'OfficeNetworkIp',
+        entityId: ip,
+      })),
+    })
+  } catch (e) {
+    console.error('[attendance-gate] could not record blocked check-in', e)
+  }
+}
+
 /** Is the given user on a work-from-home day for the given (shift) date? */
 async function isWfhToday(userId: string, dateValue: Date): Promise<boolean> {
   const leave = await prisma.leaveDay.findUnique({ where: { userId_date: { userId, date: dateValue } } })
@@ -467,7 +499,8 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
   // where the person works off-site by design.
   const blocked = await attendanceGuard(req, me, isWfh)
   if (blocked) {
-    console.log(`[attendance-gate] BLOCKED check-in — userId=${me.id}`)
+    console.log(`[attendance-gate] BLOCKED check-in — userId=${me.id} ip=${ip}`)
+    if (!attendanceDeviceBlock(req, me.role)) await recordBlockedCheckIn(me, ip)
     res.status(403).json({ error: blocked })
     return
   }

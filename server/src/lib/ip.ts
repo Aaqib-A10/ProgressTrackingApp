@@ -108,3 +108,19 @@ export function isValidCidr(cidr: string): boolean {
   }
   return true
 }
+
+/**
+ * The usual range an office address belongs to: the /24 for IPv4 (a provider that changes
+ * the address usually stays in it) and the /64 for IPv6 (one office line). Null if malformed.
+ */
+export function suggestRange(ip: string): string | null {
+  const a = parseIp(ip)
+  if (!a) return null
+  if (a.v === 4) {
+    const n = Number(a.n)
+    return `${n >>> 24}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.0/24`
+  }
+  const top = a.n >> 64n
+  const groups = [48n, 32n, 16n, 0n].map((s) => ((top >> s) & 0xffffn).toString(16))
+  return `${groups.join(':')}::/64`
+}
