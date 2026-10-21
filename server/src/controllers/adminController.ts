@@ -1029,7 +1029,7 @@ export async function createOfficeNetwork(req: AuthedRequest, res: Response): Pr
     return
   }
   if (!isValidCidr(parsed.data.cidr)) {
-    res.status(400).json({ error: 'Enter a valid IPv4 address or CIDR (e.g. 203.0.113.7 or 203.0.113.0/24)' })
+    res.status(400).json({ error: 'Enter a valid IP address or range (e.g. 203.0.113.7, 203.0.113.0/24 or 2001:db8:1234:5678::/64)' })
     return
   }
   const n = await prisma.officeNetwork.create({ data: { label: parsed.data.label, cidr: parsed.data.cidr } })

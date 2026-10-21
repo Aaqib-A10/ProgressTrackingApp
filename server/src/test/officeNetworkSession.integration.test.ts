@@ -1,0 +1,73 @@
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest'
+import request from 'supertest'
+import { DateTime } from 'luxon'
+import { app, auth, prisma, seedWorld, type SeededWorld } from './helpers'
+
+// Someone checks in on the office network; mid shift the office line hands out a different
+// address (IPv4 to IPv6, a second line). Ending a break or checking out must still work.
+// Check-in stays office only, and its refusal shows the address so an admin can add it.
+
+const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36'
+const OFFICE_IP = '182.177.47.7'
+const OFFICE_V6 = '2400:adc1:1a2:3b00::/64'
+const pk = (iso: string) => DateTime.fromISO(iso, { zone: 'Asia/Karachi' }).toJSDate()
+const at = (iso: string) => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(pk(iso)) }
+
+let w: SeededWorld
+const nets: string[] = []
+beforeAll(async () => {
+  w = await seedWorld()
+  for (const u of [w.itadMember, w.leadgenMember]) {
+    await prisma.attendanceShift.create({ data: { userId: u.id, startTime: '09:00', endTime: '18:00', graceMin: 10, requiredMinutes: 480, workingDays: [1, 2, 3, 4, 5], timeZone: null } })
+  }
+  nets.push((await prisma.officeNetwork.create({ data: { label: 'Office', cidr: OFFICE_IP } })).id)
+})
+afterEach(() => { vi.useRealTimers() })
+afterAll(async () => {
+  await prisma.officeNetwork.deleteMany({ where: { id: { in: nets } } })
+  await prisma.$disconnect()
+})
+
+const clock = (u: SeededWorld['itadMember'], path: string, ip: string) =>
+  request(app).post(`/api/attendance/${path}`).set(...auth(u)).set('User-Agent', DESKTOP_UA).set('X-Client-Mobile', '0').set('CF-Connecting-IP', ip)
+
+describe('office network during a running session', () => {
+  it('checked in at the office: break, end break, overtime and check-out work from another address', async () => {
+    at('2026-10-12T09:05')
+    await clock(w.itadMember, 'check-in', OFFICE_IP).expect(200)
+    at('2026-10-12T13:00')
+    await clock(w.itadMember, 'break/start', '2400:adc1:1a2:3b00:1111:2222:3333:4444').expect(200)
+    at('2026-10-12T14:00')
+    const e = await clock(w.itadMember, 'break/end', '39.50.1.2').expect(200)
+    expect(e.body.today.state).toBe('IN')
+    expect(e.body.today.regularBreakMin).toBe(60)
+    at('2026-10-12T18:00')
+    await clock(w.itadMember, 'overtime', '39.50.1.2').expect(200)
+    at('2026-10-12T18:30')
+    await clock(w.itadMember, 'check-out', '39.50.1.2').expect(200)
+    const day = await prisma.attendanceDay.findFirst({ where: { userId: w.itadMember.id }, orderBy: { date: 'desc' } })
+    expect(day?.checkOutIp).toBe('39.50.1.2') // saved for the admin to see
+  })
+
+  it('check-in from outside is refused and the message shows the address', async () => {
+    at('2026-10-13T09:05')
+    const r = await clock(w.leadgenMember, 'check-in', '2400:adc1:1a2:3b00::99').expect(403)
+    expect(r.body.error).toMatch(/office network/)
+    expect(r.body.error).toContain('2400:adc1:1a2:3b00::99')
+  })
+
+  it('an IPv6 office range can be added and then lets check-in through', async () => {
+    const bad = await request(app).post('/api/admin/office-networks').set(...auth(w.superAdmin)).send({ label: 'Bad', cidr: '2400:adc1::/129' })
+    expect(bad.status).toBe(400)
+    const ok = await request(app).post('/api/admin/office-networks').set(...auth(w.superAdmin)).send({ label: 'Office IPv6', cidr: OFFICE_V6 })
+    expect(ok.status).toBeLessThan(300)
+    nets.push(ok.body.id ?? ok.body.network?.id)
+    at('2026-10-13T09:10')
+    await clock(w.leadgenMember, 'check-in', '2400:adc1:1a2:3b00::99').expect(200)
+  })
+
+  it('a phone is still refused mid session', async () => {
+    at('2026-10-13T12:00')
+    await request(app).post('/api/attendance/break/start').set(...auth(w.leadgenMember)).set('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148').set('CF-Connecting-IP', OFFICE_IP).expect(403)
+  })
+})

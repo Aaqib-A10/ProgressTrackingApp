@@ -356,7 +356,7 @@ async function officeNetworkBlock(ip: string, role: Role, isRemote: boolean): Pr
   const nets = await prisma.officeNetwork.findMany({ where: { isActive: true }, select: { cidr: true } })
   if (nets.length === 0) return null // allowlist not configured — allow everyone
   if (ipAllowed(ip, nets.map((n) => n.cidr))) return null
-  return 'You must be on the office network to record attendance. Working from home? Ask your Team Lead with "Request work from home" on My Attendance.'
+  return `You must be on the office network to check in (this network is ${ip || 'unknown'}). If you are in the office, send this address to your admin to add under Office networks. Working from home? Ask your Team Lead with "Request work from home" on My Attendance.`
 }
 
 /**
@@ -394,6 +394,22 @@ async function attendanceGuard(req: AuthedRequest, me: Awaited<ReturnType<typeof
   const dev = attendanceDeviceBlock(req, me.role)
   if (dev) return dev
   if (!isWfh) return officeNetworkBlock(getClientIp(req), me.role, me.attendanceRemote)
+  return null
+}
+
+/**
+ * Gate for actions inside a running session (break start/end, overtime, check-out).
+ * The office network was already checked at check-in, so only the device rule applies
+ * here: a phone or office Wi-Fi switching address (IPv4 to IPv6, a second line) must
+ * never trap someone on a break or stop them checking out. The IP is still saved and
+ * logged when it is outside the office list, so admins can see it.
+ */
+async function sessionGuard(req: AuthedRequest, me: Awaited<ReturnType<typeof loadUser>>, action: string): Promise<string | null> {
+  const dev = attendanceDeviceBlock(req, me.role)
+  if (dev) return dev
+  const ip = getClientIp(req)
+  const off = await officeNetworkBlock(ip, me.role, me.attendanceRemote)
+  if (off) console.log(`[attendance-gate] off-network ${action} allowed (session already open) — userId=${me.id} ip=${ip}`)
   return null
 }
 
@@ -480,9 +496,7 @@ export async function checkOut(req: AuthedRequest, res: Response): Promise<void>
   const now = new Date()
   const shift = await resolveShift(me.id, me.departmentId)
 
-  const dateValue = dbDateFromString(shiftDayString(shift, now))
-  const isWfh = await isWfhToday(me.id, dateValue)
-  const blocked = await attendanceGuard(req, me, isWfh)
+  const blocked = await sessionGuard(req, me, 'check-out')
   if (blocked) {
     console.log(`[attendance-gate] BLOCKED check-out — userId=${me.id}`)
     res.status(403).json({ error: blocked })
@@ -510,8 +524,7 @@ export async function startOvertime(req: AuthedRequest, res: Response): Promise<
   const me = await loadUser(req.user!.id)
   const now = new Date()
   const shift = await resolveShift(me.id, me.departmentId)
-  const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
-  const blocked = await attendanceGuard(req, me, isWfh)
+  const blocked = await sessionGuard(req, me, 'overtime')
   if (blocked) {
     res.status(403).json({ error: blocked })
     return
@@ -535,8 +548,7 @@ export async function startBreak(req: AuthedRequest, res: Response): Promise<voi
   const now = new Date()
   const shift = await resolveShift(me.id, me.departmentId)
 
-  const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
-  const blocked = await attendanceGuard(req, me, isWfh)
+  const blocked = await sessionGuard(req, me, 'break-start')
   if (blocked) {
     console.log(`[attendance-gate] BLOCKED break-start — userId=${me.id}`)
     res.status(403).json({ error: blocked })
@@ -568,8 +580,7 @@ export async function endBreak(req: AuthedRequest, res: Response): Promise<void>
   const now = new Date()
   const shift = await resolveShift(me.id, me.departmentId)
 
-  const isWfh = await isWfhToday(me.id, dbDateFromString(shiftDayString(shift, now)))
-  const blocked = await attendanceGuard(req, me, isWfh)
+  const blocked = await sessionGuard(req, me, 'break-end')
   if (blocked) {
     console.log(`[attendance-gate] BLOCKED break-end — userId=${me.id}`)
     res.status(403).json({ error: blocked })

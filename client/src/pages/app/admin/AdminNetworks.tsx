@@ -87,7 +87,7 @@ export default function AdminNetworks() {
         {enforced ? <ShieldCheck size={20} className="mt-0.5 shrink-0 text-success" /> : <ShieldAlert size={20} className="mt-0.5 shrink-0 text-warning" />}
         <div className="text-body-sm">
           {enforced ? (
-            <><b className="text-ink">Enforcement is ON.</b> <span className="text-ink-muted">Only the active networks below can check in or out. Super Admins and localhost are always allowed.</span></>
+            <><b className="text-ink">Enforcement is ON.</b> <span className="text-ink-muted">Only the active networks below can check in. Breaks and check-out are not blocked once someone has checked in. Super Admins and localhost are always allowed.</span></>
           ) : (
             <><b className="text-ink">Enforcement is OFF.</b> <span className="text-ink-muted">No active networks — anyone can check in from anywhere. Add and activate at least one network to enforce office-only attendance.</span></>
           )}
@@ -102,7 +102,7 @@ export default function AdminNetworks() {
           </label>
           <label className="block">
             <span className="mb-1 block text-body-sm font-medium text-ink">Public IP or CIDR</span>
-            <input value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="203.0.113.7 or 203.0.113.0/24" className={inputCls} />
+            <input value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="203.0.113.7, 203.0.113.0/24 or an IPv6 /64" className={inputCls} />
           </label>
           <Button type="submit" leadingIcon={<Plus size={16} />} disabled={saving}>Add</Button>
         </form>
