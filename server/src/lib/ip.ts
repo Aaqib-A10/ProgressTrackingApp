@@ -83,7 +83,10 @@ export function ipInCidr(ip: string, cidr: string): boolean {
   const a = parseIp(ip)
   const r = parseIp(range)
   if (!a || !r || a.v !== r.v) return false
-  const bits = bitsStr === undefined ? r.bits : Number(bitsStr)
+  // A bare IPv6 address stands for its whole /64 (one office line): every laptop on an
+  // IPv6 network has its own address, and Windows/macOS/phones change it every day
+  // (privacy addresses), so a single IPv6 address would let in one laptop for one day.
+  const bits = bitsStr === undefined ? (r.v === 6 ? 64 : r.bits) : Number(bitsStr)
   if (!/^\d+$/.test(String(bits)) || bits < 0 || bits > r.bits) return false
   if (bits === 0) return true
   const shift = BigInt(r.bits - bits)
@@ -123,4 +126,18 @@ export function suggestRange(ip: string): string | null {
   const top = a.n >> 64n
   const groups = [48n, 32n, 16n, 0n].map((s) => ((top >> s) & 0xffffn).toString(16))
   return `${groups.join(':')}::/64`
+}
+
+/** True for an IPv6 address (not an IPv4-mapped one). */
+export function isIpv6(ip: string): boolean {
+  return parseIp(ip)?.v === 6
+}
+
+/**
+ * The network an address belongs to, for grouping and for what an admin allows: an IPv4
+ * address is its own network (the office's NAT address, shared by everyone); an IPv6
+ * address belongs to its /64 (each device has its own address inside it).
+ */
+export function networkOf(ip: string): string {
+  return isIpv6(ip) ? (suggestRange(ip) ?? ip) : ip
 }

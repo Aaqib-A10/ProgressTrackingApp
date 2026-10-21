@@ -96,6 +96,39 @@ describe('office network during a running session', () => {
     expect(after.body.blocked.find((b: { ip: string }) => b.ip === NEW_LINE)).toBeUndefined()
   })
 
+  it('IPv6 office line: one click lets every laptop on it in, also the next day when Windows changes the address', async () => {
+    const LAPTOP_A = '2400:adc2:77:9a00:5d1:22ff:fe33:4401'
+    const LAPTOP_B = '2400:adc2:77:9a00:c0de:1:2:3'
+    at('2026-10-15T09:05')
+    await clock(w.itadMember, 'check-in', LAPTOP_A).expect(403)
+    await clock(w.leadgenMember, 'check-in', LAPTOP_B).expect(403)
+
+    // One alert and one row for the office line, not one per laptop.
+    const notes = await prisma.notification.findMany({ where: { userId: w.superAdmin.id, type: 'NETWORK_BLOCKED', entityId: '2400:adc2:77:9a00::/64' } })
+    expect(notes).toHaveLength(1)
+    const list = await request(app).get('/api/admin/office-networks').set(...auth(w.superAdmin)).expect(200)
+    const rows = list.body.blocked.filter((b: { network: string }) => b.network === '2400:adc2:77:9a00::/64')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ ipv6: true, count: 2, range: '2400:adc2:77:9a00::/64' })
+    expect(rows[0].people).toHaveLength(2)
+
+    // The admin clicks the address of one laptop: the whole line is allowed.
+    const ok = await request(app).post('/api/admin/office-networks/allow').set(...auth(w.superAdmin)).send({ ip: LAPTOP_A, wholeRange: false }).expect(201)
+    expect(ok.body.network.cidr).toBe('2400:adc2:77:9a00::/64')
+    nets.push(ok.body.network.id)
+
+    await clock(w.leadgenMember, 'check-in', LAPTOP_B).expect(200)
+    at('2026-10-16T09:05')
+    await clock(w.itadMember, 'check-in', '2400:adc2:77:9a00:e1f0:7:8:9').expect(200) // new privacy address
+  })
+
+  it('an IPv6 address added earlier as a single address now covers its line', async () => {
+    const old = await prisma.officeNetwork.create({ data: { label: 'Old single v6', cidr: '2400:adc3:5:6:aaaa:bbbb:cccc:dddd' } })
+    nets.push(old.id)
+    at('2026-10-17T09:05')
+    await clock(w.itadMember, 'check-in', '2400:adc3:5:6:1:2:3:4').expect(200)
+  })
+
   it('a phone is still refused mid session', async () => {
     at('2026-10-13T12:00')
     await request(app).post('/api/attendance/break/start').set(...auth(w.leadgenMember)).set('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148').set('CF-Connecting-IP', OFFICE_IP).expect(403)

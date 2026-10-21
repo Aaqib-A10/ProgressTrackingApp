@@ -7,7 +7,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { hashPassword, signInviteToken } from '../lib/auth'
 import { sendInviteEmail } from '../lib/mail'
 import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
-import { getClientIp, ipAllowed, isValidCidr, suggestRange } from '../lib/ip'
+import { getClientIp, ipAllowed, isIpv6, isValidCidr, networkOf, suggestRange } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 
 function loadUser(id: string) {
@@ -1018,21 +1018,24 @@ export async function listOfficeNetworks(req: AuthedRequest, res: Response): Pro
     select: { ip: true, createdAt: true, user: { select: { name: true } } },
     take: 2000,
   })
-  const byIp = new Map<string, { ip: string; count: number; people: string[]; lastAt: Date }>()
+  // One row per network: an IPv4 address, or an IPv6 /64 (every laptop on an IPv6 office
+  // line has its own address, so per-address rows would hide that it is one office).
+  const byNet = new Map<string, { ip: string; network: string; ipv6: boolean; count: number; people: string[]; lastAt: Date }>()
   for (const r of rows) {
     if (active.length && ipAllowed(r.ip, active)) continue
-    const g = byIp.get(r.ip) ?? { ip: r.ip, count: 0, people: [], lastAt: r.createdAt }
+    const key = networkOf(r.ip)
+    const g = byNet.get(key) ?? { ip: r.ip, network: key, ipv6: isIpv6(r.ip), count: 0, people: [], lastAt: r.createdAt }
     g.count++
     if (!g.people.includes(r.user.name)) g.people.push(r.user.name)
-    byIp.set(r.ip, g)
+    byNet.set(key, g)
   }
   const yourIp = getClientIp(req)
   res.json({
     networks: networks.map((n) => ({ id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive })),
     // When empty, enforcement is off (everyone can check in) — surfaced in the UI.
     enforced: networks.some((n) => n.isActive),
-    blocked: [...byIp.values()].map((g) => ({ ...g, lastAt: g.lastAt.toISOString(), range: suggestRange(g.ip) })),
-    you: { ip: yourIp, allowed: active.length === 0 || ipAllowed(yourIp, active), range: suggestRange(yourIp) },
+    blocked: [...byNet.values()].map((g) => ({ ...g, lastAt: g.lastAt.toISOString(), range: suggestRange(g.ip) })),
+    you: { ip: yourIp, ipv6: isIpv6(yourIp), allowed: active.length === 0 || ipAllowed(yourIp, active), range: suggestRange(yourIp) },
   })
 }
 
@@ -1068,11 +1071,12 @@ export async function allowOfficeNetwork(req: AuthedRequest, res: Response): Pro
     res.status(400).json({ error: 'Not a valid address.' })
     return
   }
-  const cidr = parsed.data.wholeRange ? suggestRange(parsed.data.ip)! : parsed.data.ip
+  // IPv6 is always allowed as its /64: a single IPv6 address is one laptop for one day.
+  const cidr = parsed.data.wholeRange || isIpv6(parsed.data.ip) ? suggestRange(parsed.data.ip)! : parsed.data.ip
   const existing = await prisma.officeNetwork.findFirst({ where: { cidr } })
   const n = existing
     ? await prisma.officeNetwork.update({ where: { id: existing.id }, data: { isActive: true } })
-    : await prisma.officeNetwork.create({ data: { label: parsed.data.label || (parsed.data.wholeRange ? 'Office range' : 'Office line'), cidr } })
+    : await prisma.officeNetwork.create({ data: { label: parsed.data.label || (cidr.includes('/') ? 'Office range' : 'Office line'), cidr } })
   res.status(201).json({ network: { id: n.id, label: n.label, cidr: n.cidr, isActive: n.isActive } })
 }
 

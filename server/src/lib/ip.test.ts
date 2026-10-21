@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Request } from 'express'
-import { ipInCidr, ipAllowed, isValidCidr, isLoopback, getClientIp } from './ip'
+import { ipInCidr, ipAllowed, isValidCidr, isLoopback, getClientIp, networkOf, isIpv6 } from './ip'
 
 describe('getClientIp', () => {
   const mk = (headers: Record<string, string>, ip?: string): Request =>
@@ -75,5 +75,25 @@ describe('isValidCidr', () => {
     expect(isValidCidr('203.0.113')).toBe(false)
     expect(isValidCidr('203.0.113.0/33')).toBe(false)
     expect(isValidCidr('hello')).toBe(false)
+  })
+})
+
+describe('IPv6 office lines', () => {
+  it('a bare IPv6 address covers its /64, so every laptop on the line passes on every day', () => {
+    expect(ipInCidr('2400:adc1:1a2:3b00:9c1e:44ff:fe01:2', '2400:adc1:1a2:3b00:1111:2222:3333:4444')).toBe(true)
+    expect(ipInCidr('2400:adc1:1a2:3b01::1', '2400:adc1:1a2:3b00:1111:2222:3333:4444')).toBe(false)
+  })
+  it('an explicit /128 is still one address', () => {
+    expect(ipInCidr('2400:adc1:1a2:3b00::2', '2400:adc1:1a2:3b00::1/128')).toBe(false)
+    expect(ipInCidr('2400:adc1:1a2:3b00::1', '2400:adc1:1a2:3b00::1/128')).toBe(true)
+  })
+  it('a bare IPv4 address is still exact', () => {
+    expect(ipInCidr('119.156.230.30', '119.156.230.29')).toBe(false)
+  })
+  it('networkOf groups IPv6 by /64 and leaves IPv4 alone', () => {
+    expect(networkOf('2400:adc1:1a2:3b00:9c1e:44ff:fe01:2')).toBe('2400:adc1:1a2:3b00::/64')
+    expect(networkOf('119.156.230.29')).toBe('119.156.230.29')
+    expect(isIpv6('::ffff:1.2.3.4')).toBe(false)
+    expect(isIpv6('2400:adc1::1')).toBe(true)
   })
 })

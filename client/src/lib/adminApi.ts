@@ -130,14 +130,15 @@ export interface OfficeNetwork {
   cidr: string
   isActive: boolean
 }
-export interface BlockedNetwork { ip: string; count: number; people: string[]; lastAt: string; range: string | null }
+/** One refused network: an IPv4 address, or an IPv6 /64 (`network`), with the latest address seen (`ip`). */
+export interface BlockedNetwork { ip: string; network: string; ipv6: boolean; count: number; people: string[]; lastAt: string; range: string | null }
 export interface OfficeNetworksResponse {
   networks: OfficeNetwork[]
   enforced: boolean
   /** Check-ins refused in the last 7 days, one row per address not allowed yet. */
   blocked: BlockedNetwork[]
   /** The address this admin is on right now. */
-  you: { ip: string; allowed: boolean; range: string | null }
+  you: { ip: string; ipv6: boolean; allowed: boolean; range: string | null }
 }
 export const listOfficeNetworks = () =>
   api.get<OfficeNetworksResponse>('/admin/office-networks')

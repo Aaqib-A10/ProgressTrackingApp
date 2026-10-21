@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { isOvernight, shiftMinutes, shiftDayString, belongsToPreviousShift, timesForWeekday, type DayTimes } from '../lib/shiftDay'
-import { getClientIp, ipAllowed, isLoopback } from '../lib/ip'
+import { getClientIp, ipAllowed, isLoopback, networkOf } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { sendCsv } from '../lib/csv'
 import { shiftSpanMin, autoCheckoutAt, overtimeMinutes, OVERTIME_MAX_MIN } from '../lib/overtime'
@@ -421,8 +421,10 @@ async function sessionGuard(req: AuthedRequest, me: Awaited<ReturnType<typeof lo
 async function recordBlockedCheckIn(me: Awaited<ReturnType<typeof loadUser>>, ip: string): Promise<void> {
   try {
     await prisma.blockedCheckIn.create({ data: { userId: me.id, ip } })
+    // One alert per network (an IPv6 office line gives every laptop its own address).
+    const net = networkOf(ip)
     const recent = await prisma.notification.findFirst({
-      where: { type: 'NETWORK_BLOCKED', entityId: ip, createdAt: { gte: new Date(Date.now() - 30 * 60_000) } },
+      where: { type: 'NETWORK_BLOCKED', entityId: net, createdAt: { gte: new Date(Date.now() - 30 * 60_000) } },
       select: { id: true },
     })
     if (recent) return
@@ -434,10 +436,10 @@ async function recordBlockedCheckIn(me: Awaited<ReturnType<typeof loadUser>>, ip
         actorId: me.id,
         type: 'NETWORK_BLOCKED' as const,
         title: `${me.name} could not check in`,
-        body: `Network ${ip} is not on the office list. If it is the office, allow it on Office Networks.`,
+        body: `Network ${net} is not on the office list. If it is the office, allow it on Office Networks.`,
         link: '/app/admin/networks',
         entityType: 'OfficeNetworkIp',
-        entityId: ip,
+        entityId: net,
       })),
     })
   } catch (e) {

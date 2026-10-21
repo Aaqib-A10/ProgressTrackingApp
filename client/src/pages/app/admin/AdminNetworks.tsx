@@ -122,15 +122,22 @@ export default function AdminNetworks() {
           </p>
           <ul className="divide-y divide-line rounded-btn border border-line">
             {blocked.map((b) => (
-              <li key={b.ip} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+              <li key={b.network ?? b.ip} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <code className="text-body-md font-semibold text-ink">{b.ip}</code>
+                  <code className="break-all text-body-md font-semibold text-ink">{b.ipv6 ? b.network : b.ip}</code>
+                  {b.ipv6 && <span className="ml-2 text-body-sm text-ink-muted">IPv6 line (each laptop has its own address on it)</span>}
                   <p className="text-body-sm text-ink-muted">
                     {b.people.join(', ')} · {b.count} time{b.count === 1 ? '' : 's'} · last {new Date(b.lastAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   </p>
                 </div>
-                <Button size="sm" variant="secondary" disabled={saving} onClick={() => allow(b.ip, false)}>Allow this address</Button>
-                {b.range && <Button size="sm" disabled={saving} onClick={() => allow(b.ip, true)}>Allow range {b.range}</Button>}
+                {b.ipv6 ? (
+                  <Button size="sm" disabled={saving} onClick={() => allow(b.ip, true)}>Allow this office line</Button>
+                ) : (
+                  <>
+                    <Button size="sm" variant="secondary" disabled={saving} onClick={() => allow(b.ip, false)}>Allow this address</Button>
+                    {b.range && <Button size="sm" disabled={saving} onClick={() => allow(b.ip, true)}>Allow range {b.range}</Button>}
+                  </>
+                )}
               </li>
             ))}
           </ul>
@@ -143,14 +150,18 @@ export default function AdminNetworks() {
             <MapPin size={18} className="text-primary" />
             <div className="min-w-0 flex-1 text-body-sm">
               <span className="text-ink-muted">Your network right now: </span>
-              <code className="font-semibold text-ink">{you.ip}</code>
+              <code className="break-all font-semibold text-ink">{you.ip}</code>
               {enforced && <span className={'ml-2 ' + (you.allowed ? 'text-success' : 'text-warning')}>{you.allowed ? 'on the office list' : 'not on the list'}</span>}
             </div>
             {!you.allowed || !enforced ? (
-              <>
-                <Button size="sm" variant="secondary" disabled={saving} onClick={() => allow(you.ip, false, 'Office line')}>Add as office</Button>
-                {you.range && <Button size="sm" variant="secondary" disabled={saving} onClick={() => allow(you.ip, true, 'Office range')}>Add range {you.range}</Button>}
-              </>
+              you.ipv6 ? (
+                <Button size="sm" variant="secondary" disabled={saving} onClick={() => allow(you.ip, true, 'Office IPv6 line')}>Add this office line {you.range}</Button>
+              ) : (
+                <>
+                  <Button size="sm" variant="secondary" disabled={saving} onClick={() => allow(you.ip, false, 'Office line')}>Add as office</Button>
+                  {you.range && <Button size="sm" variant="secondary" disabled={saving} onClick={() => allow(you.ip, true, 'Office range')}>Add range {you.range}</Button>}
+                </>
+              )
             ) : null}
           </div>
           <p className="mt-1 text-body-sm text-ink-muted">Only add this when you are in the office yourself.</p>
@@ -188,7 +199,8 @@ export default function AdminNetworks() {
                     <span className="truncate text-body-md font-medium text-ink">{n.label}</span>
                     {n.isActive ? <Badge tone="success">Active</Badge> : <Badge tone="neutral">Inactive</Badge>}
                   </div>
-                  <code className="text-body-sm text-ink-muted">{n.cidr}</code>
+                  <code className="break-all text-body-sm text-ink-muted">{n.cidr}</code>
+                  {n.cidr.includes(':') && !n.cidr.includes('/') && <span className="ml-2 text-body-sm text-ink-muted">covers its whole /64 line</span>}
                 </div>
                 <Toggle checked={n.isActive} onChange={() => toggle(n)} label={`Toggle ${n.label}`} />
                 <button onClick={() => remove(n)} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Remove">
