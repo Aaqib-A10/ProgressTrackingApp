@@ -72,7 +72,7 @@ export default function InventoryList() {
       <div className="flex flex-wrap items-center gap-1.5">
         {['All Items', ...INVENTORY_CATEGORIES].map((c) => (
           <button key={c} onClick={() => pickCat(c)}
-            className={'rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors ' + (cat === c ? 'bg-ink text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>
+            className={'rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors ' + (cat === c ? 'bg-ink text-card' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>
             {c}
           </button>
         ))}

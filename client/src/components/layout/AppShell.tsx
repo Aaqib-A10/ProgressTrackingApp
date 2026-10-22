@@ -10,6 +10,7 @@ import { FloatingChat } from '../chat/FloatingChat'
 import { CallProvider } from '../calls/CallProvider'
 import { UpdateBanner } from './UpdateBanner'
 import { PushBanner } from './PushControls'
+import { CommandPalette } from './GlobalSearch'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -100,7 +101,7 @@ export function AppShell({ user, children }: AppShellProps) {
           {/* Backdrop (mobile only) */}
           <div
             className={cn(
-              'fixed inset-0 z-40 bg-ink/50 transition-opacity lg:hidden',
+              'fixed inset-0 z-40 bg-black/40 transition-opacity lg:hidden',
               navOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
             )}
             onClick={() => setNavOpen(false)}
@@ -119,7 +120,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
           <div className="flex min-w-0 flex-1 flex-col">
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
-            <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+            <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:px-8 sm:py-7">
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
                 <PushBanner />
                 {children ?? <Outlet />}
@@ -127,6 +128,7 @@ export function AppShell({ user, children }: AppShellProps) {
             </main>
           </div>
         </div>
+        <CommandPalette />
         <FloatingChat meId={user.id} />
         <UpdateBanner />
       </CallProvider>

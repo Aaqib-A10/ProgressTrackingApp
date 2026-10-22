@@ -153,7 +153,7 @@ function NumberCell({ label, value, disabled, onChange, onNav, r, c }: {
         if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); onNav(1, 0) }
         else if (e.key === 'ArrowUp') { e.preventDefault(); onNav(-1, 0) }
       }}
-      className="h-9 w-20 rounded-btn border border-line bg-white px-2 text-right text-body-md tabular-nums text-ink placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-slate-50 disabled:text-slate-400"
+      className="h-9 w-20 rounded-btn border border-line bg-card px-2 text-right text-body-md tabular-nums text-ink placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-slate-50 disabled:text-slate-400"
     />
   )
 }

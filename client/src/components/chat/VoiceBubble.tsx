@@ -187,7 +187,7 @@ export function VoiceBubble({ href, name, mine }: { href: string; name: string |
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-muted">
           <span className="tabular-nums">{isPlaying || pos > 0 ? fmtClock(pos) : fmtClock(duration)}</span>
-          <button type="button" onClick={cycleSpeed} className={cn('rounded-full px-1.5 font-semibold leading-4', speed !== 1 ? 'bg-ink text-white' : 'bg-slate-200 text-ink hover:bg-slate-300')} aria-label={`Playback speed ${speed}x`} title="Playback speed">
+          <button type="button" onClick={cycleSpeed} className={cn('rounded-full px-1.5 font-semibold leading-4', speed !== 1 ? 'bg-ink text-card' : 'bg-slate-200 text-ink hover:bg-slate-300')} aria-label={`Playback speed ${speed}x`} title="Playback speed">
             {speed}x
           </button>
           <a href={href} className="ml-auto rounded p-0.5 hover:text-ink" aria-label="Download voice message" title="Download"><Download size={12} /></a>

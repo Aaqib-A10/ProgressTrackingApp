@@ -31,7 +31,7 @@ export function MediaViewer({ item, onClose }: { item: MediaItem; onClose: () =>
   }, [onClose])
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex flex-col bg-slate-950 text-white" role="dialog" aria-modal="true" aria-label={item.name}>
+    <div className="keep-palette fixed inset-0 z-[80] flex flex-col bg-slate-950 text-white" role="dialog" aria-modal="true" aria-label={item.name}>
       <div className="flex items-center gap-2 px-4 py-3">
         <span className="min-w-0 flex-1 truncate text-body-md font-medium">{item.name}{item.size ? <span className="ml-2 text-body-sm text-white/60">{item.size}</span> : null}</span>
         {item.kind === 'image' && (

@@ -19,7 +19,7 @@ import { SortableContext, horizontalListSortingStrategy, sortableKeyboardCoordin
 import { CSS } from '@dnd-kit/utilities'
 import { ArrowRight, CheckSquare, ChevronDown, ChevronUp, GripVertical, MessageSquare, Paperclip, Plus } from 'lucide-react'
 import type { BoardColumn, TaskCard } from '../../../lib/projectsApi'
-import { AvatarStack, DueChip, PriorityIcon } from '../../../components/projects/pmUi'
+import { AvatarStack, DueChip, PriorityGlyph, StatusIcon, PRIORITY_META } from '../../../components/projects/pmUi'
 import { LabelChip } from '../../../components/projects/Pickers'
 import { VERDICT_META, VerdictBadge } from '../../../components/projects/Reviews'
 import { cn } from '../../../lib/cn'
@@ -196,8 +196,8 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
           </div>
         </SortableContext>
       </div>
-      <DragOverlay dropAnimation={{ duration: 160, easing: 'ease-out' }}>
-        {active ? <CardBody task={active} lifted /> : activeCol ? <div className="w-60 rounded-card border border-primary/40 bg-card px-3 py-2 text-label-md uppercase text-ink shadow-overlay">{activeCol.name}</div> : null}
+      <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' }}>
+        {active ? <CardBody task={active} lifted /> : activeCol ? <div className="flex w-60 items-center gap-2 rounded-xl border border-line-strong bg-card px-3 py-2.5 text-[13px] font-medium text-ink shadow-overlay"><StatusIcon name={activeCol.name} category={activeCol.category} color={activeCol.color} />{activeCol.name}</div> : null}
       </DragOverlay>
     </DndContext>
   )
@@ -236,21 +236,27 @@ function Column({ column, ids: allIds, byId, canMove, canDragColumn, onOpen, onQ
       ref={sortable.setNodeRef}
       style={style}
       aria-label={`${column.name} column, ${allIds.length} tasks`}
-      className={cn('flex w-[85vw] max-w-[300px] shrink-0 snap-start flex-col rounded-card border bg-slate-50/80 sm:w-64 xl:w-auto xl:min-w-0 xl:max-w-none xl:flex-1 xl:basis-0', isOver ? 'border-primary/40 bg-primary/5' : 'border-line', sortable.isDragging && 'opacity-40')}
+      className={cn('flex w-[85vw] max-w-[300px] shrink-0 snap-start flex-col rounded-xl transition-colors duration-150 sm:w-[272px] xl:w-auto xl:min-w-0 xl:max-w-none xl:flex-1 xl:basis-0', isOver ? 'bg-primary/[0.06] ring-1 ring-inset ring-primary/25' : 'bg-slate-100/60', sortable.isDragging && 'opacity-40')}
     >
-      <header className="flex items-center gap-2 px-3 pb-1 pt-2.5 xl:px-2.5">
+      <header className="group/col flex h-10 items-center gap-2 px-3 xl:px-2.5">
         {canDragColumn && (
-          <button type="button" {...sortable.attributes} {...sortable.listeners} className="-ml-1 cursor-grab touch-none rounded p-0.5 text-ink-muted hover:bg-slate-200 active:cursor-grabbing" aria-label={`Drag to reorder ${column.name} column`}>
-            <GripVertical size={14} />
+          <button type="button" {...sortable.attributes} {...sortable.listeners} className="-ml-1.5 cursor-grab touch-none rounded p-0.5 text-ink-faint opacity-0 hover:bg-slate-200 hover:text-ink-muted focus-visible:opacity-100 active:cursor-grabbing group-hover/col:opacity-100" aria-label={`Drag to reorder ${column.name} column`}>
+            <GripVertical size={13} />
           </button>
         )}
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: column.color ?? '#94A3B8' }} />
-        <h2 className="flex-1 truncate text-label-md uppercase text-ink">{column.name}</h2>
-        <span className={cn('rounded-full px-2 text-body-sm font-semibold tabular-nums', over ? 'bg-danger/10 text-danger' : 'bg-slate-200 text-ink-muted')} title={column.wipLimit != null ? `Work in progress limit ${column.wipLimit}` : undefined}>
+        <StatusIcon name={column.name} category={column.category} color={column.color} />
+        <h2 className="truncate text-[13px] font-medium text-ink">{column.name}</h2>
+        <span className={cn('text-[12px] tabular-nums', over ? 'font-semibold text-danger' : 'text-ink-faint')} title={column.wipLimit != null ? `Work in progress limit ${column.wipLimit}` : undefined}>
           {allIds.length}{column.wipLimit != null ? `/${column.wipLimit}` : ''}
         </span>
+        <span className="flex-1" />
+        {(onAddTask || onQuickAdd) && (
+          <button type="button" onClick={() => (onAddTask ? onAddTask(column.id) : setAdding(true))} className="rounded-md p-1 text-ink-faint transition-colors hover:bg-slate-200 hover:text-ink" aria-label={`Add task to ${column.name}`} title="Add task">
+            <Plus size={14} />
+          </button>
+        )}
       </header>
-      <div ref={dropRef} className="flex min-h-[96px] flex-1 flex-col gap-2 p-2 xl:gap-1.5 xl:p-1.5">
+      <div ref={dropRef} className="flex min-h-[96px] flex-1 flex-col gap-1.5 px-1.5 pb-1.5">
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {ids.map((id) => {
             const t = byId.get(id)
@@ -258,7 +264,7 @@ function Column({ column, ids: allIds, byId, canMove, canDragColumn, onOpen, onQ
           })}
         </SortableContext>
         {ids.length === 0 && !adding && (
-          <p className="px-1 py-4 text-center text-body-sm text-ink-muted">
+          <p className="mx-0.5 rounded-lg border border-dashed border-line-strong/70 px-2 py-5 text-center text-[12px] text-ink-faint">
             {tucked.length > 0 ? 'Nothing finished in the last day' : canMove ? 'Drop tasks here' : 'No tasks'}
           </p>
         )}
@@ -266,7 +272,7 @@ function Column({ column, ids: allIds, byId, canMove, canDragColumn, onOpen, onQ
           <button
             type="button"
             onClick={() => setShowOld((v) => !v)}
-            className="flex items-center justify-center gap-1 rounded-btn border border-dashed border-line px-2 py-1.5 text-body-sm font-medium text-ink-muted hover:border-primary/40 hover:text-primary"
+            className="flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[12px] font-medium text-ink-muted hover:bg-slate-200/60 hover:text-ink"
             title={`Tasks finished more than ${DONE_VISIBLE_HOURS} hours ago are tucked away to keep the board short. They are never deleted: see the Completed tab.`}
           >
             {showOld ? <><ChevronUp size={14} /> Hide older</> : <><ChevronDown size={14} /> Show {tucked.length} older</>}
@@ -275,7 +281,7 @@ function Column({ column, ids: allIds, byId, canMove, canDragColumn, onOpen, onQ
       </div>
       {onAddTask ? (
         <div className="px-2 pb-2">
-          <button type="button" onClick={() => onAddTask(column.id)} className="flex w-full items-center gap-1.5 rounded-btn px-2 py-1.5 text-body-sm font-medium text-ink-muted hover:bg-slate-200/70 hover:text-ink">
+          <button type="button" onClick={() => onAddTask(column.id)} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-ink-faint transition-colors hover:bg-slate-200/60 hover:text-ink">
             <Plus size={14} /> Add task
           </button>
         </div>
@@ -295,12 +301,12 @@ function Column({ column, ids: allIds, byId, canMove, canDragColumn, onOpen, onQ
                 onBlur={() => { if (!title.trim()) setAdding(false) }}
                 rows={2}
                 placeholder="Task title, then Enter"
-                className="w-full resize-none rounded-btn border border-primary bg-card p-2 text-body-md focus:outline-none focus:ring-4 focus:ring-primary/10"
+                className="w-full resize-none rounded-lg border border-primary bg-card p-2 text-[13px] shadow-raised focus:outline-none focus:ring-[3px] focus:ring-primary/15"
               />
             </form>
           ) : (
-            <button type="button" onClick={() => setAdding(true)} className="flex w-full items-center gap-1.5 rounded-btn px-2 py-1.5 text-body-sm font-medium text-ink-muted hover:bg-slate-200/70 hover:text-ink">
-              <Plus size={15} /> Add task
+            <button type="button" onClick={() => setAdding(true)} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-ink-faint transition-colors hover:bg-slate-200/60 hover:text-ink">
+              <Plus size={14} /> Add task
             </button>
           )}
         </div>
@@ -326,7 +332,7 @@ function SortableCard({ task, canMove, onOpen }: { task: TaskCard; canMove: bool
         if (e.key === 'Enter') onOpen(task.code)
         else listeners?.onKeyDown?.(e)
       }}
-      className={cn('touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-btn', isDragging && 'opacity-30')}
+      className={cn('touch-manipulation rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', isDragging && 'opacity-30')}
     >
       <CardBody task={task} />
     </div>
@@ -336,29 +342,41 @@ function SortableCard({ task, canMove, onOpen }: { task: TaskCard; canMove: bool
 
 export function CardBody({ task, lifted }: { task: TaskCard; lifted?: boolean }) {
   const c = task.counts
+  const hasFoot = c.comments > 0 || c.attachments > 0 || c.checklistTotal > 0 || !!task.lastReviewVerdict
   return (
-    <div className={cn('cursor-pointer rounded-btn border bg-card p-3 shadow-card transition-shadow hover:shadow-overlay xl:p-2.5', task.isOverdue ? 'border-danger/40' : 'border-line', lifted && 'w-60 rotate-1 cursor-grabbing shadow-overlay')}>
-      {task.labels.length > 0 && <div className="mb-1.5 flex flex-wrap gap-1">{task.labels.map((l) => <LabelChip key={l.id} label={l} />)}</div>}
-      <p className="line-clamp-3 break-words text-body-md font-medium text-ink xl:text-body-sm">{task.title}</p>
-      <p className="mt-1 truncate text-[11px] text-ink-muted" title={`Assigned by ${task.createdBy.name} to ${task.assignees.map((a) => a.name).join(', ') || 'nobody yet'}`}>
-        <span className="font-medium text-ink">{task.createdBy.name}</span>
-        <ArrowRight size={10} className="mx-1 inline" />
-        {task.assignees.length ? <span className="font-medium text-ink">{task.assignees.map((a) => a.name).join(', ')}</span> : <span className="italic">unassigned</span>}
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 xl:mt-1.5">
-        <span className="font-mono text-[11px] font-semibold text-ink-muted">{task.code}</span>
-        <PriorityIcon priority={task.priority} />
-        <DueChip dueAt={task.dueAt} category={task.category} compact />
-        <span className="ml-auto">{task.assignees.length > 0 && <AvatarStack people={task.assignees} max={3} size={22} />}</span>
+    <div
+      className={cn(
+        'group/card relative cursor-pointer rounded-lg border bg-card px-3 py-2.5 shadow-xs transition-[border-color,box-shadow,transform] duration-150 hover:border-line-strong hover:shadow-raised',
+        task.isOverdue ? 'border-danger/35' : 'border-line',
+        lifted && 'w-64 rotate-[1.5deg] scale-[1.02] cursor-grabbing border-line-strong shadow-overlay',
+      )}
+    >
+      {/* Urgent and high priority show as a thin coloured edge, so the eye finds them first. */}
+      {(task.priority === 'URGENT' || task.priority === 'HIGH') && (
+        <span className={cn('absolute inset-y-2 left-0 w-[3px] rounded-r-full', task.priority === 'URGENT' ? 'bg-danger' : 'bg-warning')} aria-hidden />
+      )}
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[11px] text-ink-faint">{task.code}</span>
+        <span className="flex-1" />
+        {task.assignees.length > 0 ? <AvatarStack people={task.assignees} max={3} size={20} /> : <span className="h-5 w-5 rounded-full border border-dashed border-line-strong" title="Nobody yet" />}
       </div>
-      {(c.comments > 0 || c.attachments > 0 || c.checklistTotal > 0 || task.lastReviewVerdict) && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-muted">
+      <p className="mt-1 line-clamp-3 break-words text-[13px] font-medium leading-[18px] text-ink">{task.title}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex h-5 items-center rounded-md border border-line px-1" title={`${PRIORITY_META[task.priority].label} priority`}><PriorityGlyph priority={task.priority} size={13} /></span>
+        <DueChip dueAt={task.dueAt} category={task.category} compact />
+        {task.labels.map((l) => <LabelChip key={l.id} label={l} />)}
+      </div>
+      {hasFoot && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-faint">
           {task.lastReviewVerdict && <span title={`${c.reviews} review${c.reviews === 1 ? '' : 's'}, latest: ${VERDICT_META[task.lastReviewVerdict].label}`}><VerdictBadge verdict={task.lastReviewVerdict} short /></span>}
           {c.comments > 0 && <span className="inline-flex items-center gap-1"><MessageSquare size={12} />{c.comments}</span>}
           {c.attachments > 0 && <span className="inline-flex items-center gap-1"><Paperclip size={12} />{c.attachments}</span>}
           {c.checklistTotal > 0 && <span className={cn('inline-flex items-center gap-1', c.checklistDone === c.checklistTotal && 'text-success')}><CheckSquare size={12} />{c.checklistDone}/{c.checklistTotal}</span>}
         </div>
       )}
+      <p className="mt-1.5 truncate text-[11px] text-ink-faint" title={`Assigned by ${task.createdBy.name} to ${task.assignees.map((a) => a.name).join(', ') || 'nobody yet'}`}>
+        {task.createdBy.name}<ArrowRight size={10} className="mx-1 inline" />{task.assignees.length ? task.assignees.map((a) => a.name).join(', ') : 'nobody yet'}
+      </p>
     </div>
   )
 }

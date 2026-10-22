@@ -5,7 +5,7 @@ import { Card } from '../../../components/ui/Card'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { StatCard } from '../../../components/StatCard'
 import { DonutChart } from '../../../components/charts/DonutChart'
-import { CHART, SERIES_COLORS } from '../../../components/charts/chartTheme'
+import { CHART, SERIES_COLORS, tooltipStyle } from '../../../components/charts/chartTheme'
 import { useToast } from '../../../components/ui/Toast'
 import { useAuth } from '../../../lib/auth'
 import type { RangeKey } from '../../../components/layout/RangeSelector'
@@ -36,7 +36,6 @@ const FLAG: Record<QaDashAgent['flag'], { tone: BadgeTone; text: string }> = {
   coach: { tone: 'danger', text: 'Coach' },
 }
 const agentColor = (i: number) => SERIES_COLORS[i % SERIES_COLORS.length]
-const TT = { borderRadius: 12, border: `1px solid ${CHART.grid}`, fontSize: 12, boxShadow: '0 10px 15px -3px rgba(15,23,42,0.08)' }
 
 export default function QaTeam() {
   const { user } = useAuth()
@@ -81,7 +80,7 @@ export default function QaTeam() {
           )}
           <div className="inline-flex gap-1.5">
             {RANGES.map((r) => (
-              <button key={r.key} onClick={() => setRange(r.key)} className={'rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors ' + (range === r.key ? 'bg-ink text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{r.label}</button>
+              <button key={r.key} onClick={() => setRange(r.key)} className={'rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors ' + (range === r.key ? 'bg-ink text-card' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{r.label}</button>
             ))}
           </div>
         </div>
@@ -148,7 +147,7 @@ export default function QaTeam() {
                   <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" stroke={CHART.axis} fontSize={9} tickLine={false} axisLine={false} interval={0} />
                   <YAxis allowDecimals={false} stroke={CHART.axis} fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={TT} formatter={(v: number) => [`${v} agent${v === 1 ? '' : 's'}`, 'Count']} />
+                  <Tooltip {...tooltipStyle()} formatter={(v: number) => [`${v} agent${v === 1 ? '' : 's'}`, 'Count']} />
                   <Bar dataKey="count" radius={[5, 5, 0, 0]} barSize={34}>
                     {data.scoreBands.map((_, i) => (
                       <Cell key={i} fill={[CHART.danger, CHART.warning, CHART.primary, CHART.success][i]} fillOpacity={0.85} />
@@ -234,7 +233,7 @@ export default function QaTeam() {
                     <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" domain={[0, 100]} hide />
                     <YAxis type="category" dataKey="name" width={108} stroke={CHART.axis} fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={TT} formatter={(v: number) => [`${v}%`, 'Team avg']} />
+                    <Tooltip {...tooltipStyle()} formatter={(v: number) => [`${v}%`, 'Team avg']} />
                     <Bar dataKey="avg" radius={[0, 4, 4, 0]} barSize={16} label={{ position: 'right', fontSize: 11, fill: CHART.axis, formatter: (v: number) => `${v}%` }}>
                       {data.categories.map((c, i) => <Cell key={i} fill={scoreColor(c.avg)} fillOpacity={0.85} />)}
                     </Bar>
@@ -251,7 +250,7 @@ export default function QaTeam() {
                 <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="week" stroke={CHART.axis} fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis domain={[40, 100]} stroke={CHART.axis} fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={TT} formatter={(v: number) => `${v}%`} />
+                <Tooltip {...tooltipStyle()} formatter={(v: number) => `${v}%`} />
                 {data.agents.map((a, i) => (
                   <Line key={a.id} type="monotone" dataKey={a.name} stroke={agentColor(i)} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                 ))}
@@ -270,7 +269,7 @@ export default function QaTeam() {
                   <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="category" stroke={CHART.axis} fontSize={9} tickLine={false} axisLine={false} interval={0} angle={-12} textAnchor="end" height={48} />
                   <YAxis domain={[0, 100]} stroke={CHART.axis} fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={TT} formatter={(v: number) => `${v}%`} />
+                  <Tooltip {...tooltipStyle()} formatter={(v: number) => `${v}%`} />
                   {data.agents.map((a, i) => <Bar key={a.id} dataKey={a.name} fill={agentColor(i)} fillOpacity={0.85} radius={[2, 2, 0, 0]} />)}
                 </BarChart>
               </ResponsiveContainer>

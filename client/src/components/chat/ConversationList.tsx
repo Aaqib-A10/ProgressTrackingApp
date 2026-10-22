@@ -28,35 +28,35 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className={cn('flex shrink-0 items-center gap-2 border-b border-line', compact ? 'p-2' : 'p-3')}>
+      <div className={cn('flex shrink-0 items-center gap-1.5', compact ? 'border-b border-line p-2' : 'px-3 pb-2')}>
         <div className="relative flex-1">
-          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a chat" aria-label="Find a chat" className={cn(fieldCls, 'h-8 pl-8 text-body-sm')} />
         </div>
-        <Button size="sm" onClick={() => setNewOpen(true)} aria-label="New message" title="New message"><Plus size={16} /></Button>
+        <button type="button" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn border border-line bg-card text-ink-muted shadow-xs hover:border-line-strong hover:text-ink" onClick={() => setNewOpen(true)} aria-label="New message" title="New message"><Plus size={15} /></button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
-        {!list && <div className="space-y-2 p-3">{Array.from({ length: 6 }, (_, i) => <div key={i} className="h-10 animate-pulse rounded bg-slate-100" />)}</div>}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
+        {!list && <div className="space-y-2 p-3">{Array.from({ length: 6 }, (_, i) => <div key={i} className="skeleton h-11 rounded-md" />)}</div>}
         {list && shown.length === 0 && <p className="p-4 text-center text-body-sm text-ink-muted">{q ? 'No chats match.' : 'No conversations yet. Start one with the + button.'}</p>}
         {groups.map((g) => g.items.length > 0 && (
-          <div key={g.title} className="mb-1">
-            <p className="px-3 pb-1 pt-2 text-label-md uppercase text-ink-muted">{g.title}</p>
-            <ul>
+          <div key={g.title} className="mb-2">
+            <p className="px-2 pb-1 pt-2 text-[12px] font-medium text-ink-faint">{g.title}</p>
+            <ul className="space-y-px">
               {g.items.map((c) => (
                 <li key={c.id}>
-                  <button type="button" onClick={() => onSelect(c.id)} className={cn('flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50', activeId === c.id && 'bg-primary/5')}>
-                    {c.type === 'DIRECT' && c.other ? <PersonAvatar person={c.other} size={32} presence={c.other.presence} /> : (
-                      <ChatPicture type={c.type} conversationId={c.id} projectKey={c.projectKey} color={c.color} size={32} />
+                  <button type="button" onClick={() => onSelect(c.id)} className={cn('flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors', activeId === c.id ? 'bg-slate-200/70' : 'hover:bg-slate-200/40')}>
+                    {c.type === 'DIRECT' && c.other ? <PersonAvatar person={c.other} size={30} presence={c.other.presence} /> : (
+                      <ChatPicture type={c.type} conversationId={c.id} projectKey={c.projectKey} color={c.color} size={30} />
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1">
-                        <span className={cn('truncate text-body-md', c.unread > 0 ? 'font-semibold text-ink' : 'text-ink')}>{c.title}</span>
+                        <span className={cn('truncate text-[13px]', c.unread > 0 ? 'font-semibold text-ink' : 'font-medium text-ink')}>{c.title}</span>
                         {c.muted && <BellOff size={11} className="shrink-0 text-ink-muted" />}
-                        {c.lastMessage && <span className="ml-auto shrink-0 text-[11px] text-ink-muted">{fmtAgo(c.lastMessage.createdAt)}</span>}
+                        {c.lastMessage && <span className="ml-auto shrink-0 text-[11px] tabular-nums text-ink-faint">{fmtAgo(c.lastMessage.createdAt)}</span>}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className={cn('truncate text-body-sm', c.unread > 0 ? 'text-ink' : 'text-ink-muted')}>{c.lastMessage ? `${c.lastMessage.mine ? 'You' : c.type === 'DIRECT' ? '' : c.lastMessage.userName.split(' ')[0]}${c.lastMessage.mine || c.type !== 'DIRECT' ? ': ' : ''}${c.lastMessage.body}` : 'No messages yet'}</span>
-                        {c.unread > 0 && <span className={cn('ml-auto shrink-0 rounded-full px-1.5 text-[11px] font-bold text-white', c.muted ? 'bg-slate-400' : 'bg-primary')}>{c.unread > 99 ? '99+' : c.unread}</span>}
+                        <span className={cn('truncate text-[12.5px]', c.unread > 0 ? 'text-ink' : 'text-ink-muted')}>{c.lastMessage ? `${c.lastMessage.mine ? 'You' : c.type === 'DIRECT' ? '' : c.lastMessage.userName.split(' ')[0]}${c.lastMessage.mine || c.type !== 'DIRECT' ? ': ' : ''}${c.lastMessage.body}` : 'No messages yet'}</span>
+                        {c.unread > 0 && <span className={cn('ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums text-white', c.muted ? 'bg-slate-400' : 'bg-primary')}>{c.unread > 99 ? '99+' : c.unread}</span>}
                       </span>
                     </span>
                   </button>
@@ -105,7 +105,7 @@ export function NewChatModal({ onClose, onOpened }: { onClose: () => void; onOpe
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className={fieldCls} autoFocus />
         {isGroup && <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name (optional)" className={fieldCls} maxLength={60} />}
         <p className="text-body-sm text-ink-muted">Pick one person for a direct message, or several for a group.</p>
-        <ul className="max-h-72 divide-y divide-line overflow-y-auto rounded-btn border border-line">
+        <ul className="max-h-72 divide-y divide-line overflow-y-auto rounded-lg border border-line">
           {list.map((u) => (
             <li key={u.id}>
               <label className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-slate-50">
@@ -133,9 +133,9 @@ export function ConversationActions({ id, muted, isGroup, onChanged, onLeft, pic
   }
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Conversation options">{muted ? <BellOff size={17} /> : <Bell size={17} />}</button>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Conversation options">{muted ? <BellOff size={16} /> : <Bell size={16} />}</button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-card border border-line bg-card py-1 shadow-overlay">
+        <div className="absolute right-0 z-20 mt-1 w-52 animate-scale-in overflow-hidden rounded-lg border border-line bg-card p-1 shadow-overlay">
           {muted ? <MenuBtn onClick={() => muteFor(null)}>Unmute</MenuBtn> : (
             <>
               <MenuBtn onClick={() => muteFor(1)}>Mute for 1 hour</MenuBtn>
@@ -163,5 +163,5 @@ export function ConversationActions({ id, muted, isGroup, onChanged, onLeft, pic
   )
 }
 function MenuBtn({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
-  return <button type="button" onClick={onClick} className={cn('block w-full px-3 py-1.5 text-left text-body-sm hover:bg-slate-50', danger ? 'text-danger' : 'text-ink')}>{children}</button>
+  return <button type="button" onClick={onClick} className={cn('block w-full rounded-md px-2.5 py-1.5 text-left text-body-sm hover:bg-slate-100', danger ? 'text-danger' : 'text-ink')}>{children}</button>
 }

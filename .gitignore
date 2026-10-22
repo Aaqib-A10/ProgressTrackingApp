@@ -86,3 +86,6 @@ member-*.png
 team-attendance.png
 desktop-check.png
 *.patch
+
+# Files Claude leaves for you (patches, screenshots)
+Claude outputs/

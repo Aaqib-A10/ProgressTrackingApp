@@ -74,7 +74,7 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
       <button
         type="button"
         onClick={() => setMobileOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-body-sm font-semibold text-ink sm:hidden"
+        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-card px-3 py-1.5 text-body-sm font-semibold text-ink sm:hidden"
         aria-haspopup="menu"
         aria-expanded={mobileOpen}
       >

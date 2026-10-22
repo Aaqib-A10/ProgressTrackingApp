@@ -34,6 +34,11 @@ function logPath(user: CurrentUser): string | null {
   }
 }
 
+function greeting(): string {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+
 export default function DashboardHome() {
   const { user } = useAuth()
   if (!user) return null
@@ -43,8 +48,9 @@ export default function DashboardHome() {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-headline-lg text-ink">Welcome back, {user.name.split(' ')[0]}</h1>
+        <p className="text-body-sm font-medium text-ink-faint">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+        <div className="mt-1 flex items-center gap-3">
+          <h1 className="text-[24px] font-semibold tracking-[-0.02em] text-ink">{greeting()}, {user.name.split(' ')[0]}</h1>
           <Badge tone="primary">{ROLE_LABEL[user.role]}</Badge>
         </div>
         <p className="mt-1 text-body-md text-ink-muted">
@@ -52,11 +58,11 @@ export default function DashboardHome() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {log && (
           <QuickAction
             to={log}
-            icon={<ClipboardList size={20} />}
+            icon={<ClipboardList size={17} />}
             title="Log today's progress"
             desc="Submit your daily entry in under a minute."
           />
@@ -64,7 +70,7 @@ export default function DashboardHome() {
         {canOpen(user, '/app/qa/my') && (
           <QuickAction
             to="/app/qa/my"
-            icon={<ClipboardCheck size={20} />}
+            icon={<ClipboardCheck size={17} />}
             title="My QA scores"
             desc="See how your calls were scored and what to work on."
           />
@@ -72,7 +78,7 @@ export default function DashboardHome() {
         {canOpen(user, '/app/analytics') && (
           <QuickAction
             to="/app/analytics"
-            icon={<LineChart size={20} />}
+            icon={<LineChart size={17} />}
             title="My analytics"
             desc="Track your KPIs, trends and targets over time."
           />
@@ -115,15 +121,15 @@ function RecentFeedback() {
     <Card
       title="Recent feedback"
       action={
-        <Link to="/app/feedback" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline">
-          View all <ArrowRight size={14} />
+        <Link to="/app/feedback" className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-body-sm font-medium text-ink-muted hover:bg-slate-100 hover:text-ink">
+          View all <ArrowRight size={13} />
         </Link>
       }
       subtitle={unread ? `${unread} unread` : undefined}
     >
       <div className="space-y-2">
         {threads.slice(0, 3).map((t) => (
-          <Link key={t.id} to={`/app/feedback/${t.id}`} className="flex items-start gap-3 rounded-btn p-2 transition-colors hover:bg-slate-50">
+          <Link key={t.id} to={`/app/feedback/${t.id}`} className="-mx-2 flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-slate-50">
             <span className="mt-0.5 shrink-0"><FeedbackSentimentBadge sentiment={t.sentiment} /></span>
             <div className="min-w-0 flex-1">
               <p className={'text-body-md text-ink ' + (t.unread ? 'font-semibold' : 'font-medium')}>
@@ -146,14 +152,16 @@ function QuickAction({ to, icon, title, desc }: { to: string; icon: React.ReactN
   return (
     <Link
       to={to}
-      className="group rounded-card border border-line bg-card p-5 shadow-card transition-colors hover:border-primary/30"
+      className="group flex items-start gap-3.5 rounded-card border border-line bg-card p-4 shadow-xs transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised"
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-btn bg-primary/10 text-primary">{icon}</div>
-      <div className="mt-3 flex items-center justify-between">
-        <h3 className="text-headline-md text-ink">{title}</h3>
-        <ArrowRight size={18} className="text-ink-muted transition-transform group-hover:translate-x-0.5" />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
+          <ArrowRight size={15} className="shrink-0 text-ink-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
+        </div>
+        <p className="mt-0.5 text-body-sm text-ink-muted">{desc}</p>
       </div>
-      <p className="mt-1 text-body-sm text-ink-muted">{desc}</p>
     </Link>
   )
 }

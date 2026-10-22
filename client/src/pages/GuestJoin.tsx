@@ -142,11 +142,11 @@ function GuestCall({ callId, conversationId, video, me, name, title, onEnd }: { 
   }, [snap?.status]) // eslint-disable-line react-hooks/exhaustive-deps
   const speaking = useSpeaking(snap ? [{ id: me, stream: snap.localStream, on: snap.mic }, ...snap.peers.map((p) => ({ id: p.userId, stream: p.stream, on: p.mic }))] : [])
 
-  if (!snap) return <div className="flex min-h-full items-center justify-center bg-slate-950 text-white"><Loader2 className="animate-spin" /></div>
+  if (!snap) return <div className="keep-palette flex min-h-full items-center justify-center bg-slate-950 text-white"><Loader2 className="animate-spin" /></div>
   const meTile: Tile = { key: 'me', id: me, name: 'You', avatarName: name, stream: snap.localStream, mic: snap.mic, hand: false, showVideo: snap.cam && hasVideo(snap.localStream), mirror: true, local: true, state: 'connected', speaking: speaking.has(me) }
   const tiles: Tile[] = [...snap.peers.map((p) => ({ key: p.userId, id: p.userId, name: p.name, stream: p.stream, mic: p.mic, hand: p.hand, showVideo: (p.cam || p.screen) && hasVideo(p.stream), mirror: false, local: false, state: p.state, screen: p.screen, stuck: p.stuck, speaking: speaking.has(p.userId) })), meTile]
   return (
-    <div className="fixed inset-0 flex flex-col bg-slate-950 text-white">
+    <div className="keep-palette fixed inset-0 flex flex-col bg-slate-950 text-white">
       {snap.peers.map((p) => <PeerAudio key={p.userId} stream={p.stream} />)}
       <div className="flex shrink-0 items-center gap-3 px-4 py-3">
         <div className="min-w-0 flex-1">

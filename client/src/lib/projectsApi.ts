@@ -32,6 +32,11 @@ export interface ProjectListItem extends Project {
   openCount: number
   overdueCount: number
   myOpenCount: number
+  totalCount: number
+  doneCount: number
+  /** Open tasks due in the next 3 days. */
+  dueSoonCount: number
+  lastActivityAt: string | null
 }
 
 export interface ProjectPerms {

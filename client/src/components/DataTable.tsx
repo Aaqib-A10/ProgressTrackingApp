@@ -1,3 +1,4 @@
+import { Inbox } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import { cn } from '../lib/cn'
 
@@ -78,16 +79,15 @@ export function DataTable<T>({
         <tr
           onClick={onRowClick ? () => onRowClick(row) : undefined}
           className={cn(
-            'border-b border-line/70 transition-colors',
-            i % 2 === 1 && 'bg-slate-50/60',
-            onRowClick && 'cursor-pointer hover:bg-slate-100',
+            'border-b border-line/70 transition-colors last:border-b-0',
+            onRowClick ? 'cursor-pointer hover:bg-slate-50' : 'hover:bg-slate-50/60',
           )}
         >
           {columns.map((col) => (
             <td
               key={col.key}
               className={cn(
-                col.wrap ? 'min-w-[16rem] whitespace-normal break-words px-4 py-3 text-ink [overflow-wrap:anywhere]' : 'whitespace-nowrap px-4 py-3 text-ink',
+                col.wrap ? 'min-w-[16rem] whitespace-normal break-words px-4 py-2.5 text-ink [overflow-wrap:anywhere]' : 'whitespace-nowrap px-4 py-2.5 text-ink',
                 col.align === 'right' && 'tabular-nums',
                 alignClass[col.align ?? 'left'],
                 col.className,
@@ -112,13 +112,13 @@ export function DataTable<T>({
     <div className={cn('overflow-x-auto', className)}>
       <table className="w-full border-collapse text-body-md">
         <thead className="sticky top-0 z-10">
-          <tr className="bg-bg">
+          <tr className="bg-slate-50/90 backdrop-blur">
             {columns.map((col) => (
               <th
                 key={col.key}
                 scope="col"
                 className={cn(
-                  'whitespace-nowrap border-b border-line px-4 py-3 text-label-md uppercase text-ink-muted',
+                  'h-9 whitespace-nowrap border-b border-line px-4 text-[12px] font-medium text-ink-muted',
                   alignClass[col.align ?? 'left'],
                   col.headerClassName,
                 )}
@@ -130,7 +130,7 @@ export function DataTable<T>({
         </thead>
         <tbody>
           {totalRow && (
-            <tr className={cn('bg-primary/5 font-semibold text-ink', totalRow.className)}>
+            <tr className={cn('border-b border-line bg-primary/[0.04] font-semibold text-ink', totalRow.className)}>
               {columns.map((col) => (
                 <td
                   key={col.key}
@@ -144,14 +144,15 @@ export function DataTable<T>({
 
           {rows.length === 0 && !totalRow ? (
             <tr>
-              <td colSpan={columns.length} className="px-4 py-10 text-center text-body-md text-ink-muted">
+              <td colSpan={columns.length} className="px-4 py-12 text-center text-body-md text-ink-muted">
+                <span className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-slate-50 text-ink-faint shadow-xs"><Inbox size={16} /></span>
                 {emptyMessage}
               </td>
             </tr>
           ) : grouped ? (
             groups.map((g) => (
               <Fragment key={`group:${g.key}`}>
-                <tr className="bg-slate-100/70">
+                <tr className="bg-slate-50">
                   <td colSpan={columns.length} className="px-4 py-2.5">
                     {renderGroupHeader(g.key, g.rows)}
                   </td>

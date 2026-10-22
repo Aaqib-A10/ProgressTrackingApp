@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, ChevronsUp, Minus } from 'lucide-react'
+// (Arrow icons stay in PRIORITY_META for menus that list priorities.)
 import type { ColumnCategory, PersonRef, PmPriority, PmRole } from '../../lib/projectsApi'
 import { cn } from '../../lib/cn'
 import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
@@ -19,13 +20,55 @@ export const CATEGORY_LABEL: Record<ColumnCategory, string> = { TODO: 'To do', I
 
 export const SWATCHES = ['#4F46E5', '#14B8A6', '#22C55E', '#F59E0B', '#EF4444', '#8B5CF6', '#0EA5E9', '#EC4899', '#64748B', '#16A34A', '#2563EB', '#B45309']
 
+/** Linear-style priority: signal bars (low 1, medium 2, high 3) and a red square for urgent. */
+export function PriorityGlyph({ priority, size = 14 }: { priority: PmPriority; size?: number }) {
+  if (priority === 'URGENT') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden className="text-danger">
+        <rect x="1" y="1" width="14" height="14" rx="3.5" fill="currentColor" />
+        <rect x="7.1" y="4" width="1.8" height="5.2" rx="0.9" fill="white" />
+        <rect x="7.1" y="10.6" width="1.8" height="1.8" rx="0.9" fill="white" />
+      </svg>
+    )
+  }
+  const on = priority === 'HIGH' ? 3 : priority === 'MEDIUM' ? 2 : 1
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <rect key={i} x={2 + i * 4.5} y={10 - i * 3.5} width="3" height={4 + i * 3.5} rx="1" fill="currentColor" className={i < on ? 'text-ink-muted' : 'text-slate-300'} />
+      ))}
+    </svg>
+  )
+}
+
 export function PriorityIcon({ priority, withLabel }: { priority: PmPriority; withLabel?: boolean }) {
   const m = PRIORITY_META[priority]
   return (
-    <span className={cn('inline-flex items-center gap-0.5 text-body-sm font-medium', m.cls)} title={`${m.label} priority`} aria-label={`${m.label} priority`}>
-      {m.icon}
+    <span className={cn('inline-flex items-center gap-1 text-[12px] font-medium', priority === 'URGENT' ? 'text-danger' : 'text-ink-muted')} title={`${m.label} priority`} aria-label={`${m.label} priority`}>
+      <PriorityGlyph priority={priority} />
       {withLabel && m.label}
     </span>
+  )
+}
+
+/**
+ * Linear-style status circle for a board column: dashed for backlog, empty for to do,
+ * half for in progress, three quarters for review, a slash for blocked, a tick for done.
+ */
+export function StatusIcon({ name, category, color, size = 14 }: { name: string; category: ColumnCategory; color?: string | null; size?: number }) {
+  const n = name.toLowerCase()
+  const c = color ?? (category === 'DONE' ? 'rgb(var(--success))' : category === 'IN_PROGRESS' ? 'rgb(var(--warning))' : 'rgb(var(--ink-faint))')
+  const ring = <circle cx="8" cy="8" r="6" fill="none" stroke={c} strokeWidth="1.6" strokeDasharray={n.includes('backlog') ? '2.2 2.2' : undefined} />
+  let inner: JSX.Element | null = null
+  if (category === 'DONE') inner = <><circle cx="8" cy="8" r="6.8" fill={c} /><path d="M5.3 8.2l1.8 1.8 3.6-3.8" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></>
+  else if (n.includes('block')) inner = <path d="M4.3 11.7l7.4-7.4" stroke={c} strokeWidth="1.6" strokeLinecap="round" />
+  else if (n.includes('review')) inner = <path d="M8 8V3.6A4.4 4.4 0 1 1 3.6 8z" fill={c} />
+  else if (category === 'IN_PROGRESS') inner = <path d="M8 8V3.6a4.4 4.4 0 0 1 0 8.8z" fill={c} />
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden className="shrink-0">
+      {category !== 'DONE' && ring}
+      {inner}
+    </svg>
   )
 }
 
@@ -119,15 +162,15 @@ export function DueChip({ dueAt, category, compact }: { dueAt: string | null; ca
   const st = dueState(dueAt, category)
   if (st === 'none') return null
   const cls = {
-    normal: 'bg-slate-100 text-ink-muted',
-    soon: 'bg-warning/15 text-amber-700',
-    overdue: 'bg-danger/10 text-danger',
-    done: 'bg-success/10 text-success',
+    normal: 'text-ink-muted border-line',
+    soon: 'text-warning border-warning/30 bg-warning/[0.06]',
+    overdue: 'text-danger border-danger/30 bg-danger/[0.06]',
+    done: 'text-ink-faint border-line',
   }[st]
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', cls)} title={`Due ${fmtDateTime(dueAt!)}`}>
+    <span className={cn('inline-flex h-5 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium tabular-nums', cls)} title={`Due ${fmtDateTime(dueAt!)}`}>
       {st === 'overdue' ? <AlertTriangle size={11} /> : <CalendarClock size={11} />}
-      {st === 'overdue' ? (compact ? 'Overdue' : `Overdue · ${fmtShort(dueAt!)}`) : fmtShort(dueAt!)}
+      {st === 'overdue' ? (compact ? `Overdue · ${fmtShort(dueAt!)}` : `Overdue · ${fmtShort(dueAt!)}`) : fmtShort(dueAt!)}
     </span>
   )
 }
@@ -141,7 +184,7 @@ export function toLocalInput(iso: string | null): string {
 }
 export const fromLocalInput = (v: string): string | null => (v ? new Date(v).toISOString() : null)
 
-export const fieldCls = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 disabled:bg-slate-50 disabled:text-ink-muted'
+export const fieldCls = 'h-9 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink shadow-xs focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15 disabled:bg-slate-50 disabled:text-ink-muted'
 
 export const fmtBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`)
 

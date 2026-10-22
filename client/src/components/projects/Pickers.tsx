@@ -29,7 +29,13 @@ export function Popover({ trigger, children, align = 'left', width = 'w-64', dis
 }
 
 /** Multi-select of project members (assignees). */
-export function PeoplePicker({ people, value, onChange, disabled, placeholder = 'Unassigned', popoverWidth }: { people: PersonRef[]; value: string[]; onChange: (ids: string[]) => void; disabled?: boolean; placeholder?: string; /** e.g. 'w-full' to match the box in a narrow panel */ popoverWidth?: string }) {
+/** The box that opens a picker: a normal field, or a quiet one that only shows its edge on hover. */
+function triggerCls(open: boolean, disabled?: boolean, quiet?: boolean): string {
+  if (quiet) return cn('flex min-h-8 w-full items-center gap-2 rounded-md border px-2.5 py-1 text-left text-body-md', open ? 'border-primary bg-card ring-[3px] ring-primary/15' : 'border-transparent', !open && !disabled && 'hover:border-line hover:bg-card', disabled && 'cursor-default')
+  return cn('flex min-h-9 w-full items-center gap-2 rounded-btn border bg-card px-2.5 py-1 text-left text-body-md shadow-xs', open ? 'border-primary ring-[3px] ring-primary/15' : 'border-line hover:border-line-strong', disabled && 'cursor-not-allowed bg-slate-50')
+}
+
+export function PeoplePicker({ people, value, onChange, disabled, placeholder = 'Unassigned', popoverWidth, quiet }: { people: PersonRef[]; value: string[]; onChange: (ids: string[]) => void; disabled?: boolean; placeholder?: string; /** borderless until hovered, for property panels */ quiet?: boolean; /** e.g. 'w-full' to match the box in a narrow panel */ popoverWidth?: string }) {
   const [q, setQ] = useState('')
   const selected = people.filter((p) => value.includes(p.id))
   const list = people.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
@@ -38,7 +44,7 @@ export function PeoplePicker({ people, value, onChange, disabled, placeholder = 
       width={popoverWidth}
       disabled={disabled}
       trigger={(open) => (
-        <button type="button" disabled={disabled} className={cn('flex min-h-10 w-full items-center gap-2 rounded-btn border bg-card px-2.5 py-1.5 text-left text-body-md', open ? 'border-primary ring-4 ring-primary/10' : 'border-line', disabled && 'cursor-not-allowed bg-slate-50')}>
+        <button type="button" disabled={disabled} className={triggerCls(open, disabled, quiet)}>
           {selected.length === 0 ? <span className="flex-1 text-ink-muted">{placeholder}</span> : (
             <span className="flex flex-1 flex-wrap gap-1">
               {selected.map((p) => (
@@ -78,7 +84,7 @@ export function PeoplePicker({ people, value, onChange, disabled, placeholder = 
 }
 
 /** Multi-select of project labels, with inline "create label". */
-export function LabelPicker({ labels, value, onChange, onCreate, disabled, popoverWidth }: { labels: Label[]; value: string[]; onChange: (ids: string[]) => void; onCreate?: (name: string) => Promise<Label | null>; disabled?: boolean; popoverWidth?: string }) {
+export function LabelPicker({ labels, value, onChange, onCreate, disabled, popoverWidth, quiet }: { labels: Label[]; value: string[]; onChange: (ids: string[]) => void; onCreate?: (name: string) => Promise<Label | null>; disabled?: boolean; popoverWidth?: string; quiet?: boolean }) {
   const [q, setQ] = useState('')
   const selected = labels.filter((l) => value.includes(l.id))
   const list = labels.filter((l) => !q || l.name.toLowerCase().includes(q.toLowerCase()))
@@ -88,7 +94,7 @@ export function LabelPicker({ labels, value, onChange, onCreate, disabled, popov
       width={popoverWidth}
       disabled={disabled}
       trigger={(open) => (
-        <button type="button" disabled={disabled} className={cn('flex min-h-10 w-full items-center gap-2 rounded-btn border bg-card px-2.5 py-1.5 text-left text-body-md', open ? 'border-primary ring-4 ring-primary/10' : 'border-line', disabled && 'cursor-not-allowed bg-slate-50')}>
+        <button type="button" disabled={disabled} className={triggerCls(open, disabled, quiet)}>
           {selected.length === 0 ? <span className="flex flex-1 items-center gap-1.5 text-ink-muted"><Tag size={14} /> No labels</span> : (
             <span className="flex flex-1 flex-wrap gap-1">{selected.map((l) => <LabelChip key={l.id} label={l} />)}</span>
           )}
@@ -130,7 +136,8 @@ export function LabelPicker({ labels, value, onChange, onCreate, disabled, popov
 
 export function LabelChip({ label, onRemove }: { label: Label; onRemove?: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: `${label.color}1f`, color: label.color }}>
+    <span className="inline-flex h-5 items-center gap-1.5 rounded-full border border-line bg-card px-2 text-[11px] font-medium text-ink-muted">
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
       {label.name}
       {onRemove && <button type="button" onClick={onRemove} aria-label={`Remove ${label.name}`}><X size={11} /></button>}
     </span>

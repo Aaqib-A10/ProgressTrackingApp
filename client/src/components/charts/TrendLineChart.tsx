@@ -1,3 +1,4 @@
+import { useTheme } from '../../lib/theme'
 import {
   ResponsiveContainer,
   LineChart,
@@ -8,7 +9,7 @@ import {
   Tooltip,
   ReferenceLine,
 } from 'recharts'
-import { CHART } from './chartTheme'
+import { CHART, tooltipStyle } from './chartTheme'
 
 export interface TrendPoint {
   label: string
@@ -34,6 +35,7 @@ export function TrendLineChart({
   targetLine,
   showTargetSeries,
 }: TrendLineChartProps) {
+  useTheme() // redraw with the new colours when the theme changes
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
@@ -41,12 +43,7 @@ export function TrendLineChart({
         <XAxis dataKey="label" stroke={CHART.axis} fontSize={12} tickLine={false} axisLine={false} />
         <YAxis stroke={CHART.axis} fontSize={12} tickLine={false} axisLine={false} />
         <Tooltip
-          contentStyle={{
-            borderRadius: 12,
-            border: `1px solid ${CHART.grid}`,
-            fontSize: 12,
-            boxShadow: '0 10px 15px -3px rgba(15,23,42,0.08)',
-          }}
+          {...tooltipStyle()}
         />
         {targetLine !== undefined && (
           <ReferenceLine y={targetLine} stroke={CHART.target} strokeDasharray="4 4" />

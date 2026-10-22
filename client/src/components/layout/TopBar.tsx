@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, MessagesSquare, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing } from 'lucide-react'
+import { Bell, MessagesSquare, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { DEPARTMENTS } from '../../lib/departments'
 import { useAuth } from '../../lib/auth'
@@ -12,6 +12,7 @@ import { RangeSelector, type RangeKey, type CustomRange } from './RangeSelector'
 import { Avatar } from './Sidebar'
 import { ClockWidget } from '../attendance/ClockWidget'
 import { GlobalSearch } from './GlobalSearch'
+import { ThemeSwitch } from '../ui/ThemeSwitch'
 
 export interface TopBarProps {
   user: CurrentUser
@@ -43,7 +44,6 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [mobileSearch, setMobileSearch] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifs, setNotifs] = useState<AppNotification[]>([])
   const [seenKey, setSeenKey] = useState('')
@@ -123,37 +123,27 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   const hasUnread = notifs.length > 0 && notifKey !== seenKey
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-line bg-card px-3 sm:gap-4 sm:px-6">
+    <header className="relative z-30 flex h-[52px] shrink-0 items-center gap-1.5 border-b border-line bg-bg/85 px-2.5 backdrop-blur-md sm:gap-3 sm:px-4">
       {/* Hamburger — toggles the sidebar on desktop, opens the drawer on mobile */}
       <button
         onClick={onMenu}
-        className="shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink"
+        className="shrink-0 rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink"
         aria-label="Toggle menu"
         title="Toggle sidebar"
       >
-        <Menu size={22} />
+        <Menu size={18} />
       </button>
 
       <button
         onClick={() => navigate(-1)}
-        className="hidden shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink sm:block"
+        className="hidden shrink-0 rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink sm:block"
         aria-label="Go back"
         title="Go back"
       >
-        <ArrowLeft size={20} />
+        <ArrowLeft size={17} />
       </button>
 
-      <GlobalSearch className="hidden max-w-md flex-1 md:block" />
-
-      {/* Small screens: a search button that opens the box across the top. */}
-      <button type="button" onClick={() => setMobileSearch(true)} className="shrink-0 rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink md:hidden" aria-label="Search">
-        <Search size={20} />
-      </button>
-      {mobileSearch && (
-        <div className="fixed inset-x-0 top-0 z-50 border-b border-line bg-card p-3 shadow-overlay md:hidden">
-          <GlobalSearch autoFocus onDone={() => setMobileSearch(false)} />
-        </div>
-      )}
+      <GlobalSearch compact className="shrink-0" />
 
       <div className="min-w-0 md:hidden" />
 
@@ -166,7 +156,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         {/* Attendance clock */}
         <ClockWidget />
 
-        <div className="mx-1 h-6 w-px bg-line" />
+        <div className="mx-1 h-5 w-px bg-line" />
 
         {/* Chat */}
         <button
@@ -175,7 +165,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           aria-label={chatUnread.total ? `Chat, ${chatUnread.total} unread` : 'Chat'}
           title="Chat"
         >
-          <MessagesSquare size={20} />
+          <MessagesSquare size={18} />
           {chatUnread.total > 0 && <span className="absolute right-0.5 top-0.5 min-w-[16px] rounded-full bg-primary px-1 text-center text-[10px] font-bold leading-4 text-white ring-2 ring-card">{chatUnread.total > 99 ? '99+' : chatUnread.total}</span>}
         </button>
 
@@ -186,11 +176,11 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
             className="relative rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink"
             aria-label="Notifications"
           >
-            <Bell size={20} />
-            {hasUnread && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-danger ring-2 ring-card" />}
+            <Bell size={18} />
+            {hasUnread && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger ring-2 ring-bg" />}
           </button>
           {notifOpen && (
-            <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-80 animate-scale-in overflow-hidden rounded-card border border-line bg-card shadow-overlay">
+            <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-80 animate-scale-in overflow-hidden rounded-xl border border-line bg-card shadow-overlay">
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
                 <span className="text-body-md font-semibold text-ink">Notifications</span>
                 {notifs.some((n) => n.persistent) && (
@@ -273,35 +263,39 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         </div>
 
         <button className="hidden rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink sm:inline-flex" aria-label="Help">
-          <HelpCircle size={20} />
+          <HelpCircle size={18} />
         </button>
 
-        <div className="mx-2 hidden h-6 w-px bg-line sm:block" />
+        <div className="mx-1 hidden h-5 w-px bg-line sm:block" />
 
         {/* Avatar + menu */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="flex items-center gap-2 rounded-btn p-1 pr-2 hover:bg-slate-100"
+            className="flex items-center gap-2 rounded-btn p-1 pr-1.5 hover:bg-slate-100"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            <Avatar user={user} size={32} />
+            <Avatar user={user} size={26} />
             <div className="hidden text-left sm:block">
-              <div className="text-body-sm font-semibold leading-tight text-ink">{user.name}</div>
+              <div className="text-[12.5px] font-medium leading-tight text-ink">{user.name}</div>
               <div className="text-[11px] leading-tight text-ink-muted">{ROLE_LABEL[user.role]}</div>
             </div>
-            <ChevronDown size={16} className={'text-ink-muted transition-transform ' + (menuOpen ? 'rotate-180' : '')} />
+            <ChevronDown size={14} className={'text-ink-faint transition-transform ' + (menuOpen ? 'rotate-180' : '')} />
           </button>
 
           {menuOpen && (
-            <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-60 animate-scale-in overflow-hidden rounded-card border border-line bg-card shadow-overlay">
+            <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-60 animate-scale-in overflow-hidden rounded-xl border border-line bg-card shadow-overlay">
               <div className="border-b border-line px-4 py-3">
                 <div className="truncate text-body-md font-semibold text-ink">{user.name}</div>
                 <div className="truncate text-body-sm text-ink-muted">{user.email}</div>
               </div>
               <div className="p-1">
                 <MenuItem icon={<Settings size={16} />} label="Settings" onClick={() => { setMenuOpen(false); navigate('/app/settings') }} />
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <span className="text-body-md text-ink">Theme</span>
+                  <ThemeSwitch />
+                </div>
               </div>
               <div className="border-t border-line p-1">
                 <MenuItem icon={<LogOut size={16} />} label="Log out" danger onClick={handleLogout} />
@@ -362,7 +356,7 @@ function DepartmentSwitcher({ user }: { user: CurrentUser }) {
         <ChevronDown size={14} className={'text-ink-muted transition-transform ' + (open ? 'rotate-180' : '')} />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-64 animate-scale-in overflow-hidden rounded-card border border-line bg-card shadow-overlay">
+        <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-64 animate-scale-in overflow-hidden rounded-xl border border-line bg-card shadow-overlay">
           <div className="border-b border-line px-4 py-2 text-label-md uppercase text-ink-muted">Acting as</div>
           <ul className="max-h-80 overflow-y-auto p-1">
             {memberships.map((m) => {

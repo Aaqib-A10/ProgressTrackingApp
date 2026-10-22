@@ -59,21 +59,21 @@ export default function ChatPage() {
 
   if (!user) return null
   return (
-    <div className="-m-4 flex h-[calc(100vh-4rem)] overflow-hidden bg-card sm:-m-6">
-      <aside className={cn('w-full shrink-0 border-r border-line md:w-80', active && 'hidden md:block')}>
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h1 className="text-headline-md text-ink">Chat</h1>
-          <button type="button" onClick={() => setSearchOpen((s) => !s)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Search messages" title="Search messages"><Search size={17} /></button>
+    <div className="-m-4 flex h-[calc(100dvh-52px)] overflow-hidden bg-card sm:-mx-8 sm:-my-7">
+      <aside className={cn('w-full shrink-0 border-r border-line bg-sidebar/50 md:w-[300px]', active && 'hidden md:block')}>
+        <div className="flex h-12 items-center justify-between px-4">
+          <h1 className="text-[15px] font-semibold text-ink">Chat</h1>
+          <button type="button" onClick={() => setSearchOpen((s) => !s)} className={cn('flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-slate-200/60 hover:text-ink', searchOpen && 'bg-slate-200/70 text-ink')} aria-label="Search messages" title="Search messages"><Search size={15} /></button>
         </div>
         {searchOpen ? <MessageSearch onPick={(cid) => { setSearchOpen(false); select(cid) }} onClose={() => setSearchOpen(false)} /> : (
-          <div className="h-[calc(100%-57px)]"><ConversationList activeId={active} onSelect={select} refreshKey={refresh} /></div>
+          <div className="h-[calc(100%-48px)]"><ConversationList activeId={active} onSelect={select} refreshKey={refresh} /></div>
         )}
       </aside>
       <section className={cn('min-w-0 flex-1', !active && 'hidden md:block')}>
         {active ? (
           <div className="flex h-full flex-col">
             {share && (
-              <div className="flex items-center gap-2 border-b border-primary/20 bg-primary/5 px-4 py-2 text-body-sm text-ink">
+              <div className="flex items-center gap-2 border-b border-primary/15 bg-primary/[0.05] px-4 py-2 text-body-sm text-ink">
                 <Share2 size={14} className="text-primary" /> Sharing <b className="font-mono">{share}</b>. Press Enter to send it here, or pick another chat.
                 <button type="button" className="ml-auto text-ink-muted" onClick={() => { const n = new URLSearchParams(params); n.delete('share'); setParams(n, { replace: true }) }} aria-label="Cancel sharing"><X size={14} /></button>
               </div>
@@ -91,9 +91,9 @@ export default function ChatPage() {
             </div>
           </div>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <MessagesSquare size={36} className="text-ink-muted" />
-            <p className="text-body-lg text-ink">{share ? `Pick a chat to share ${share}` : 'Pick a conversation'}</p>
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+            <span className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-slate-50 text-ink-muted shadow-xs"><MessagesSquare size={22} /></span>
+            <p className="text-[15px] font-semibold text-ink">{share ? `Pick a chat to share ${share}` : 'Pick a conversation'}</p>
             <p className="max-w-xs text-body-md text-ink-muted">Every project has its own channel. Use + to message someone directly or start a group.</p>
           </div>
         )}
@@ -111,17 +111,17 @@ function MessageSearch({ onPick, onClose }: { onPick: (conversationId: string) =
     return () => window.clearTimeout(t)
   }, [q])
   return (
-    <div className="flex h-[calc(100%-57px)] flex-col">
-      <div className="flex gap-2 border-b border-line p-3">
+    <div className="flex h-[calc(100%-48px)] flex-col">
+      <div className="flex items-center gap-2 px-3 pb-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder="Search all my messages" className={cn(fieldCls, 'h-8 text-body-sm')} />
-        <button type="button" onClick={onClose} className="text-ink-muted" aria-label="Close search"><X size={16} /></button>
+        <button type="button" onClick={onClose} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-slate-200/60 hover:text-ink" aria-label="Close search"><X size={15} /></button>
       </div>
-      <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
+      <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
         {results.map((r) => (
           <li key={r.id}>
-            <button type="button" onClick={() => onPick(r.conversationId)} className="block w-full px-3 py-2 text-left hover:bg-slate-50">
-              <span className="flex items-center gap-2 text-body-sm text-ink-muted"><b className="text-ink">{r.userName}</b> in {r.conversationName ?? 'chat'} <span className="ml-auto">{fmtAgo(r.createdAt)}</span></span>
-              <span className="block text-body-sm text-ink">{r.body}</span>
+            <button type="button" onClick={() => onPick(r.conversationId)} className="block w-full rounded-md px-2.5 py-2 text-left hover:bg-slate-200/50">
+              <span className="flex items-center gap-1.5 text-[12px] text-ink-muted"><span className="font-medium text-ink">{r.userName}</span> in {r.conversationName ?? 'chat'} <span className="ml-auto text-ink-faint">{fmtAgo(r.createdAt)}</span></span>
+              <span className="mt-0.5 line-clamp-2 block text-body-sm text-ink">{r.body}</span>
             </button>
           </li>
         ))}

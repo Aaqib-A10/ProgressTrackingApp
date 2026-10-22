@@ -1,3 +1,4 @@
+import { useTheme } from '../../lib/theme'
 import {
   ResponsiveContainer,
   BarChart,
@@ -8,7 +9,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts'
-import { SERIES_COLORS, CHART } from './chartTheme'
+import { SERIES_COLORS, CHART, tooltipStyle } from './chartTheme'
 
 export interface StackedSeries {
   key: string
@@ -25,6 +26,7 @@ export interface StackedBarChartProps {
 
 /** Stacked bars (e.g. Leads-by-Vertical over time, plan §5.3). */
 export function StackedBarChart({ data, xKey, series, height = 260 }: StackedBarChartProps) {
+  useTheme() // redraw with the new colours when the theme changes
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
@@ -32,12 +34,7 @@ export function StackedBarChart({ data, xKey, series, height = 260 }: StackedBar
         <XAxis dataKey={xKey} stroke={CHART.axis} fontSize={12} tickLine={false} axisLine={false} />
         <YAxis stroke={CHART.axis} fontSize={12} tickLine={false} axisLine={false} />
         <Tooltip
-          contentStyle={{
-            borderRadius: 12,
-            border: `1px solid ${CHART.grid}`,
-            fontSize: 12,
-            boxShadow: '0 10px 15px -3px rgba(15,23,42,0.08)',
-          }}
+          {...tooltipStyle()}
         />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
         {series.map((s, i) => (

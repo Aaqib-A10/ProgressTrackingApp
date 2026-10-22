@@ -131,7 +131,7 @@ function Pills<T extends string>({ value, onChange, options }: { value: T; onCha
   return (
     <div className="inline-flex gap-1">
       {options.map(([v, label]) => (
-        <button key={v} onClick={() => onChange(v)} className={'rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors ' + (value === v ? 'bg-ink text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{label}</button>
+        <button key={v} onClick={() => onChange(v)} className={'rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors ' + (value === v ? 'bg-ink text-card' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{label}</button>
       ))}
     </div>
   )

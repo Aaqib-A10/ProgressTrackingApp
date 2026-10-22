@@ -18,7 +18,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={fieldId} className="mb-1 block text-body-sm font-semibold text-ink">
+        <label htmlFor={fieldId} className="mb-1.5 block text-body-sm font-medium text-ink">
           {label}
         </label>
       )}
@@ -27,11 +27,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           ref={ref}
           id={fieldId}
           className={cn(
-            'h-10 w-full rounded-btn border bg-card px-3 text-body-md text-ink placeholder:text-ink-muted',
-            'focus:outline-none focus:ring-4',
+            'h-9 w-full rounded-btn border bg-card px-3 text-body-md text-ink placeholder:text-ink-faint',
+            'focus:outline-none focus:ring-[3px]',
             error
               ? 'border-danger focus:border-danger focus:ring-danger/10'
-              : 'border-line focus:border-primary focus:ring-primary/10',
+              : 'border-line focus:border-primary focus:ring-primary/15',
             rightSlot && 'pr-10',
             className,
           )}
@@ -60,7 +60,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={fieldId} className="mb-1 block text-body-sm font-semibold text-ink">
+        <label htmlFor={fieldId} className="mb-1.5 block text-body-sm font-medium text-ink">
           {label}
         </label>
       )}
@@ -69,11 +69,11 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         id={fieldId}
         rows={rows}
         className={cn(
-          'w-full rounded-btn border bg-card px-3 py-2 text-body-md text-ink placeholder:text-ink-muted',
-          'focus:outline-none focus:ring-4',
+          'w-full rounded-btn border bg-card px-3 py-2 text-body-md text-ink placeholder:text-ink-faint',
+          'focus:outline-none focus:ring-[3px]',
           error
             ? 'border-danger focus:border-danger focus:ring-danger/10'
-            : 'border-line focus:border-primary focus:ring-primary/10',
+            : 'border-line focus:border-primary focus:ring-primary/15',
           className,
         )}
         aria-invalid={!!error}

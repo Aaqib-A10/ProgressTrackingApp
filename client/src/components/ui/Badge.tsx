@@ -4,12 +4,12 @@ import { cn } from '../../lib/cn'
 export type BadgeTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'accent'
 
 const TONES: Record<BadgeTone, string> = {
-  neutral: 'bg-slate-100 text-ink-muted',
-  primary: 'bg-primary/10 text-primary',
-  success: 'bg-success/10 text-success',
-  warning: 'bg-warning/10 text-warning',
-  danger: 'bg-danger/10 text-danger',
-  accent: 'bg-accent/10 text-accent',
+  neutral: 'bg-slate-100 text-ink-muted ring-slate-200',
+  primary: 'bg-primary/[0.08] text-primary ring-primary/15',
+  success: 'bg-success/[0.08] text-success ring-success/20',
+  warning: 'bg-warning/[0.09] text-warning ring-warning/20',
+  danger: 'bg-danger/[0.08] text-danger ring-danger/20',
+  accent: 'bg-accent/[0.08] text-accent ring-accent/20',
 }
 
 export interface BadgeProps {
@@ -20,12 +20,12 @@ export interface BadgeProps {
   dot?: boolean
 }
 
-/** Pill-shaped status chip (fully rounded per DESIGN.md). */
+/** Small status chip: soft tint with a hairline ring of the same colour. */
 export function Badge({ tone = 'neutral', dot, children, className }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-body-sm font-medium',
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-px text-[11.5px] font-medium leading-[18px] ring-1 ring-inset',
         TONES[tone],
         className,
       )}

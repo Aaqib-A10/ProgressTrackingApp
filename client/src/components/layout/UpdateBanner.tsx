@@ -56,12 +56,12 @@ export function UpdateBanner() {
   if (!outdated) return null
   const inCall = !!calls?.call
   return (
-    <div className="fixed bottom-4 left-1/2 z-[75] flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 animate-scale-in items-center gap-3 rounded-card bg-ink px-4 py-3 text-white shadow-overlay" role="status">
+    <div className="fixed bottom-4 left-1/2 z-[75] flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 animate-scale-in items-center gap-3 rounded-card bg-ink px-4 py-3 text-card shadow-overlay" role="status">
       <Sparkles size={18} className="shrink-0 text-warning" />
       <p className="min-w-0 flex-1 text-body-sm">
         <b>PulseTrack has been updated.</b> {inCall ? 'Reload after your call to get the latest version.' : 'Reload to get the latest version.'}
       </p>
-      <button type="button" disabled={inCall} onClick={() => window.location.reload()} className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-white px-3 py-1.5 text-body-sm font-semibold text-ink hover:bg-slate-100 disabled:opacity-50">
+      <button type="button" disabled={inCall} onClick={() => window.location.reload()} className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-card px-3 py-1.5 text-body-sm font-semibold text-ink hover:bg-slate-100 disabled:opacity-50">
         <RefreshCw size={14} /> Reload
       </button>
     </div>

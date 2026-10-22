@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Settings, ChevronRight, Search, X } from 'lucide-react'
+import { Settings, ChevronRight, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import metriqLogo from '../../assets/metriq-logo.svg'
+import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
@@ -11,6 +12,8 @@ import { filterNav, type NavGroup } from './navConfig'
 import { visiblePoll } from '../../lib/chatApi'
 import { projectsApi } from '../../lib/projectsApi'
 import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
+import { GlobalSearch } from './GlobalSearch'
+import { getPins, onPinsChange, type Pin } from '../../lib/pins'
 
 const NAV_STORE = 'pt-nav-expanded'
 const matches = (to: string, path: string) => path === to || path.startsWith(to + '/')
@@ -56,6 +59,8 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
   const [unreadFeedback, setUnreadFeedback] = useState(0)
   const [unreadQa, setUnreadQa] = useState(0)
   const [query, setQuery] = useState('')
+  const [pins, setPins] = useState<Pin[]>(() => getPins(user.id))
+  useEffect(() => onPinsChange(() => setPins(getPins(user.id))), [user.id])
 
   // "Jump to…" filter: narrows nav to items whose label matches. When active,
   // every group/subgroup is force-expanded and non-matching ones are hidden.
@@ -140,7 +145,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
   useEffect(() => { if (readingPage) loadUnread() }, [location.pathname, readingPage, loadUnread])
 
   const renderItems = (items: typeof groups[number]['items'], nested = false) => (
-    <ul className={cn('space-y-0.5', nested && 'ml-3 border-l border-line/60 pl-2')}>
+    <ul className={cn('space-y-px', nested && 'ml-[17px] border-l border-line pl-2')}>
       {items.map((item) => {
         const Icon = item.icon
         return (
@@ -150,25 +155,24 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
               onClick={() => { setQuery(''); onNavigate?.() }}
               className={({ isActive }) =>
                 cn(
-                  'group relative flex items-center gap-3 rounded-btn px-3 py-2 text-body-md transition-colors',
+                  'group relative flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors duration-100',
                   isActive
-                    ? 'bg-primary/10 font-semibold text-primary'
-                    : 'font-medium text-ink-muted hover:bg-slate-50 hover:text-ink',
+                    ? 'bg-slate-200/70 font-medium text-ink shadow-[inset_0_0_0_1px_rgb(var(--line-strong)/0.35)]'
+                    : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  {isActive && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />}
-                  <Icon size={18} className="shrink-0" />
-                  <span className="flex-1">{item.label}</span>
+                  <Icon size={16} strokeWidth={isActive ? 2 : 1.75} className={cn('shrink-0', isActive ? 'text-ink' : 'text-ink-faint group-hover:text-ink-muted')} />
+                  <span className="flex-1 truncate">{item.label}</span>
                   {item.to === '/app/feedback' && unreadFeedback > 0 && (
-                    <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
+                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-white">
                       {unreadFeedback > 9 ? '9+' : unreadFeedback}
                     </span>
                   )}
                   {item.to === '/app/qa/my' && unreadQa > 0 && (
-                    <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold tabular-nums text-white">
+                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-white">
                       {unreadQa > 9 ? '9+' : unreadQa}
                     </span>
                   )}
@@ -187,51 +191,48 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
   )
 
   return (
-    <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-line bg-card">
+    <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-line bg-sidebar">
       {/* Brand */}
-      <div className="flex items-center justify-between gap-2 px-5 py-4">
-        <div className="min-w-0">
-          <img src={metriqLogo} alt="Metriq" className="h-8 w-auto" />
-          <div className="mt-1 text-body-sm text-ink-muted">Performance Suite</div>
-        </div>
+      <div className="flex h-[52px] items-center justify-between gap-2 px-4">
+        <img src={metriqLogo} alt="Metriq" className="h-[22px] w-auto dark:hidden" />
+        <img src={metriqLogoDark} alt="Metriq" className="hidden h-[22px] w-auto dark:block" />
         {/* Close (mobile drawer only) */}
         <button
           type="button"
           onClick={onNavigate}
-          className="-mr-1 shrink-0 rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink lg:hidden"
+          className="-mr-1 shrink-0 rounded-btn p-1.5 text-ink-muted hover:bg-slate-200/60 hover:text-ink lg:hidden"
           aria-label="Close menu"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
       </div>
 
-      {/* Jump-to filter */}
-      <div className="px-3 pb-1 pt-2">
-        <div className="relative">
-          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-            placeholder="Jump to…"
-            aria-label="Filter navigation"
-            className="w-full rounded-btn border border-line bg-slate-50 py-1.5 pl-8 pr-7 text-body-sm text-ink transition-colors placeholder:text-ink-muted focus:border-primary focus:bg-card focus:outline-none focus:ring-4 focus:ring-primary/10"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-btn p-0.5 text-ink-muted hover:bg-slate-100 hover:text-ink"
-              aria-label="Clear filter"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
+      {/* Search / jump (opens the command bar) */}
+      <div className="px-3 pb-2">
+        <GlobalSearch className="h-[30px] bg-card/70" />
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-2">
+      <nav className="flex-1 overflow-y-auto px-2.5 pb-3">
+        {pins.length > 0 && !q && (
+          <div className="mb-3">
+            <p className="flex h-6 items-center px-2 text-[11.5px] font-medium text-ink-faint">Pinned</p>
+            <ul className="space-y-px">
+              {pins.map((p) => (
+                <li key={p.key}>
+                  <NavLink
+                    to={`/app/projects/${p.key}`}
+                    onClick={() => onNavigate?.()}
+                    className={({ isActive }) => cn('flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors', isActive && location.search.indexOf('task=') < 0 ? 'bg-slate-200/70 font-medium text-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
+                  >
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center"><span className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundColor: p.color ?? 'rgb(var(--ink-faint))' }} /></span>
+                    <span className="truncate">{p.name}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {q && visibleGroups.length === 0 && (
           <p className="px-3 py-6 text-center text-body-sm text-ink-muted">No screens match “{query.trim()}”.</p>
         )}
@@ -242,35 +243,35 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
           // Hairline before the first titled section, separating personal items from departments.
           const showDivider = !q && collapsible && !visibleGroups[gi - 1]?.title
           return (
-          <div key={group.title ?? gi} className={cn(collapsible ? 'mb-1.5' : 'mb-2')}>
-            {showDivider && <div className="mx-3 my-2 border-t border-line/70" />}
+          <div key={group.title ?? gi} className={cn(collapsible ? 'mb-0.5' : 'mb-3')}>
+            {showDivider && <div className="mx-2 mb-2 mt-1 border-t border-line" />}
             {group.title && (
               <button
                 type="button"
                 onClick={() => toggleGroup(group.title!)}
-                className="group/hd flex w-full items-center justify-between rounded-btn px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-muted transition-colors hover:bg-slate-50 hover:text-ink"
+                className="group/hd flex h-[30px] w-full items-center justify-between rounded-md px-2 text-[13px] text-ink-muted transition-colors hover:bg-slate-200/45 hover:text-ink"
                 aria-expanded={isOpen}
               >
-                <span className="flex items-center gap-2.5">
+                <span className="flex min-w-0 items-center gap-2.5">
                   {GroupIcon && (
                     <span
-                      className="flex h-5 w-5 items-center justify-center rounded-[6px]"
-                      style={group.color ? { color: group.color, backgroundColor: `${group.color}1A` } : undefined}
+                      className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px]"
+                      style={group.color ? { color: group.color, backgroundColor: `${group.color}1F` } : undefined}
                     >
-                      <GroupIcon size={13} />
+                      <GroupIcon size={12} strokeWidth={2.2} />
                     </span>
                   )}
-                  <span>{group.title}</span>
+                  <span className="truncate">{group.title}</span>
                 </span>
                 <ChevronRight
-                  size={14}
-                  className={cn('shrink-0 text-ink-muted/50 transition-transform duration-200 group-hover/hd:text-ink-muted', isOpen && 'rotate-90')}
+                  size={13}
+                  className={cn('shrink-0 text-ink-faint transition-transform duration-200', isOpen && 'rotate-90')}
                 />
               </button>
             )}
             {isOpen && (
               <>
-                {group.items.length > 0 && renderItems(group.items)}
+                {group.items.length > 0 && <div className={cn(collapsible && 'mb-1 mt-px pl-[17px]')}>{renderItems(group.items, collapsible)}</div>}
                 {group.subgroups?.map((sg) => {
                   const key = subKey(group.title ?? '', sg.title)
                   const subOpen = !!q || expanded[key]
@@ -279,13 +280,13 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                       <button
                         type="button"
                         onClick={() => toggleGroup(key)}
-                        className="group/sub flex w-full items-center justify-between rounded-btn px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-muted/80 transition-colors hover:bg-slate-50 hover:text-ink"
+                        className="group/sub ml-[17px] flex h-[28px] w-[calc(100%-17px)] items-center justify-between rounded-md px-2 text-[12px] font-medium text-ink-faint transition-colors hover:bg-slate-200/45 hover:text-ink"
                         aria-expanded={subOpen}
                       >
                         <span>{sg.title}</span>
                         <ChevronRight
-                          size={13}
-                          className={cn('shrink-0 text-ink-muted/40 transition-transform duration-200 group-hover/sub:text-ink-muted', subOpen && 'rotate-90')}
+                          size={12}
+                          className={cn('shrink-0 text-ink-faint transition-transform duration-200', subOpen && 'rotate-90')}
                         />
                       </button>
                       {subOpen && renderItems(sg.items, true)}
@@ -299,24 +300,20 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
         })}
       </nav>
 
-      {/* Footer links + user card */}
-      <div className="border-t border-line px-3 py-3">
-        <ul className="mb-2 space-y-0.5">
-          <li>
-            <NavLink
-              to="/app/settings"
-              onClick={onNavigate}
-              className="flex items-center gap-3 rounded-btn px-3 py-2 text-body-md font-medium text-ink-muted hover:bg-slate-50 hover:text-ink"
-            >
-              <Settings size={18} /> Settings
-            </NavLink>
-          </li>
-        </ul>
-        <div className="flex items-center gap-3 rounded-btn px-3 py-2">
-          <Avatar user={user} />
-          <div className="min-w-0">
-            <div className="truncate text-body-md font-semibold text-ink">{user.name}</div>
-            <div className="truncate text-body-sm text-ink-muted">{ROLE_LABEL[user.role]}</div>
+      {/* Footer: settings and who is signed in */}
+      <div className="border-t border-line px-2.5 py-2">
+        <NavLink
+          to="/app/settings"
+          onClick={onNavigate}
+          className={({ isActive }) => cn('flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors', isActive ? 'bg-slate-200/70 font-medium text-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
+        >
+          <Settings size={16} strokeWidth={1.75} className="text-ink-faint" /> Settings
+        </NavLink>
+        <div className="mt-1 flex items-center gap-2.5 rounded-md px-2 py-1.5">
+          <Avatar user={user} size={24} />
+          <div className="min-w-0 leading-tight">
+            <div className="truncate text-[12.5px] font-medium text-ink">{user.name}</div>
+            <div className="truncate text-[11px] text-ink-muted">{ROLE_LABEL[user.role]}</div>
           </div>
         </div>
       </div>
@@ -338,8 +335,8 @@ export function Avatar({ user, size = 36 }: { user: CurrentUser; size?: number }
   }
   return (
     <div
-      className="flex items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary"
-      style={{ width: size, height: size }}
+      className="flex items-center justify-center rounded-full bg-primary/15 font-semibold text-primary"
+      style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.38)) }}
     >
       {initials(user.name)}
     </div>

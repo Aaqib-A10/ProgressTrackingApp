@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth'
 import { api, ApiError } from '../../lib/api'
 import { ROLE_LABEL } from '../../lib/types'
 import { ConnectClaude } from '../../components/ConnectClaude'
+import { ThemeSwitch } from '../../components/ui/ThemeSwitch'
 
 const NOTIF_KEY = 'metriq.notifications'
 const NOTIFS = [
@@ -108,6 +109,10 @@ export default function Settings() {
       </Card>
 
       {/* Security */}
+      <Card title="Appearance" subtitle="Light, dark, or follow your computer. Saved on this device.">
+        <ThemeSwitch withLabels />
+      </Card>
+
       <Card title="Security" subtitle="Change your password">
         <form onSubmit={savePassword} className="space-y-4">
           <PasswordField label="Current password" value={curPw} onChange={(e) => setCurPw(e.target.value)} autoComplete="current-password" />

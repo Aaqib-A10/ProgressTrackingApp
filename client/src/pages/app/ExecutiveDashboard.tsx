@@ -10,6 +10,7 @@ import { useToast } from '../../components/ui/Toast'
 import { formatNumber, formatPercent, formatSignedPercent } from '../../lib/format'
 import { getExecutiveDashboard, type ExecutiveDashboardData, type ExecBenchmarkRow, type DashKpi, type ExecSummary } from '../../lib/dashboardApi'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
+import { EmptyState } from '../../components/ui/EmptyState'
 
 function Delta({ value }: { value: number }) {
   const pos = value >= 0
@@ -26,9 +27,9 @@ const fmt = (k: { value: number; format: 'number' | 'percent' }) =>
 
 function MiniStat({ label, value, tone = 'text-ink' }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-card border border-line p-3">
-      <p className="text-label-md uppercase text-ink-muted">{label}</p>
-      <p className={'mt-0.5 text-headline-md font-bold tabular-nums ' + tone}>{value}</p>
+    <div className="rounded-lg border border-line bg-slate-50/50 p-3">
+      <p className="text-[12px] font-medium text-ink-muted">{label}</p>
+      <p className={'mt-0.5 text-[20px] font-semibold tracking-[-0.01em] tabular-nums ' + tone}>{value}</p>
     </div>
   )
 }
@@ -43,16 +44,16 @@ function ActionCenter({ summary }: { summary: ExecSummary }) {
   return (
     <Card title="Action Center" subtitle={items.length ? `${summary.alerts} items need attention` : 'You are all caught up'}>
       {items.length === 0 ? (
-        <div className="flex items-center gap-2 py-2 text-body-md text-success"><CheckCircle2 size={18} /> All clear — nothing needs attention.</div>
+        <div className="flex items-center gap-2.5 rounded-lg bg-success/[0.07] px-3 py-2.5 text-body-md text-success"><CheckCircle2 size={17} /> All clear. Nothing needs attention.</div>
       ) : (
         <ul className="divide-y divide-line">
           {items.map((i) => (
             <li key={i.label}>
               <Link to={i.to} className="-mx-2 flex items-center gap-3 rounded-btn px-2 py-2.5 hover:bg-slate-50">
-                <span className={'flex h-8 w-8 items-center justify-center rounded-btn ' + i.tone}>{i.icon}</span>
+                <span className={'flex h-8 w-8 items-center justify-center rounded-lg ' + i.tone}>{i.icon}</span>
                 <span className="flex-1 text-body-md text-ink">{i.label}</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-body-sm font-semibold tabular-nums text-ink">{i.n}</span>
-                <ArrowRight size={16} className="text-ink-muted" />
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-body-sm font-semibold tabular-nums text-ink">{i.n}</span>
+                <ArrowRight size={15} className="text-ink-faint" />
               </Link>
             </li>
           ))}
@@ -180,7 +181,7 @@ export default function ExecutiveDashboard() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card title="Top performers" subtitle="Leaders per department this period">
               {data.topPerformers.length === 0 ? (
-                <p className="py-6 text-center text-body-sm text-ink-muted">No activity yet this period.</p>
+                <EmptyState compact icon={<Trophy />} title="No activity yet this period" hint="Leaders show here once people start logging their work." />
               ) : (
                 <ul className="space-y-3">
                   {data.topPerformers.map((t) => (
@@ -199,7 +200,7 @@ export default function ExecutiveDashboard() {
 
             <Card title="Recent activity" subtitle="Latest across the company">
               {data.recentActivity.length === 0 ? (
-                <p className="py-6 text-center text-body-sm text-ink-muted">Nothing recent.</p>
+                <EmptyState compact icon={<Activity />} title="Nothing recent" hint="New submissions, tasks and approvals appear here as they happen." />
               ) : (
                 <ul className="space-y-2.5">
                   {data.recentActivity.map((a, i) => (

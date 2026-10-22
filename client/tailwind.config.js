@@ -1,50 +1,61 @@
 /** @type {import('tailwindcss').Config} */
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`
+
 export default {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      // Metriq design tokens. Every colour is a CSS variable (index.css), so the whole app
+      // follows one palette and can switch themes. Neutrals are a calm grey (Linear style),
+      // and the slate scale used across screens maps to the same greys.
       colors: {
-        // Metriq design tokens (see CLAUDE.md "Design system")
         primary: {
-          DEFAULT: '#4F46E5', // indigo — main CTAs, active/focus states
-          50: '#EEF2FF',
-          100: '#E0E7FF',
-          600: '#4F46E5',
-          700: '#4338CA',
+          DEFAULT: v('primary'), // main actions, focus, selection
+          50: v('primary-50'),
+          100: v('primary-100'),
+          600: v('primary'),
+          700: v('primary-700'),
         },
-        accent: '#14B8A6', // teal — secondary highlights
-        success: '#22C55E',
-        warning: '#F59E0B',
-        danger: '#EF4444',
-        bg: '#F8FAFC', // app canvas
-        card: '#FFFFFF', // surface
+        accent: v('accent'),
+        success: v('success'),
+        warning: v('warning'),
+        danger: v('danger'),
+        bg: v('bg'), // app canvas
+        card: v('card'), // surfaces
+        sidebar: v('sidebar'), // navigation rail
         ink: {
-          DEFAULT: '#0F172A', // primary text (slate-900)
-          muted: '#64748B', // secondary text (slate-500)
+          DEFAULT: v('ink'), // primary text
+          muted: v('ink-muted'), // secondary text
+          faint: v('ink-faint'), // hints, placeholders, icons at rest
         },
-        line: '#E2E8F0', // borders (slate-200)
+        line: { DEFAULT: v('line'), strong: v('line-strong') }, // borders
+        slate: Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((n) => [n, v(`slate-${n}`)])),
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
       },
       borderRadius: {
-        card: '12px',
-        btn: '8px',
+        card: '10px',
+        btn: '7px',
       },
       boxShadow: {
-        card: '0 1px 2px 0 rgba(15,23,42,0.04), 0 1px 3px 0 rgba(15,23,42,0.06)',
-        overlay: '0 10px 15px -3px rgba(15,23,42,0.08), 0 4px 6px -4px rgba(15,23,42,0.05)',
+        // Quiet depth: borders do most of the work, shadows only lift what floats.
+        xs: '0 1px 1px 0 rgb(var(--shadow) / 0.05)',
+        card: '0 1px 2px 0 rgb(var(--shadow) / 0.04), 0 0 0 0 transparent',
+        raised: '0 1px 2px 0 rgb(var(--shadow) / 0.05), 0 4px 12px -2px rgb(var(--shadow) / 0.06)',
+        overlay: '0 0 0 1px rgb(var(--shadow) / 0.04), 0 8px 24px -4px rgb(var(--shadow) / 0.14), 0 2px 6px -1px rgb(var(--shadow) / 0.06)',
       },
       // Type scale from design-reference DESIGN.md
       fontSize: {
-        'display-lg': ['36px', { lineHeight: '44px', letterSpacing: '-0.02em', fontWeight: '700' }],
-        'headline-lg': ['24px', { lineHeight: '32px', letterSpacing: '-0.01em', fontWeight: '600' }],
-        'headline-md': ['20px', { lineHeight: '28px', fontWeight: '600' }],
-        'body-lg': ['16px', { lineHeight: '24px' }],
-        'body-md': ['14px', { lineHeight: '20px' }],
+        'display-lg': ['34px', { lineHeight: '40px', letterSpacing: '-0.025em', fontWeight: '650' }],
+        'headline-lg': ['22px', { lineHeight: '28px', letterSpacing: '-0.018em', fontWeight: '600' }],
+        'headline-md': ['17px', { lineHeight: '24px', letterSpacing: '-0.012em', fontWeight: '600' }],
+        'body-lg': ['15px', { lineHeight: '22px', letterSpacing: '-0.006em' }],
+        'body-md': ['13.5px', { lineHeight: '20px', letterSpacing: '-0.003em' }],
         'body-sm': ['12px', { lineHeight: '16px' }],
-        'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.05em', fontWeight: '600' }],
-        'metric-lg': ['32px', { lineHeight: '40px', fontWeight: '700' }],
+        'label-md': ['11px', { lineHeight: '16px', letterSpacing: '0.04em', fontWeight: '600' }],
+        'metric-lg': ['28px', { lineHeight: '34px', letterSpacing: '-0.025em', fontWeight: '600' }],
       },
       keyframes: {
         'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
@@ -56,11 +67,18 @@ export default {
           from: { opacity: '0', transform: 'scale(0.97)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
+        'rise-in': {
+          from: { opacity: '0', transform: 'translateY(4px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        shimmer: { '100%': { transform: 'translateX(100%)' } },
       },
       animation: {
         'fade-in': 'fade-in 150ms ease-out',
         'slide-in-right': 'slide-in-right 200ms ease-out',
-        'scale-in': 'scale-in 150ms ease-out',
+        'scale-in': 'scale-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1)',
+        'rise-in': 'rise-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1)',
+        shimmer: 'shimmer 1.4s infinite',
       },
     },
   },

@@ -59,20 +59,20 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
-      <div className="absolute inset-0 animate-fade-in bg-ink/40" onClick={onClose} />
+      <div className="absolute inset-0 animate-fade-in bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[calc(100vh-2rem)] w-full flex-col animate-scale-in rounded-card bg-card shadow-overlay focus:outline-none',
+          'relative flex max-h-[calc(100vh-2rem)] w-full flex-col animate-scale-in rounded-xl border border-line bg-card shadow-overlay focus:outline-none',
           SIZES[size],
         )}
       >
         {title != null && (
-          <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="text-headline-md text-ink">{title}</h2>
+          <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
+            <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
             <button
               onClick={onClose}
               className="rounded-btn p-1 text-ink-muted hover:bg-slate-100 hover:text-ink"
@@ -84,7 +84,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
         )}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer != null && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-line px-5 py-4">{footer}</div>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-slate-50/60 px-5 py-3 rounded-b-xl">{footer}</div>
         )}
       </div>
     </div>,

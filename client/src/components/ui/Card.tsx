@@ -12,7 +12,7 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'>
   flush?: boolean
 }
 
-// Level-1 surface: white, 1px border, 12px radius, soft shadow (DESIGN.md).
+// Level-1 surface: card colour, hairline border, 10px radius, barely-there shadow.
 export function Card({ title, subtitle, action, flush, className, children, ...props }: CardProps) {
   const hasHeader = title != null || action != null
   return (
@@ -21,9 +21,9 @@ export function Card({ title, subtitle, action, flush, className, children, ...p
       {...props}
     >
       {hasHeader && (
-        <div className="flex items-start justify-between gap-4 px-5 pt-5">
+        <div className="flex items-start justify-between gap-4 px-5 pt-4">
           <div>
-            {title != null && <h3 className="text-headline-md text-ink">{title}</h3>}
+            {title != null && <h3 className="text-[15px] font-semibold leading-6 tracking-[-0.01em] text-ink">{title}</h3>}
             {subtitle != null && <p className="mt-0.5 text-body-sm text-ink-muted">{subtitle}</p>}
           </div>
           {action != null && <div className="shrink-0">{action}</div>}

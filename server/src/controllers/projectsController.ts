@@ -54,10 +54,14 @@ export async function listProjects(req: AuthedRequest, res: Response): Promise<v
   const pids = projects.map((p) => p.id)
   const now = new Date()
   const openWhere = { projectId: { in: pids }, deletedAt: null, column: { category: { not: 'DONE' as PmColumnCategory } } }
-  const [open, overdue, mine] = await Promise.all([
+  const soon = new Date(now.getTime() + 3 * 86400000)
+  const [open, overdue, mine, total, dueSoon, latest] = await Promise.all([
     prisma.pmTask.groupBy({ by: ['projectId'], where: openWhere, _count: { _all: true } }),
     prisma.pmTask.groupBy({ by: ['projectId'], where: { ...openWhere, dueAt: { lt: now } }, _count: { _all: true } }),
     prisma.pmTask.groupBy({ by: ['projectId'], where: { ...openWhere, assignees: { some: { userId: me.id } } }, _count: { _all: true } }),
+    prisma.pmTask.groupBy({ by: ['projectId'], where: { projectId: { in: pids }, deletedAt: null }, _count: { _all: true } }),
+    prisma.pmTask.groupBy({ by: ['projectId'], where: { ...openWhere, dueAt: { gte: now, lt: soon } }, _count: { _all: true } }),
+    prisma.pmTask.groupBy({ by: ['projectId'], where: { projectId: { in: pids }, deletedAt: null }, _max: { updatedAt: true } }),
   ])
   const count = (rows: { projectId: string; _count: { _all: number } }[], id: string) => rows.find((r) => r.projectId === id)?._count._all ?? 0
   res.json({
@@ -70,6 +74,11 @@ export async function listProjects(req: AuthedRequest, res: Response): Promise<v
       openCount: count(open, p.id),
       overdueCount: count(overdue, p.id),
       myOpenCount: count(mine, p.id),
+      // For the progress bar and the card: all tasks, finished ones, due in the next 3 days, last change.
+      totalCount: count(total, p.id),
+      doneCount: count(total, p.id) - count(open, p.id),
+      dueSoonCount: count(dueSoon, p.id),
+      lastActivityAt: latest.find((r) => r.projectId === p.id)?._max.updatedAt?.toISOString() ?? null,
     })),
   })
 }

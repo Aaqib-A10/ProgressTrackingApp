@@ -6,6 +6,9 @@ import { ToastProvider } from './components/ui/Toast'
 import { AuthProvider } from './lib/auth'
 import './index.css'
 import { registerWorker } from './lib/push'
+import { initTheme } from './lib/theme'
+
+initTheme()
 
 // After a deploy the old page files are replaced. If this tab (opened before the deploy)
 // tries to load one of them, reload once to pick up the new version instead of breaking.

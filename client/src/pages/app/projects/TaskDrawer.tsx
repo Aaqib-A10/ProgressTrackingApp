@@ -8,10 +8,15 @@ import { useToast } from '../../../components/ui/Toast'
 import { MentionBox, highlightMentions } from '../../../components/MentionBox'
 import { LabelPicker, PeoplePicker } from '../../../components/projects/Pickers'
 import { ReviewForm, ReviewItem } from '../../../components/projects/Reviews'
-import { PRIORITIES, PRIORITY_META, PersonAvatar, fieldCls, fmtAgo, fmtBytes, fmtDateTime, fmtSpan, fromLocalInput, toLocalInput } from '../../../components/projects/pmUi'
+import { PRIORITIES, PRIORITY_META, PersonAvatar, PriorityGlyph, StatusIcon, fieldCls, fmtAgo, fmtBytes, fmtDateTime, fmtSpan, fromLocalInput, toLocalInput } from '../../../components/projects/pmUi'
 import { errMsg, projectsApi, type ActivityRow, type BoardColumn, type Label, type PmPriority, type ProjectMember, type TaskCard, type TaskDetail, type TaskPerms } from '../../../lib/projectsApi'
 import { cn } from '../../../lib/cn'
 import { copyText } from '../../../lib/workLogApi'
+
+/** Section titles, property labels and the quiet inline fields of the properties panel. */
+const secCls = 'flex items-center gap-1.5 text-[13px] font-semibold text-ink'
+const dtCls = 'text-body-sm text-ink-muted'
+const propCls = 'h-8 cursor-pointer rounded-md border border-transparent bg-transparent px-2.5 text-body-md text-ink hover:border-line hover:bg-card focus:border-primary focus:bg-card focus:outline-none focus:ring-[3px] focus:ring-primary/15 disabled:cursor-default disabled:hover:border-transparent disabled:hover:bg-transparent'
 
 /**
  * Task window, centred and large (deep link: /app/projects/:key?task=CODE): the work on the
@@ -92,6 +97,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
 
   const people = members.map((m) => ({ id: m.id, name: m.name }))
   const canEdit = !!perms?.canEdit
+  const status = task ? columns.find((c) => c.id === task.columnId) : null
 
   const body = (() => {
     if (missing) return <div className="p-8 text-center text-body-md text-ink-muted">This task doesn't exist or you don't have access to it.</div>
@@ -99,10 +105,10 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
     const overdueMs = task.isOverdue && task.dueAt ? Date.now() - new Date(task.dueAt).getTime() : 0
     const pendingExt = task.extensionRequests.find((x) => x.status === 'PENDING')
     return (
-      <div className="flex flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_440px]">
-      <div className="space-y-6 p-5 sm:p-6 lg:overflow-y-auto lg:p-8">
+      <div className="flex flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-7 p-5 sm:p-7 lg:overflow-y-auto lg:px-10 lg:py-8">
         {task.isOverdue && (
-          <div className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 px-3 py-2 text-body-sm text-danger">
+          <div className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/[0.06] px-3 py-2 text-body-sm text-danger">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
             <span><b>Overdue by {fmtSpan(overdueMs)}.</b> Due {fmtDateTime(task.dueAt!)}.{perms.canRequestExtension && !pendingExt ? ' Update the status or request an extension.' : ''}</span>
           </div>
@@ -117,15 +123,15 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLTextAreaElement).blur() } }}
             rows={1}
             aria-label="Task title"
-            className="w-full resize-none rounded-btn border border-transparent px-1 py-0.5 text-headline-md text-ink hover:border-line focus:border-primary focus:outline-none"
+            className="-mx-1.5 w-[calc(100%+0.75rem)] resize-none rounded-md border-0 bg-transparent px-1.5 py-0.5 text-[22px] font-semibold leading-snug tracking-[-0.01em] text-ink shadow-none hover:bg-slate-100/70 focus:bg-transparent focus:outline-none focus:ring-0"
           />
-        ) : <h2 className="text-headline-md text-ink">{task.title}</h2>}
+        ) : <h2 className="text-[22px] font-semibold leading-snug tracking-[-0.01em] text-ink">{task.title}</h2>}
 
         {/* Description */}
         <section>
           <div className="mb-1 flex items-center justify-between">
-            <h3 className="text-body-md font-semibold text-ink">Description</h3>
-            {canEdit && !editingDesc && <button type="button" onClick={() => setEditingDesc(true)} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><Pencil size={13} /> Edit</button>}
+            <h3 className={secCls}>Description</h3>
+            {canEdit && !editingDesc && <button type="button" onClick={() => setEditingDesc(true)} className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-body-sm font-medium text-ink-muted hover:bg-slate-100 hover:text-ink"><Pencil size={13} /> Edit</button>}
           </div>
           {editingDesc ? (
             <div>
@@ -136,28 +142,28 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
               </div>
             </div>
           ) : task.description ? (
-            <p className="whitespace-pre-wrap break-words text-body-md text-ink">{linkify(task.description)}</p>
+            <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-ink">{linkify(task.description)}</p>
           ) : <p className="text-body-sm text-ink-muted">{canEdit ? 'No description yet. Click Edit to add one.' : 'No description.'}</p>}
         </section>
 
         {/* Checklist */}
         <section>
           <div className="mb-1 flex items-center gap-2">
-            <h3 className="text-body-md font-semibold text-ink"><CheckSquare size={15} className="mr-1 inline" />Checklist</h3>
+            <h3 className={secCls}><CheckSquare size={14} />Checklist</h3>
             {task.checklist.length > 0 && <span className="text-body-sm text-ink-muted">{task.checklist.filter((c) => c.isDone).length}/{task.checklist.length}</span>}
           </div>
           {task.checklist.length > 0 && (
-            <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full bg-success transition-all" style={{ width: `${(task.checklist.filter((c) => c.isDone).length / task.checklist.length) * 100}%` }} /></div>
+            <div className="mb-2 h-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-success transition-all duration-300" style={{ width: `${(task.checklist.filter((c) => c.isDone).length / task.checklist.length) * 100}%` }} /></div>
           )}
           <ul className="space-y-1">
             {task.checklist.map((c) => (
-              <li key={c.id} className="group flex items-center gap-2 rounded-btn px-1 py-0.5 hover:bg-slate-50">
+              <li key={c.id} className="group -mx-2 flex items-center gap-2.5 rounded-md px-2 py-1 hover:bg-slate-100/70">
                 <input type="checkbox" checked={c.isDone} disabled={!canEdit} onChange={() => {
                   // Tick at once, then save (and put it back if saving fails).
                   setTask((t) => (t ? { ...t, checklist: t.checklist.map((x) => (x.id === c.id ? { ...x, isDone: !c.isDone } : x)) } : t))
                   projectsApi.updateChecklist(c.id, { isDone: !c.isDone }).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => { addToast({ type: 'error', message: errMsg(e) }); void load() })
                 }} className="h-4 w-4 accent-primary" aria-label={c.text} />
-                <span className={cn('flex-1 text-body-md', c.isDone && 'text-ink-muted line-through')}>{c.text}</span>
+                <span className={cn('flex-1 text-body-md text-ink', c.isDone && 'text-ink-faint line-through')}>{c.text}</span>
                 {canEdit && <button type="button" onClick={() => projectsApi.deleteChecklist(c.id).then(load).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} className="opacity-0 group-hover:opacity-100" aria-label="Delete item"><X size={14} className="text-ink-muted" /></button>}
               </li>
             ))}
@@ -182,17 +188,17 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
           onDrop={(e) => { e.preventDefault(); if (perms.canMove) uploadMany(Array.from(e.dataTransfer.files)) }}
         >
           <div className="mb-1 flex items-center justify-between">
-            <h3 className="text-body-md font-semibold text-ink"><Paperclip size={15} className="mr-1 inline" />Attachments</h3>
-            {perms.canMove && <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 text-body-sm text-primary" disabled={uploading}><Upload size={13} /> {uploading ? 'Uploading…' : 'Add file'}</button>}
+            <h3 className={secCls}><Paperclip size={14} />Attachments{task.attachments.length > 0 && <span className="font-normal text-ink-faint">{task.attachments.length}</span>}</h3>
+            {perms.canMove && <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-body-sm font-medium text-ink-muted hover:bg-slate-100 hover:text-ink" disabled={uploading}><Upload size={13} /> {uploading ? 'Uploading…' : 'Add file'}</button>}
             <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { uploadMany(Array.from(e.target.files ?? [])); e.target.value = '' }} />
           </div>
           {task.attachments.length === 0 ? <p className="text-body-sm text-ink-muted">{perms.canMove ? 'Drop a file here or use Add file (25 MB max).' : 'No files.'}</p> : (
-            <ul className="divide-y divide-line rounded-btn border border-line">
+            <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
               {task.attachments.map((a) => (
-                <li key={a.id} className="flex items-center gap-2 px-3 py-2 text-body-sm">
+                <li key={a.id} className="flex items-center gap-2.5 px-3 py-2 text-body-sm hover:bg-slate-50">
                   <Paperclip size={14} className="text-ink-muted" />
-                  <span className="min-w-0 flex-1 truncate text-ink" title={a.originalName}>{a.originalName}</span>
-                  <span className="text-ink-muted">{fmtBytes(a.size)}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-ink" title={a.originalName}>{a.originalName}</span>
+                  <span className="tabular-nums text-ink-faint">{fmtBytes(a.size)}</span>
                   <a href={(import.meta.env.VITE_API_URL ?? '/api') + a.downloadUrl.replace(/^\/api/, '')} className="text-ink-muted hover:text-primary" aria-label={`Download ${a.originalName}`}><Download size={14} /></a>
                   {(a.uploadedBy.id === meId || perms.canManage) && <button type="button" onClick={() => projectsApi.deleteAttachment(a.id).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} aria-label="Remove file"><Trash2 size={14} className="text-ink-muted hover:text-danger" /></button>}
                 </li>
@@ -204,8 +210,8 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
         {/* Reviews */}
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-body-md font-semibold text-ink"><ClipboardCheck size={15} className="mr-1 inline" />Reviews ({task.reviews.length})</h3>
-            {!reviewOpen && <button type="button" onClick={() => setReviewOpen(true)} className="inline-flex items-center gap-1 text-body-sm text-primary"><Plus size={13} /> Add review</button>}
+            <h3 className={secCls}><ClipboardCheck size={14} />Reviews{task.reviews.length > 0 && <span className="font-normal text-ink-faint">{task.reviews.length}</span>}</h3>
+            {!reviewOpen && <button type="button" onClick={() => setReviewOpen(true)} className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-body-sm font-medium text-ink-muted hover:bg-slate-100 hover:text-ink"><Plus size={13} /> Add review</button>}
           </div>
           {reviewOpen && (
             <div className="mb-2">
@@ -231,17 +237,17 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
 
         {/* Comments / activity */}
         <section>
-          <div className="mb-2 flex gap-1 border-b border-line">
+          <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-0.5 ring-1 ring-inset ring-line/60">
             {(['comments', 'activity'] as const).map((t) => (
-              <button key={t} type="button" onClick={() => setTab(t)} className={cn('-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-body-md font-medium', tab === t ? 'border-primary text-ink' : 'border-transparent text-ink-muted hover:text-ink')}>
-                {t === 'comments' ? <><MessageSquare size={14} /> Comments ({task.comments.length})</> : <><History size={14} /> Activity</>}
+              <button key={t} type="button" onClick={() => setTab(t)} className={cn('inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-body-sm font-medium transition-colors', tab === t ? 'bg-card text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.08),0_0_0_1px_rgb(var(--line-strong)/0.5)]' : 'text-ink-muted hover:text-ink')}>
+                {t === 'comments' ? <><MessageSquare size={13} /> Comments{task.comments.length > 0 && <span className="text-ink-faint">{task.comments.length}</span>}</> : <><History size={13} /> Activity</>}
               </button>
             ))}
           </div>
           {tab === 'comments' ? (
             <div>
               {task.comments.length === 0 && <p className="py-2 text-body-sm text-ink-muted">No comments yet. Start the discussion below.</p>}
-              <ul className="space-y-3">
+              <ul className="mb-4 space-y-4">
                 {task.comments.map((c) => (
                   <Comment key={c.id} comment={c} members={people} mine={c.author.id === meId} canDelete={c.author.id === meId || !!perms.canManage} onChanged={load} />
                 ))}
@@ -257,41 +263,43 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
       </div>
 
       {/* Details panel: status, people, dates, priority, labels, watchers, extension. */}
-      <aside className="space-y-4 border-t border-line bg-slate-50/70 p-5 sm:p-7 lg:overflow-y-auto lg:border-l lg:border-t-0">
-        <h3 className="text-label-md uppercase text-ink-muted">Details</h3>
+      <aside className="space-y-5 border-t border-line bg-sidebar/60 p-5 sm:p-6 lg:overflow-y-auto lg:border-l lg:border-t-0">
+        <h3 className="text-[12px] font-medium text-ink-faint">Properties</h3>
           {/* Fields */}
-          <dl className="grid grid-cols-[100px_minmax(0,1fr)] items-center gap-x-4 gap-y-3.5 text-body-md">
-            <dt className="text-ink-muted">Status</dt>
-            <dd>
-              <select value={task.columnId} disabled={!perms.canMove} onChange={(e) => move(e.target.value)} className={cn(fieldCls, 'h-10')} aria-label="Status">
+          <dl className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-body-md">
+            <dt className={dtCls}>Status</dt>
+            <dd className="relative">
+              {status && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"><StatusIcon name={status.name} category={status.category} color={status.color} size={14} /></span>}
+              <select value={task.columnId} disabled={!perms.canMove} onChange={(e) => move(e.target.value)} className={cn(propCls, 'w-full pl-8')} aria-label="Status">
                 {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </dd>
-            <dt className="text-ink-muted">Assigned by</dt>
-            <dd className="flex items-center gap-2"><PersonAvatar person={task.createdBy} size={22} />{task.createdBy.name} <span className="text-body-sm text-ink-muted">· {fmtAgo(task.createdAt)}</span></dd>
-            <dt className="text-ink-muted">Assigned to</dt>
-            <dd><PeoplePicker popoverWidth="w-full" people={people} value={task.assignees.map((a) => a.id)} onChange={(ids) => patch({ assigneeIds: ids })} disabled={!canEdit} /></dd>
-            <dt className="text-ink-muted">Start date</dt>
-            <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(fieldCls, 'h-10')} aria-label="Start date" /></dd>
-            <dt className="text-ink-muted">End date</dt>
+            <dt className={dtCls}>Assigned by</dt>
+            <dd className="flex h-8 items-center gap-2 px-2.5 text-ink"><PersonAvatar person={task.createdBy} size={20} /><span className="truncate">{task.createdBy.name}</span> <span className="shrink-0 text-body-sm text-ink-faint">{fmtAgo(task.createdAt)}</span></dd>
+            <dt className={dtCls}>Assigned to</dt>
+            <dd><PeoplePicker quiet popoverWidth="w-full" people={people} value={task.assignees.map((a) => a.id)} onChange={(ids) => patch({ assigneeIds: ids })} disabled={!canEdit} /></dd>
+            <dt className={dtCls}>Start date</dt>
+            <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(propCls, 'w-full')} aria-label="Start date" /></dd>
+            <dt className={dtCls}>End date</dt>
             <dd className="flex items-center gap-2">
-              <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(fieldCls, 'h-10')} aria-label="End date (due)" />
+              <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(propCls, 'w-full', task.isOverdue && 'text-danger')} aria-label="End date (due)" />
               {perms.canChangeDue && task.dueAt && <button type="button" className="text-body-sm text-ink-muted hover:text-danger" onClick={() => patch({ dueAt: null })}>Clear</button>}
             </dd>
-            <dt className="text-ink-muted">Priority</dt>
-            <dd>
-              <select value={task.priority} disabled={!canEdit} onChange={(e) => patch({ priority: e.target.value as PmPriority })} className={cn(fieldCls, 'h-10')} aria-label="Priority">
+            <dt className={dtCls}>Priority</dt>
+            <dd className="relative">
+              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"><PriorityGlyph priority={task.priority} size={14} /></span>
+              <select value={task.priority} disabled={!canEdit} onChange={(e) => patch({ priority: e.target.value as PmPriority })} className={cn(propCls, 'w-full pl-8')} aria-label="Priority">
                 {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
               </select>
             </dd>
-            <dt className="text-ink-muted">Labels</dt>
+            <dt className={dtCls}>Labels</dt>
             <dd>
-              <LabelPicker popoverWidth="w-full" labels={labels} value={task.labels.map((l) => l.id)} disabled={!canEdit} onChange={(ids) => patch({ labelIds: ids })}
+              <LabelPicker quiet popoverWidth="w-full" labels={labels} value={task.labels.map((l) => l.id)} disabled={!canEdit} onChange={(ids) => patch({ labelIds: ids })}
                 onCreate={async (name) => { try { const r = await projectsApi.createLabel(task.projectKey, { name }); onLabelCreated(r.label); return r.label } catch (e) { addToast({ type: 'error', message: errMsg(e) }); return null } }} />
             </dd>
-            <dt className="text-ink-muted">Estimate</dt>
-            <dd className="flex items-center gap-2"><input type="number" min={0} step={0.5} defaultValue={task.estimateHours ?? ''} key={`e${task.estimateHours}`} disabled={!canEdit} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== task.estimateHours) patch({ estimateHours: v }) }} className={cn(fieldCls, 'h-10 w-32')} aria-label="Estimate in hours" /><span className="text-body-sm text-ink-muted">hours</span></dd>
-            <dt className="text-ink-muted">Watching</dt>
+            <dt className={dtCls}>Estimate</dt>
+            <dd className="flex items-center gap-2"><input type="number" min={0} step={0.5} defaultValue={task.estimateHours ?? ''} key={`e${task.estimateHours}`} disabled={!canEdit} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== task.estimateHours) patch({ estimateHours: v }) }} className={cn(propCls, 'w-24')} placeholder="0" aria-label="Estimate in hours" /><span className="text-body-sm text-ink-muted">hours</span></dd>
+            <dt className={dtCls}>Watching</dt>
             <dd className="flex items-center gap-2">
               <span className="flex -space-x-1.5">{task.watchers.slice(0, 6).map((w) => <PersonAvatar key={w.id} person={w} size={22} ring />)}</span>
               {task.watchers.some((w) => w.id === meId)
@@ -302,7 +310,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
 
           {/* Extension */}
           {(pendingExt || perms.canRequestExtension) && (
-            <div className="rounded-btn border border-line bg-bg p-3">
+            <div className="rounded-lg border border-line bg-card p-3 shadow-xs">
               {pendingExt ? (
                 <div className="space-y-2 text-body-sm">
                   <p className="text-ink"><b>{pendingExt.requestedBy.name}</b> asked to move the due date to <b>{fmtDateTime(pendingExt.requestedDueAt)}</b>.</p>
@@ -335,7 +343,6 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
     try { await load(); const r = await projectsApi.task(code); onChanged(r.task) } finally { setUploading(false) }
   }
 
-  const status = task ? columns.find((c) => c.id === task.columnId) : null
   /** The whole ticket as text (what to do, where the work lives, checklist, files, comments) to paste into Claude. */
   async function copyForClaude() {
     try {
@@ -346,14 +353,15 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
   }
   return createPortal(
     <div className="fixed inset-0 z-40 flex items-center justify-center sm:p-4 lg:p-8">
-      <div className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={task ? `${task.code} ${task.title}` : 'Task'} className="relative flex h-full w-full max-w-6xl animate-scale-in flex-col overflow-hidden bg-card shadow-overlay focus:outline-none sm:h-[92vh] sm:rounded-card">
-        <div className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-3 sm:px-6">
-          <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-body-sm font-semibold text-ink-muted">{code}</span>
+      <div className="absolute inset-0 animate-fade-in bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={task ? `${task.code} ${task.title}` : 'Task'} className="relative flex h-full w-full max-w-6xl animate-scale-in flex-col overflow-hidden bg-card shadow-overlay focus:outline-none sm:h-[92vh] sm:rounded-xl sm:border sm:border-line">
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-4 sm:px-5">
           {task && <span className="truncate text-body-sm text-ink-muted">{task.projectName}</span>}
+          {task && <span className="text-ink-faint">/</span>}
+          <span className="font-mono text-body-sm font-medium text-ink">{code}</span>
           {status && (
-            <span className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-body-sm font-medium text-ink sm:inline-flex">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color ?? '#94A3B8' }} />{status.name}
+            <span className="hidden h-6 items-center gap-1.5 rounded-md border border-line bg-card px-2 text-body-sm font-medium text-ink shadow-xs sm:inline-flex">
+              <StatusIcon name={status.name} category={status.category} color={status.color} size={13} />{status.name}
             </span>
           )}
           <div className="ml-auto flex items-center gap-1">
@@ -361,7 +369,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             <IconBtn label="Share to chat" onClick={() => navigate(`/app/chat?share=${encodeURIComponent(code)}`)}><MessagesSquare size={16} /></IconBtn>
             <IconBtn label="Copy code" onClick={() => { navigator.clipboard?.writeText(code); addToast({ type: 'success', message: `${code} copied` }) }}><Copy size={16} /></IconBtn>
             <button type="button" onClick={copyForClaude} title="Copy the whole ticket (description, checklist, files, comments) to paste into Claude"
-              className="inline-flex h-8 items-center gap-1.5 rounded-btn border border-line px-2.5 text-body-sm font-semibold text-ink hover:bg-slate-50"><Bot size={15} /> Copy for Claude</button>
+              className="ml-1 mr-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-card px-2.5 text-body-sm font-medium text-ink shadow-xs hover:bg-slate-50"><Bot size={14} /> <span className="hidden sm:inline">Copy for Claude</span></button>
             {perms?.canDelete && <IconBtn label="Delete task" onClick={() => setConfirmDelete(true)}><Trash2 size={16} /></IconBtn>}
             <IconBtn label="Close" onClick={onClose}><X size={18} /></IconBtn>
           </div>
@@ -381,7 +389,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
 }
 
 function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} title={label} aria-label={label} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink">{children}</button>
+  return <button type="button" onClick={onClick} title={label} aria-label={label} className="flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-slate-100 hover:text-ink">{children}</button>
 }
 
 function linkify(text: string): React.ReactNode[] {
@@ -394,13 +402,13 @@ function Comment({ comment, members, mine, canDelete, onChanged }: { comment: Ta
   const [text, setText] = useState(comment.body)
   const { addToast } = useToast()
   return (
-    <li className="flex gap-2.5">
-      <PersonAvatar person={comment.author} size={28} />
+    <li className="group flex gap-3">
+      <PersonAvatar person={comment.author} size={26} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-body-md font-semibold text-ink">{comment.author.name}</span>
-          <span className="text-body-sm text-ink-muted" title={fmtDateTime(comment.createdAt)}>{fmtAgo(comment.createdAt)}{comment.editedAt ? ' · edited' : ''}</span>
-          <span className="ml-auto flex gap-2">
+          <span className="text-body-md font-medium text-ink">{comment.author.name}</span>
+          <span className="text-body-sm text-ink-faint" title={fmtDateTime(comment.createdAt)}>{fmtAgo(comment.createdAt)}{comment.editedAt ? ' · edited' : ''}</span>
+          <span className="ml-auto flex gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             {mine && !editing && <button type="button" onClick={() => setEditing(true)} className="text-body-sm text-ink-muted hover:text-ink">Edit</button>}
             {canDelete && !editing && <button type="button" onClick={() => projectsApi.deleteComment(comment.id).then(onChanged).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} className="text-body-sm text-ink-muted hover:text-danger">Delete</button>}
           </span>
@@ -413,7 +421,7 @@ function Comment({ comment, members, mine, canDelete, onChanged }: { comment: Ta
               <Button size="sm" leadingIcon={<Check size={14} />} onClick={async () => { try { await projectsApi.editComment(comment.id, text); setEditing(false); onChanged() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } }}>Save</Button>
             </div>
           </div>
-        ) : <p className="mt-0.5 whitespace-pre-wrap break-words text-body-md text-ink">{highlightMentions(comment.body, comment.mentions, members)}</p>}
+        ) : <p className="mt-0.5 whitespace-pre-wrap break-words text-body-md leading-relaxed text-ink">{highlightMentions(comment.body, comment.mentions, members)}</p>}
       </div>
     </li>
   )
@@ -461,12 +469,12 @@ function ActivityList({ rows, people }: { rows: ActivityRow[] | null; columns: B
     return ''
   }
   return (
-    <ul className="space-y-2">
+    <ul className="relative space-y-3 before:absolute before:bottom-2 before:left-[9.5px] before:top-2 before:w-px before:bg-line">
       {rows.map((r) => (
-        <li key={r.id} className="flex items-start gap-2 text-body-sm">
+        <li key={r.id} className="relative flex items-start gap-2.5 text-body-sm">
           {r.user ? <PersonAvatar person={r.user} size={20} /> : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-danger/10"><AlertTriangle size={11} className="text-danger" /></span>}
-          <span className="flex-1 text-ink">{r.user && <b>{r.user.name} </b>}{ACTION_TEXT[r.action] ?? r.action.replace(/_/g, ' ')}{detail(r)}</span>
-          <span className="shrink-0 text-ink-muted" title={fmtDateTime(r.createdAt)}>{fmtAgo(r.createdAt)}</span>
+          <span className="flex-1 pt-0.5 text-ink-muted">{r.user && <span className="font-medium text-ink">{r.user.name} </span>}{ACTION_TEXT[r.action] ?? r.action.replace(/_/g, ' ')}{detail(r)}</span>
+          <span className="shrink-0 pt-0.5 text-ink-faint" title={fmtDateTime(r.createdAt)}>{fmtAgo(r.createdAt)}</span>
         </li>
       ))}
     </ul>

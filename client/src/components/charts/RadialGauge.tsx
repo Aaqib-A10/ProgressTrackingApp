@@ -1,3 +1,4 @@
+import { useTheme } from '../../lib/theme'
 import { CHART } from './chartTheme'
 
 export interface RadialGaugeProps {
@@ -10,6 +11,7 @@ export interface RadialGaugeProps {
 
 /** Small circular progress gauge (e.g. "Calls Goal 72%"). */
 export function RadialGauge({ value, label, color = CHART.primary, size = 96 }: RadialGaugeProps) {
+  useTheme() // redraw with the new colours when the theme changes
   const pct = Math.max(0, Math.min(1, value))
   const stroke = 8
   const r = (size - stroke) / 2

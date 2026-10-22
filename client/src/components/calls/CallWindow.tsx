@@ -88,7 +88,7 @@ export function CallWindow() {
       <style>{'@keyframes pt-float-up{0%{transform:translateY(0) scale(.6);opacity:0}12%{transform:translateY(-20px) scale(1.1);opacity:1}100%{transform:translateY(-260px) scale(1);opacity:0}}'}</style>
 
       {minimized ? (
-        <div className="fixed bottom-4 left-4 z-[60] w-[min(300px,calc(100vw-2rem))] animate-scale-in overflow-hidden rounded-card bg-slate-900 text-white shadow-overlay" role="dialog" aria-label={`Call with ${title}`}>
+        <div className="keep-palette fixed bottom-4 left-4 z-[60] w-[min(300px,calc(100vw-2rem))] animate-scale-in overflow-hidden rounded-card bg-slate-900 text-white shadow-overlay" role="dialog" aria-label={`Call with ${title}`}>
           <button type="button" onClick={() => ctx.setMinimized(false)} className="block w-full text-left" title="Open the call">
             <div className="relative aspect-video bg-slate-800">
               <TileView tile={sharer ? peerTiles.find((t) => t.id === sharer.userId)! : peerTiles[0] ?? meTile} compact />
@@ -107,7 +107,7 @@ export function CallWindow() {
           </div>
         </div>
       ) : (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-slate-950 text-white" role="dialog" aria-modal="true" aria-label={`Call with ${title}`}>
+        <div className="keep-palette fixed inset-0 z-[60] flex flex-col bg-slate-950 text-white" role="dialog" aria-modal="true" aria-label={`Call with ${title}`}>
           {/* Header */}
           <div className="flex shrink-0 items-center gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">

@@ -117,7 +117,7 @@ export function PushBanner() {
           {busy && <Loader2 size={14} className="animate-spin" />} Turn on
         </button>
       )}
-      <button type="button" onClick={later} className="shrink-0 rounded p-1 text-ink-muted hover:bg-white hover:text-ink" aria-label="Not now" title="Not now"><X size={16} /></button>
+      <button type="button" onClick={later} className="shrink-0 rounded p-1 text-ink-muted hover:bg-card hover:text-ink" aria-label="Not now" title="Not now"><X size={16} /></button>
     </div>
   )
 }

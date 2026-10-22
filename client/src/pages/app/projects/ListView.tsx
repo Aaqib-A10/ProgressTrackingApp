@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/Toast'
-import { AvatarStack, DueChip, PRIORITIES, PRIORITY_META, PriorityIcon, fmtAgo } from '../../../components/projects/pmUi'
+import { AvatarStack, DueChip, PRIORITIES, PRIORITY_META, PriorityIcon, StatusIcon, fmtAgo } from '../../../components/projects/pmUi'
 import { errMsg, projectsApi, type BoardColumn, type PmPriority, type ProjectMember, type TaskCard } from '../../../lib/projectsApi'
 import { cn } from '../../../lib/cn'
 
@@ -64,8 +64,8 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
   }
 
   const Th = ({ k, children, className }: { k: SortKey; children: React.ReactNode; className?: string }) => (
-    <th scope="col" className={cn('px-3 py-2 text-left', className)}>
-      <button type="button" onClick={() => setSort((s) => ({ key: k, dir: s.key === k ? (s.dir === 1 ? -1 : 1) : 1 }))} className="inline-flex items-center gap-1 text-label-md uppercase text-ink-muted hover:text-ink">
+    <th scope="col" className={cn('h-9 px-3 text-left font-normal', className)}>
+      <button type="button" onClick={() => setSort((s) => ({ key: k, dir: s.key === k ? (s.dir === 1 ? -1 : 1) : 1 }))} className="inline-flex items-center gap-1 text-[12px] font-medium text-ink-muted hover:text-ink">
         {children}{sort.key === k && (sort.dir === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
       </button>
     </th>
@@ -74,17 +74,17 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
   return (
     <div className="space-y-2">
       {canManage && sel.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-card border border-primary/30 bg-primary/5 px-3 py-2 text-body-sm">
-          <b className="text-ink">{sel.size} selected</b>
-          <select defaultValue="" onChange={(e) => { if (e.target.value) bulk({ columnId: e.target.value }); e.target.value = '' }} className="h-8 rounded-btn border border-line bg-card px-2" aria-label="Move selected to">
+        <div className="sticky top-2 z-10 flex animate-rise-in flex-wrap items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 text-body-sm shadow-raised">
+          <span className="mr-1 inline-flex h-6 items-center rounded-md bg-primary/10 px-2 font-medium text-primary">{sel.size} selected</span>
+          <select defaultValue="" onChange={(e) => { if (e.target.value) bulk({ columnId: e.target.value }); e.target.value = '' }} className="h-7 rounded-md border border-line bg-card px-2 text-body-sm shadow-xs" aria-label="Move selected to">
             <option value="">Move to…</option>
             {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select defaultValue="" onChange={(e) => { if (e.target.value) bulk({ priority: e.target.value as PmPriority }); e.target.value = '' }} className="h-8 rounded-btn border border-line bg-card px-2" aria-label="Set priority">
+          <select defaultValue="" onChange={(e) => { if (e.target.value) bulk({ priority: e.target.value as PmPriority }); e.target.value = '' }} className="h-7 rounded-md border border-line bg-card px-2 text-body-sm shadow-xs" aria-label="Set priority">
             <option value="">Priority…</option>
             {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
           </select>
-          <select defaultValue="" onChange={(e) => { if (e.target.value) bulk({ assigneeId: e.target.value === '__none' ? null : e.target.value }); e.target.value = '' }} className="h-8 rounded-btn border border-line bg-card px-2" aria-label="Assign selected">
+          <select defaultValue="" onChange={(e) => { if (e.target.value) bulk({ assigneeId: e.target.value === '__none' ? null : e.target.value }); e.target.value = '' }} className="h-7 rounded-md border border-line bg-card px-2 text-body-sm shadow-xs" aria-label="Assign selected">
             <option value="">Assign to…</option>
             <option value="__none">Nobody</option>
             {members.filter((m) => m.role !== 'VIEWER').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -93,9 +93,9 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
           <button type="button" className="ml-auto text-ink-muted hover:text-ink" onClick={() => setSel(new Set())}>Clear</button>
         </div>
       )}
-      <div className="overflow-x-auto rounded-card border border-line bg-card shadow-card">
+      <div className="overflow-x-auto rounded-card border border-line bg-card shadow-xs">
         <table className="w-full min-w-[760px] text-body-md">
-          <thead className="sticky top-0 border-b border-line bg-slate-50">
+          <thead className="sticky top-0 border-b border-line bg-slate-50/80 backdrop-blur">
             <tr>
               {canManage && <th className="w-8 px-3"><input type="checkbox" checked={rows.length > 0 && sel.size === rows.length} onChange={toggleAll} className="h-4 w-4 accent-primary" aria-label="Select all" /></th>}
               <Th k="code" className="w-24">Task</Th>
@@ -108,20 +108,20 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {rows.map((t, i) => (
-              <tr key={t.id} className={cn('cursor-pointer hover:bg-primary/5', i % 2 === 1 && 'bg-slate-50/50')} onClick={() => onOpen(t.code)}>
+            {rows.map((t) => (
+              <tr key={t.id} className={cn('group h-11 cursor-pointer transition-colors hover:bg-slate-50', sel.has(t.id) && 'bg-primary/[0.04]')} onClick={() => onOpen(t.code)}>
                 {canManage && (
                   <td className="px-3" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={sel.has(t.id)} onChange={() => setSel((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n })} className="h-4 w-4 accent-primary" aria-label={`Select ${t.code}`} />
                   </td>
                 )}
-                <td className="px-3 py-2 font-mono text-body-sm text-ink-muted">{t.code}</td>
-                <td className="max-w-[340px] truncate px-3 py-2 font-medium text-ink">{t.title}</td>
-                <td className="px-3 py-2"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-body-sm text-ink">{t.status}</span></td>
-                <td className="px-3 py-2"><AvatarStack people={t.assignees} max={3} size={22} /></td>
-                <td className="px-3 py-2"><PriorityIcon priority={t.priority} withLabel /></td>
-                <td className="px-3 py-2">{t.dueAt ? <DueChip dueAt={t.dueAt} category={t.category} /> : <span className="text-body-sm text-ink-muted">None</span>}</td>
-                <td className="px-3 py-2 text-body-sm text-ink-muted">{fmtAgo(t.updatedAt)}</td>
+                <td className="px-3 font-mono text-[12px] text-ink-faint">{t.code}</td>
+                <td className="max-w-[340px] truncate px-3 font-medium text-ink">{t.title}</td>
+                <td className="px-3"><span className="inline-flex items-center gap-1.5 text-body-sm text-ink"><StatusIcon name={t.status} category={t.category} color={columns.find((c) => c.id === t.columnId)?.color} size={13} />{t.status}</span></td>
+                <td className="px-3"><AvatarStack people={t.assignees} max={3} size={22} /></td>
+                <td className="px-3"><PriorityIcon priority={t.priority} withLabel /></td>
+                <td className="px-3">{t.dueAt ? <DueChip dueAt={t.dueAt} category={t.category} /> : <span className="text-body-sm text-ink-faint">None</span>}</td>
+                <td className="px-3 text-body-sm tabular-nums text-ink-faint">{fmtAgo(t.updatedAt)}</td>
               </tr>
             ))}
             {rows.length === 0 && <tr><td colSpan={8} className="px-3 py-10 text-center text-body-md text-ink-muted">No tasks match these filters.</td></tr>}

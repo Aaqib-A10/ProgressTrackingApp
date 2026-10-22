@@ -171,8 +171,13 @@ export default function ProjectBoard() {
   if (!data) {
     return (
       <div className="space-y-4">
-        <div className="h-10 w-64 animate-pulse rounded-btn bg-slate-200" />
-        <div className="flex gap-3">{Array.from({ length: 5 }, (_, i) => <div key={i} className="h-96 w-72 shrink-0 animate-pulse rounded-card bg-slate-100" />)}</div>
+        <div className="flex items-center gap-3"><div className="skeleton h-9 w-9 rounded-lg" /><div className="space-y-1.5"><div className="skeleton h-3 w-24" /><div className="skeleton h-5 w-48" /></div></div>
+        <div className="flex gap-2.5">{Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="w-72 shrink-0 space-y-1.5 rounded-xl bg-slate-100/60 p-1.5">
+            <div className="skeleton m-1.5 h-4 w-28" />
+            {Array.from({ length: 3 - (i % 2) }, (_, j) => <div key={j} className="h-[92px] rounded-lg border border-line bg-card p-3"><div className="skeleton h-3 w-14" /><div className="skeleton mt-2.5 h-3.5 w-4/5" /><div className="skeleton mt-3 h-4 w-24" /></div>)}
+          </div>
+        ))}</div>
       </div>
     )
   }
@@ -184,18 +189,18 @@ export default function ProjectBoard() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
-        <ProjectPicture project={project} size={40} />
+        <ProjectPicture project={project} size={36} className="rounded-lg" />
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-body-sm text-ink-muted"><Link to="/app/projects" className="hover:text-ink">Projects</Link><span>/</span><span>{project.key}</span></div>
-          <h1 className="truncate text-headline-lg leading-tight text-ink">{project.name}{project.status === 'ARCHIVED' && <span className="ml-2 align-middle text-body-sm font-medium text-ink-muted">(archived)</span>}</h1>
+          <div className="flex items-center gap-1.5 text-[12px] text-ink-faint"><Link to="/app/projects" className="hover:text-ink">Projects</Link><span>/</span><span className="font-mono">{project.key}</span></div>
+          <h1 className="truncate text-[20px] font-semibold leading-tight tracking-[-0.015em] text-ink">{project.name}{project.status === 'ARCHIVED' && <span className="ml-2 align-middle text-body-sm font-medium text-ink-muted">(archived)</span>}</h1>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => perms.canManage && navigate(`/app/projects/${project.key}/settings?tab=members`)} title={`${data.members.length} members`} className="mr-1"><AvatarStack people={people} max={5} size={28} /></button>
-          <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist" aria-label="View">
-            <button type="button" role="tab" aria-selected={view === 'board'} onClick={() => setParam('view', null)} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'board' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><Columns3 size={14} /> Board</button>
-            <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => setParam('view', 'list')} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'list' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><List size={14} /> List</button>
-            <button type="button" role="tab" aria-selected={view === 'reviews'} onClick={() => setParam('view', 'reviews')} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'reviews' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><ClipboardCheck size={14} /> Reviews</button>
-            <button type="button" role="tab" aria-selected={view === 'completed'} onClick={() => setParam('view', 'completed')} title="Every finished task, including ones tucked away from the board" className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-body-sm font-semibold', view === 'completed' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><CheckCircle2 size={14} /> Completed</button>
+          <button type="button" onClick={() => perms.canManage && navigate(`/app/projects/${project.key}/settings?tab=members`)} title={`${data.members.length} members`} className="mr-1 rounded-full"><AvatarStack people={people} max={5} size={24} /></button>
+          <div className="inline-flex rounded-lg bg-slate-100 p-0.5 ring-1 ring-inset ring-line/60" role="tablist" aria-label="View">
+            <button type="button" role="tab" aria-selected={view === 'board'} onClick={() => setParam('view', null)} className={cn('inline-flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors', view === 'board' ? 'bg-card text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.08),0_0_0_1px_rgb(var(--line-strong)/0.5)]' : 'text-ink-muted hover:text-ink')}><Columns3 size={14} /> Board</button>
+            <button type="button" role="tab" aria-selected={view === 'list'} onClick={() => setParam('view', 'list')} className={cn('inline-flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors', view === 'list' ? 'bg-card text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.08),0_0_0_1px_rgb(var(--line-strong)/0.5)]' : 'text-ink-muted hover:text-ink')}><List size={14} /> List</button>
+            <button type="button" role="tab" aria-selected={view === 'reviews'} onClick={() => setParam('view', 'reviews')} className={cn('inline-flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors', view === 'reviews' ? 'bg-card text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.08),0_0_0_1px_rgb(var(--line-strong)/0.5)]' : 'text-ink-muted hover:text-ink')}><ClipboardCheck size={14} /> Reviews</button>
+            <button type="button" role="tab" aria-selected={view === 'completed'} onClick={() => setParam('view', 'completed')} title="Every finished task, including ones tucked away from the board" className={cn('inline-flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors', view === 'completed' ? 'bg-card text-ink shadow-[0_1px_2px_rgb(var(--shadow)/0.08),0_0_0_1px_rgb(var(--line-strong)/0.5)]' : 'text-ink-muted hover:text-ink')}><CheckCircle2 size={14} /> Completed</button>
           </div>
           <Button size="sm" variant="secondary" leadingIcon={<MessagesSquare size={15} />} onClick={() => navigate(`/app/chat?project=${project.key}`)}>Chat</Button>
           {perms.canManage && <Button size="sm" variant="secondary" leadingIcon={<Settings2 size={15} />} onClick={() => navigate(`/app/projects/${project.key}/settings`)}>Settings</Button>}
@@ -204,35 +209,36 @@ export default function ProjectBoard() {
       </div>
 
       {myOverdue > 0 && (
-        <button type="button" onClick={() => { const n = new URLSearchParams(params); n.set('due', 'overdue'); n.set('mine', '1'); setParams(n, { replace: true }) }} className="flex w-full items-center gap-2 rounded-card border border-danger/30 bg-danger/5 px-4 py-2.5 text-left text-body-md text-danger">
-          <AlertTriangle size={16} /> You have {myOverdue} overdue task{myOverdue > 1 ? 's' : ''} in this project. <span className="font-semibold underline">Show them</span>
+        <button type="button" onClick={() => { const n = new URLSearchParams(params); n.set('due', 'overdue'); n.set('mine', '1'); setParams(n, { replace: true }) }} className="flex w-full items-center gap-2 rounded-lg border border-danger/25 bg-danger/[0.05] px-3.5 py-2 text-left text-[13px] text-danger transition-colors hover:bg-danger/[0.08]">
+          <AlertTriangle size={15} /> You have {myOverdue} overdue task{myOverdue > 1 ? 's' : ''} in this project. <span className="font-semibold underline">Show them</span>
         </button>
       )}
 
       {/* Filters */}
       <div className={cn('flex flex-wrap items-center gap-2', view === 'reviews' && 'hidden')}>
         <div className="relative w-full sm:w-56">
-          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <input value={q} onChange={(e) => setParam('q', e.target.value || null)} placeholder="Search title or code" aria-label="Search tasks" className={cn(fieldCls, 'h-8 pl-8 text-body-sm')} />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+          <input value={q} onChange={(e) => setParam('q', e.target.value || null)} placeholder="Filter by title or code" aria-label="Search tasks" className={cn(fieldCls, 'h-7 pl-8 text-[12.5px]')} />
         </div>
         <FilterSelect label="Assignee" value={assignee} onChange={(v) => setParam('assignee', v)} options={[{ v: 'me', l: 'Me' }, { v: 'none', l: 'Unassigned' }, ...data.members.map((m) => ({ v: m.id, l: m.name }))]} />
         <FilterSelect label="Priority" value={priority} onChange={(v) => setParam('priority', v)} options={PRIORITIES.map((p) => ({ v: p, l: PRIORITY_META[p].label }))} />
         {data.labels.length > 0 && <FilterSelect label="Label" value={label} onChange={(v) => setParam('label', v)} options={data.labels.map((l) => ({ v: l.id, l: l.name }))} />}
         <FilterSelect label="Due" value={due} onChange={(v) => setParam('due', v)} options={[{ v: 'overdue', l: 'Overdue' }, { v: 'today', l: 'Due today' }, { v: 'week', l: 'Due this week' }, { v: 'none', l: 'No due date' }]} />
-        <label className={cn('inline-flex h-8 cursor-pointer items-center gap-2 rounded-btn border px-2.5 text-body-sm font-medium', mine ? 'border-primary bg-primary/5 text-primary' : 'border-line bg-card text-ink-muted')}>
+        <label className={cn('inline-flex h-7 cursor-pointer items-center gap-2 rounded-btn border px-2.5 text-[12.5px] font-medium shadow-xs transition-colors', mine ? 'border-primary/40 bg-primary/[0.06] text-primary' : 'border-line bg-card text-ink-muted hover:border-line-strong')}>
           <input type="checkbox" checked={mine} onChange={(e) => setParam('mine', e.target.checked ? '1' : null)} className="h-3.5 w-3.5 accent-primary" /> Only my tasks
         </label>
         {filtersOn && (
-          <button type="button" onClick={() => { const n = new URLSearchParams(); if (view !== 'board') n.set('view', view); setParams(n, { replace: true }) }} className="inline-flex h-8 items-center gap-1 px-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>
+          <button type="button" onClick={() => { const n = new URLSearchParams(); if (view !== 'board') n.set('view', view); setParams(n, { replace: true }) }} className="inline-flex h-7 items-center gap-1 rounded-btn px-2 text-[12.5px] text-ink-muted hover:bg-slate-100 hover:text-ink"><X size={13} /> Clear</button>
         )}
-        <span className="ml-auto text-body-sm text-ink-muted">{filtered.length} of {data.tasks.length} tasks</span>
+        <span className="ml-auto text-[12px] tabular-nums text-ink-faint">{filtered.length} of {data.tasks.length} tasks</span>
       </div>
 
       {view === 'reviews' ? (
         <ReviewsView projectKey={project.key} refreshKey={data.tasks.map((t) => t.updatedAt).sort().at(-1) ?? ''} onOpen={(c) => setParam('task', c)} />
       ) : data.tasks.length === 0 && !creating ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-card py-14 text-center">
-          <p className="text-body-lg text-ink">No tasks yet</p>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line-strong bg-card py-16 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-ink-muted"><Columns3 size={20} /></span>
+          <p className="text-body-md font-medium text-ink">No tasks yet</p>
           <p className="text-body-md text-ink-muted">{perms.canContribute ? 'Create the first task and assign it to someone on the team.' : 'Tasks will appear here when the team adds them.'}</p>
           {perms.canContribute && <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setCreating(true)}>Create the first task</Button>}
         </div>
@@ -257,7 +263,7 @@ export default function ProjectBoard() {
       )}
 
       {data.hiddenDoneCount > 0 || showOld ? (
-        <button type="button" className="text-body-sm text-ink-muted underline hover:text-ink" onClick={() => setShowOld((s) => !s)}>
+        <button type="button" className="text-[12.5px] text-ink-muted hover:text-ink hover:underline" onClick={() => setShowOld((s) => !s)}>
           {showOld ? 'Hide older completed tasks' : `Show ${data.hiddenDoneCount} completed task${data.hiddenDoneCount === 1 ? '' : 's'} older than 14 days`}
         </button>
       ) : null}
@@ -288,7 +294,7 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
       value={value}
       onChange={(e) => onChange(e.target.value || null)}
       aria-label={label}
-      className={cn('h-8 rounded-btn border bg-card px-2 text-body-sm font-medium focus:border-primary focus:outline-none', value ? 'border-primary text-primary' : 'border-line text-ink-muted')}
+      className={cn('h-7 rounded-btn border px-2 text-[12.5px] font-medium shadow-xs transition-colors focus:border-primary focus:outline-none', value ? 'border-primary/40 bg-primary/[0.06] text-primary' : 'border-line bg-card text-ink-muted hover:border-line-strong')}
     >
       <option value="">{label}: All</option>
       {options.map((o) => <option key={o.v} value={o.v}>{label}: {o.l}</option>)}

@@ -1,5 +1,6 @@
+import { useTheme } from '../../lib/theme'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
-import { SERIES_COLORS } from './chartTheme'
+import { SERIES_COLORS, tooltipStyle } from './chartTheme'
 
 export interface DonutSlice {
   name: string
@@ -17,6 +18,7 @@ export interface DonutChartProps {
 
 /** Donut/breakdown chart (e.g. ITAD Activity Breakdown). */
 export function DonutChart({ data, height = 200, centerValue, centerLabel }: DonutChartProps) {
+  useTheme() // redraw with the new colours when the theme changes
   return (
     <div className="relative" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
@@ -27,12 +29,7 @@ export function DonutChart({ data, height = 200, centerValue, centerLabel }: Don
             ))}
           </Pie>
           <Tooltip
-            contentStyle={{
-              borderRadius: 12,
-              border: '1px solid #E2E8F0',
-              fontSize: 12,
-              boxShadow: '0 10px 15px -3px rgba(15,23,42,0.08)',
-            }}
+            {...tooltipStyle()}
           />
         </PieChart>
       </ResponsiveContainer>

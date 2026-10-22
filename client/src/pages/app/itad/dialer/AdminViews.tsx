@@ -1,3 +1,4 @@
+import { CHART } from '../../../../components/charts/chartTheme'
 import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts'
 import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
@@ -64,9 +65,9 @@ export function HistoryView({ rep, refreshKey, onOpenLeads }: { rep: string; ref
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chart} margin={{ top: 8, right: 16, bottom: 0, left: -12 }}>
-                <CartesianGrid stroke="#E2E8F0" vertical={false} />
-                <XAxis dataKey="at" tick={{ fontSize: 11, fill: '#64748B' }} />
-                <YAxis unit="%" domain={[0, 'auto']} tick={{ fontSize: 11, fill: '#64748B' }} />
+                <CartesianGrid stroke={CHART.grid} vertical={false} />
+                <XAxis dataKey="at" tick={{ fontSize: 11, fill: CHART.axis }} />
+                <YAxis unit="%" domain={[0, 'auto']} tick={{ fontSize: 11, fill: CHART.axis }} />
                 <Tooltip formatter={(v: number) => `${v}%`} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 {LINES.map(([k, c]) => <Line key={k} type="monotone" dataKey={k} stroke={c} strokeWidth={2} dot={{ r: 4, strokeWidth: 0, fill: c }} activeDot={{ r: 6 }} connectNulls />)}

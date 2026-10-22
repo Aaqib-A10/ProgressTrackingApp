@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
+import { PieChart, Sparkles } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
 import { SubmissionBadge } from '../../components/ui/Badge'
@@ -14,6 +14,7 @@ import { formatNumber, formatPercent } from '../../lib/format'
 import { getTeamDashboard, type TeamDashboard, type DashSubmission } from '../../lib/dashboardApi'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 import { DEPARTMENT_LABEL } from '../../lib/departments'
+import { EmptyState } from '../../components/ui/EmptyState'
 
 const RANGE_LABEL: Record<string, string> = {
   today: 'Today',
@@ -100,7 +101,7 @@ export default function TeamLeadDashboard() {
               {breakdownTotal > 0 ? (
                 <DonutChart data={data.breakdown} centerValue={formatNumber(breakdownTotal)} centerLabel="Total" />
               ) : (
-                <p className="py-10 text-center text-body-sm text-ink-muted">No activity in this period.</p>
+                <EmptyState icon={<PieChart />} title="No activity in this period" hint="Try a longer range in the top bar, or check who has not submitted today." />
               )}
             </Card>
           </div>

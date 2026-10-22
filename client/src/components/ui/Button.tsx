@@ -13,20 +13,21 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   trailingIcon?: ReactNode
 }
 
-// Variants follow DESIGN.md: primary solid indigo, secondary white+border,
-// ghost transparent → slate-100 hover. 8px (rounded-btn) radius.
+// Linear-style buttons: compact, medium weight, quiet borders. Primary is the one solid
+// colour on a screen; secondary is a white surface with a hairline border and a tiny shadow.
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-primary text-white hover:bg-primary-700 focus-visible:ring-primary/40',
+  primary:
+    'bg-primary text-white shadow-xs hover:bg-primary-700 active:bg-primary-700 focus-visible:ring-primary/40 [box-shadow:inset_0_1px_0_rgb(255_255_255/0.12),0_1px_1px_rgb(var(--shadow)/0.12)]',
   secondary:
-    'bg-card text-ink border border-line hover:bg-slate-50 focus-visible:ring-primary/30',
-  ghost: 'text-ink-muted hover:bg-slate-100 hover:text-ink focus-visible:ring-primary/30',
-  danger: 'bg-danger text-white hover:bg-red-600 focus-visible:ring-danger/40',
+    'bg-card text-ink border border-line shadow-xs hover:border-line-strong hover:bg-slate-50 active:bg-slate-100 focus-visible:ring-primary/30',
+  ghost: 'text-ink-muted hover:bg-slate-100 hover:text-ink active:bg-slate-200 focus-visible:ring-primary/30',
+  danger: 'bg-danger text-white shadow-xs hover:bg-danger/90 focus-visible:ring-danger/40',
 }
 
 const SIZES: Record<Size, string> = {
-  sm: 'h-8 px-3 text-body-sm gap-1.5',
-  md: 'h-10 px-4 text-body-md gap-2',
-  lg: 'h-11 px-5 text-body-md gap-2',
+  sm: 'h-7 px-2.5 text-[12.5px] gap-1.5',
+  md: 'h-9 px-3.5 text-body-md gap-2',
+  lg: 'h-10 px-4 text-body-md gap-2',
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -37,7 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center rounded-btn font-semibold transition-colors',
+        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-btn font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:scale-[0.98]',
         'focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50',
         VARIANTS[variant],
         SIZES[size],

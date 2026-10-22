@@ -142,7 +142,7 @@ function Versatile() {
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-card text-ink">
+    <div className="force-light min-h-screen bg-card text-ink">
       {/* Hero wrapper — the thin blue blob starts at the very top of the screen */}
       <div className="relative overflow-hidden bg-gradient-to-b from-[#eef3fb] to-[#f4f7fc] pb-16">
         {/* logo header — always in front */}

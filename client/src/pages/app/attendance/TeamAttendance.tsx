@@ -230,8 +230,8 @@ export default function TeamAttendance() {
       <TeamWfhInbox onDecided={reload} highlight={wfhFocus} />
 
       <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === 'overview'} onClick={() => setTab('overview')} className={'h-8 rounded-md px-4 text-body-sm font-semibold ' + (tab === 'overview' ? 'bg-ink text-white' : 'text-ink-muted hover:text-ink')}>Overview</button>
-        <button type="button" role="tab" aria-selected={tab === 'register'} onClick={() => setTab('register')} className={'h-8 rounded-md px-4 text-body-sm font-semibold ' + (tab === 'register' ? 'bg-ink text-white' : 'text-ink-muted hover:text-ink')}>Register: in and out by day</button>
+        <button type="button" role="tab" aria-selected={tab === 'overview'} onClick={() => setTab('overview')} className={'h-8 rounded-md px-4 text-body-sm font-semibold ' + (tab === 'overview' ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>Overview</button>
+        <button type="button" role="tab" aria-selected={tab === 'register'} onClick={() => setTab('register')} className={'h-8 rounded-md px-4 text-body-sm font-semibold ' + (tab === 'register' ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>Register: in and out by day</button>
       </div>
 
       {tab === 'register' ? (

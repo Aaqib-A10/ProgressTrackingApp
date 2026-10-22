@@ -68,7 +68,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
 
   return (
     <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={l?.company ?? 'Lead'}>
-      <div className="absolute inset-0 bg-ink/20" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
       <aside className={cn('absolute flex flex-col bg-card shadow-overlay animate-[slideIn_.18s_ease-out]', full ? 'inset-0' : 'right-0 top-0 h-full w-full max-w-[500px]')}>
         <style>{'@keyframes slideIn{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}'}</style>
         {/* Header */}
@@ -130,7 +130,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
                   <div className="flex items-center gap-2 py-1">
                     <span className="w-28 shrink-0 text-ink-muted">Time zone</span>
                     <div className="flex gap-1">
-                      {REGIONS.map((r) => <button key={r} type="button" onClick={() => edit({ zone: l.zoneOverride === r ? null : r }, `${REGION_META[r].name} time.`)} className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold ring-1 ring-line', l.zoneOverride === r ? 'bg-ink text-white ring-ink' : 'text-ink-muted hover:text-ink')}>{r}</button>)}
+                      {REGIONS.map((r) => <button key={r} type="button" onClick={() => edit({ zone: l.zoneOverride === r ? null : r }, `${REGION_META[r].name} time.`)} className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold ring-1 ring-line', l.zoneOverride === r ? 'bg-ink text-card ring-ink' : 'text-ink-muted hover:text-ink')}>{r}</button>)}
                     </div>
                   </div>
                 )}
