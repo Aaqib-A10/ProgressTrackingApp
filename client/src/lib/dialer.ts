@@ -354,7 +354,30 @@ export const PRESET_VIEWS: { id: string; name: string; hint: string }[] = [
   { id: 'earthzone', name: 'Needs Earthzone update', hint: 'Something added here should also go into Earthzone.' },
 ]
 
-export interface LeadFilters { preset?: string; q?: string; state?: string; region?: string; industry?: string; status?: string; stage?: string; inStatus?: string; updated?: string; notes?: string; list?: string; tag?: string; rep?: string }
+export interface LeadFilters { preset?: string; q?: string; state?: string; region?: string; industry?: string; status?: string; stage?: string; inStatus?: string; updated?: string; notes?: string; list?: string; tag?: string; rep?: string
+  /** Who can be called: 'now', 'prime' (in prime time now), or a Pakistan time 'HH:MM' (the next time the clock shows it). */
+  callAt?: string
+}
+
+/** The next moment (from now, within 24 hours) the Pakistan clock shows HH:MM. */
+export function nextPktTime(hhmm: string, now: Date): Date {
+  const delta = (toMin(hhmm) - parts(PKT, now).minutes + 1440) % 1440
+  const d = new Date(now.getTime() + delta * 60_000)
+  d.setSeconds(0, 0)
+  return d
+}
+
+/** "11:30 PM" for a Pakistan 'HH:MM'. */
+export const fmtPkt = (hhmm: string) => fmtMin(toMin(hhmm))
+
+/** Can this lead be called at that moment: dialable then, and its region inside calling hours (and prime time if asked). */
+export function callableAt(l: DialerLead, s: DialerSettings, at: Date, primeOnly = false): boolean {
+  if (!isDialable(l, s, at)) return false
+  const r = leadRegion(l, at)
+  if (!r) return false
+  const w = regionWindow(r, s, at)
+  return primeOnly ? w.prime : w.open
+}
 
 export function presetMatch(l: DialerLead, preset: string | undefined, now: Date, lastImport: { id: string; at: Date } | null): boolean {
   switch (preset) {
@@ -370,8 +393,10 @@ export function presetMatch(l: DialerLead, preset: string | undefined, now: Date
   }
 }
 
-export function filterLeads(leads: DialerLead[], f: LeadFilters, now: Date, lastImport: { id: string; at: Date } | null): DialerLead[] {
+export function filterLeads(leads: DialerLead[], f: LeadFilters, now: Date, lastImport: { id: string; at: Date } | null, s?: DialerSettings): DialerLead[] {
+  const callAt = s && f.callAt ? (f.callAt === 'now' || f.callAt === 'prime' ? now : /^\d{2}:\d{2}$/.test(f.callAt) ? nextPktTime(f.callAt, now) : null) : null
   return leads.filter((l) => {
+    if (callAt && s && !callableAt(l, s, callAt, f.callAt === 'prime')) return false
     if (l.duplicate) return false
     if (!presetMatch(l, f.preset, now, lastImport)) return false
     if (f.q && !matchesSearch(l, f.q)) return false

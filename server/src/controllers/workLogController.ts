@@ -36,11 +36,18 @@ export function nextPeriodStart(period: WorkLogPeriod, start: string): string {
 }
 
 type Entry = Awaited<ReturnType<typeof prisma.workLogEntry.findFirstOrThrow>>
-function view(e: Entry) {
+type Note = Awaited<ReturnType<typeof prisma.workLogNote.findFirstOrThrow>>
+function noteView(n: Note) {
+  return { id: n.id, entryId: n.entryId, source: n.source, sender: n.sender, body: n.body, createdAt: n.createdAt.toISOString(), updatedAt: n.updatedAt.toISOString() }
+}
+/** Notes are loaded with the entries, oldest first. */
+const WITH_NOTES = { notes: { orderBy: { createdAt: 'asc' as const } } }
+function view(e: Entry & { notes?: Note[] }) {
   return {
     id: e.id, userId: e.userId, period: e.period, periodStart: dateStringFromDb(e.periodStart), title: e.title, details: e.details,
     status: e.status, doneAt: e.doneAt?.toISOString() ?? null, hours: e.hours, quantity: e.quantity, tag: e.tag, private: e.private, blocked: e.blocked,
     order: e.order, createdAt: e.createdAt.toISOString(), updatedAt: e.updatedAt.toISOString(),
+    notes: (e.notes ?? []).map(noteView),
   }
 }
 
@@ -68,6 +75,7 @@ export async function listWorkLog(req: AuthedRequest, res: Response): Promise<vo
   const rows = await prisma.workLogEntry.findMany({
     where: { userId: ownerId, periodStart: { gte: dbDateFromString(from), lte: dbDateFromString(to) }, ...(ownerId !== viewer.id ? { private: false } : {}) },
     orderBy: [{ periodStart: 'asc' }, { status: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
+    include: WITH_NOTES,
   })
   const reviews = await prisma.workLogReview.findMany({
     where: { userId: ownerId, periodStart: { gte: dbDateFromString(from), lte: dbDateFromString(to) } },
@@ -128,6 +136,7 @@ export async function updateWorkLog(req: AuthedRequest, res: Response): Promise<
   const start = d.date || d.period ? dbDateFromString(periodStartOf(period, d.date ?? dateStringFromDb(e.periodStart))) : undefined
   const updated = await prisma.workLogEntry.update({
     where: { id: e.id },
+    include: WITH_NOTES,
     data: {
       ...(d.title !== undefined ? { title: d.title } : {}),
       ...(d.details !== undefined ? { details: d.details || null } : {}),
@@ -151,7 +160,7 @@ export async function carryWorkLog(req: AuthedRequest, res: Response): Promise<v
   if (!e) { res.status(404).json({ error: 'Entry not found' }); return }
   if (e.status === 'DONE') { res.status(400).json({ error: 'It is already done.' }); return }
   const next = nextPeriodStart(e.period, dateStringFromDb(e.periodStart))
-  const updated = await prisma.workLogEntry.update({ where: { id: e.id }, data: { periodStart: dbDateFromString(next) } })
+  const updated = await prisma.workLogEntry.update({ where: { id: e.id }, data: { periodStart: dbDateFromString(next) }, include: WITH_NOTES })
   res.json({ entry: view(updated) })
 }
 
@@ -217,6 +226,7 @@ export async function teamWorkLog(req: AuthedRequest, res: Response): Promise<vo
     prisma.workLogEntry.findMany({
       where: { userId: { in: ids }, private: false, periodStart: range, period: { in: (Object.keys(RANK) as WorkLogPeriod[]).filter((p) => RANK[p] <= RANK[period]) } },
       orderBy: [{ periodStart: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
+      include: WITH_NOTES,
     }),
     prisma.workLogReview.findMany({ where: { userId: { in: ids }, period, periodStart: dbDateFromString(start) }, include: { reviewer: { select: { name: true } } } }),
     prisma.leaveDay.findMany({ where: { userId: { in: ids }, date: range }, select: { userId: true, date: true } }),
@@ -289,4 +299,70 @@ export async function reviewWorkLog(req: AuthedRequest, res: Response): Promise<
     }).catch(() => undefined)
   }
   res.json({ review: reviewView(r) })
+}
+
+// ------------------------------------------------------------------ notes on an item
+
+/** Sources everyone starts with; people add their own by typing a new one. */
+export const NOTE_SOURCES = ['WhatsApp', 'Email', 'Call', 'Teams', 'Meeting', 'In person']
+
+const noteSchema = z.object({
+  body: z.string().trim().min(1, 'Write the note.').max(5000, 'Keep a note under 5000 characters.'),
+  source: z.string().trim().max(40).nullable().optional(),
+  sender: z.string().trim().max(80).nullable().optional(),
+})
+
+/** GET /api/worklog/note-sources — the starting sources plus every source this person has used. */
+export async function workLogNoteSources(req: AuthedRequest, res: Response): Promise<void> {
+  const used = await prisma.workLogNote.findMany({ where: { userId: req.user!.id, source: { not: null } }, distinct: ['source'], select: { source: true }, take: 200 })
+  const mine = used.map((u) => u.source!).filter((x) => !NOTE_SOURCES.some((d) => d.toLowerCase() === x.toLowerCase()))
+  res.json({ sources: [...NOTE_SOURCES, ...mine.sort((a, b) => a.localeCompare(b))] })
+}
+
+/** Same spelling as a source used before ("whatsapp" becomes "WhatsApp"), so one source is not split in two. */
+async function canonicalSource(userId: string, source: string | null | undefined): Promise<string | null> {
+  const s = source?.trim()
+  if (!s) return null
+  const known = NOTE_SOURCES.find((d) => d.toLowerCase() === s.toLowerCase())
+  if (known) return known
+  const prev = await prisma.workLogNote.findFirst({ where: { userId, source: { equals: s, mode: 'insensitive' } }, select: { source: true } })
+  return prev?.source ?? s
+}
+
+/** POST /api/worklog/:id/notes — add a note to one of your own items. */
+export async function addWorkLogNote(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = noteSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid note' }); return }
+  const e = await prisma.workLogEntry.findFirst({ where: { id: req.params.id, userId: req.user!.id }, select: { id: true } })
+  if (!e) { res.status(404).json({ error: 'Entry not found' }); return }
+  const d = parsed.data
+  const n = await prisma.workLogNote.create({
+    data: { entryId: e.id, userId: req.user!.id, body: d.body, source: await canonicalSource(req.user!.id, d.source), sender: d.sender?.trim() || null },
+  })
+  res.status(201).json({ note: noteView(n) })
+}
+
+/** PATCH /api/worklog/notes/:noteId — edit your own note. */
+export async function updateWorkLogNote(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = noteSchema.partial().safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid note' }); return }
+  const n = await prisma.workLogNote.findFirst({ where: { id: req.params.noteId, userId: req.user!.id } })
+  if (!n) { res.status(404).json({ error: 'Note not found' }); return }
+  const d = parsed.data
+  const updated = await prisma.workLogNote.update({
+    where: { id: n.id },
+    data: {
+      ...(d.body !== undefined ? { body: d.body } : {}),
+      ...(d.source !== undefined ? { source: await canonicalSource(req.user!.id, d.source) } : {}),
+      ...(d.sender !== undefined ? { sender: d.sender?.trim() || null } : {}),
+    },
+  })
+  res.json({ note: noteView(updated) })
+}
+
+/** DELETE /api/worklog/notes/:noteId — your own note. */
+export async function deleteWorkLogNote(req: AuthedRequest, res: Response): Promise<void> {
+  const r = await prisma.workLogNote.deleteMany({ where: { id: req.params.noteId, userId: req.user!.id } })
+  if (r.count === 0) { res.status(404).json({ error: 'Note not found' }); return }
+  res.status(204).end()
 }

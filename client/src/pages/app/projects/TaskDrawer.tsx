@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Bell, BellOff, CalendarClock, Check, CheckSquare, ClipboardCheck, Copy, Download, History, Link2, MessageSquare, MessagesSquare, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { AlertTriangle, Bell, BellOff, Bot, CalendarClock, Check, CheckSquare, ClipboardCheck, Copy, Download, History, Link2, MessageSquare, MessagesSquare, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/Toast'
@@ -11,6 +11,7 @@ import { ReviewForm, ReviewItem } from '../../../components/projects/Reviews'
 import { PRIORITIES, PRIORITY_META, PersonAvatar, fieldCls, fmtAgo, fmtBytes, fmtDateTime, fmtSpan, fromLocalInput, toLocalInput } from '../../../components/projects/pmUi'
 import { errMsg, projectsApi, type ActivityRow, type BoardColumn, type Label, type PmPriority, type ProjectMember, type TaskCard, type TaskDetail, type TaskPerms } from '../../../lib/projectsApi'
 import { cn } from '../../../lib/cn'
+import { copyText } from '../../../lib/workLogApi'
 
 /**
  * Task window, centred and large (deep link: /app/projects/:key?task=CODE): the work on the
@@ -335,6 +336,14 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
   }
 
   const status = task ? columns.find((c) => c.id === task.columnId) : null
+  /** The whole ticket as text (what to do, where the work lives, checklist, files, comments) to paste into Claude. */
+  async function copyForClaude() {
+    try {
+      const r = await projectsApi.taskBrief(code)
+      await copyText(r.text)
+      addToast({ type: 'success', message: `${code} copied for Claude. Paste it into Claude and say "do this".` })
+    } catch (e) { addToast({ type: 'error', message: errMsg(e) }) }
+  }
   return createPortal(
     <div className="fixed inset-0 z-40 flex items-center justify-center sm:p-4 lg:p-8">
       <div className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
@@ -351,6 +360,8 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             <IconBtn label="Copy link" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/app/projects/${task?.projectKey ?? code.split('-')[0]}?task=${code}`); addToast({ type: 'success', message: 'Link copied' }) }}><Link2 size={16} /></IconBtn>
             <IconBtn label="Share to chat" onClick={() => navigate(`/app/chat?share=${encodeURIComponent(code)}`)}><MessagesSquare size={16} /></IconBtn>
             <IconBtn label="Copy code" onClick={() => { navigator.clipboard?.writeText(code); addToast({ type: 'success', message: `${code} copied` }) }}><Copy size={16} /></IconBtn>
+            <button type="button" onClick={copyForClaude} title="Copy the whole ticket (description, checklist, files, comments) to paste into Claude"
+              className="inline-flex h-8 items-center gap-1.5 rounded-btn border border-line px-2.5 text-body-sm font-semibold text-ink hover:bg-slate-50"><Bot size={15} /> Copy for Claude</button>
             {perms?.canDelete && <IconBtn label="Delete task" onClick={() => setConfirmDelete(true)}><Trash2 size={16} /></IconBtn>}
             <IconBtn label="Close" onClick={onClose}><X size={18} /></IconBtn>
           </div>

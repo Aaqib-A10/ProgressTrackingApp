@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Clock, Eye, Hash, LifeBuoy, Lock, Pencil, Play, Redo2, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
+import { Check, Clock, Eye, Hash, LifeBuoy, Lock, Pencil, Play, Redo2, StickyNote, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { cn } from '../../../lib/cn'
 import type { WorkEntry, WorkPeriod, WorkRating, WorkReview } from '../../../lib/workLogApi'
@@ -59,6 +59,8 @@ export interface EntryActions {
   onCarry: (e: WorkEntry) => void
   onEdit: (e: WorkEntry) => void
   onDelete: (e: WorkEntry) => void
+  /** Open the item's notes (add a WhatsApp message, an email, a call). */
+  onNotes: (e: WorkEntry) => void
 }
 
 /** The small action buttons on a row or a card. */
@@ -68,6 +70,10 @@ export function RowActions({ e, a, compact }: { e: WorkEntry; a: EntryActions; c
       {e.status === 'PLANNED' && <IconBtn label="Start (In progress)" onClick={() => a.onStatus(e, 'IN_PROGRESS')}><Play size={15} /></IconBtn>}
       {e.status !== 'DONE' && <IconBtn label={e.blocked ? 'No longer needs help' : 'Needs help from my lead'} active={e.blocked} onClick={() => a.onBlocked(e)}><LifeBuoy size={15} /></IconBtn>}
       {e.status !== 'DONE' && <IconBtn label={`Move to next ${NOUN[e.period]}`} onClick={() => a.onCarry(e)}><Redo2 size={15} /></IconBtn>}
+      <button type="button" onPointerDown={(ev) => ev.stopPropagation()} onClick={(ev) => { ev.stopPropagation(); a.onNotes(e) }} title={e.notes?.length ? `Notes (${e.notes.length})` : 'Add a note (WhatsApp, email, call)'} aria-label="Notes"
+        className={cn('inline-flex items-center gap-0.5 rounded-btn p-1.5 hover:bg-sky-50 hover:text-sky-700', e.notes?.length ? 'text-sky-700' : 'text-ink-muted')}>
+        <StickyNote size={15} />{e.notes?.length ? <span className="text-[11px] font-bold">{e.notes.length}</span> : null}
+      </button>
       <IconBtn label="Edit" onClick={() => a.onEdit(e)}><Pencil size={15} /></IconBtn>
       <IconBtn label="Delete" onClick={() => a.onDelete(e)} danger><Trash2 size={15} /></IconBtn>
     </div>

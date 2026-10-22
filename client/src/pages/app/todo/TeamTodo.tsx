@@ -6,6 +6,7 @@ import { cn } from '../../../lib/cn'
 import { DEPARTMENTS } from '../../../lib/departments'
 import { copyText, entriesToText, parse, periodLabel, workLogApi, type TeamMember, type TeamWorkLog, type WorkPeriod, type WorkRating } from '../../../lib/workLogApi'
 import { Chips, EntryText, NOUN, RATING_STYLE, ReviewBox, errMsg, ratingKey } from './parts'
+import { NoteList } from './notes'
 
 /**
  * Team view of My To-Do for Team Leads (their department) and Super Admins (everyone, or one
@@ -166,6 +167,7 @@ function PersonCard({ m, period, busy, onOpen, onReview, onClear }: { m: TeamMem
             <div className="min-w-0 flex-1">
               <EntryText text={e.title} done={e.status === 'DONE'} lines={3} />
               <Chips e={e} />
+              <NoteList notes={e.notes} />
             </div>
             {period !== 'DAY' && <span className="shrink-0 text-[11px] text-ink-muted">{e.period === 'DAY' ? parse(e.periodStart).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }) : `${NOUN[e.period]} goal`}</span>}
           </li>

@@ -26,6 +26,7 @@ projectsRouter.get('/reports/export.csv', h(R.reportCsv))
 
 // Tasks by code
 projectsRouter.get('/tasks/:code', h(T.getTask))
+projectsRouter.get('/tasks/:code/brief', h(T.getTaskBrief))
 projectsRouter.patch('/tasks/:code', h(T.updateTask))
 projectsRouter.delete('/tasks/:code', h(T.deleteTask))
 projectsRouter.patch('/tasks/:code/move', h(T.moveTask))

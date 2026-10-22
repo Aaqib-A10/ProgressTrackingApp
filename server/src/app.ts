@@ -33,6 +33,7 @@ import { projectsRouter } from './routes/projects'
 import { chatRouter } from './routes/chat'
 import { meetingsRouter } from './routes/meetings'
 import { avatarsRouter } from './routes/avatars'
+import { claudeRouter, mcpRouter } from './routes/claude'
 
 /**
  * Builds the Express app. Kept separate from index.ts so tests can import
@@ -105,6 +106,8 @@ export function createApp(): Express {
   app.use('/api/guest', guestRouter)
   app.use('/api/search', searchRouter)
   app.use('/api/docs', docsRouter)
+  app.use('/api/claude', claudeRouter)
+  app.use('/api/mcp', mcpRouter)
 
   // Fallback 404 for unknown API paths.
   app.use((_req, res) => {

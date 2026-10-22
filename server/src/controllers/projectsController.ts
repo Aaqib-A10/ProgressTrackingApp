@@ -19,7 +19,7 @@ const DONE_HIDE_DAYS = 14
 
 const roleEnum = z.enum(['ADMIN', 'MEMBER', 'VIEWER'])
 
-function serializeProject(p: { id: string; name: string; key: string; description: string | null; color: string; status: string; ownerId: string; taskCounter: number; overdueNotifyAdmins: boolean; overdueRepeatHours: number; reminderOffsetsMinutes: number[]; createdAt: Date }) {
+function serializeProject(p: { id: string; name: string; key: string; description: string | null; color: string; status: string; ownerId: string; taskCounter: number; overdueNotifyAdmins: boolean; overdueRepeatHours: number; reminderOffsetsMinutes: number[]; workFolder?: string | null; createdAt: Date }) {
   return {
     id: p.id,
     name: p.name,
@@ -32,6 +32,7 @@ function serializeProject(p: { id: string; name: string; key: string; descriptio
     overdueNotifyAdmins: p.overdueNotifyAdmins,
     overdueRepeatHours: p.overdueRepeatHours,
     reminderOffsetsMinutes: p.reminderOffsetsMinutes,
+    workFolder: p.workFolder ?? null,
     createdAt: p.createdAt.toISOString(),
   }
 }
@@ -129,6 +130,7 @@ const updateSchema = z.object({
   overdueNotifyAdmins: z.boolean().optional(),
   overdueRepeatHours: z.number().int().min(1).max(168).optional(),
   reminderOffsetsMinutes: z.array(z.number().int().min(5).max(10080)).max(4).optional(),
+  workFolder: z.string().trim().max(500).nullable().optional().transform((v) => (v === '' ? null : v)),
 })
 
 /** PATCH /api/projects/:key — settings (project admins). Key is locked once tasks exist. */

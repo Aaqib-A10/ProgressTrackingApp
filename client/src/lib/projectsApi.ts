@@ -20,6 +20,8 @@ export interface Project {
   overdueNotifyAdmins: boolean
   overdueRepeatHours: number
   reminderOffsetsMinutes: number[]
+  /** Where the work lives (folder, repo, link); given to Claude with each ticket. */
+  workFolder: string | null
   createdAt: string
 }
 
@@ -147,7 +149,7 @@ const k = (key: string) => encodeURIComponent(key)
 export const projectsApi = {
   list: (archived = false) => api.get<{ canCreate: boolean; projects: ProjectListItem[] }>(`/projects${archived ? '?archived=1' : ''}`),
   create: (body: { name: string; key: string; description?: string; color?: string; members?: { userId: string; role: PmRole }[] }) => api.post<{ project: Project }>('/projects', body),
-  update: (key: string, body: Partial<Pick<Project, 'name' | 'key' | 'description' | 'color' | 'overdueNotifyAdmins' | 'overdueRepeatHours' | 'reminderOffsetsMinutes'>>) => api.patch<{ project: Project }>(`/projects/${k(key)}`, body),
+  update: (key: string, body: Partial<Pick<Project, 'name' | 'key' | 'description' | 'color' | 'overdueNotifyAdmins' | 'overdueRepeatHours' | 'reminderOffsetsMinutes' | 'workFolder'>>) => api.patch<{ project: Project }>(`/projects/${k(key)}`, body),
   archive: (key: string, archived: boolean) => api.post<{ project: Project }>(`/projects/${k(key)}/archive`, { archived }),
   board: (key: string, showOldDone = false) => api.get<BoardData>(`/projects/${k(key)}/board${showOldDone ? '?showOldDone=1' : ''}`),
 
@@ -173,6 +175,8 @@ export const projectsApi = {
     api.patch<{ task: TaskCard }>(`/projects/tasks/${k(code)}`, body),
   moveTask: (code: string, columnId: string, beforeTaskId: string | null, afterTaskId: string | null) => api.patch<{ task: TaskCard }>(`/projects/tasks/${k(code)}/move`, { columnId, beforeTaskId, afterTaskId }),
   deleteTask: (code: string) => api.del(`/projects/tasks/${k(code)}`),
+  /** The ticket as text for Claude ("Copy for Claude"). */
+  taskBrief: (code: string) => api.get<{ text: string }>(`/projects/tasks/${k(code)}/brief`),
   activity: (code: string) => api.get<{ activity: ActivityRow[] }>(`/projects/tasks/${k(code)}/activity`),
   watch: (code: string, on: boolean) => (on ? api.post(`/projects/tasks/${k(code)}/watch`) : api.del(`/projects/tasks/${k(code)}/watch`)),
   addComment: (code: string, body: string, mentions: string[]) => api.post<{ comment: TaskComment }>(`/projects/tasks/${k(code)}/comments`, { body, mentions }),

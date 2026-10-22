@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CalendarDays, ChevronLeft, ChevronRight, Columns3, Copy, Download, List, MoreHorizontal, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Columns3, Copy, Download, List, MoreHorizontal, StickyNote, Users } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
@@ -15,6 +15,7 @@ import {
 import { Chips, DoneCheck, EntryText, NOUN, ReviewBox, ReviewNote, RowActions, errMsg, type EntryActions } from './todo/parts'
 import { TodoBoard } from './todo/TodoBoard'
 import { TeamTodo } from './todo/TeamTodo'
+import { NoteList, NotesModal } from './todo/notes'
 
 /**
  * My To-Do (/app/todo). Plan ahead or log what was already done, for any day, week, month or
@@ -49,6 +50,7 @@ export default function MyTodo() {
   const [people, setPeople] = useState<{ id: string; name: string; department: string | null }[]>([])
   const [who, setWho] = useState('')
   const [editing, setEditing] = useState<WorkEntry | null>(null)
+  const [notesFor, setNotesFor] = useState<string | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
 
   function setLayout(l: 'list' | 'board') { setLayoutState(l); try { localStorage.setItem('todo.layout', l) } catch { /* ignore */ } }
@@ -94,7 +96,9 @@ export default function MyTodo() {
     onCarry: (e) => mutate(() => workLogApi.carry(e.id), `Moved to the next ${NOUN[e.period]}.`),
     onEdit: setEditing,
     onDelete: (e) => mutate(() => workLogApi.remove(e.id), 'Deleted.'),
+    onNotes: (e) => setNotesFor(e.id),
   }
+  const notesEntry = notesFor ? all.find((e) => e.id === notesFor) ?? null : null
 
   async function copyAll() {
     await copyText(entriesToText(`Report, ${periodLabel(period, start)}`, here))
@@ -232,6 +236,7 @@ export default function MyTodo() {
         </div>
       )}
 
+      {notesEntry && <NotesModal entry={notesEntry} readOnly={readOnly} onClose={() => setNotesFor(null)} onChanged={load} />}
       {editing && <EditEntry entry={editing} tagIdeas={tagIdeas} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
     </div>
   )
@@ -394,6 +399,7 @@ function EntryList({ entries, readOnly, empty, actions }: { entries: WorkEntry[]
                   <EntryText text={e.title} done={e.status === 'DONE'} />
                   {e.details && <EntryText text={e.details} done className="mt-0.5 text-body-sm" lines={3} />}
                   <Chips e={{ ...e, status: e.status === 'IN_PROGRESS' ? 'PLANNED' : e.status }} />
+                  <NoteList notes={e.notes} onOpen={() => actions.onNotes(e)} />
                 </div>
                 {!readOnly && <RowActions e={e} a={actions} />}
               </li>
@@ -430,7 +436,7 @@ function Bigger({ title, period, entries, onOpen }: { title: string; period: Wor
 
 const dayStats = (entries: WorkEntry[], d: string) => {
   const es = entries.filter((e) => e.period === 'DAY' && e.periodStart === d)
-  return { total: es.length, done: es.filter((e) => e.status === 'DONE').length, es }
+  return { total: es.length, done: es.filter((e) => e.status === 'DONE').length, notes: es.reduce((t, e) => t + (e.notes?.length ?? 0), 0), es }
 }
 
 /** A small month calendar beside the day view: dots on days with entries, click to jump (fill in past days). */
@@ -454,14 +460,17 @@ function MiniMonth({ anchor, entries, today, onPick }: { anchor: string; entries
           const d = addDays(month, i)
           const s = dayStats(entries, d)
           return (
-            <button key={d} type="button" onClick={() => onPick(d)} className={cn('relative flex h-8 flex-col items-center justify-center rounded-md text-body-sm', d === anchor ? 'bg-primary text-white' : d === today ? 'font-bold text-primary ring-1 ring-primary/40' : 'text-ink hover:bg-slate-100')}>
+            <button key={d} type="button" onClick={() => onPick(d)} title={s.notes ? `${s.notes} note${s.notes === 1 ? '' : 's'} on this day` : undefined}
+              className={cn('relative flex h-8 flex-col items-center justify-center rounded-md text-body-sm',
+                d === anchor ? 'bg-primary text-white' : s.notes ? cn('bg-sky-100 font-semibold text-sky-800 hover:bg-sky-200', d === today && 'ring-1 ring-primary/40') : d === today ? 'font-bold text-primary ring-1 ring-primary/40' : 'text-ink hover:bg-slate-100')}>
               {i + 1}
+              {s.notes > 0 && <span className={cn('absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-sm', d === anchor ? 'bg-white' : 'bg-sky-500')} />}
               {s.total > 0 && <span className={cn('absolute bottom-1 h-1 w-1 rounded-full', d === anchor ? 'bg-white' : s.done === s.total ? 'bg-success' : 'bg-warning')} />}
             </button>
           )
         })}
       </div>
-      <p className="mt-2 text-[11px] text-ink-muted">Green dot: all done. Amber: some still open. Click any past day to log what was done.</p>
+      <p className="mt-2 text-[11px] text-ink-muted">Green dot: all done. Amber: some still open. <span className="font-semibold text-sky-700">Blue day: has notes.</span> Click any past day to log what was done.</p>
     </Card>
   )
 }
@@ -475,9 +484,10 @@ function WeekDays({ start, entries, today, onOpenDay }: { start: string; entries
           const d = addDays(start, i)
           const s = dayStats(entries, d)
           return (
-            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex min-h-[110px] flex-col rounded-btn border p-2 text-left hover:border-primary/50', d === today ? 'border-primary/50 bg-primary/5' : 'border-line')}>
+            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex min-h-[110px] flex-col rounded-btn border p-2 text-left hover:border-primary/50', s.notes ? 'border-sky-300 bg-sky-50' : d === today ? 'border-primary/50 bg-primary/5' : 'border-line', s.notes && d === today && 'ring-2 ring-primary/30')}>
               <span className="text-body-sm font-semibold text-ink">{parse(d).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}</span>
               <span className="text-[11px] text-ink-muted">{s.total ? `${s.done}/${s.total} done` : 'Nothing yet'}</span>
+              {s.notes > 0 && <span className="mt-0.5 inline-flex items-center gap-0.5 self-start rounded-full bg-sky-100 px-1.5 text-[10px] font-bold text-sky-700"><StickyNote size={10} />{s.notes} note{s.notes === 1 ? '' : 's'}</span>}
               <ul className="mt-1 space-y-0.5">
                 {s.es.slice(0, 4).map((e) => <li key={e.id} className={cn('truncate text-[11px]', e.status === 'DONE' ? 'text-ink-muted line-through' : 'text-ink')}>{e.title}</li>)}
                 {s.es.length > 4 && <li className="text-[11px] text-ink-muted">+{s.es.length - 4} more</li>}
@@ -495,7 +505,7 @@ function MonthCalendar({ start, entries, today, onOpenDay }: { start: string; en
   const days = Number(endOf('MONTH', start).slice(8))
   return (
     <Card>
-      <h3 className="mb-3 text-label-md uppercase text-ink-muted">Days of the month · click a day to plan or log it</h3>
+      <h3 className="mb-3 text-label-md uppercase text-ink-muted">Days of the month · click a day to plan or log it · <span className="text-sky-700">blue: has notes</span></h3>
       <div className="grid grid-cols-7 gap-1.5">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <span key={d} className="text-center text-[11px] font-semibold uppercase text-ink-muted">{d}</span>)}
         {Array.from({ length: lead }, (_, i) => <span key={`x${i}`} />)}
@@ -503,8 +513,11 @@ function MonthCalendar({ start, entries, today, onOpenDay }: { start: string; en
           const d = addDays(start, i)
           const s = dayStats(entries, d)
           return (
-            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex h-20 flex-col rounded-btn border p-1.5 text-left hover:border-primary/50', d === today ? 'border-primary/50 bg-primary/5' : 'border-line')}>
-              <span className="text-body-sm font-semibold text-ink">{i + 1}</span>
+            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex h-20 flex-col rounded-btn border p-1.5 text-left hover:border-primary/50', s.notes ? 'border-sky-300 bg-sky-50' : d === today ? 'border-primary/50 bg-primary/5' : 'border-line', s.notes && d === today && 'ring-2 ring-primary/30')}>
+              <span className="flex items-center justify-between gap-1">
+                <span className="text-body-sm font-semibold text-ink">{i + 1}</span>
+                {s.notes > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-1.5 text-[10px] font-bold text-sky-700" title={`${s.notes} note${s.notes === 1 ? '' : 's'}`}><StickyNote size={10} />{s.notes}</span>}
+              </span>
               {s.total > 0 && <span className={cn('mt-auto self-start rounded-full px-1.5 text-[10px] font-bold', s.done === s.total ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>{s.done}/{s.total}</span>}
             </button>
           )

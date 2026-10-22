@@ -3,6 +3,7 @@ import { DndContext, DragOverlay, PointerSensor, TouchSensor, useDraggable, useD
 import { cn } from '../../../lib/cn'
 import type { WorkEntry, WorkStatus } from '../../../lib/workLogApi'
 import { Chips, DoneCheck, EntryText, RowActions, type EntryActions } from './parts'
+import { NoteList } from './notes'
 
 /**
  * Board view of My To-Do: To do, In progress and Done columns. Drag a card to another column
@@ -75,6 +76,7 @@ function CardBody({ e, readOnly, actions, lifted }: { e: WorkEntry; readOnly: bo
           <EntryText text={e.title} done={e.status === 'DONE'} lines={3} />
           {e.details && <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-[12px] text-ink-muted">{e.details}</p>}
           <Chips e={{ ...e, status: e.status === 'IN_PROGRESS' ? 'PLANNED' : e.status }} />
+          {!lifted && <NoteList notes={e.notes} max={1} onOpen={() => actions.onNotes(e)} />}
         </div>
       </div>
       {!readOnly && !lifted && <div className="mt-1 flex justify-end"><RowActions e={e} a={actions} /></div>}

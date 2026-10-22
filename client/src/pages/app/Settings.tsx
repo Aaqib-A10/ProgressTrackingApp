@@ -9,6 +9,7 @@ import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
 import { api, ApiError } from '../../lib/api'
 import { ROLE_LABEL } from '../../lib/types'
+import { ConnectClaude } from '../../components/ConnectClaude'
 
 const NOTIF_KEY = 'metriq.notifications'
 const NOTIFS = [
@@ -115,6 +116,9 @@ export default function Settings() {
           <Button type="submit" disabled={savingPw || !curPw || !newPw}>{savingPw ? 'Saving…' : 'Change password'}</Button>
         </form>
       </Card>
+
+      {/* Claude connector */}
+      <ConnectClaude />
 
       {/* Notifications */}
       <Card title="Notifications" subtitle="Preferences (saved on this device)">

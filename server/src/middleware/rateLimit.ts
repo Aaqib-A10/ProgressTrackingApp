@@ -30,3 +30,6 @@ export const sensitiveAuthLimiter = rateLimit({ ...base, windowMs: 60 * 60 * 100
 
 /** People outside Metriq asking to join a call by link: blunts link guessing and lobby spam. */
 export const guestLimiter = rateLimit({ ...base, windowMs: 10 * 60 * 1000, limit: 30 })
+
+/** Claude's Metriq connector: generous (one task can take many calls), but not unlimited. */
+export const mcpLimiter = rateLimit({ ...base, windowMs: 60 * 1000, limit: 240, message: { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Too many requests. Wait a minute.' } } })

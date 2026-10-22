@@ -19,6 +19,8 @@ import {
   type ProjectCtx,
 } from '../lib/pm/access'
 import { parse, viewer } from '../lib/pm/http'
+import { invokeAs, invokedError } from '../lib/pm/invoke'
+import { ticketBrief, type BriefTask } from '../lib/pm/brief'
 import { needsRebalance, rankBetween, RANK_STEP } from '../lib/pm/rank'
 import { CARD_INCLUDE, clearOverdueIfResolved, isTaskOverdue, logActivity, rebalanceColumn, serializeCard } from '../lib/pm/tasks'
 import { fmtDue, pmNotify, taskLink, trunc } from '../lib/pm/pmNotify'
@@ -820,4 +822,13 @@ export async function listProjectReviews(req: AuthedRequest, res: Response): Pro
       task: { code: r.task.code, title: r.task.title, status: r.task.column.name, category: r.task.column.category, assignees: r.task.assignees.map((a) => a.user) },
     })),
   })
+}
+
+/** GET /api/projects/tasks/:code/brief — the ticket as text to paste into Claude ("Copy for Claude"). */
+export async function getTaskBrief(req: AuthedRequest, res: Response): Promise<void> {
+  const r = await invokeAs(getTask, viewer(req), { params: { code: req.params.code } })
+  if (r.status >= 400) throw new HttpError(r.status, invokedError(r))
+  const task = (r.body as { task: BriefTask }).task
+  const project = await prisma.pmProject.findUnique({ where: { key: task.projectKey }, select: { workFolder: true } })
+  res.json({ text: ticketBrief(task, { workFolder: project?.workFolder ?? null, appUrl: (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '') }) })
 }

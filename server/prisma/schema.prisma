@@ -257,6 +257,8 @@ model User {
   workLogReviews      WorkLogReview[]      @relation("WorkLogReviewOwner")
   workLogReviewsGiven WorkLogReview[]      @relation("WorkLogReviewer")
   blockedCheckIns     BlockedCheckIn[]
+  workLogNotes        WorkLogNote[]        @relation("WorkLogNoteAuthor")
+  claudeKeys          ClaudeKey[]
 
   @@index([departmentId])
   @@index([subDepartmentId])
@@ -1906,6 +1908,9 @@ model PmProject {
   avatarAt               DateTime?
   /// Who last changed the picture (shown in the chat).
   avatarById             String?
+  /// Where the work for this project lives (a folder, a GitHub repo, a link). Shown to Claude
+  /// with each ticket so it knows where to make the change.
+  workFolder             String?
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
@@ -2634,9 +2639,29 @@ model WorkLogEntry {
   order       Int           @default(0)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  notes       WorkLogNote[]
 
   @@index([userId, periodStart])
   @@index([userId, period, periodStart])
+}
+
+/// A note on a My To-Do item, e.g. the WhatsApp message from a manager that asked for it.
+/// `source` is where it came from (WhatsApp, Email, Call, or any name the person types);
+/// `sender` is who it came from (optional).
+model WorkLogNote {
+  id        String       @id @default(cuid())
+  entryId   String
+  entry     WorkLogEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation("WorkLogNoteAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  source    String?
+  sender    String?
+  body      String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([entryId])
+  @@index([userId, source])
 }
 
 enum WorkLogRating {
@@ -2661,4 +2686,21 @@ model WorkLogReview {
 
   @@unique([userId, period, periodStart])
   @@index([reviewerId])
+}
+
+/// A private key that lets Claude (a connector) work in Metriq as this person: read the tickets
+/// they can see, comment on them and move them. Only a hash is stored; the key is shown once.
+model ClaudeKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  /// First characters of the key, to tell keys apart in the list.
+  prefix     String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }

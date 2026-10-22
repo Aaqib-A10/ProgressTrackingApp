@@ -5,7 +5,7 @@ import { Modal } from '../../../../components/ui/Modal'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerData, type SavedView } from '../../../../lib/dialerApi'
-import { PRESET_VIEWS, REGIONS, filterLeads, leadState, type LeadFilters } from '../../../../lib/dialer'
+import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, type LeadFilters } from '../../../../lib/dialer'
 import { InfoTip, LeadTable, Pager, errMsg, usePaged } from './ui'
 import { BulkFillModal } from './BulkFillModal'
 import { downloadCsv, downloadNotes } from './exports'
@@ -25,7 +25,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
   const [notesOpen, setNotesOpen] = useState(false)
   const lastImport = useMemo(() => (data.lastImport ? { id: data.lastImport.id, at: new Date(data.lastImport.at) } : null), [data.lastImport])
   const leads = data.leads
-  const list = useMemo(() => filterLeads(leads, f, now, lastImport), [leads, f, now, lastImport])
+  const list = useMemo(() => filterLeads(leads, f, now, lastImport, data.settings), [leads, f, now, lastImport, data.settings])
   const p = usePaged(list)
   const counts = useMemo(() => Object.fromEntries(PRESET_VIEWS.map((v) => [v.id, filterLeads(leads, { preset: v.id }, now, lastImport).length])), [leads, now, lastImport])
 
@@ -77,6 +77,19 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
         <select value={f.stage ?? ''} onChange={(e) => set('stage', e.target.value)} className={sel(!!f.stage)} aria-label="Stage"><option value="">Stage</option><option value="1">1 New / assigned</option><option value="2">2 Attempted</option><option value="3">3 Connected</option><option value="4">4 Positive</option></select>
         <select value={f.inStatus ?? ''} onChange={(e) => set('inStatus', e.target.value)} className={sel(!!f.inStatus)} aria-label="Days in status"><option value="">Days in status</option>{[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d}+ days</option>)}</select>
         <select value={f.updated ?? ''} onChange={(e) => set('updated', e.target.value)} className={sel(!!f.updated)} aria-label="Last updated"><option value="">Last updated</option>{[1, 7, 30, 90].map((d) => <option key={d} value={d}>In the last {d === 1 ? 'day' : `${d} days`}</option>)}</select>
+        <select value={f.callAt ? (/^\d/.test(f.callAt) ? 'time' : f.callAt) : ''} onChange={(e) => set('callAt', e.target.value === 'time' ? nextHour(now) : e.target.value)} className={sel(!!f.callAt)} aria-label="Call time">
+          <option value="">Call time</option>
+          <option value="now">Can call now</option>
+          <option value="prime">Prime time now</option>
+          <option value="time">At a time I pick (PKT)</option>
+        </select>
+        {f.callAt && /^\d/.test(f.callAt) && (
+          <label className="inline-flex items-center gap-1.5 text-body-sm text-ink">
+            <span className="text-ink-muted">At</span>
+            <input type="time" value={f.callAt} onChange={(e) => e.target.value && set('callAt', e.target.value)} className="h-8 rounded-full border border-primary bg-primary/5 px-3 text-body-sm font-semibold text-primary focus:outline-none" aria-label="Pakistan time to call" />
+            <span className="text-ink-muted">PKT</span>
+          </label>
+        )}
         <select value={f.notes ?? ''} onChange={(e) => set('notes', e.target.value)} className={sel(!!f.notes)} aria-label="Notes"><option value="">Notes</option><option value="yes">Has notes</option><option value="no">No notes</option></select>
         {tags.length > 0 && <select value={f.tag ?? ''} onChange={(e) => set('tag', e.target.value)} className={sel(!!f.tag)} aria-label="Tag"><option value="">Tag</option>{tags.map((t) => <option key={t}>{t}</option>)}</select>}
         {lists.length > 1 && <select value={f.list ?? ''} onChange={(e) => set('list', e.target.value)} className={sel(!!f.list)} aria-label="List"><option value="">List</option>{lists.map((t) => <option key={t} value={t}>{t === 'CRM' ? 'CRM (SMB)' : t}</option>)}</select>}
@@ -87,7 +100,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
 
       <div className="rounded-card border border-line bg-card p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-body-sm text-ink-muted"><b className="text-ink">{list.length.toLocaleString()}</b> leads</span>
+          <span className="text-body-sm text-ink-muted"><b className="text-ink">{list.length.toLocaleString()}</b> leads{f.callAt && /^\d/.test(f.callAt) ? <> you can call at <b className="text-ink">{fmtPkt(f.callAt)} PKT</b> (inside their calling hours then)</> : f.callAt === 'now' ? ' you can call now' : f.callAt === 'prime' ? ' in prime time now' : ''}</span>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" leadingIcon={<FileUp size={14} />} onClick={() => setFill(true)}>Bulk fill extra contacts</Button>
             <Button size="sm" variant="secondary" leadingIcon={<Download size={14} />} onClick={() => setNotesOpen(true)}>Export notes</Button>
@@ -107,6 +120,12 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
       {notesOpen && <NotesExportModal data={data} onClose={() => setNotesOpen(false)} />}
     </div>
   )
+}
+
+/** The next whole hour on the Pakistan clock, as 'HH:MM' (the time picker's starting value). */
+function nextHour(now: Date): string {
+  const h = Number(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hourCycle: 'h23' }))
+  return `${String((h + 1) % 24).padStart(2, '0')}:00`
 }
 
 function NameView({ onClose, onSave }: { onClose: () => void; onSave: (name: string) => void }) {

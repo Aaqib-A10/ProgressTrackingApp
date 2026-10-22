@@ -32,7 +32,6 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
   }, [leads, settings, now, followUpDays, data.dayStart, data.actedToday])
   const table = useMemo(() => stateTable(leads, settings, now), [leads, settings, now])
   const windows = REGIONS.map((r) => regionWindow(r, settings, now))
-  const primeNow = windows.filter((w) => w.prime)
   const ready = (r: RegionCode) => live.filter((l) => leadRegion(l, now) === r && isDialable(l, settings, now))
   const prime = (settings.primeTimes ?? []).map((p) => `${fmt12(p.start)} to ${fmt12(p.end)}`).join(' and ')
 
@@ -40,15 +39,6 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
     <div className="space-y-4">
       {/* Who can I call right now */}
       <Panel title="Who can I call right now" info={<>Calling hours are 9 AM to 5 PM on the lead's own clock in every region{prime ? <>; prime time is {prime}</> : null}. Each lead's region comes from its state; Arizona follows {usDaylight(now) ? 'Pacific' : 'Mountain'} hours right now. Do-Not-Call, finished, snoozed and duplicate leads are never counted.</>}>
-        {primeNow.length > 0 && (
-          <button type="button" onClick={() => onOpenLeads(`Prime time: ${primeNow.map((w) => REGION_META[w.region].name).join(' and ')}`, primeNow.flatMap((w) => ready(w.region)))}
-            className="mb-3 flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-card bg-success px-4 py-3 text-left text-white shadow-sm hover:bg-success/90">
-            <Zap size={20} className="shrink-0 fill-white" />
-            <span className="text-body-lg font-bold">Prime time now: {primeNow.map((w) => `${REGION_META[w.region].name} (${fmtSpan(w.primeLeft ?? 0)} left)`).join(' · ')}</span>
-            <span className="text-body-md text-white/90">{num(primeNow.reduce((t, w) => t + ready(w.region).length, 0))} leads. Call these first.</span>
-            <span className="ml-auto inline-flex items-center gap-1 text-body-sm font-semibold">Open leads <ArrowRight size={14} /></span>
-          </button>
-        )}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {windows.map((w) => {
             const list = ready(w.region)

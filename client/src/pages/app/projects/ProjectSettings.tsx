@@ -63,13 +63,14 @@ function General({ data, onSaved }: { data: BoardData; onSaved: () => void }) {
   const [name, setName] = useState(p.name)
   const [key, setKey] = useState(p.key)
   const [description, setDescription] = useState(p.description ?? '')
+  const [workFolder, setWorkFolder] = useState(p.workFolder ?? '')
   const [color, setColor] = useState(p.color)
   const [busy, setBusy] = useState(false)
   const keyLocked = p.taskCounter > 0
   async function save() {
     setBusy(true)
     try {
-      const r = await projectsApi.update(p.key, { name: name.trim(), description: description.trim() || null, color, ...(keyLocked ? {} : { key }) })
+      const r = await projectsApi.update(p.key, { name: name.trim(), description: description.trim() || null, workFolder: workFolder.trim() || null, color, ...(keyLocked ? {} : { key }) })
       addToast({ type: 'success', message: 'Saved' })
       if (r.project.key !== p.key) navigate(`/app/projects/${r.project.key}/settings`, { replace: true })
       else onSaved()
@@ -88,6 +89,11 @@ function General({ data, onSaved }: { data: BoardData; onSaved: () => void }) {
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={cn(fieldCls, 'h-auto py-2')} />
+          </div>
+          <div>
+            <label className="mb-1 block text-body-sm font-semibold text-ink">Where the work lives</label>
+            <textarea value={workFolder} onChange={(e) => setWorkFolder(e.target.value)} rows={2} maxLength={500} placeholder="e.g. GitHub Aneeskhan99/cmr, folder C:\Users\99TECH\Desktop\CMR, or a Google Drive link" className={cn(fieldCls, 'h-auto py-2')} />
+            <p className="mt-1 text-body-sm text-ink-muted">Claude reads this with every ticket of this project, so it knows which folder or repo to change.</p>
           </div>
           <div>
             <span className="mb-1 block text-body-sm font-semibold text-ink">Color</span>

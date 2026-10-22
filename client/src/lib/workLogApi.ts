@@ -21,7 +21,21 @@ export interface WorkEntry {
   order: number
   createdAt: string
   updatedAt: string
+  notes: WorkNote[]
 }
+/** A note on an item: e.g. the WhatsApp message from a manager that asked for it. */
+export interface WorkNote {
+  id: string
+  entryId: string
+  /** Where it came from: WhatsApp, Email, Call, or the person's own name for it. */
+  source: string | null
+  /** Who it came from. */
+  sender: string | null
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+export interface WorkNoteInput { body?: string; source?: string | null; sender?: string | null }
 export interface WorkEntryInput {
   title?: string
   details?: string | null
@@ -78,6 +92,10 @@ export const workLogApi = {
   carry: (id: string) => api.post<{ entry: WorkEntry }>(`/worklog/${id}/carry`),
   remove: (id: string) => api.del<void>(`/worklog/${id}`),
   team: (period: WorkPeriod, date: string, department?: string) => api.get<TeamWorkLog>(`/worklog/team?period=${period}&date=${date}${department ? `&department=${department}` : ''}`),
+  noteSources: () => api.get<{ sources: string[] }>('/worklog/note-sources'),
+  addNote: (entryId: string, body: WorkNoteInput & { body: string }) => api.post<{ note: WorkNote }>(`/worklog/${entryId}/notes`, body),
+  updateNote: (id: string, body: WorkNoteInput) => api.patch<{ note: WorkNote }>(`/worklog/notes/${id}`, body),
+  removeNote: (id: string) => api.del<void>(`/worklog/notes/${id}`),
   review: (body: { userId: string; period: WorkPeriod; date: string; rating?: WorkRating | null; comment?: string | null; clear?: boolean }) => api.put<{ review: WorkReview | null }>('/worklog/review', body),
 }
 
@@ -133,17 +151,22 @@ export function splitLines(text: string): string[] {
 
 /** Plain text of a list of entries, ready to paste into WhatsApp, email or a report. */
 export function entriesToText(heading: string, entries: WorkEntry[]): string {
-  // One numbered list, no section headings: done work first, then anything still open
-  // (marked "in progress" or "to do" so it is not read as finished).
+  // Each item exactly as it was written: no numbers or bullets are added (an item that the
+  // person numbered keeps its own numbers). Done work first, then anything still open (marked
+  // "in progress" or "to do" so it is not read as finished). An item that runs over several
+  // lines gets a blank line after it, so where one item ends is clear.
   const order: Record<WorkStatus, number> = { DONE: 0, IN_PROGRESS: 1, PLANNED: 2 }
   const note: Record<WorkStatus, string> = { DONE: '', IN_PROGRESS: 'in progress', PLANNED: 'to do' }
   const out: string[] = [heading, '']
-  ;[...entries].sort((a, b) => order[a.status] - order[b.status]).forEach((e, i) => {
+  const sorted = [...entries].sort((a, b) => order[a.status] - order[b.status])
+  sorted.forEach((e, i) => {
     const extra = [note[e.status], e.quantity != null ? `${e.quantity} items` : '', e.hours != null ? `${e.hours} h` : '', e.tag ?? '', e.blocked ? 'needs help' : ''].filter(Boolean).join(', ')
-    const [first, ...rest] = e.title.split(/\r?\n/)
-    out.push(`${i + 1}. ${first}${extra ? ` (${extra})` : ''}`)
-    for (const l of rest) if (l.trim()) out.push(`    ${l.trim()}`)
-    if (e.details) for (const l of e.details.split(/\r?\n/)) if (l.trim()) out.push(`    ${l.trim()}`)
+    const lines = e.title.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.trim())
+    if (e.details) lines.push(...e.details.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.trim()))
+    if (!lines.length) return
+    if (extra) lines[0] = `${lines[0]} (${extra})`
+    out.push(...lines)
+    if (lines.length > 1 && i < sorted.length - 1) out.push('')
   })
   const hours = entries.reduce((t, e) => t + (e.hours ?? 0), 0)
   const qty = entries.reduce((t, e) => t + (e.quantity ?? 0), 0)
