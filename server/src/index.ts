@@ -11,6 +11,8 @@ import { startMeetingReminders } from './lib/pm/meetings'
 import { startCleanup } from './lib/cleanup'
 import { scheduleNotes } from './controllers/chatController'
 import { recoverNotes } from './lib/pm/notes'
+import { captureError, flushErrors } from './lib/health/errors'
+import { setAuditBaseUrl, startHealthAudit } from './lib/health/audit'
 
 const PORT = Number(process.env.PORT) || 4000
 
@@ -21,11 +23,15 @@ const PORT = Number(process.env.PORT) || 4000
 process.on('unhandledRejection', (reason) => {
   // eslint-disable-next-line no-console
   console.error('[server] Unhandled promise rejection:', reason)
+  const e = reason instanceof Error ? reason : new Error(String(reason))
+  captureError({ source: 'SERVER', message: `Unhandled promise rejection: ${e.message}`, stack: e.stack, route: 'process' })
 })
 process.on('uncaughtException', (err) => {
   // eslint-disable-next-line no-console
   console.error('[server] Uncaught exception:', err)
-  process.exit(1)
+  // Save it to the error log first (at most 2 seconds), then let pm2 restart the process.
+  captureError({ source: 'SERVER', message: `Crash: ${err.message}`, stack: err.stack, route: 'process' })
+  void Promise.race([flushErrors(), new Promise((r) => setTimeout(r, 2000))]).finally(() => process.exit(1))
 })
 
 const app = createApp()
@@ -42,6 +48,8 @@ app.listen(PORT, () => {
   startCallSweeper()
   startMeetingReminders()
   startCleanup()
+  setAuditBaseUrl(`http://127.0.0.1:${PORT}`)
+  startHealthAudit()
   // When a call with the AI note taker on ends, write its notes.
   setOnCallEnded((c) => { if (c.noteTaker) scheduleNotes(c.callId) })
   // Notes interrupted by a restart or deploy are written now.

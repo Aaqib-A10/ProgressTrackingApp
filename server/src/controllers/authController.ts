@@ -56,6 +56,7 @@ async function publicUser(userId: string) {
     name: user.name,
     email: user.email,
     role: user.role, // the ACTIVE membership's role (mirrored onto User)
+    isDeveloper: user.isDeveloper, // sees System Health
     department: user.department?.type ?? null,
     subDepartment: user.subDepartment?.slug ?? null,
     activeDepartmentId: user.departmentId ?? null,

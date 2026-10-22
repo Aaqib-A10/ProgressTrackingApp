@@ -148,6 +148,8 @@ model User {
   role              Role       @default(MEMBER)
   status            UserStatus @default(ACTIVE)
   isActive          Boolean    @default(true)
+  /// Sees System Health (error log, hourly checks) and gets its alerts. Super Admins see it too.
+  isDeveloper       Boolean    @default(false)
   // Permanently remote: exempt from the office-network IP check-in restriction.
   attendanceRemote  Boolean    @default(false)
   // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
@@ -979,6 +981,7 @@ enum NotificationType {
   WFH_DECIDED
   WORKLOG_REVIEW
   NETWORK_BLOCKED
+  SYSTEM_HEALTH
 }
 
 enum BreakType {
@@ -2703,4 +2706,137 @@ model ClaudeKey {
   createdAt  DateTime  @default(now())
 
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// System Health: the error log, the hourly self check, job heartbeats and outages.
+// Only Super Admins and developers (User.isDeveloper) can see any of it.
+// ---------------------------------------------------------------------------
+
+enum ErrorSource {
+  SERVER // a crash or 500 inside the API
+  BROWSER // a page that broke in someone's browser
+  JOB // a background job (reminders, auto checkout, deadlines) that failed
+  SLOW // a request that took too long
+}
+
+enum ErrorState {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+/// One kind of error. The same error happening 200 times is one group with count 200.
+model ErrorGroup {
+  id           String       @id @default(cuid())
+  fingerprint  String       @unique
+  source       ErrorSource
+  message      String
+  stack        String?
+  route        String? // "GET /api/projects/:key", a page path, or "job:auto-checkout"
+  status       Int?
+  count        Int          @default(1)
+  userIds      String[] // distinct people it hit (first 50)
+  state        ErrorState   @default(OPEN)
+  firstSeenAt  DateTime     @default(now())
+  lastSeenAt   DateTime     @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  reopenedAt   DateTime? // set when a resolved error came back
+  events       ErrorEvent[]
+
+  @@index([state, lastSeenAt(sort: Desc)])
+  @@index([source, lastSeenAt(sort: Desc)])
+}
+
+/// One time an error happened (kept 30 days, a sample during error storms).
+model ErrorEvent {
+  id         String     @id @default(cuid())
+  groupId    String
+  group      ErrorGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  at         DateTime   @default(now())
+  userId     String?
+  url        String?
+  status     Int?
+  durationMs Int?
+  meta       Json?
+
+  @@index([groupId, at(sort: Desc)])
+  @@index([at])
+}
+
+enum AuditState {
+  RUNNING
+  PASSED
+  WARN
+  FAILED
+}
+
+enum CheckResult {
+  PASS
+  WARN
+  FAIL
+  SKIP
+}
+
+/// One run of the hourly self check.
+model AuditRun {
+  id          String       @id @default(cuid())
+  trigger     String // schedule | manual | claude
+  startedById String?
+  state       AuditState   @default(RUNNING)
+  startedAt   DateTime     @default(now())
+  finishedAt  DateTime?
+  durationMs  Int?
+  total       Int          @default(0)
+  passed      Int          @default(0)
+  warned      Int          @default(0)
+  failed      Int          @default(0)
+  skipped     Int          @default(0)
+  newProblems Int          @default(0)
+  fixed       Int          @default(0)
+  checks      AuditCheck[]
+
+  @@index([startedAt(sort: Desc)])
+}
+
+/// One thing the self check looked at (an API, the database, disk space, a job...).
+model AuditCheck {
+  id       String      @id @default(cuid())
+  runId    String
+  run      AuditRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  category String // api-read | api-write | database | server | services | jobs | data | website
+  name     String
+  result   CheckResult
+  ms       Int?
+  status   Int?
+  detail   String?
+  isNew    Boolean     @default(false) // a problem now that was fine (or not there) last run
+  fixed    Boolean     @default(false) // fine now, was failing last run
+
+  @@index([runId])
+  @@index([category, name])
+}
+
+/// Each background job reports here every time it runs.
+model JobHeartbeat {
+  name           String    @id
+  lastRunAt      DateTime
+  lastOkAt       DateTime?
+  lastError      String?
+  lastDurationMs Int?
+  runs           Int       @default(0)
+  failures       Int       @default(0)
+}
+
+/// A time the whole site was down, reported by the outside checker once it is back.
+model UptimeEvent {
+  id        String   @id @default(cuid())
+  downAt    DateTime
+  upAt      DateTime
+  minutes   Int
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([downAt(sort: Desc)])
 }

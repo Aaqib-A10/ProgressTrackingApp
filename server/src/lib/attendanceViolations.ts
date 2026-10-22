@@ -4,6 +4,7 @@ import { prisma } from './prisma'
 import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
 import { shiftDayString, timesForWeekday, type DayTimes } from './shiftDay'
 import { notifyAttendance } from './notify'
+import { runTracked } from './health/jobs'
 
 /**
  * Attendance policy violations — evaluated every few minutes:
@@ -201,7 +202,7 @@ export async function runAttendanceViolationTick(now: Date = new Date()): Promis
 /** Start the cron scheduler (every 5 minutes). Call once on server boot. */
 export function startAttendanceViolations(): void {
   cron.schedule('*/5 * * * *', () => {
-    runAttendanceViolationTick().catch((e) => {
+    runTracked('attendance-violations', runAttendanceViolationTick).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[violations] tick failed:', e)
     })

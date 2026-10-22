@@ -3,7 +3,8 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import Login from '../pages/auth/Login'
 import NotFound from '../pages/NotFound'
-import { RequireAuth, RequireRole, RequireFinance, AppShellRoute } from './guards'
+import { RequireAuth, RequireRole, RequireFinance, AppShellRoute, RequireHealth } from './guards'
+import { RouteError } from './RouteError'
 
 // Public pages people open rarely load on demand (Login stays in the main bundle: it is
 // the page most people land on).
@@ -81,6 +82,7 @@ const AdminLeave = lazy(() => import('../pages/app/admin/AdminLeave'))
 const AdminNetworks = lazy(() => import('../pages/app/admin/AdminNetworks'))
 const FinancialReports = lazy(() => import('../pages/app/admin/FinancialReports'))
 const AdminActivity = lazy(() => import('../pages/app/admin/AdminActivity'))
+const SystemHealth = lazy(() => import('../pages/app/admin/SystemHealth'))
 const ProjectsList = lazy(() => import('../pages/app/projects/ProjectsList'))
 const ProjectBoard = lazy(() => import('../pages/app/projects/ProjectBoard'))
 const ProjectSettings = lazy(() => import('../pages/app/projects/ProjectSettings'))
@@ -108,6 +110,7 @@ export const router = createBrowserRouter([
   // Authenticated app shell
   {
     path: '/app',
+    errorElement: <RouteError />,
     element: (
       <RequireAuth>
         <AppShellRoute />
@@ -219,6 +222,7 @@ export const router = createBrowserRouter([
       { path: 'admin/networks', element: <RequireRole roles={['SUPER_ADMIN']}><AdminNetworks /></RequireRole> },
       { path: 'admin/financials', element: <RequireFinance><FinancialReports /></RequireFinance> },
       { path: 'admin/activity', element: <RequireRole roles={['SUPER_ADMIN', 'TEAM_LEAD']}><AdminActivity /></RequireRole> },
+      { path: 'admin/health', element: <RequireHealth><SystemHealth /></RequireHealth> },
     ],
   },
 

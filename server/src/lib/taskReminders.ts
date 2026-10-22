@@ -4,6 +4,7 @@ import { prisma } from './prisma'
 import { COMPANY_TZ } from './time'
 import { notifyTaskDueSoon } from './notify'
 import { sendTaskDueSoonEmail } from './mail'
+import { runTracked } from './health/jobs'
 
 /**
  * Remind assignees of URGENT marketing tasks ~1 hour before they're due.
@@ -40,7 +41,7 @@ export async function runTaskReminderTick(now: Date = new Date()): Promise<numbe
 /** Start the urgent-task due-reminder cron (every 5 min). Call once on boot. */
 export function startTaskReminders(): void {
   cron.schedule('*/5 * * * *', () => {
-    runTaskReminderTick().catch((e) => {
+    runTracked('task-reminders', runTaskReminderTick).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[task-reminders] tick failed:', e)
     })

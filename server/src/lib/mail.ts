@@ -1,3 +1,5 @@
+import { inAudit } from './health/auditContext'
+
 // Best-effort transactional email through Mailtrap (Email API, transactional stream).
 // Never throws into request flow: if MAILTRAP_API_TOKEN is unset or the send fails, we log
 // and continue. The "from" address must be on the domain verified in Mailtrap
@@ -25,6 +27,7 @@ export function parseAddress(raw: string): { email: string; name?: string } {
 }
 
 export async function sendMail({ to, subject, html, text, category }: SendOpts): Promise<void> {
+  if (inAudit()) return // the self check's test requests never send email
   if (!MAILTRAP_API_TOKEN) {
     // eslint-disable-next-line no-console
     console.warn('[mail] MAILTRAP_API_TOKEN not set — skipping email')

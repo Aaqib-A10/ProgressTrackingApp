@@ -37,6 +37,7 @@ import {
   FolderOpen,
   MessagesSquare,
   LayoutGrid,
+  Activity,
   type LucideIcon,
 } from 'lucide-react'
 import type { CurrentUser, Role } from '../../lib/types'
@@ -54,6 +55,8 @@ export interface NavItem {
   hideFor?: Role[]
   /** Restricted to these exact emails (identity gate) — overrides even Super Admin. */
   requireEmail?: string[]
+  /** System Health: Super Admins and developers (User.isDeveloper) only. */
+  healthOnly?: boolean
   badge?: { text: string; tone: BadgeTone }
 }
 
@@ -242,14 +245,16 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Tags', to: '/app/admin/tags', icon: Tags },
       { label: 'Holidays & Leave', to: '/app/admin/leave', icon: CalendarOff },
       { label: 'Office Networks', to: '/app/admin/networks', icon: Wifi },
+      { label: 'System Health', to: '/app/admin/health', icon: Activity, healthOnly: true },
     ],
   },
 ]
 
-type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email'>
+type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper'>
 
 /** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
 function itemVisible(item: NavItem, u: NavUser): boolean {
+  if (item.healthOnly) return u.role === 'SUPER_ADMIN' || !!u.isDeveloper
   // Identity gate wins over everything, including Super Admin: only the listed emails see it.
   if (item.requireEmail) {
     return !!u.email && item.requireEmail.map((e) => e.toLowerCase()).includes(u.email.toLowerCase())

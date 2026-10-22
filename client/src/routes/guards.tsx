@@ -50,3 +50,11 @@ export function RequireFinance({ children }: { children: ReactNode }) {
   if (!canViewFinance(user)) return <Navigate to="/app/dashboard" replace />
   return <>{children}</>
 }
+
+/** System Health: Super Admins and developers. */
+export function RequireHealth({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role !== 'SUPER_ADMIN' && !user.isDeveloper) return <Navigate to="/app/dashboard" replace />
+  return <>{children}</>
+}

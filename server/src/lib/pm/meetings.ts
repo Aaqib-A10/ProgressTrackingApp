@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import { prisma } from '../prisma'
 import { COMPANY_TZ } from '../time'
 import { pmNotify } from './pmNotify'
+import { runTracked } from '../health/jobs'
 
 /**
  * Scheduled meetings: helpers + the reminder that goes out 10 minutes before.
@@ -112,7 +113,7 @@ export async function runMeetingReminders(now = new Date()): Promise<number> {
 
 export function startMeetingReminders(): void {
   cron.schedule('* * * * *', () => {
-    runMeetingReminders().catch((e) => {
+    runTracked('meeting-reminders', runMeetingReminders).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[meetings] reminder tick failed:', e)
     })

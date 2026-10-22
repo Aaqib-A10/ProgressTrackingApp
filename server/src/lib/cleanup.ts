@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import { runTracked } from './health/jobs'
 
 /**
  * Nightly tidy-up so the tables that grow every day stay small and fast:
@@ -21,10 +22,12 @@ export async function runCleanup(now = new Date()): Promise<{ reminders: number;
 
 export function startCleanup(): void {
   const run = () => {
-    runCleanup()
-      .then((r) => { if (r.reminders || r.notifications) console.log(`[cleanup] removed ${r.reminders} old reminder records, closed ${r.notifications} old notifications`) }) // eslint-disable-line no-console
-      .catch((e) => console.error('[cleanup] failed', e)) // eslint-disable-line no-console
+    runTracked('cleanup', async () => {
+      const r = await runCleanup()
+      if (r.reminders || r.notifications) console.log(`[cleanup] removed ${r.reminders} old reminder records, closed ${r.notifications} old notifications`) // eslint-disable-line no-console
+    }).catch((e) => console.error('[cleanup] failed', e)) // eslint-disable-line no-console
   }
   setTimeout(run, 10 * 60 * 1000).unref()
   setInterval(run, DAY).unref()
 }
+

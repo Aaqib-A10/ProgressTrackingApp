@@ -10,6 +10,9 @@ import { ticketBrief, fmtWhen, type BriefTask } from './pm/brief'
 import * as T from '../controllers/pmTasksController'
 import * as P from '../controllers/projectsController'
 import { COMPANY_TZ } from './time'
+import { canSeeHealth } from '../controllers/systemHealthController'
+import { auditReport, errorBrief, errorList } from './health/report'
+import { startAudit } from './health/audit'
 
 /**
  * Metriq as a Claude connector (Model Context Protocol, "streamable HTTP", stateless).
@@ -34,7 +37,8 @@ To work on someone's tickets: list_my_tickets, then get_ticket for each one. "Wh
 When you finish a ticket: add_comment saying what you changed and where (files, links), tick checklist items you completed, then move_ticket to the review column (e.g. "In review").
 Never move a ticket to Done unless the person asked you to. Comments and moves appear under the person's own name.
 If a ticket needs something you cannot do (a phone call, a decision, a login), comment what is needed instead of guessing.
-To give work to someone: list_project_members to find the right person (if a name fits more than one person, ask which one), list_board_columns for valid statuses, then create_ticket. update_ticket changes title, description, assignee, due date or priority. Only the person who created a ticket can delete it; confirm with the person before deleting.`
+To give work to someone: list_project_members to find the right person (if a name fits more than one person, ask which one), list_board_columns for valid statuses, then create_ticket. update_ticket changes title, description, assignee, due date or priority. Only the person who created a ticket can delete it; confirm with the person before deleting.
+Developers and Super Admins also get System Health tools: system_health, get_audit_report, list_errors and get_error show what is broken in Metriq itself (with stack traces) so you can fix it in the PulseTrack code; after the fix is deployed, set_error_state marks it resolved.`
 
 // ------------------------------------------------------------------ tools
 
@@ -44,6 +48,8 @@ interface Tool {
   description: string
   inputSchema: Record<string, unknown>
   annotations?: Record<string, boolean>
+  /** System Health tools: only listed for, and usable by, developers and Super Admins. */
+  health?: boolean
   run: (u: User, args: Record<string, unknown>) => Promise<ToolResult>
 }
 type Content = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
@@ -505,6 +511,93 @@ const TOOLS: Tool[] = [
       return text(`${c} "${task.title}" deleted.`)
     },
   },
+  // ---------------------------------------------------------------- System Health (developers and Super Admins)
+  {
+    name: 'system_health',
+    title: 'Metriq system health',
+    description: 'How Metriq itself is doing: the last hourly self check, open errors, background jobs and outages. Start here before fixing Metriq.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    health: true,
+    async run() {
+      const [run, open, newDay, jobs] = await Promise.all([
+        prisma.auditRun.findFirst({ where: { state: { not: 'RUNNING' } }, orderBy: { startedAt: 'desc' } }),
+        prisma.errorGroup.count({ where: { state: 'OPEN', source: { not: 'SLOW' } } }),
+        prisma.errorGroup.count({ where: { firstSeenAt: { gte: new Date(Date.now() - 86400_000) }, source: { not: 'SLOW' } } }),
+        prisma.jobHeartbeat.findMany({ where: { lastError: { not: null } } }),
+      ])
+      const lines = [
+        run ? `Last self check ${run.id}: ${run.state.toLowerCase()}, ${run.passed} passed, ${run.failed} failed, ${run.warned} warnings (${run.startedAt.toISOString()}).` : 'No self check has run yet.',
+        `Open errors: ${open} (${newDay} new in the last 24 hours).`,
+        jobs.length ? `Failing jobs: ${jobs.map((j) => `${j.name} (${j.lastError})`).join('; ')}` : 'Background jobs: no failures.',
+        'Next: get_audit_report for the failed checks, list_errors and get_error for the errors.',
+      ]
+      return text(lines.join('\n'))
+    },
+  },
+  {
+    name: 'list_errors',
+    title: 'List Metriq errors',
+    description: 'Errors from the Metriq error log (server crashes, pages that broke in browsers, failed jobs, slow requests), newest first. Each line starts with the error id for get_error.',
+    inputSchema: { type: 'object', properties: { state: { type: 'string', enum: ['open', 'resolved', 'ignored', 'all'], description: 'Default open.' } }, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    health: true,
+    async run(_u, a) {
+      const st = str(a.state).toUpperCase() || 'OPEN'
+      if (!['OPEN', 'RESOLVED', 'IGNORED', 'ALL'].includes(st)) return fail('State must be open, resolved, ignored or all.')
+      return text(await errorList({ state: st as 'OPEN' }))
+    },
+  },
+  {
+    name: 'get_error',
+    title: 'Read a Metriq error',
+    description: 'One error from the log with its stack trace, the page or API, who it hit and when. Use it to find and fix the cause in the PulseTrack code.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Error id from list_errors.' } }, required: ['id'], additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    health: true,
+    async run(_u, a) {
+      const t = await errorBrief(str(a.id))
+      return t ? text(t) : fail('No error with that id. Use list_errors to see the ids.')
+    },
+  },
+  {
+    name: 'set_error_state',
+    title: 'Resolve or ignore a Metriq error',
+    description: 'Marks an error as resolved (after the fix is deployed), ignored, or open again. A resolved error that happens again reopens by itself and alerts the developers.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, state: { type: 'string', enum: ['resolved', 'ignored', 'open'] } }, required: ['id', 'state'], additionalProperties: false },
+    health: true,
+    async run(u, a) {
+      const st = str(a.state).toUpperCase()
+      if (!['OPEN', 'RESOLVED', 'IGNORED'].includes(st)) return fail('State must be resolved, ignored or open.')
+      const g = await prisma.errorGroup.findUnique({ where: { id: str(a.id) }, select: { id: true } })
+      if (!g) return fail('No error with that id.')
+      await prisma.errorGroup.update({ where: { id: g.id }, data: { state: st as 'OPEN', resolvedAt: st === 'RESOLVED' ? new Date() : null, resolvedById: st === 'RESOLVED' ? u.id : null } })
+      return text(`Error ${g.id} is now ${st.toLowerCase()}.`)
+    },
+  },
+  {
+    name: 'get_audit_report',
+    title: 'Read a self check report',
+    description: 'The hourly self check: every API, the database, server, services, jobs, data and website. Shows what failed, what is new since the run before and what got fixed. Leave run_id out for the latest.',
+    inputSchema: { type: 'object', properties: { run_id: { type: 'string' } }, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    health: true,
+    async run(_u, a) {
+      const t = await auditReport(str(a.run_id) || undefined)
+      return t ? text(t) : fail(str(a.run_id) ? 'No self check with that id.' : 'No self check has run yet. Use run_audit.')
+    },
+  },
+  {
+    name: 'run_audit',
+    title: 'Run the self check now',
+    description: 'Starts the full self check now (takes a minute or two; nothing in Metriq is changed by it). Then call get_audit_report with the run id.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    health: true,
+    async run(u) {
+      const r = await startAudit({ trigger: 'claude', startedById: u.id })
+      return text(r.already ? `A self check is already running: ${r.runId}. Call get_audit_report with that id in a minute.` : `Self check ${r.runId} started. Call get_audit_report with run_id ${r.runId} in a minute or two.`)
+    },
+  },
 ]
 
 // ------------------------------------------------------------------ JSON-RPC over HTTP
@@ -531,10 +624,14 @@ async function handle(u: User, m: Rpc): Promise<object | null> {
     }
     case 'ping': return { jsonrpc: '2.0', id: m.id, result: {} }
     case 'tools/list':
-      return { jsonrpc: '2.0', id: m.id, result: { tools: TOOLS.map(({ run: _run, ...t }) => t) } }
+    {
+      const health = await canSeeHealth(u)
+      return { jsonrpc: '2.0', id: m.id, result: { tools: TOOLS.filter((t) => !t.health || health).map(({ run: _run, health: _h, ...t }) => t) } }
+    }
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === m.params?.name)
       if (!tool) return rpcError(m.id, -32602, `Unknown tool: ${String(m.params?.name)}`)
+      if (tool.health && !(await canSeeHealth(u))) return { jsonrpc: '2.0', id: m.id, result: fail('Only developers and Super Admins can use System Health.') }
       const args = (m.params?.arguments && typeof m.params.arguments === 'object' ? m.params.arguments : {}) as Record<string, unknown>
       try {
         return { jsonrpc: '2.0', id: m.id, result: await tool.run(u, args) }

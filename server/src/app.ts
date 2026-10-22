@@ -1,4 +1,4 @@
-import express, { type Express, type NextFunction, type Request, type Response } from 'express'
+import express, { type Express, type Router } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
@@ -34,6 +34,50 @@ import { chatRouter } from './routes/chat'
 import { meetingsRouter } from './routes/meetings'
 import { avatarsRouter } from './routes/avatars'
 import { claudeRouter, mcpRouter } from './routes/claude'
+import { systemHealthRouter } from './routes/systemHealth'
+import { auditProbeMiddleware, errorHandler, requestMonitor } from './lib/health/monitor'
+import { registerApiMounts } from './lib/health/audit'
+
+/**
+ * Every API router and where it lives. The hourly self check (System Health) walks this list
+ * to find each endpoint, so a new router added here is checked automatically.
+ */
+export const API_MOUNTS: [string, Router][] = [
+  ['/api', healthRouter],
+  ['/api/auth', authRouter],
+  ['/api/itad', itadRouter],
+  ['/api/dialer', dialerRouter],
+  ['/api/leadgen', leadgenRouter],
+  ['/api/dashboard', dashboardRouter],
+  ['/api/reports', reportsRouter],
+  ['/api/marketing', marketingRouter],
+  ['/api/ecommerce', ecommerceRouter],
+  ['/api/attendance', attendanceRouter],
+  ['/api/rdp', rdpRouter],
+  ['/api/admin', adminRouter],
+  ['/api/notifications', notificationsRouter],
+  ['/api/members', membersRouter],
+  ['/api/feedback', feedbackRouter],
+  ['/api/qa', qaRouter],
+  ['/api/attachments', attachmentsRouter],
+  ['/api/todos', todosRouter],
+  ['/api/worklog', worklogRouter],
+  ['/api/tasks', tasksRouter],
+  ['/api/financials', financialsRouter],
+  ['/api/talkloop', talkloopRouter],
+  ['/api/inventory', inventoryRouter],
+  ['/api/projects', projectsRouter],
+  ['/api/chat', chatRouter],
+  ['/api/meetings', meetingsRouter],
+  ['/api/avatars', avatarsRouter],
+  ['/api/push', pushRouter],
+  ['/api/guest', guestRouter],
+  ['/api/search', searchRouter],
+  ['/api/docs', docsRouter],
+  ['/api/claude', claudeRouter],
+  ['/api/mcp', mcpRouter],
+  ['/api/system-health', systemHealthRouter],
+]
 
 /**
  * Builds the Express app. Kept separate from index.ts so tests can import
@@ -74,64 +118,21 @@ export function createApp(): Express {
   app.use(express.json({ limit: '1mb' }))
   app.use(cookieParser())
 
+  // The self check's test mode (only its own requests), then the error and slow-request log.
+  app.use(auditProbeMiddleware)
+  app.use(requestMonitor)
+
   // All API routes are mounted under /api (matches the Vite dev proxy).
-  app.use('/api', healthRouter)
-  app.use('/api/auth', authRouter)
-  app.use('/api/itad', itadRouter)
-  app.use('/api/dialer', dialerRouter)
-  app.use('/api/leadgen', leadgenRouter)
-  app.use('/api/dashboard', dashboardRouter)
-  app.use('/api/reports', reportsRouter)
-  app.use('/api/marketing', marketingRouter)
-  app.use('/api/ecommerce', ecommerceRouter)
-  app.use('/api/attendance', attendanceRouter)
-  app.use('/api/rdp', rdpRouter)
-  app.use('/api/admin', adminRouter)
-  app.use('/api/notifications', notificationsRouter)
-  app.use('/api/members', membersRouter)
-  app.use('/api/feedback', feedbackRouter)
-  app.use('/api/qa', qaRouter)
-  app.use('/api/attachments', attachmentsRouter)
-  app.use('/api/todos', todosRouter)
-  app.use('/api/worklog', worklogRouter)
-  app.use('/api/tasks', tasksRouter)
-  app.use('/api/financials', financialsRouter)
-  app.use('/api/talkloop', talkloopRouter)
-  app.use('/api/inventory', inventoryRouter)
-  app.use('/api/projects', projectsRouter)
-  app.use('/api/chat', chatRouter)
-  app.use('/api/meetings', meetingsRouter)
-  app.use('/api/avatars', avatarsRouter)
-  app.use('/api/push', pushRouter)
-  app.use('/api/guest', guestRouter)
-  app.use('/api/search', searchRouter)
-  app.use('/api/docs', docsRouter)
-  app.use('/api/claude', claudeRouter)
-  app.use('/api/mcp', mcpRouter)
+  for (const [path, router] of API_MOUNTS) app.use(path, router)
+  registerApiMounts(API_MOUNTS)
 
   // Fallback 404 for unknown API paths.
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' })
   })
 
-  // Centralized error handler — unexpected throws become 500s.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    // body-parser errors carry a type — surface them as proper 4xx (not 500), with
-    // generic messages so nothing internal leaks.
-    const e = err as { type?: string }
-    if (e?.type === 'entity.too.large') {
-      res.status(413).json({ error: 'Request body too large' })
-      return
-    }
-    if (e?.type === 'entity.parse.failed') {
-      res.status(400).json({ error: 'Invalid JSON body' })
-      return
-    }
-    // eslint-disable-next-line no-console
-    console.error('[server] Unhandled error:', err)
-    res.status(500).json({ error: 'Internal server error' })
-  })
+  // Centralized error handler: unexpected throws become 500s and go to the error log.
+  app.use(errorHandler)
 
   return app
 }

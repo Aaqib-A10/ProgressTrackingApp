@@ -1,5 +1,6 @@
 import webpush from 'web-push'
 import { prisma } from './prisma'
+import { inAudit } from './health/auditContext'
 
 /**
  * Pop-up notifications that reach people even when PulseTrack is closed (Web Push):
@@ -11,7 +12,7 @@ import { prisma } from './prisma'
  */
 
 export interface PushPayload {
-  kind: 'msg' | 'call' | 'missed' | 'test'
+  kind: 'msg' | 'call' | 'missed' | 'test' | 'alert'
   title: string
   body: string
   /** Same tag replaces the earlier pop-up (one per chat, one per call). */
@@ -52,6 +53,7 @@ export function vapidKeys(): Promise<{ publicKey: string; privateKey: string }> 
 const ACTIVE_MS = 15_000
 const lastPoll = new Map<string, number>()
 export function markActive(userId: string, now = Date.now()): void {
+  if (inAudit()) return // the self check is not a person looking at the app
   lastPoll.set(userId, now)
 }
 function isActive(userId: string, now = Date.now()): boolean {
@@ -61,6 +63,7 @@ function isActive(userId: string, now = Date.now()): boolean {
 /** Send to every device of these people. Never throws; dead subscriptions are removed. */
 export async function sendPush(userIds: string[], payload: PushPayload, opts: { ttl?: number; urgency?: 'normal' | 'high'; evenIfActive?: boolean } = {}): Promise<number> {
   if (process.env.NODE_ENV === 'test' && !process.env.PUSH_IN_TESTS) return 0
+  if (inAudit()) return 0 // the self check's test requests never notify anyone
   const now = Date.now()
   const ids = [...new Set(userIds)].filter((id) => opts.evenIfActive || !isActive(id, now))
   if (!ids.length) return 0

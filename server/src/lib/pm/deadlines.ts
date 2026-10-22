@@ -5,6 +5,7 @@ import { prisma } from '../prisma'
 import { COMPANY_TZ } from '../time'
 import { logActivity } from './tasks'
 import { fmtDue, fmtDuration, pmNotify, taskLink, trunc } from './pmNotify'
+import { runTracked } from '../health/jobs'
 
 /**
  * Deadline watcher for project tasks (runs every 5 minutes).
@@ -278,7 +279,7 @@ async function emailOnly(userId: string, t: DeadlineTask, mail: { subject: strin
 /** Start the deadline cron (every 5 minutes). Call once on boot. */
 export function startPmDeadlines(): void {
   cron.schedule('*/5 * * * *', () => {
-    runDeadlineTick().catch((e) => {
+    runTracked('pm-deadlines', runDeadlineTick).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[pm-deadlines] tick failed:', e)
     })

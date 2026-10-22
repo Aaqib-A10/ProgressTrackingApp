@@ -27,6 +27,8 @@ export interface CurrentUser {
   name: string
   email: string
   role: Role
+  /** Sees System Health (error log, self checks) and gets its alerts. */
+  isDeveloper?: boolean
   department?: Department | null
   subDepartment?: string | null
   /** Id of the department currently being acted as (matches one membership). */
