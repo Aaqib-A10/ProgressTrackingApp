@@ -2,12 +2,14 @@ import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { Request, Response } from 'express'
+import { DateTime } from 'luxon'
 import type { Role } from '@prisma/client'
 import { prisma } from './prisma'
 import { invokeAs, invokedError } from './pm/invoke'
 import { ticketBrief, fmtWhen, type BriefTask } from './pm/brief'
 import * as T from '../controllers/pmTasksController'
 import * as P from '../controllers/projectsController'
+import { COMPANY_TZ } from './time'
 
 /**
  * Metriq as a Claude connector (Model Context Protocol, "streamable HTTP", stateless).
@@ -31,7 +33,8 @@ const INSTRUCTIONS = `Metriq is the team's work app. Tickets have codes like CMR
 To work on someone's tickets: list_my_tickets, then get_ticket for each one. "Where the work lives" in a ticket tells you the folder or repo to change.
 When you finish a ticket: add_comment saying what you changed and where (files, links), tick checklist items you completed, then move_ticket to the review column (e.g. "In review").
 Never move a ticket to Done unless the person asked you to. Comments and moves appear under the person's own name.
-If a ticket needs something you cannot do (a phone call, a decision, a login), comment what is needed instead of guessing.`
+If a ticket needs something you cannot do (a phone call, a decision, a login), comment what is needed instead of guessing.
+To give work to someone: list_project_members to find the right person (if a name fits more than one person, ask which one), list_board_columns for valid statuses, then create_ticket. update_ticket changes title, description, assignee, due date or priority. Only the person who created a ticket can delete it; confirm with the person before deleting.`
 
 // ------------------------------------------------------------------ tools
 
@@ -59,6 +62,97 @@ async function loadTicket(u: User, c: string): Promise<{ task?: BriefTask & { id
   return { task: (r.body as { task: BriefTask & { id: string } }).task }
 }
 
+
+// ------------------------------------------------------------------ shared helpers (projects, people, dates)
+
+type Card = { code: string; title: string; status: string; category: string; priority: string; dueAt: string | null; isOverdue: boolean; createdBy: { name: string }; assignees: { id: string; name: string }[] }
+
+/** One ticket as a line: code | status | priority | due | title | given by / given to. */
+function ticketLine(t: Card, who: 'from' | 'to' | 'both'): string {
+  const due = t.dueAt ? ` | due ${fmtWhen(t.dueAt)}${t.isOverdue ? ' (OVERDUE)' : ''}` : ''
+  const to = t.assignees.map((x) => x.name).join(', ') || 'nobody'
+  const tail = who === 'from' ? `from ${t.createdBy.name}` : who === 'to' ? `to ${to}` : `to ${to}, from ${t.createdBy.name}`
+  return `${t.code} | ${t.status} | ${t.priority.toLowerCase()}${due} | ${t.title} | ${tail}`
+}
+
+type ProjectRow = { key: string; name: string; workFolder: string | null; myRole: string | null; openCount: number; myOpenCount: number }
+
+/** A project the person can see, by key or name. Unknown → a plain error naming the projects they have. */
+async function resolveProject(u: User, given: unknown): Promise<{ project?: ProjectRow; error?: string }> {
+  const want = norm(str(given))
+  if (!want) return { error: 'Say which project (its key, e.g. CMR, or its name).' }
+  const r = await invokeAs(P.listProjects, u)
+  if (r.status >= 400) return { error: invokedError(r) }
+  const rows = (r.body as { projects: ProjectRow[] }).projects
+  const hit = rows.find((p) => norm(p.key) === want) ?? rows.find((p) => norm(p.name) === want)
+  if (hit) return { project: hit }
+  return { error: `No project "${str(given)}" that you can see. Your projects: ${rows.map((p) => `${p.key} (${p.name})`).join(', ') || 'none'}.` }
+}
+
+type Member = { userId: string; name: string; email: string; isActive: boolean; role: string }
+
+async function projectMembers(u: User, key: string): Promise<{ members?: Member[]; error?: string }> {
+  const r = await invokeAs(P.listMembers, u, { params: { key } })
+  if (r.status >= 400) return { error: invokedError(r) }
+  return { members: (r.body as { members: Member[] }).members }
+}
+
+/**
+ * A project member by user id, email or name ("me" is the person). Only members can be picked.
+ * A name that fits more than one person returns the candidates instead of guessing.
+ */
+function resolveMember(u: User, members: Member[], given: string, projectKey: string): { member?: Member; error?: string } {
+  const g = given.trim()
+  const active = members.filter((m) => m.isActive)
+  if (/^(me|myself|i)$/i.test(g)) {
+    const mine = active.find((m) => m.userId === u.id)
+    return mine ? { member: mine } : { error: `You are not a member of ${projectKey}, so the ticket cannot be assigned to you.` }
+  }
+  const byId = active.find((m) => m.userId === g)
+  if (byId) return { member: byId }
+  const byEmail = active.find((m) => m.email.toLowerCase() === g.toLowerCase())
+  if (byEmail) return { member: byEmail }
+  const n = norm(g)
+  const exact = active.filter((m) => norm(m.name) === n)
+  const loose = exact.length ? exact : active.filter((m) => n.length >= 2 && (norm(m.name).includes(n) || m.name.toLowerCase().split(/\s+/).some((w) => norm(w) === n)))
+  if (loose.length === 1) return { member: loose[0] }
+  const list = (ms: Member[]) => ms.map((m) => `${m.name} (${m.email}, id ${m.userId})`).join('; ')
+  if (loose.length > 1) return { error: `"${g}" matches more than one person in ${projectKey}: ${list(loose)}. Say which one (use the email or id).` }
+  return { error: `"${g}" is not a member of ${projectKey}. Members: ${list(active) || 'none'}. Only project members can be given tickets.` }
+}
+
+/**
+ * YYYY-MM-DD (end of that day) or "YYYY-MM-DD HH:MM", on the company clock like the app's date
+ * picker. "none" or "" clears it (null). Returns an ISO string, null, or an error.
+ */
+function parseDue(v: unknown): { iso?: string | null; error?: string } {
+  const s = str(v)
+  if (!s || /^(none|no|clear|null)$/i.test(s)) return { iso: null }
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/)
+  if (!m) return { error: `"${s}" is not a date. Use YYYY-MM-DD, e.g. 2026-10-30 (optionally with a time, 2026-10-30 17:00).` }
+  const d = m[2] ? DateTime.fromISO(`${m[1]}T${m[2].padStart(2, '0')}:${m[3]}`, { zone: COMPANY_TZ }) : DateTime.fromISO(m[1], { zone: COMPANY_TZ }).set({ hour: 23, minute: 59 })
+  if (!d.isValid) return { error: `"${s}" is not a real date.` }
+  return { iso: d.toUTC().toISO() }
+}
+
+const PRIORITY: Record<string, string> = { low: 'LOW', medium: 'MEDIUM', high: 'HIGH', urgent: 'URGENT' }
+
+type Column = { id: string; name: string; category: string; isDefault: boolean }
+type Board = { columns: Column[]; tasks: (Card & { createdAt: string })[]; perms: Record<string, boolean> }
+
+async function loadBoard(u: User, key: string, showOldDone = false): Promise<{ board?: Board; error?: string }> {
+  const r = await invokeAs(P.getBoard, u, { params: { key }, query: showOldDone ? { showOldDone: '1' } : {} })
+  if (r.status >= 400) return { error: invokedError(r) }
+  return { board: r.body as Board }
+}
+
+function findColumn(cols: Column[], given: string): Column | undefined {
+  const want = norm(given)
+  return cols.find((x) => norm(x.name) === want) ?? cols.find((x) => want.length >= 4 && norm(x.name).includes(want))
+}
+
+const ticketUrl = (key: string, c: string) => `${APP_URL()}/app/projects/${encodeURIComponent(key)}?task=${encodeURIComponent(c)}`
+
 const TOOLS: Tool[] = [
   {
     name: 'list_my_tickets',
@@ -78,13 +172,13 @@ const TOOLS: Tool[] = [
       const scope = a.scope === 'created' ? 'created' : 'assigned'
       const r = await invokeAs(T.myTasks, u, { query: { scope } })
       if (r.status >= 400) return fail(invokedError(r))
-      type Row = { code: string; title: string; status: string; category: string; priority: string; dueAt: string | null; isOverdue: boolean; createdBy: { name: string }; assignees: { name: string }[]; project: { key: string; name: string } }
+      type Row = { code: string; title: string; status: string; category: string; priority: string; dueAt: string | null; isOverdue: boolean; createdBy: { name: string }; assignees: { id: string; name: string }[]; project: { key: string; name: string } }
       let rows = (r.body as { tasks: Row[] }).tasks
       const p = str(a.project)
       if (p) rows = rows.filter((t) => norm(t.project.key) === norm(p) || norm(t.project.name) === norm(p))
       if (!a.include_done) rows = rows.filter((t) => t.category !== 'DONE')
       if (!rows.length) return text(`No ${a.include_done ? '' : 'open '}tickets ${scope === 'assigned' ? 'assigned to you' : 'you gave to others'}${p ? ` in ${p}` : ''}.`)
-      const lines = rows.map((t) => `${t.code} | ${t.status} | ${t.priority.toLowerCase()}${t.dueAt ? ` | due ${fmtWhen(t.dueAt)}${t.isOverdue ? ' (OVERDUE)' : ''}` : ''} | ${t.title} | ${scope === 'assigned' ? `from ${t.createdBy.name}` : `to ${t.assignees.map((x) => x.name).join(', ')}`}`)
+      const lines = rows.map((t) => ticketLine(t, scope === 'assigned' ? 'from' : 'to'))
       return text(`${rows.length} ticket${rows.length === 1 ? '' : 's'} (code | status | priority | due | title | ${scope === 'assigned' ? 'given by' : 'given to'}):\n${lines.join('\n')}\n\nUse get_ticket with a code for the full brief.`)
     },
   },
@@ -192,6 +286,223 @@ const TOOLS: Tool[] = [
         return text(`${att.originalName} (from ${task.code})${buf.length > max ? ', first 200 KB' : ''}:\n\n${body}`)
       }
       return text(`${att.originalName} is a ${att.mimeType} file (${Math.round(att.size / 1024)} KB). It cannot be opened here; ask the person to download it from ${APP_URL()}/app/projects/${task.projectKey}?task=${task.code}.`)
+    },
+  },
+  {
+    name: 'list_board_columns',
+    title: 'List board columns',
+    description: 'The columns of a project\'s board in order (e.g. To Do, In Progress, In Review, Done). Use these names as the status for create_ticket and move_ticket.',
+    inputSchema: { type: 'object', properties: { project: { type: 'string', description: 'Project key or name, e.g. CMR' } }, required: ['project'], additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    async run(u, a) {
+      const { project, error } = await resolveProject(u, a.project)
+      if (!project) return fail(error!)
+      const { board, error: e2 } = await loadBoard(u, project.key)
+      if (!board) return fail(e2!)
+      return text(`${project.key} columns, in order:\n${board.columns.map((c, i) => `${i + 1}. ${c.name}${c.isDefault ? ' (new tickets start here)' : ''}${c.category === 'DONE' ? ' (finished)' : ''}`).join('\n')}`)
+    },
+  },
+  {
+    name: 'list_project_members',
+    title: 'List project members',
+    description: 'Everyone in a project with their name, email, role and user id. Tickets can only be given to these people.',
+    inputSchema: { type: 'object', properties: { project: { type: 'string', description: 'Project key or name, e.g. CMR' } }, required: ['project'], additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    async run(u, a) {
+      const { project, error } = await resolveProject(u, a.project)
+      if (!project) return fail(error!)
+      const { members, error: e2 } = await projectMembers(u, project.key)
+      if (!members) return fail(e2!)
+      const role: Record<string, string> = { ADMIN: 'admin', MEMBER: 'member', VIEWER: 'viewer (cannot be given tickets to work on)' }
+      return text(`${members.length} member${members.length === 1 ? '' : 's'} of ${project.key} (name | email | role | user id):\n${members.map((m) => `${m.name}${m.userId === u.id ? ' (you)' : ''} | ${m.email} | ${role[m.role] ?? m.role.toLowerCase()}${m.isActive ? '' : ' | account switched off'} | ${m.userId}`).join('\n')}`)
+    },
+  },
+  {
+    name: 'list_project_tickets',
+    title: 'List project tickets',
+    description: 'All tickets in one project (not only mine), open ones by default. Can filter by column and by assignee (a name, email, "me" or "unassigned").',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project key or name, e.g. CMR' },
+        status: { type: 'string', description: 'Only this column, e.g. In Progress' },
+        assignee: { type: 'string', description: 'Only tickets given to this person (name, email, id, "me"), or "unassigned"' },
+        include_done: { type: 'boolean', description: 'Also list finished tickets (default false)' },
+      },
+      required: ['project'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+    async run(u, a) {
+      const { project, error } = await resolveProject(u, a.project)
+      if (!project) return fail(error!)
+      const { board, error: e2 } = await loadBoard(u, project.key, a.include_done === true)
+      if (!board) return fail(e2!)
+      let rows = board.tasks
+      if (str(a.status)) {
+        const col = findColumn(board.columns, str(a.status))
+        if (!col) return fail(`No column "${str(a.status)}" on ${project.key}. Columns: ${board.columns.map((x) => x.name).join(', ')}.`)
+        rows = rows.filter((t) => t.status === col.name)
+      } else if (a.include_done !== true) {
+        rows = rows.filter((t) => t.category !== 'DONE')
+      }
+      if (str(a.assignee)) {
+        if (/^(unassigned|nobody|none)$/i.test(str(a.assignee))) rows = rows.filter((t) => !t.assignees.length)
+        else {
+          const { members, error: e3 } = await projectMembers(u, project.key)
+          if (!members) return fail(e3!)
+          const { member, error: e4 } = resolveMember(u, members, str(a.assignee), project.key)
+          if (!member) return fail(e4!)
+          rows = rows.filter((t) => t.assignees.some((x) => x.id === member.userId))
+        }
+      }
+      if (!rows.length) return text(`No ${a.include_done === true || str(a.status) ? '' : 'open '}tickets in ${project.key} match.`)
+      return text(`${rows.length} ticket${rows.length === 1 ? '' : 's'} in ${project.key} (code | status | priority | due | title | given to, given by):\n${rows.map((t) => ticketLine(t, 'both')).join('\n')}\n\nUse get_ticket with a code for the full brief.`)
+    },
+  },
+  {
+    name: 'create_ticket',
+    title: 'Create a ticket',
+    description: 'Adds a ticket to a project board, exactly like "+ Add task" in Metriq: it gets the next code (e.g. CMR-7), the person using Claude is "given by", and the assignee is notified. Only project members can be assignees.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project key or name, e.g. CMR' },
+        title: { type: 'string' },
+        description: { type: 'string', description: 'What to do (markdown is fine)' },
+        assignee: { type: 'string', description: 'Who does it: name, email, user id, or "me". Leave out for nobody yet.' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD (end of that day, Pakistan time), or "YYYY-MM-DD HH:MM"' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'Default medium' },
+        status: { type: 'string', description: 'Board column to start in (see list_board_columns). Default: the board\'s first column for new tickets.' },
+        checklist: { type: 'array', items: { type: 'string' }, description: 'Checklist items' },
+      },
+      required: ['project', 'title'],
+      additionalProperties: false,
+    },
+    async run(u, a) {
+      const { project, error } = await resolveProject(u, a.project)
+      if (!project) return fail(error!)
+      const title = str(a.title)
+      if (!title) return fail('Give the ticket a title.')
+      const body: Record<string, unknown> = { title, description: str(a.description) || null }
+      if (a.priority !== undefined) {
+        const p = PRIORITY[str(a.priority).toLowerCase()]
+        if (!p) return fail(`Priority must be low, medium, high or urgent (not "${str(a.priority)}").`)
+        body.priority = p
+      }
+      if (a.due_date !== undefined) {
+        const d = parseDue(a.due_date)
+        if (d.error) return fail(d.error)
+        body.dueAt = d.iso
+      }
+      let assigneeName = 'nobody yet'
+      if (str(a.assignee)) {
+        const { members, error: e2 } = await projectMembers(u, project.key)
+        if (!members) return fail(e2!)
+        const { member, error: e3 } = resolveMember(u, members, str(a.assignee), project.key)
+        if (!member) return fail(e3!)
+        body.assigneeIds = [member.userId]
+        assigneeName = member.name
+      }
+      if (str(a.status)) {
+        const { board, error: e4 } = await loadBoard(u, project.key)
+        if (!board) return fail(e4!)
+        const col = findColumn(board.columns, str(a.status))
+        if (!col) return fail(`No column "${str(a.status)}" on ${project.key}. Columns: ${board.columns.map((x) => x.name).join(', ')}.`)
+        body.columnId = col.id
+      }
+      if (Array.isArray(a.checklist)) body.checklist = a.checklist.map((x) => String(x).trim()).filter(Boolean)
+      const r = await invokeAs(T.createTask, u, { params: { key: project.key }, body })
+      if (r.status >= 400) return fail(invokedError(r))
+      const t = (r.body as { task: Card }).task
+      return text([
+        `Created ${t.code}: ${t.title}`,
+        `Project: ${project.key}  |  Status: ${t.status}  |  Priority: ${t.priority.toLowerCase()}`,
+        `Assigned to: ${assigneeName}  |  Given by: ${u.name}`,
+        `Due: ${t.dueAt ? fmtWhen(t.dueAt) : 'no due date'}`,
+        `Open it: ${ticketUrl(project.key, t.code)}`,
+      ].join('\n'))
+    },
+  },
+  {
+    name: 'update_ticket',
+    title: 'Edit a ticket',
+    description: 'Changes a ticket\'s title, description, assignee, due date or priority. Only the fields you pass change. Same rules as editing in Metriq: the creator, an assignee or a project admin can edit; only the creator or an admin can change the due date.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: { type: 'string', description: 'Ticket code, e.g. CMR-7' },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        assignee: { type: 'string', description: 'New assignee (replaces the current ones): name, email, user id, "me", or "nobody"' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD, "YYYY-MM-DD HH:MM", or "none" to remove it' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+      },
+      required: ['code'],
+      additionalProperties: false,
+    },
+    async run(u, a) {
+      const c = code(a.code)
+      const { task, error } = await loadTicket(u, c)
+      if (!task) return fail(error!)
+      const body: Record<string, unknown> = {}
+      const changed: string[] = []
+      if (a.title !== undefined) { if (!str(a.title)) return fail('The title cannot be empty.'); body.title = str(a.title); changed.push('title') }
+      if (a.description !== undefined) { body.description = str(a.description) || null; changed.push('description') }
+      if (a.priority !== undefined) {
+        const p = PRIORITY[str(a.priority).toLowerCase()]
+        if (!p) return fail(`Priority must be low, medium, high or urgent (not "${str(a.priority)}").`)
+        body.priority = p; changed.push(`priority to ${p.toLowerCase()}`)
+      }
+      if (a.due_date !== undefined) {
+        const d = parseDue(a.due_date)
+        if (d.error) return fail(d.error)
+        body.dueAt = d.iso; changed.push(d.iso ? `due date to ${fmtWhen(d.iso)}` : 'due date removed')
+      }
+      if (a.assignee !== undefined) {
+        if (/^(nobody|none|unassigned)$/i.test(str(a.assignee)) || !str(a.assignee)) { body.assigneeIds = []; changed.push('assignee removed') }
+        else {
+          const { members, error: e2 } = await projectMembers(u, task.projectKey)
+          if (!members) return fail(e2!)
+          const { member, error: e3 } = resolveMember(u, members, str(a.assignee), task.projectKey)
+          if (!member) return fail(e3!)
+          body.assigneeIds = [member.userId]; changed.push(`assigned to ${member.name}`)
+        }
+      }
+      if (!changed.length) return fail('Nothing to change. Pass a title, description, assignee, due_date or priority.')
+      const r = await invokeAs(T.updateTask, u, { params: { code: c }, body })
+      if (r.status >= 400) return fail(invokedError(r))
+      return text(`${c} updated: ${changed.join(', ')}.\nOpen it: ${ticketUrl(task.projectKey, c)}`)
+    },
+  },
+  {
+    name: 'add_checklist_item',
+    title: 'Add a checklist item',
+    description: 'Adds an item to the end of a ticket\'s checklist.',
+    inputSchema: { type: 'object', properties: { code: { type: 'string', description: 'Ticket code, e.g. CMR-7' }, text: { type: 'string' } }, required: ['code', 'text'], additionalProperties: false },
+    async run(u, a) {
+      const c = code(a.code)
+      const t = str(a.text)
+      if (!t) return fail('Write the checklist item.')
+      const r = await invokeAs(T.addChecklistItem, u, { params: { code: c }, body: { text: t.slice(0, 300) } })
+      if (r.status >= 400) return fail(r.status === 403 ? `You cannot change ${c}: only its creator, an assignee or a project admin can edit it.` : invokedError(r))
+      return text(`Added "${t.slice(0, 300)}" to the checklist of ${c}.`)
+    },
+  },
+  {
+    name: 'delete_ticket',
+    title: 'Delete a ticket',
+    description: 'Deletes a ticket. Only the person who created it can delete it (same rule as Metriq). It is removed from the board; nothing else is lost.',
+    inputSchema: { type: 'object', properties: { code: { type: 'string', description: 'Ticket code, e.g. CMR-7' } }, required: ['code'], additionalProperties: false },
+    annotations: { destructiveHint: true },
+    async run(u, a) {
+      const c = code(a.code)
+      const { task, error } = await loadTicket(u, c)
+      if (!task) return fail(error!)
+      const r = await invokeAs(T.deleteTask, u, { params: { code: c } })
+      if (r.status === 403) return fail(`You cannot delete ${c}: only the person who created it (${task.createdBy.name}) can delete it.`)
+      if (r.status >= 400) return fail(invokedError(r))
+      return text(`${c} "${task.title}" deleted.`)
     },
   },
 ]
