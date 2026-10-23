@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma'
 import { verifyToken } from '../lib/auth'
 import type { AuthedRequest } from '../middleware/auth'
 import { captureError, normalizePath } from '../lib/health/errors'
+import { isForeignScriptError } from '../lib/health/foreignScript'
 import { nextRunAt, startAudit } from '../lib/health/audit'
 import { JOBS } from '../lib/health/jobs'
 import { errorBrief } from '../lib/health/report'
@@ -264,6 +265,8 @@ export async function reportClientError(req: Request, res: Response): Promise<vo
     slot.n++
   } else perMinute.set(who, { at: now, n: 1 })
   if (perMinute.size > 5000) perMinute.clear()
+  // A browser extension's or another site's script broke, not ours: nothing to fix in Metriq.
+  if (isForeignScriptError(p.data.stack, p.data.url)) { res.status(202).json({ ok: true, ignored: 'not Metriq code' }); return }
   let page: string | null = null
   try { page = p.data.url ? normalizePath(new URL(p.data.url, 'http://x').pathname) : null } catch { page = null }
   captureError({

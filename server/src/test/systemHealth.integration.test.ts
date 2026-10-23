@@ -106,6 +106,29 @@ describe('browser errors', () => {
     expect((await alerts(w.itadMember)).map((n) => n.title)).toContain('An error came back in a browser')
   })
 
+  it('drops errors thrown by a browser extension or another script injected into the page', async () => {
+    const before = await prisma.errorGroup.count({ where: { source: 'BROWSER' } })
+    // The exact reports from Hassan Raza (/app/dashboard) and Muhammad Zeeshan (/app/attendance/me), 23 Oct 2026.
+    const injected = [
+      { message: 'Uncaught ReferenceError: _0x5229ea is not defined', stack: 'ReferenceError: _0x5229ea is not defined\n    at <anonymous>:1:30\n    at <anonymous>:1:303', url: 'https://pulsetrack.online/app/dashboard', kind: 'error' },
+      { message: 'Uncaught ReferenceError: _0x5229ea is not defined', stack: 'ReferenceError: _0x5229ea is not defined\n    at <anonymous>:1:30\n    at <anonymous>:1:318', url: 'https://pulsetrack.online/app/attendance/me', kind: 'error' },
+      { message: 'TypeError: x is not a function', stack: 'TypeError: x is not a function\n    at chrome-extension://abcdefgh/content.js:4:9', url: 'https://pulsetrack.online/app/dashboard', kind: 'error' },
+      { message: 'TypeError: y', stack: 'TypeError: y\n    at track (https://ads.example.com/tag.js:1:99)', url: 'https://pulsetrack.online/app/dashboard', kind: 'rejection' },
+      { message: 'TypeError: z', stack: 'z@moz-extension://1234/inject.js:2:3', url: 'https://pulsetrack.online/app/dashboard', kind: 'error' },
+    ]
+    for (const r of injected) {
+      const res = await request(app).post('/api/system-health/client-error').set(...auth(w.leadgenMember)).send(r).expect(202)
+      expect(res.body.ignored).toBe('not Metriq code')
+    }
+    // Our own code still gets logged, even when an injected frame is mixed in.
+    await request(app).post('/api/system-health/client-error').set(...auth(w.leadgenMember)).send({ message: 'TypeError: ours', stack: 'TypeError: ours\n    at <anonymous>:1:1\n    at Dashboard (https://pulsetrack.online/assets/Dashboard-Ab12.js:3:40)', url: 'https://pulsetrack.online/app/dashboard', kind: 'error' }).expect(202)
+    await flushErrors()
+    const groups = await prisma.errorGroup.findMany({ where: { source: 'BROWSER' } })
+    expect(groups).toHaveLength(before + 1)
+    expect(groups.some((g) => g.message.includes('_0x5229ea'))).toBe(false)
+    expect(groups.some((g) => g.message === 'TypeError: ours')).toBe(true)
+  })
+
   it('rejects junk', async () => {
     await request(app).post('/api/system-health/client-error').send({}).expect(400)
     await request(app).post('/api/system-health/client-error').send({ message: 'x'.repeat(3000) }).expect(400)

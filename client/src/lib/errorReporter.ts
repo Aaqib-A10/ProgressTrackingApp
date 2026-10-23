@@ -16,6 +16,30 @@ const NOISE = [
   /^(TypeError: )?(Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.?)$/i,
   /NotAllowedError|Permission denied|play\(\) request was interrupted/i,
 ]
+/**
+ * True when someone else's script broke on our page (a browser extension, antivirus, a
+ * translator): its stack has frames but none from this site's own files, e.g.
+ * "at <anonymous>:1:30" with a scrambled name like _0x5229ea. Nothing in Metriq can fix it.
+ * The server has the same rule in server/src/lib/health/foreignScript.ts (keep the two in step).
+ */
+export function isForeignScriptError(stack: string | null | undefined, pageUrl: string): boolean {
+  if (!stack) return false
+  const locs: string[] = []
+  for (const raw of stack.split('\n')) {
+    const line = raw.trim()
+    if (line.startsWith('at ')) {
+      const m = /\(([^()]*)\)\s*$/.exec(line)
+      locs.push((m ? m[1] : line.slice(3).replace(/^async\s+/, '')).trim())
+    } else if (/^[^\s@]*@\S+:\d+(:\d+)?$/.test(line)) {
+      locs.push(line.slice(line.lastIndexOf('@', line.search(/:\d+(:\d+)?$/)) + 1))
+    }
+  }
+  if (!locs.length) return false
+  const host = (u: string) => { try { return new URL(u).host } catch { return null } }
+  const own = host(pageUrl)
+  return !locs.some((l) => /^https?:\/\//i.test(l) && (!own || host(l) === own))
+}
+
 const sent = new Set<string>()
 let total = 0
 
@@ -23,6 +47,7 @@ export function reportError(e: { message: string; stack?: string | null; kind?: 
   try {
     const message = (e.message || 'Unknown error').slice(0, 2000)
     if (NOISE.some((re) => re.test(message) || (e.stack ? re.test(e.stack.split('\n')[1] ?? '') : false))) return
+    if (isForeignScriptError(e.stack, window.location.href)) return
     const key = `${message}|${(e.stack ?? '').slice(0, 200)}`
     if (sent.has(key) || total >= 10) return
     sent.add(key)
