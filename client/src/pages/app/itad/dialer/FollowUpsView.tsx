@@ -127,7 +127,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
   )
 }
 
-const DID: Record<string, string> = { CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', NOTE: 'Note added', KEEP: 'Kept', DROP: 'Dropped', CLEAR: 'Snooze cleared', EDIT: 'Details added', STATE_FIX: 'State corrected', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill' }
+const DID: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', NOTE: 'Note added', KEEP: 'Kept', DROP: 'Dropped', CLEAR: 'Snooze cleared', EDIT: 'Details added', STATE_FIX: 'State corrected', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill' }
 function whenCell(x: FollowUp, tab: Tab, now: Date, did?: string) {
   const l = x.lead
   const t = (iso: string) => new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })

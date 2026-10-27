@@ -33,3 +33,6 @@ export const guestLimiter = rateLimit({ ...base, windowMs: 10 * 60 * 1000, limit
 
 /** Claude's Metriq connector: generous (one task can take many calls), but not unlimited. */
 export const mcpLimiter = rateLimit({ ...base, windowMs: 60 * 1000, limit: 240, message: { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Too many requests. Wait a minute.' } } })
+
+/** The predictive dialer's link: one message per call, many agents at once. */
+export const dialerHookLimiter = rateLimit({ ...base, windowMs: 60 * 1000, limit: 1200, message: { ok: false, error: 'Too many messages. Wait a minute.' } })

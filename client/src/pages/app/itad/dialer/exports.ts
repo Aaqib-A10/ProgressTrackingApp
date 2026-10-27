@@ -35,13 +35,16 @@ export function splitName(name: string | null): [string | null, string | null] {
   return [parts[0], parts.length > 1 ? parts.slice(1).join(' ') : null]
 }
 
-/** One row per lead, phone and name first, ready to upload to the predictive dialer. */
+/**
+ * One row per lead, phone and name first, ready to upload to the predictive dialer. The Metriq lead
+ * ID goes into the dialer's own lead reference field so call results come back to the right lead.
+ */
 export function leadSheet(leads: DialerLead[], now: Date, showOwner: boolean): { head: string[]; rows: (string | number | null)[][] } {
-  const head = ['Phone (digits)', 'Phone', 'First name', 'Last name', 'Contact name', 'Company', 'Website', 'Email', 'City', 'State', 'Region', 'Time zone', 'Status', 'Industry', 'List', 'Second phone', 'Second email', 'Decision maker', 'Best time', 'LinkedIn', 'Tags', 'CRM lead ID', 'Last activity', ...(showOwner ? ['Rep'] : [])]
+  const head = ['Phone (digits)', 'Phone', 'Metriq lead ID', 'First name', 'Last name', 'Contact name', 'Company', 'Website', 'Email', 'City', 'State', 'Region', 'Time zone', 'Status', 'Industry', 'List', 'Second phone', 'Second email', 'Decision maker', 'Best time', 'LinkedIn', 'Tags', 'CRM lead ID', 'Last activity', ...(showOwner ? ['Rep'] : [])]
   const rows = leads.map((l) => {
     const r = leadRegion(l, now)
     const [first, last] = splitName(l.contactName)
-    return [dialDigits(l.phone), l.phone, first, last, l.contactName, l.company, l.website, l.email, l.city, leadState(l), r, r ? REGION_META[r].name : null, l.status, l.industry, l.listName, l.phone2, l.email2, l.decisionMaker, l.bestTime, l.linkedin, l.tags.join(', '), l.externalId, lastActivity(l).slice(0, 10), ...(showOwner ? [l.ownerName] : [])]
+    return [dialDigits(l.phone), l.phone, l.id, first, last, l.contactName, l.company, l.website, l.email, l.city, leadState(l), r, r ? REGION_META[r].name : null, l.status, l.industry, l.listName, l.phone2, l.email2, l.decisionMaker, l.bestTime, l.linkedin, l.tags.join(', '), l.externalId, lastActivity(l).slice(0, 10), ...(showOwner ? [l.ownerName] : [])]
   })
   return { head, rows }
 }

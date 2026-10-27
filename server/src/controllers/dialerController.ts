@@ -2,7 +2,8 @@ import type { Response } from 'express'
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
-import { contactNameFor, websiteFromRaw } from '../lib/dialerRaw'
+import { contactNameFor, industryFromRaw, websiteFromRaw } from '../lib/dialerRaw'
+import { OUTCOMES, type Outcome } from '../lib/dialer/calls'
 import type { AuthedRequest } from '../middleware/auth'
 import { findState, stateFromPhone } from '../lib/dialer/states'
 import { DEFAULT_SETTINGS, FOLLOW_UP_MAX, FOLLOW_UP_MIN, funnel, normalizeStatus, stageOf, withDefaults, type DialerSettingsData, type FunnelNumbers } from '../lib/dialer/rules'
@@ -28,7 +29,7 @@ export async function loadSettings(): Promise<DialerSettingsData> {
   return withDefaults(row?.data)
 }
 
-async function whoAmI(req: AuthedRequest) {
+export async function whoAmI(req: AuthedRequest) {
   const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { id: true, name: true, role: true, departmentId: true, department: { select: { type: true } } } })
   const isManager = me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'ITAD')
   return { ...me, isManager }
@@ -179,7 +180,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     recs.set(key, {
       key, externalId: leadId, company: company ?? contactName!, contactName, email, phone,
       city: clean(get(row, 'city')), stateRaw, state: st?.name ?? null, region: st?.region ?? null, verifyZone: !!st?.split,
-      industry: clean(get(row, 'industry')), status, stage: stageOf(status, settings), source: clean(get(row, 'source')),
+      industry: clean(get(row, 'industry')) ?? industryFromRaw(raw), status, stage: stageOf(status, settings), source: clean(get(row, 'source')),
       leadDate: parseDate(get(row, 'leadDate')), lastActivityAt: parseDate(get(row, 'lastActivity')),
       website: clean(get(row, 'website')) ?? websiteFromRaw(raw), companySize: clean(get(row, 'companySize')), listName, raw,
     })
@@ -255,6 +256,8 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
         industry: r.industry, status: r.status, stage: r.stage, maxStage: Math.max(old.maxStage, r.stage), source: r.source,
         leadDate: r.leadDate, lastActivityAt: r.lastActivityAt, statusChangedAt: statusChanged ? now : old.statusChangedAt,
         website: r.website, companySize: r.companySize, listName: r.listName,
+        // A new number from the CRM may work: "wrong number" from the dialer is cleared.
+        ...(old.wrongNumber && r.phone !== old.phone ? { wrongNumber: false } : {}),
         inLatestImport: true, raw: r.raw as Prisma.InputJsonValue, lastImportId: imp.id,
         // Added-here fields (second phone, notes...) are never touched. A status change means the lead
         // moved on: a pending call-later, snooze or follow-up drop from before no longer applies.
@@ -314,7 +317,7 @@ export async function dialerData(req: AuthedRequest, res: Response): Promise<voi
         leadDate: true, lastActivityAt: true, statusChangedAt: true, duplicate: true, sentToLeadGen: true, snoozeUntil: true, callLaterAt: true,
         lastActionAt: true, createdAt: true, website: true, companySize: true, listName: true, externalId: true,
         phone2: true, email2: true, linkedin: true, decisionMaker: true, bestTime: true, tags: true,
-        needsCrmUpdate: true, crmUpdateWhat: true, followUpDropped: true, backlogKeptAt: true, lastImportId: true, firstImportId: true,
+        needsCrmUpdate: true, crmUpdateWhat: true, followUpDropped: true, backlogKeptAt: true, lastImportId: true, firstImportId: true, doNotCall: true, wrongNumber: true,
         _count: { select: { actions: true, notes: true } },
       },
     }),
@@ -404,13 +407,18 @@ async function loadOwnLead(req: AuthedRequest, res: Response) {
 export async function leadDetail(req: AuthedRequest, res: Response): Promise<void> {
   const got = await loadOwnLead(req, res)
   if (!got) return
-  const [actions, changes, notes] = await Promise.all([
+  const [actions, changes, notes, calls] = await Promise.all([
     prisma.dialerAction.findMany({ where: { leadId: got.lead.id }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, kind: true, note: true, at: true, createdAt: true, user: { select: { name: true } } } }),
     prisma.dialerStatusChange.findMany({ where: { leadId: got.lead.id }, orderBy: { createdAt: 'asc' }, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, importId: true } }),
     prisma.dialerNote.findMany({ where: { leadId: got.lead.id }, orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }], select: noteSelect }),
+    // Calls the predictive dialer reported for this lead.
+    prisma.dialerCall.findMany({ where: { leadId: got.lead.id }, orderBy: { calledAt: 'desc' }, take: 200, select: { id: true, calledAt: true, disposition: true, outcome: true, notes: true, durationSec: true, agentRaw: true, effect: true, agent: { select: { name: true } } } }),
   ])
   const { raw, ...lead } = got.lead
-  res.json({ lead: { ...lead, suggestedState: !lead.state && !lead.stateOverride ? stateFromPhone(lead.phone) : null }, raw, actions, changes, notes: notes.map(noteView) })
+  res.json({
+    lead: { ...lead, suggestedState: !lead.state && !lead.stateOverride ? stateFromPhone(lead.phone) : null }, raw, actions, changes, notes: notes.map(noteView),
+    calls: calls.map((c) => ({ id: c.id, calledAt: c.calledAt.toISOString(), disposition: c.disposition, outcome: c.outcome, outcomeLabel: c.outcome ? OUTCOMES[c.outcome as Outcome] ?? c.outcome : null, notes: c.notes, durationSec: c.durationSec, agent: c.agent?.name ?? c.agentRaw ?? null, effect: c.effect })),
+  })
 }
 
 const noteSelect = { id: true, leadId: true, text: true, pinned: true, nextActionAt: true, editedAt: true, createdAt: true, user: { select: { id: true, name: true } } } as const

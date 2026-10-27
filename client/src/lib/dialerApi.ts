@@ -49,6 +49,9 @@ export interface DialerLead {
   statusChangedAt: string | null
   duplicate: boolean
   sentToLeadGen: boolean
+  /** From the predictive dialer: never dial again (DNC) / the number is wrong. Imports never change these. */
+  doNotCall?: boolean
+  wrongNumber?: boolean
   snoozeUntil: string | null
   callLaterAt: string | null
   lastActionAt: string | null
@@ -126,7 +129,10 @@ export interface LeadDetail {
   actions: { id: string; kind: string; note: string | null; at: string | null; createdAt: string; user: { name: string } }[]
   changes: { id: string; fromStatus: string | null; toStatus: string; createdAt: string; importId: string | null }[]
   notes: DialerNote[]
+  /** Calls the predictive dialer reported for this lead, newest first. */
+  calls?: DialerCallRow[]
 }
+export interface DialerCallRow { id: string; calledAt: string; disposition: string; outcome: string | null; outcomeLabel: string | null; notes: string | null; durationSec: number | null; agent: string | null; effect: string | null }
 export interface NoteExportRow extends DialerNote { company: string; contactName: string | null; phone: string | null; crmId: string | null; status: string; rep: string }
 export interface FillRow { matchKey?: string | null; crmId?: string | null; email?: string | null; company?: string | null; contactName?: string | null; phone?: string | null; phone2?: string | null; email2?: string | null; linkedin?: string | null; decisionMaker?: string | null; bestTime?: string | null; note?: string | null }
 export interface FillPreview { matched: number; willUpdate: number; notes: number; unmatched: { row: number; company: string | null; reason: string }[]; unmatchedCount: number; conflicts: { leadId: string; company: string; field: string; current: string; incoming: string }[]; conflictCount: number }
@@ -176,5 +182,30 @@ export const dialerApi = {
   settings: () => api.get<{ settings: DialerSettings; defaults: DialerSettings }>('/dialer/settings'),
   saveSettings: (s: DialerSettings) => api.put<{ settings: DialerSettings; restaged: number }>('/dialer/settings', s),
   duplicates: () => api.get<{ duplicates: DuplicateGroup[] }>('/dialer/duplicates'),
+  integration: () => api.get<IntegrationData>('/dialer/integration'),
+  makeIntegration: (name: string) => api.post<{ id: string; hookUrl: string }>('/dialer/integration', { name }),
+  saveIntegration: (body: { enabled?: boolean; fieldMap?: Record<string, string>; dispositionMap?: Record<string, string>; agentMap?: Record<string, string> }) => api.put<{ ok: true; enabled: boolean }>('/dialer/integration', body),
+  revokeIntegration: () => api.del('/dialer/integration'),
+  testIntegration: (message: string) => api.post<IntegrationTest>('/dialer/integration/test', { message }),
+  linkCall: (callId: string, leadId: string) => api.post<{ ok: true; effect: string }>(`/dialer/calls/${callId}/link`, { leadId }),
+  searchLeads: (q: string) => api.get<{ leads: { id: string; company: string; contactName: string | null; phone: string | null; status: string; owner: string }[] }>(`/dialer/leads-search?q=${encodeURIComponent(q)}`),
   resolveDuplicate: (matchKey: string, keepOwnerId: string) => api.post<{ ok: true }>('/dialer/duplicates/resolve', { matchKey, keepOwnerId }),
+}
+
+// Predictive dialer integration (ITAD managers)
+export interface IntegrationCall { id: string; calledAt: string; phone: string | null; disposition: string; outcome: string | null; outcomeLabel: string | null; notes: string | null; durationSec: number | null; agent: string | null; agentRaw: string | null; matchedBy: string | null; effect: string | null; lead: { id: string; company: string; owner: string } | null }
+export interface IntegrationData {
+  integration: { id: string; name: string; prefix: string; enabled: boolean; createdAt: string; lastReceivedAt: string | null; fieldMap: Record<string, string>; dispositionMap: Record<string, string>; agentMap: Record<string, string> } | null
+  outcomes: { key: string; label: string }[]
+  defaultDispositions: Record<string, string>
+  fields: { key: string; names: string[] }[]
+  agents: { id: string; name: string; email: string }[]
+  recent: IntegrationCall[]
+  unmatched: IntegrationCall[]
+}
+export interface IntegrationTest {
+  read: { leadId: string | null; crmId: string | null; phone: string | null; disposition: string | null; notes: string | null; agent: string | null; durationSec: number | null; callId: string | null; calledAt: string | null; callbackAt: string | null }
+  outcome: string | null; outcomeLabel: string | null; agent: string | null
+  lead: { id: string; company: string; status: string; owner: string; matchedBy: string | null } | null
+  problems: string[]
 }

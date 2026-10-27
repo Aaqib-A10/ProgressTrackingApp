@@ -50,8 +50,14 @@ export function RegionBadge({ lead, region, now }: { lead?: DialerLead; region?:
 }
 
 /** Status pill: neutral, except positive (green). */
-export function StatusPill({ lead }: { lead: Pick<DialerLead, 'status' | 'stage'> }) {
-  return <span className={cn('inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', lead.stage >= 4 ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted')}>{lead.status}</span>
+export function StatusPill({ lead }: { lead: Pick<DialerLead, 'status' | 'stage'> & Partial<Pick<DialerLead, 'doNotCall' | 'wrongNumber'>> }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={cn('inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', lead.stage >= 4 ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted')}>{lead.status}</span>
+      {lead.doNotCall && lead.status !== 'DNC' && <span className="whitespace-nowrap rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-bold text-danger" title="Do not call (from the dialer)">DNC</span>}
+      {lead.wrongNumber && <span className="whitespace-nowrap rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-bold text-danger" title="Wrong number (from the dialer)">Wrong #</span>}
+    </span>
+  )
 }
 
 export function Panel({ title, info, action, children, className }: { title?: ReactNode; info?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {

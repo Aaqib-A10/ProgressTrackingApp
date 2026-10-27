@@ -1,4 +1,5 @@
 import { CHART } from '../../../../components/charts/chartTheme'
+import { PredictiveDialer } from './PredictiveDialer'
 import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts'
 import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
@@ -184,6 +185,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
   return (
     <div className="space-y-4">
       <MyFollowUpDays defaults={s.followUp} onSaved={onSaved} />
+      {canEdit && <PredictiveDialer />}
       <h2 className="flex items-center gap-1.5 pt-2 text-label-md uppercase tracking-wide text-ink-muted">Company settings<InfoTip>{canEdit ? 'These change everyone\'s numbers.' : 'Only an ITAD Team Lead or Super Admin can change these. You can see how the numbers are worked out.'}</InfoTip></h2>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Stage of each status (changes everyone's numbers)">

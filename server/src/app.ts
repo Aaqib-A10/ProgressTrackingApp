@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser'
 import { healthRouter } from './routes/health'
 import { authRouter } from './routes/auth'
 import { itadRouter } from './routes/itad'
-import { dialerRouter } from './routes/dialer'
+import { dialerRouter, dialerHookRouter } from './routes/dialer'
 import { leadgenRouter } from './routes/leadgen'
 import { dashboardRouter } from './routes/dashboard'
 import { reportsRouter } from './routes/reports'
@@ -76,6 +76,7 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/docs', docsRouter],
   ['/api/claude', claudeRouter],
   ['/api/mcp', mcpRouter],
+  ['/api/dialer-hook', dialerHookRouter],
   ['/api/system-health', systemHealthRouter],
 ]
 

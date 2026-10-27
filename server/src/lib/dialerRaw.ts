@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 
 /**
- * Contact name and website from a CRM export row, whatever the CRM calls the columns.
+ * Contact name, website and industry from a CRM export row, whatever the CRM calls the columns.
  *
  * The Lead Dialer import only knew a single "Contact name" column and a few website headers,
  * so an export with "First Name" + "Last Name" (or "Website URL", "Web Address"...) came in
@@ -15,6 +15,7 @@ const norm = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '')
 const FULL = ['contactname', 'fullname', 'name', 'leadname', 'contactperson', 'contact', 'primarycontact', 'contactfullname', 'personname', 'person', 'prospectname', 'prospect', 'customername', 'clientname', 'pointofcontact', 'poc']
 const FIRST = ['firstname', 'first', 'fname', 'givenname', 'contactfirstname', 'leadfirstname', 'forename']
 const LAST = ['lastname', 'last', 'lname', 'surname', 'familyname', 'contactlastname', 'leadlastname']
+const INDUSTRY = ['industry', 'industrytype', 'industryname', 'companyindustry', 'primaryindustry', 'accountindustry', 'leadindustry', 'vertical', 'verticalmarket', 'market', 'sector', 'businesstype', 'typeofbusiness', 'businesscategory', 'category', 'sicdescription', 'sic', 'naicsdescription', 'naics', 'industrydescription', 'subindustry']
 const WEB = ['website', 'websiteurl', 'web', 'webaddress', 'websiteaddress', 'webpage', 'webpageurl', 'url', 'companywebsite', 'companywebsiteurl', 'companyurl', 'companysite', 'domain', 'companydomain', 'homepage', 'site', 'accountwebsite', 'businesswebsite']
 
 type Raw = Record<string, unknown>
@@ -49,6 +50,12 @@ export function contactNameFromRaw(raw: Raw | null | undefined, company?: string
   return pick(raw, FULL, notCompany)
 }
 
+/** ITAD, Oct 2026: "Industry is not showing when we open a lead" — the export called it something else. */
+export function industryFromRaw(raw: Raw | null | undefined): string | null {
+  if (!raw) return null
+  return pick(raw, INDUSTRY, (v) => /[a-z]/i.test(v) && v.length <= 120 && !/@/.test(v) && !/^https?:\/\//i.test(v))
+}
+
 export function websiteFromRaw(raw: Raw | null | undefined): string | null {
   if (!raw) return null
   return pick(raw, WEB, looksLikeSite)
@@ -70,7 +77,7 @@ export function contactNameFor(mapped: string | null, mappedHeader: string | nul
 }
 
 /**
- * Fill the contact name and website of leads imported before this fix, from the row they came
+ * Fill the contact name, website and industry of leads imported before this fix, from the row they came
  * with. Runs once at start; only empty fields are filled, nothing typed by a rep is changed.
  */
 export async function fillContactsFromRaw(): Promise<number> {
@@ -78,8 +85,8 @@ export async function fillContactsFromRaw(): Promise<number> {
   let cursor: string | undefined
   for (;;) {
     const batch = await prisma.dialerLead.findMany({
-      where: { OR: [{ contactName: null }, { website: null }], raw: { not: Prisma.DbNull } },
-      select: { id: true, company: true, contactName: true, website: true, raw: true },
+      where: { OR: [{ contactName: null }, { website: null }, { industry: null }], raw: { not: Prisma.DbNull } },
+      select: { id: true, company: true, contactName: true, website: true, industry: true, raw: true },
       orderBy: { id: 'asc' },
       take: 500,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -91,8 +98,9 @@ export async function fillContactsFromRaw(): Promise<number> {
       const raw = (l.raw && typeof l.raw === 'object' && !Array.isArray(l.raw) ? l.raw : null) as Raw | null
       const contactName = l.contactName ?? contactNameFromRaw(raw, l.company)
       const website = l.website ?? websiteFromRaw(raw)
-      if (contactName !== l.contactName || website !== l.website) {
-        ups.push(prisma.dialerLead.update({ where: { id: l.id }, data: { contactName, website } }))
+      const industry = l.industry ?? industryFromRaw(raw)
+      if (contactName !== l.contactName || website !== l.website || industry !== l.industry) {
+        ups.push(prisma.dialerLead.update({ where: { id: l.id }, data: { contactName, website, industry } }))
       }
     }
     if (ups.length) { await prisma.$transaction(ups); filled += ups.length }

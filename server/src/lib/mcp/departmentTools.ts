@@ -217,7 +217,7 @@ function leadLine(l: DialerLead, now: Date, s: DialerSettings, extra?: string): 
     l.phone ?? 'no phone',
     [l.city, leadState(l)].filter(Boolean).join(', ') || 'no state',
     `their time ${local}${callable ? ' (can call now)' : open && !open.open ? ' (outside calling hours)' : ''}`,
-    l.status,
+    l.doNotCall ? `${l.status}, DO NOT CALL` : l.wrongNumber ? `${l.status}, WRONG NUMBER` : l.status,
     `${quiet}d since last activity${back}`,
     l.pinnedNote ? `note: ${l.pinnedNote.slice(0, 120)}` : null,
     extra ?? null,

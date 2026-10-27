@@ -19,7 +19,7 @@ import { downloadNotes } from './exports'
  * rep can correct here.
  */
 
-const KIND_LABEL: Record<string, string> = { CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups' }
+const KIND_LABEL: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups' }
 const fmt = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, onClose, onChanged }: {
@@ -95,6 +95,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
               {win && <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', win.open ? (win.closingSoon ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success') : 'bg-slate-100 text-ink-muted')}>{win.open ? (win.prime ? 'Open · prime time' : win.closingSoon ? 'Closing soon' : 'Open now') : 'Closed now'}</span>}
               <StatusPill lead={l} />
               <span className="text-[11px] text-ink-muted">Stage {l.stage}</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-ink" title="Industry">{l.industry ?? 'No industry'}</span>
             </div>
           )}
           {l && <div className="mt-3"><LeadActions lead={l} onDone={changed} onNote={() => setNoteFocus((n) => n + 1)} /></div>}
@@ -137,7 +138,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
                 <p className="pt-1 text-[11px] text-ink-muted">Change these in Earthzone; the next import brings them here.</p>
               </Group>
 
-              <Group name="company" title="Company" tag="from CRM" defaultOpen={false}>
+              <Group name="company2" title="Company" tag="from CRM">
                 <Field k="Industry" v={l.industry} />
                 <Field k="Size" v={l.companySize} />
                 <Field k="Source" v={l.source} />
@@ -167,6 +168,26 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
             </div>
             <div className="space-y-3">
               <NotesGroup lead={l} notes={d.notes} meId={meId} settings={settings} focusKey={noteFocus} onChanged={changed} />
+
+              {(d.calls?.length ?? 0) > 0 && (
+                <Group name="calls" title={`Dialer calls · ${d.calls!.length}`}>
+                  <ul className="divide-y divide-line">
+                    {d.calls!.map((c) => (
+                      <li key={c.id} className="py-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="font-semibold text-ink">{c.outcomeLabel ?? c.disposition}</span>
+                          {c.outcomeLabel && c.disposition.toLowerCase() !== c.outcomeLabel.toLowerCase() && <span className="text-[11px] text-ink-muted">({c.disposition})</span>}
+                          <span className="text-ink-muted">{new Date(c.calledAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                          {c.durationSec != null && <span className="text-ink-muted">· {c.durationSec >= 60 ? `${Math.floor(c.durationSec / 60)}m ${String(c.durationSec % 60).padStart(2, '0')}s` : `${c.durationSec}s`}</span>}
+                          {c.agent && <span className="text-ink-muted">· {c.agent}</span>}
+                        </div>
+                        {c.notes && <p className="mt-0.5 whitespace-pre-wrap text-ink">{c.notes}</p>}
+                        {c.effect && c.effect !== 'logged' && <p className="mt-0.5 text-[12px] text-ink-muted">Metriq: {c.effect}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </Group>
+              )}
 
               <Group name="timeline" title="Timeline" defaultOpen={false}>
                 <Timeline d={d} createdAt={l.createdAt} />

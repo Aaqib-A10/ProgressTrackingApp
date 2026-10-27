@@ -137,9 +137,12 @@ const isFuture = (iso: string | null, now: Date) => !!iso && new Date(iso).getTi
 export const isSnoozed = (l: DialerLead, now: Date) => isFuture(l.snoozeUntil, now) || isFuture(l.callLaterAt, now)
 export const isClosed = (l: DialerLead, s: DialerSettings) => s.closed.includes(l.status)
 
-/** Can be dialed now: has a region, not finished / Do-Not-Call, not snoozed, not waiting for a manager. */
+/** Never dial: the predictive dialer reported Do-Not-Call or a wrong number. */
+export const isBlocked = (l: DialerLead) => !!l.doNotCall || !!l.wrongNumber
+
+/** Can be dialed now: has a region, not finished / Do-Not-Call / wrong number, not snoozed, not waiting for a manager. */
 export function isDialable(l: DialerLead, s: DialerSettings, now: Date): boolean {
-  return !l.duplicate && !isClosed(l, s) && !isSnoozed(l, now) && leadRegion(l, now) != null
+  return !l.duplicate && !isBlocked(l) && !isClosed(l, s) && !isSnoozed(l, now) && leadRegion(l, now) != null
 }
 
 export const lastActivity = (l: DialerLead) => l.lastActivityAt ?? l.statusChangedAt ?? l.createdAt
@@ -200,7 +203,7 @@ export function followUpTabs(leads: DialerLead[], s: DialerSettings, now: Date, 
     const item = (callBackDue = false): FollowUp => ({ lead: l, days, threshold: threshold ?? 0, severity: threshold && days >= threshold * 2 ? 'late' : 'due', callBackDue })
     const kind = acted.get(l.id)
     if (kind) t.done.push(item())
-    if (isClosed(l, s)) continue
+    if (isClosed(l, s) || isBlocked(l)) continue
     if (l.followUpDropped) { t.dropped.push(l); continue }
     const cb = l.callLaterAt ? new Date(l.callLaterAt).getTime() : null
     if (cb != null) {

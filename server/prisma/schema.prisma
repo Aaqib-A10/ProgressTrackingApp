@@ -255,6 +255,7 @@ model User {
   dialerActions       DialerAction[]       @relation("DialerActor")
   dialerNotes         DialerNote[]         @relation("DialerNoteAuthor")
   dialerPrefs         DialerUserPrefs?     @relation("DialerPrefsOwner")
+  dialerCalls         DialerCall[]         @relation("DialerCallAgent")
   workLogs            WorkLogEntry[]       @relation("WorkLogOwner")
   workLogReviews      WorkLogReview[]      @relation("WorkLogReviewOwner")
   workLogReviewsGiven WorkLogReview[]      @relation("WorkLogReviewer")
@@ -2510,12 +2511,18 @@ model DialerLead {
   backlogKeptAt   DateTime?
   firstImportId   String?
   lastImportId    String?
+  /// From the predictive dialer (never touched by an import): never dial this lead again.
+  doNotCall       Boolean   @default(false)
+  doNotCallAt     DateTime?
+  /// From the predictive dialer: the number is wrong; kept out of dialing until the phone changes.
+  wrongNumber     Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   actions DialerAction[]
   changes DialerStatusChange[]
   notes   DialerNote[]
+  calls   DialerCall[]
 
   @@unique([ownerId, matchKey])
   @@index([matchKey])
@@ -2593,6 +2600,62 @@ model DialerUserPrefs {
   user      User     @relation("DialerPrefsOwner", fields: [userId], references: [id], onDelete: Cascade)
   data      Json
   updatedAt DateTime @updatedAt
+}
+
+/// A predictive dialer sending call results to Metriq (Oct 2026). The dialer calls a private link
+/// after every call; Metriq finds the lead, logs the call and updates the lead.
+model DialerIntegration {
+  id             String       @id @default(cuid())
+  name           String
+  tokenHash      String       @unique
+  /// First characters of the link's key, to tell links apart.
+  prefix         String
+  enabled        Boolean      @default(true)
+  /// Which field in the dialer's message holds what (phone, lead id, disposition...); blank = guess.
+  fieldMap       Json
+  /// The dialer's disposition codes → a Metriq outcome (CONNECTED, NO_ANSWER, VOICEMAIL...).
+  dispositionMap Json
+  /// The dialer's agent ids → Metriq people.
+  agentMap       Json
+  createdById    String
+  lastReceivedAt DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  calls          DialerCall[]
+}
+
+/// One call reported by the predictive dialer, matched to a lead (or waiting to be matched).
+model DialerCall {
+  id             String            @id @default(cuid())
+  integrationId  String
+  integration    DialerIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  /// The dialer's own id for the call, so the same call sent twice is logged once.
+  externalCallId String
+  leadId         String?
+  lead           DialerLead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  /// How the lead was found: lead_id, crm_id, phone or manual (linked by a manager).
+  matchedBy      String?
+  agentId        String?
+  agent          User?             @relation("DialerCallAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  /// The agent as the dialer named them.
+  agentRaw       String?
+  phone          String?
+  disposition    String
+  /// The Metriq outcome the disposition maps to; null = not mapped (logged only).
+  outcome        String?
+  notes          String?
+  durationSec    Int?
+  calledAt       DateTime
+  callbackAt     DateTime?
+  /// What changed on the lead ("Contact Attempted → Voicemail Sent", "call back set"...).
+  effect         String?
+  /// The message as received (cut short), to check mappings.
+  payload        Json?
+  createdAt      DateTime          @default(now())
+
+  @@unique([integrationId, externalCallId])
+  @@index([leadId, calledAt])
+  @@index([integrationId, createdAt])
 }
 
 /// One row ("default"): stage map, follow-up rules, highlight thresholds, calling slots.

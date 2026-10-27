@@ -25,7 +25,7 @@ const SYNONYMS: Record<ImportField, string[]> = {
   city: ['city', 'town'],
   state: ['state', 'state/province', 'province', 'state name'],
   status: ['lead status', 'status', 'disposition', 'stage', 'lead stage'],
-  industry: ['industry', 'vertical', 'sector'],
+  industry: ['industry', 'industry type', 'company industry', 'primary industry', 'vertical', 'sector', 'business type', 'category', 'sic description', 'naics description'],
   source: ['source', 'lead source'],
   leadDate: ['created', 'created date', 'created at', 'date created', 'created time', 'assigned date', 'date assigned'],
   lastActivity: ['last modified', 'modified', 'modified date', 'last activity', 'last activity date', 'updated', 'last updated', 'updated at', 'modified time', 'last touched'],

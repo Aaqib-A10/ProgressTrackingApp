@@ -52,7 +52,7 @@ app.listen(PORT, () => {
   setAuditBaseUrl(`http://127.0.0.1:${PORT}`)
   startHealthAudit()
   // Leads imported before the import learned First/Last Name and more website columns.
-  void fillContactsFromRaw().then((n) => { if (n) console.log(`[dialer] filled contact name / website on ${n} leads from their import rows`) }).catch((e: Error) => captureError({ source: 'JOB', message: `Fill lead names from import rows: ${e.message}`, stack: e.stack, route: 'job:dialer-fill-contacts' }))
+  void fillContactsFromRaw().then((n) => { if (n) console.log(`[dialer] filled contact name / website / industry on ${n} leads from their import rows`) }).catch((e: Error) => captureError({ source: 'JOB', message: `Fill lead names from import rows: ${e.message}`, stack: e.stack, route: 'job:dialer-fill-contacts' }))
   // When a call with the AI note taker on ends, write its notes.
   setOnCallEnded((c) => { if (c.noteTaker) scheduleNotes(c.callId) })
   // Notes interrupted by a restart or deploy are written now.
