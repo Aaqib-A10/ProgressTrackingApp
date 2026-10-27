@@ -12,6 +12,7 @@ import { startCleanup } from './lib/cleanup'
 import { scheduleNotes } from './controllers/chatController'
 import { recoverNotes } from './lib/pm/notes'
 import { captureError, flushErrors } from './lib/health/errors'
+import { fillContactsFromRaw } from './lib/dialerRaw'
 import { setAuditBaseUrl, startHealthAudit } from './lib/health/audit'
 
 const PORT = Number(process.env.PORT) || 4000
@@ -50,6 +51,8 @@ app.listen(PORT, () => {
   startCleanup()
   setAuditBaseUrl(`http://127.0.0.1:${PORT}`)
   startHealthAudit()
+  // Leads imported before the import learned First/Last Name and more website columns.
+  void fillContactsFromRaw().then((n) => { if (n) console.log(`[dialer] filled contact name / website on ${n} leads from their import rows`) }).catch((e: Error) => captureError({ source: 'JOB', message: `Fill lead names from import rows: ${e.message}`, stack: e.stack, route: 'job:dialer-fill-contacts' }))
   // When a call with the AI note taker on ends, write its notes.
   setOnCallEnded((c) => { if (c.noteTaker) scheduleNotes(c.callId) })
   // Notes interrupted by a restart or deploy are written now.

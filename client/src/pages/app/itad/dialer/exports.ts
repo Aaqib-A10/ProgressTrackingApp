@@ -28,12 +28,20 @@ export function dialDigits(phone: string | null): string {
   return d.length === 11 && d.startsWith('1') ? d.slice(1) : d
 }
 
-/** One row per lead, phone first, ready to upload to the predictive dialer. */
+/** "Mary Ann Smith" → first "Mary", last "Ann Smith" (dialers ask for the two apart). */
+export function splitName(name: string | null): [string | null, string | null] {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return [null, null]
+  return [parts[0], parts.length > 1 ? parts.slice(1).join(' ') : null]
+}
+
+/** One row per lead, phone and name first, ready to upload to the predictive dialer. */
 export function leadSheet(leads: DialerLead[], now: Date, showOwner: boolean): { head: string[]; rows: (string | number | null)[][] } {
-  const head = ['Phone (digits)', 'Phone', 'Company', 'Contact', 'Email', 'City', 'State', 'Region', 'Time zone', 'Status', 'Industry', 'List', 'Second phone', 'Second email', 'Decision maker', 'Best time', 'LinkedIn', 'Website', 'Tags', 'CRM lead ID', 'Last activity', ...(showOwner ? ['Rep'] : [])]
+  const head = ['Phone (digits)', 'Phone', 'First name', 'Last name', 'Contact name', 'Company', 'Website', 'Email', 'City', 'State', 'Region', 'Time zone', 'Status', 'Industry', 'List', 'Second phone', 'Second email', 'Decision maker', 'Best time', 'LinkedIn', 'Tags', 'CRM lead ID', 'Last activity', ...(showOwner ? ['Rep'] : [])]
   const rows = leads.map((l) => {
     const r = leadRegion(l, now)
-    return [dialDigits(l.phone), l.phone, l.company, l.contactName, l.email, l.city, leadState(l), r, r ? REGION_META[r].name : null, l.status, l.industry, l.listName, l.phone2, l.email2, l.decisionMaker, l.bestTime, l.linkedin, l.website, l.tags.join(', '), l.externalId, lastActivity(l).slice(0, 10), ...(showOwner ? [l.ownerName] : [])]
+    const [first, last] = splitName(l.contactName)
+    return [dialDigits(l.phone), l.phone, first, last, l.contactName, l.company, l.website, l.email, l.city, leadState(l), r, r ? REGION_META[r].name : null, l.status, l.industry, l.listName, l.phone2, l.email2, l.decisionMaker, l.bestTime, l.linkedin, l.tags.join(', '), l.externalId, lastActivity(l).slice(0, 10), ...(showOwner ? [l.ownerName] : [])]
   })
   return { head, rows }
 }

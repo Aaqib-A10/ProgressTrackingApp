@@ -18,7 +18,8 @@ import { ImportSummaryView } from './ImportSummaryView'
 const SYNONYMS: Record<ImportField, string[]> = {
   leadId: ['lead id', 'leadid', 'lead_id', 'id', 'record id', 'crm id', 'lead number'],
   company: ['company', 'company name', 'account', 'account name', 'organization', 'organisation', 'business name', 'business'],
-  contactName: ['contact', 'contact name', 'full name', 'name', 'lead name', 'contact person'],
+  // A first-name column is the fallback: the server adds the last-name column to it.
+  contactName: ['contact', 'contact name', 'full name', 'name', 'lead name', 'contact person', 'contact full name', 'primary contact', 'person name', 'first name', 'firstname', 'contact first name'],
   email: ['email', 'email address', 'e-mail', 'work email'],
   phone: ['phone', 'phone number', 'telephone', 'mobile', 'direct phone', 'work phone', 'contact number'],
   city: ['city', 'town'],
@@ -28,18 +29,21 @@ const SYNONYMS: Record<ImportField, string[]> = {
   source: ['source', 'lead source'],
   leadDate: ['created', 'created date', 'created at', 'date created', 'created time', 'assigned date', 'date assigned'],
   lastActivity: ['last modified', 'modified', 'modified date', 'last activity', 'last activity date', 'updated', 'last updated', 'updated at', 'modified time', 'last touched'],
-  website: ['website', 'web site', 'url', 'company website', 'domain'],
+  website: ['website', 'web site', 'url', 'company website', 'domain', 'website url', 'web address', 'web', 'company url', 'company domain', 'homepage', 'webpage'],
   companySize: ['company size', 'size', 'employees', 'no. of employees', 'number of employees', 'employee count', 'headcount'],
 }
 
 function autoMap(headers: string[], saved: Record<string, string | null> | null): Record<ImportField, string | null> {
   const out = {} as Record<ImportField, string | null>
-  const low = headers.map((h) => h.trim().toLowerCase())
+  // "First_Name", "First Name" and "first-name" are the same column.
+  const norm = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const low = headers.map(norm)
   for (const f of IMPORT_FIELDS) {
     const s = saved?.[f.key]
     if (s && headers.includes(s)) { out[f.key] = s; continue }
-    const i = low.findIndex((h) => SYNONYMS[f.key].includes(h))
-    out[f.key] = i >= 0 ? headers[i] : null
+    // Synonyms in order of preference: "Full Name" wins over "First Name".
+    const hit = SYNONYMS[f.key].map((syn) => low.indexOf(norm(syn))).find((i) => i >= 0)
+    out[f.key] = hit != null ? headers[hit] : null
   }
   return out
 }

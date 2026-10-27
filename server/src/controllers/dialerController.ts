@@ -2,6 +2,7 @@ import type { Response } from 'express'
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { contactNameFor, websiteFromRaw } from '../lib/dialerRaw'
 import type { AuthedRequest } from '../middleware/auth'
 import { findState, stateFromPhone } from '../lib/dialer/states'
 import { DEFAULT_SETTINGS, FOLLOW_UP_MAX, FOLLOW_UP_MIN, funnel, normalizeStatus, stageOf, withDefaults, type DialerSettingsData, type FunnelNumbers } from '../lib/dialer/rules'
@@ -161,9 +162,12 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
   let skipped = 0
   let repeated = 0
   for (const row of rows) {
+    const raw: Record<string, string | number | null> = {}
+    headers.forEach((h, i) => { raw[h] = row[i] ?? null })
     const leadId = clean(get(row, 'leadId'))
     const company = clean(get(row, 'company'))
-    const contactName = clean(get(row, 'contactName'))
+    // First + last name columns, "Full Name", "Website URL"...: found even when not picked on the import screen.
+    const contactName = contactNameFor(clean(get(row, 'contactName')), mapping.contactName ?? null, raw, company)
     const email = clean(get(row, 'email'))?.toLowerCase() ?? null
     const phone = clean(get(row, 'phone'))
     const key = matchKeyOf({ leadId, email, company, contactName, phone })
@@ -172,14 +176,12 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     const st = findState(stateRaw)
     const status = normalizeStatus(clean(get(row, 'status')))
     if (recs.has(key)) repeated++
-    const raw: Record<string, string | number | null> = {}
-    headers.forEach((h, i) => { raw[h] = row[i] ?? null })
     recs.set(key, {
       key, externalId: leadId, company: company ?? contactName!, contactName, email, phone,
       city: clean(get(row, 'city')), stateRaw, state: st?.name ?? null, region: st?.region ?? null, verifyZone: !!st?.split,
       industry: clean(get(row, 'industry')), status, stage: stageOf(status, settings), source: clean(get(row, 'source')),
       leadDate: parseDate(get(row, 'leadDate')), lastActivityAt: parseDate(get(row, 'lastActivity')),
-      website: clean(get(row, 'website')), companySize: clean(get(row, 'companySize')), listName, raw,
+      website: clean(get(row, 'website')) ?? websiteFromRaw(raw), companySize: clean(get(row, 'companySize')), listName, raw,
     })
   }
   if (recs.size === 0) { res.status(400).json({ error: 'No leads found in the file. Check the column choices.' }); return }
