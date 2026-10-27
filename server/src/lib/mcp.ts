@@ -13,6 +13,7 @@ import { COMPANY_TZ } from './time'
 import { canSeeHealth } from '../controllers/systemHealthController'
 import { auditReport, errorBrief, errorList } from './health/report'
 import { startAudit } from './health/audit'
+import { DEPARTMENT_TOOLS } from './mcp/departmentTools'
 
 /**
  * Metriq as a connector for Claude, ChatGPT and Gemini (Model Context Protocol, "streamable
@@ -33,7 +34,10 @@ export function newKey(): string { return KEY_PREFIX + crypto.randomBytes(32).to
 
 type User = { id: string; role: Role; name: string }
 
-const INSTRUCTIONS = `Metriq is the team's work app. Tickets have codes like CMR-6 (project key + number).
+const INSTRUCTIONS = `Metriq is the team's work app: project tickets, plus each team's own work (ITAD Lead Dialer, daily logs and deals; E-commerce board, listings and stock; Lead Gen; Marketing; attendance; to-dos; reports).
+For anything that is not a project ticket, call metriq_guide first: it lists what this person can see and how to read it (metriq_read, or the Lead Dialer tools dialer_summary, dialer_leads, dialer_lead, dialer_update_lead). Answer from that real data; never guess or ask for screenshots.
+ITAD follow-ups and "who do I call first": dialer_leads with view follow_ups (overdue first), call_now or prime_time, and hot for Interested and Pipeline leads.
+Tickets have codes like CMR-6 (project key + number).
 To work on someone's tickets: list_my_tickets, then get_ticket for each one. "Where the work lives" in a ticket tells you the folder or repo to change.
 When you finish a ticket: add_comment saying what you changed and where (files, links), tick checklist items you completed, then move_ticket to the review column (e.g. "In review").
 Never move a ticket to Done unless the person asked you to. Comments and moves appear under the person's own name.
@@ -599,6 +603,7 @@ const TOOLS: Tool[] = [
       return text(r.already ? `A self check is already running: ${r.runId}. Call get_audit_report with that id in a minute.` : `Self check ${r.runId} started. Call get_audit_report with run_id ${r.runId} in a minute or two.`)
     },
   },
+  ...DEPARTMENT_TOOLS,
 ]
 
 // ------------------------------------------------------------------ JSON-RPC over HTTP

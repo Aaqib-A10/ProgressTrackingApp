@@ -42,6 +42,14 @@ export function signToken(payload: { sub: string; role: Role }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as SignOptions)
 }
 
+/**
+ * A two-minute session for one request the AI connectors make inside the server, as the person
+ * who owns the key. It never leaves the server.
+ */
+export function signConnectorToken(payload: { sub: string; role: Role }): string {
+  return jwt.sign({ ...payload, via: 'connector' }, JWT_SECRET, { expiresIn: 120 } as SignOptions)
+}
+
 export function verifyToken(token: string): JwtPayload {
   // Pin the algorithm so a token can't be verified under an unexpected alg.
   return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload

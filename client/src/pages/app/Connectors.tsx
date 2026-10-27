@@ -216,7 +216,7 @@ function ConnectorDetail({ c }: { c: Connector }) {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-body-sm text-ink-muted">It is told never to move a ticket to Done unless you ask, and to check with you before deleting one.</p>
+        <p className="mt-4 text-body-sm text-ink-muted">Sign-in, keys, private chats, salaries and file downloads stay in the app. It is told never to move a ticket to Done unless you ask, and to check with you before deleting one.</p>
       </Card>
     </div>
   )

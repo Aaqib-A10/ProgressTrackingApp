@@ -49,7 +49,7 @@ export const CONNECTORS: Connector[] = [
         ],
       },
     ],
-    examples: ['Do my Metriq tickets in CMR', 'Work on CMR-6', 'Give Sara a ticket in OPS to update the price list, due Friday'],
+    examples: ['Which of my Metriq leads need a follow-up today?', 'Do my Metriq tickets in CMR', 'Work on CMR-6', 'Give Sara a ticket in OPS to update the price list, due Friday'],
   },
   {
     id: 'chatgpt',
@@ -71,7 +71,7 @@ export const CONNECTORS: Connector[] = [
         ],
       },
     ],
-    examples: ['List my Metriq tickets', 'What is left on CMR-6? Tick the items I finished', 'Move OPS-12 to In review with a comment'],
+    examples: ['Which high-priority leads in Metriq should I call first?', 'Show this week\'s e-commerce board from Metriq', 'List my Metriq tickets', 'What is left on CMR-6? Tick the items I finished', 'Move OPS-12 to In review with a comment'],
   },
   {
     id: 'gemini',
@@ -100,7 +100,7 @@ export const CONNECTORS: Connector[] = [
         ],
       },
     ],
-    examples: ['Show my open Metriq tickets', 'Read CMR-6 and tell me what is needed', 'Comment on OPS-12 that the file is uploaded'],
+    examples: ['Who can I call right now in my Metriq Lead Dialer?', 'Show my open Metriq tickets', 'Read CMR-6 and tell me what is needed', 'Comment on OPS-12 that the file is uploaded'],
   },
 ]
 
@@ -108,6 +108,7 @@ export const connectorById = (id: string | undefined) => CONNECTORS.find((c) => 
 
 /** What every connector can do (the Metriq tools), in plain words. */
 export const CAPABILITIES: { group: string; items: string[]; healthOnly?: boolean }[] = [
+  { group: 'Your team\'s data', items: ['ITAD: Lead Dialer follow-ups, who to call now, hot leads, any lead in full', 'ITAD: log a note, call back or snooze on a lead', 'Daily logs, deals, the e-commerce board and stock, Lead Gen and Marketing numbers', 'Your attendance, to-dos, meetings and work log; team leads also their team'] },
   { group: 'Your tickets', items: ['List the tickets given to you', 'Read a ticket with its checklist, comments and files', 'Comment on a ticket', 'Move a ticket to another column', 'Tick checklist items, or add new ones'] },
   { group: 'Giving work', items: ['Make a ticket and give it to someone in the project', 'Change a ticket: title, description, assignee, due date, priority', 'Delete a ticket you made'] },
   { group: 'Projects', items: ['List your projects, their columns and members', 'List the tickets on a project board'] },

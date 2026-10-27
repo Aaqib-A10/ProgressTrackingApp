@@ -223,6 +223,7 @@ describe('delete_ticket', () => {
     expect(r.body.result.tools.map((t: { name: string }) => t.name)).toEqual([
       'list_my_tickets', 'get_ticket', 'list_projects', 'add_comment', 'move_ticket', 'update_checklist_item', 'read_attachment',
       'list_board_columns', 'list_project_members', 'list_project_tickets', 'create_ticket', 'update_ticket', 'add_checklist_item', 'delete_ticket',
+      'metriq_guide', 'metriq_read', 'dialer_summary', 'dialer_leads', 'dialer_lead', 'dialer_update_lead',
     ])
   })
 })

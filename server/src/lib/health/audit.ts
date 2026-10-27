@@ -42,6 +42,8 @@ let baseUrl = `http://127.0.0.1:${Number(process.env.PORT) || 4000}`
 export function registerApiMounts(m: [string, Router][]): void { mounts = m }
 /** index.ts says where the API listens once it has started. */
 export function setAuditBaseUrl(url: string): void { baseUrl = url }
+/** Where this server answers itself (the AI connectors call the API through it, as the person). */
+export const apiBaseUrl = (): string => baseUrl
 
 // --- Which endpoints exist ---------------------------------------------------------------
 
