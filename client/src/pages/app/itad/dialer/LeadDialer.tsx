@@ -14,7 +14,7 @@ import { DuplicatesView, HistoryView, SettingsView } from './AdminViews'
 import { ImportModal } from './ImportModal'
 import { LeadsView } from './LeadsView'
 import { LeadPanel } from './LeadPanel'
-import { InfoTip, LeadsListModal, errMsg } from './ui'
+import { DownloadLeads, InfoTip, LeadsListModal, errMsg } from './ui'
 
 /**
  * Lead Dialer (ITAD). Reps dial US leads from Pakistan at night; this page does the checking
@@ -152,6 +152,7 @@ export default function LeadDialer() {
               <select value={filters.date} onChange={(e) => setFilters({ ...filters, date: e.target.value })} className={sel(!!filters.date)} aria-label="Lead date"><option value="">Date: All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
               {filtersOn && <button type="button" onClick={() => setFilters(NO_FILTERS)} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
               {filtersOn && <span className="ml-auto text-body-sm text-ink-muted">{filtered.filter((l) => !l.duplicate).length.toLocaleString()} of {data.counts.counted.toLocaleString()} leads</span>}
+              {filtersOn && <DownloadLeads title={['leads', filters.state, filters.region, filters.industry, filters.status, filters.list, filters.date && `last ${filters.date} days`].filter(Boolean).join(' ')} leads={filtered.filter((l) => !l.duplicate)} now={now} showOwner={showOwner} label="Download filtered" />}
             </div>
           )}
 

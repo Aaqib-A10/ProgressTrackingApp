@@ -5,7 +5,7 @@ import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead, type DialerSettings } from '../../../../lib/dialerApi'
 import { followUpTabs, latestActedToday, leadState, type FollowUp, type FollowUpDays } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
-import { InfoTip, Pager, RegionBadge, StatusPill, LeadActions, errMsg, usePaged } from './ui'
+import { DownloadLeads, errMsg, InfoTip, LeadActions, Pager, RegionBadge, StatusPill, usePaged } from './ui'
 
 /**
  * Follow-up tracker. Tabs: Overdue, Due today, Scheduled, Snoozed, Done, and the 90+ day
@@ -69,6 +69,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
           })}
         </div>
         <InfoTip>{TABS.find((t) => t.k === tab)!.info} Order: Pipeline, Interested, Connected, oldest first.</InfoTip>
+        <DownloadLeads title={`follow-ups ${TABS.find((t) => t.k === tab)!.label}`} leads={rows.map((x) => x.lead)} now={now} showOwner={showOwner} />
         <div className="ml-auto flex flex-wrap items-center gap-2 text-body-sm">
           <CheckCircle2 size={15} className="text-success" />
           {showOwner && byRep.size > 0

@@ -1,11 +1,12 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { BellOff, ChevronLeft, ChevronRight, Clock3, Info, MessageSquarePlus, Phone, Pin } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { BellOff, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FileSpreadsheet, FileText, Info, MessageSquarePlus, Phone, Pin } from 'lucide-react'
 import { Modal } from '../../../../components/ui/Modal'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerLead, type RegionCode } from '../../../../lib/dialerApi'
 import { REGION_META, leadRegion, leadState, lastActivity, shortDate, daysSince } from '../../../../lib/dialer'
+import { downloadLeads } from './exports'
 
 /**
  * Small pieces shared by the Lead Dialer screens. Colour rules (ITAD, Oct 2026): red means act
@@ -215,6 +216,39 @@ export function NoteFields({ text, setText, next, setNext, pinned, setPinned, au
 }
 
 /** A list of leads (e.g. one state's leads in one status), each opening the side panel. */
+/**
+ * Download a list of leads (exactly the leads shown, after every filter) as an Excel sheet or a
+ * CSV, phone first, to upload to the predictive dialer.
+ */
+export function DownloadLeads({ title, leads, now, showOwner, label = 'Download' }: { title: string; leads: DialerLead[]; now: Date; showOwner?: boolean; label?: string }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', esc, true)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc, true) }
+  }, [open])
+  const pick = (format: 'xlsx' | 'csv') => { setOpen(false); downloadLeads(title, leads, now, !!showOwner, format) }
+  const item = 'flex w-full items-center gap-2 px-3 py-2 text-left text-body-sm text-ink hover:bg-slate-50'
+  return (
+    <div ref={box} className="relative">
+      <Button size="sm" variant="secondary" leadingIcon={<Download size={14} />} trailingIcon={<ChevronDown size={14} />} disabled={!leads.length} onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}>
+        {label}
+      </Button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-30 mt-1 w-60 overflow-hidden rounded-card border border-line bg-card py-1 shadow-overlay">
+          <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase text-ink-muted">{leads.length.toLocaleString()} lead{leads.length === 1 ? '' : 's'}</p>
+          <button type="button" role="menuitem" className={item} onClick={() => pick('xlsx')}><FileSpreadsheet size={15} className="text-success" />Excel (.xlsx)</button>
+          <button type="button" role="menuitem" className={item} onClick={() => pick('csv')}><FileText size={15} className="text-ink-muted" />CSV (.csv)</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function LeadsListModal({ title, leads, now, onClose, onOpen, showOwner }: { title: string; leads: DialerLead[]; now: Date; onClose: () => void; onOpen: (id: string, ids: string[]) => void; showOwner?: boolean }) {
   const p = usePaged(leads)
   const ids = leads.map((l) => l.id)
@@ -222,6 +256,10 @@ export function LeadsListModal({ title, leads, now, onClose, onOpen, showOwner }
     <Modal open onClose={onClose} title={`${title} · ${leads.length}`} size="xl">
       {leads.length === 0 ? <p className="py-6 text-center text-body-md text-ink-muted">No leads here.</p> : (
         <div className="max-h-[65vh] overflow-y-auto">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-body-sm text-ink-muted">Download these {leads.length.toLocaleString()} leads to upload to the predictive dialer.</span>
+            <DownloadLeads title={title} leads={leads} now={now} showOwner={showOwner} />
+          </div>
           <LeadTable leads={p.rows} now={now} showOwner={showOwner} onOpen={(id) => onOpen(id, ids)} />
           <Pager p={p} />
         </div>

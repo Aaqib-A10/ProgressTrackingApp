@@ -6,9 +6,9 @@ import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerData, type SavedView } from '../../../../lib/dialerApi'
 import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, type LeadFilters } from '../../../../lib/dialer'
-import { InfoTip, LeadTable, Pager, errMsg, usePaged } from './ui'
+import { DownloadLeads, InfoTip, LeadTable, Pager, errMsg, usePaged } from './ui'
 import { BulkFillModal } from './BulkFillModal'
-import { downloadCsv, downloadNotes } from './exports'
+import { downloadNotes } from './exports'
 
 /**
  * All leads: one search box (name, company, phone, email, city), filters, and saved views as
@@ -39,10 +39,6 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
 
   async function saveViews(next: SavedView[], msg: string) {
     try { await dialerApi.savePrefs({ views: next }); setViews(next); addToast({ type: 'success', message: msg }) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save the view') }) }
-  }
-  function exportList() {
-    downloadCsv(`leads-${new Date().toISOString().slice(0, 10)}.csv`, ['Company', 'Contact', 'Phone', 'Email', 'City', 'State', 'Status', 'Industry', 'List', 'Second phone', 'Second email', 'LinkedIn', 'Decision maker', 'Best time', 'Tags', ...(showOwner ? ['Rep'] : [])],
-      list.map((l) => [l.company, l.contactName, l.phone, l.email, l.city, leadState(l), l.status, l.industry, l.listName, l.phone2, l.email2, l.linkedin, l.decisionMaker, l.bestTime, l.tags.join(', '), ...(showOwner ? [l.ownerName] : [])]))
   }
   const sel = (active: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', active ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')
 
@@ -104,7 +100,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" leadingIcon={<FileUp size={14} />} onClick={() => setFill(true)}>Bulk fill extra contacts</Button>
             <Button size="sm" variant="secondary" leadingIcon={<Download size={14} />} onClick={() => setNotesOpen(true)}>Export notes</Button>
-            <Button size="sm" variant="secondary" leadingIcon={<Download size={14} />} disabled={!list.length} onClick={exportList}>Export this list</Button>
+            <DownloadLeads title={activeView ? `leads ${views.find((v) => v.id === activeView)?.name ?? PRESET_VIEWS.find((v) => v.id === activeView)?.name ?? ''}` : 'leads filtered'} leads={list} now={now} showOwner={showOwner} label="Download this list" />
           </div>
         </div>
         {list.length === 0 ? <p className="py-8 text-center text-body-md text-ink-muted">No leads match.</p> : (
