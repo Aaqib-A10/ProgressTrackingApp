@@ -123,3 +123,29 @@ describe('the Metriq connector', () => {
     expect((await request(app).get('/api/claude/keys').set(...auth(w.itadMember)).expect(200)).body.keys).toHaveLength(0)
   })
 })
+
+describe('Connectors for ChatGPT and Gemini', () => {
+  it('makes a key per app; the list says which app; each works on the same connector; limits are per app', async () => {
+    await request(app).post('/api/claude/keys').set(...auth(w.itadLead)).send({ name: 'x', client: 'copilot' }).expect(400)
+    const gpt = await request(app).post('/api/claude/keys').set(...auth(w.itadLead)).send({ name: 'My ChatGPT', client: 'chatgpt' }).expect(201)
+    const gem = await request(app).post('/api/claude/keys').set(...auth(w.itadLead)).send({ name: 'My Gemini', client: 'gemini' }).expect(201)
+    // No app given = Claude (what older screens send).
+    const cl = await request(app).post('/api/claude/keys').set(...auth(w.itadLead)).send({ name: 'Old screen' }).expect(201)
+    expect([gpt.body.key.client, gem.body.key.client, cl.body.key.client]).toEqual(['chatgpt', 'gemini', 'claude'])
+    const list = (await request(app).get('/api/claude/keys').set(...auth(w.itadLead)).expect(200)).body.keys as { name: string; client: string }[]
+    expect(Object.fromEntries(list.map((k) => [k.name, k.client]))).toMatchObject({ 'My ChatGPT': 'chatgpt', 'My Gemini': 'gemini', 'Old screen': 'claude' })
+
+    for (const link of [gpt.body.connectorUrl as string, gem.body.connectorUrl as string]) {
+      const path = new URL(link).pathname
+      const tools = await request(app).post(path).send({ jsonrpc: '2.0', id: 1, method: 'tools/list' }).expect(200)
+      expect(tools.body.result.tools.map((t: { name: string }) => t.name)).toContain('list_my_tickets')
+      const mine = await request(app).post(path).send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_my_tickets', arguments: {} } }).expect(200)
+      expect(mine.body.result.isError).toBeFalsy()
+    }
+
+    // Five keys per app: a sixth ChatGPT key is refused, a Gemini key still works.
+    for (let i = 0; i < 4; i++) await request(app).post('/api/claude/keys').set(...auth(w.itadLead)).send({ name: `GPT ${i}`, client: 'chatgpt' }).expect(201)
+    await request(app).post('/api/claude/keys').set(...auth(w.itadLead)).send({ name: 'GPT 6', client: 'chatgpt' }).expect(400)
+    await request(app).post('/api/claude/keys').set(...auth(w.itadLead)).send({ name: 'Gemini 2', client: 'gemini' }).expect(201)
+  })
+})

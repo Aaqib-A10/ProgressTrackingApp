@@ -38,6 +38,7 @@ import {
   MessagesSquare,
   LayoutGrid,
   Activity,
+  Plug,
   type LucideIcon,
 } from 'lucide-react'
 import type { CurrentUser, Role } from '../../lib/types'
@@ -95,6 +96,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart },
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, hideFor: HIDE_FROM_SA },
       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
+      { label: 'Connectors', to: '/app/connectors', icon: Plug },
     ],
   },
   {

@@ -9,8 +9,9 @@ import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
 import { api, ApiError } from '../../lib/api'
 import { ROLE_LABEL } from '../../lib/types'
-import { ConnectClaude } from '../../components/ConnectClaude'
 import { ThemeSwitch } from '../../components/ui/ThemeSwitch'
+import { Link } from 'react-router-dom'
+import { Plug } from 'lucide-react'
 
 const NOTIF_KEY = 'metriq.notifications'
 const NOTIFS = [
@@ -122,8 +123,13 @@ export default function Settings() {
         </form>
       </Card>
 
-      {/* Claude connector */}
-      <ConnectClaude />
+      {/* Connectors moved to their own page in the side menu */}
+      <Card title="Connectors" subtitle="Connect Claude, ChatGPT or Gemini to Metriq">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-body-sm text-ink-muted">
+          <p>Your keys and the steps for each app are on the Connectors page (in the side menu).</p>
+          <Link to="/app/connectors" className="inline-flex items-center gap-1.5 rounded-btn border border-line px-3 py-1.5 font-semibold text-ink hover:bg-slate-50"><Plug size={14} /> Open Connectors</Link>
+        </div>
+      </Card>
 
       {/* Notifications */}
       <Card title="Notifications" subtitle="Preferences (saved on this device)">

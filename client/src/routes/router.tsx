@@ -26,6 +26,7 @@ const NotSubmitted = lazy(() => import('../pages/app/NotSubmitted'))
 const TeamMembers = lazy(() => import('../pages/app/TeamMembers'))
 const MemberProfile = lazy(() => import('../pages/app/MemberProfile'))
 const Feedback = lazy(() => import('../pages/app/Feedback'))
+const Connectors = lazy(() => import('../pages/app/Connectors'))
 const FeedbackThread = lazy(() => import('../pages/app/FeedbackThread'))
 const QaEvaluate = lazy(() => import('../pages/app/qa/QaEvaluate'))
 const QaScorecards = lazy(() => import('../pages/app/qa/QaScorecards'))
@@ -134,6 +135,8 @@ export const router = createBrowserRouter([
 
       // Feedback (all roles — members receive, leads author & receive replies)
       { path: 'feedback', element: <Feedback /> },
+      { path: 'connectors', element: <Connectors /> },
+      { path: 'connectors/:id', element: <Connectors /> },
       { path: 'feedback/:id', element: <FeedbackThread /> },
 
       // Quality Assurance

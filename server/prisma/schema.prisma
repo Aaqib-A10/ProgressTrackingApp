@@ -2698,6 +2698,8 @@ model ClaudeKey {
   userId     String
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
+  /// Which app the key was made for: "claude", "chatgpt" or "gemini" (all use the same connector).
+  client     String    @default("claude")
   tokenHash  String    @unique
   /// First characters of the key, to tell keys apart in the list.
   prefix     String

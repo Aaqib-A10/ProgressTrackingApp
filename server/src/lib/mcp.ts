@@ -15,10 +15,11 @@ import { auditReport, errorBrief, errorList } from './health/report'
 import { startAudit } from './health/audit'
 
 /**
- * Metriq as a Claude connector (Model Context Protocol, "streamable HTTP", stateless).
+ * Metriq as a connector for Claude, ChatGPT and Gemini (Model Context Protocol, "streamable
+ * HTTP", stateless). One endpoint serves all three.
  *
- * The person creates a private key in Settings and adds https://<site>/api/mcp/<key> as a
- * custom connector in Claude. Claude can then list the tickets assigned to them, read a ticket
+ * The person makes a private key under Connectors and adds https://<site>/api/mcp/<key> as a
+ * custom connector in their AI app. The app can then list the tickets assigned to them, read a ticket
  * (with its files and comments), comment, tick the checklist and move the ticket, always as
  * that person and through the same checks, activity log and notifications as the app.
  */
@@ -369,7 +370,7 @@ const TOOLS: Tool[] = [
   {
     name: 'create_ticket',
     title: 'Create a ticket',
-    description: 'Adds a ticket to a project board, exactly like "+ Add task" in Metriq: it gets the next code (e.g. CMR-7), the person using Claude is "given by", and the assignee is notified. Only project members can be assignees.',
+    description: 'Adds a ticket to a project board, exactly like "+ Add task" in Metriq: it gets the next code (e.g. CMR-7), the person who connected is "given by", and the assignee is notified. Only project members can be assignees.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -658,7 +659,7 @@ export async function mcpEndpoint(req: Request, res: Response): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); res.status(405).json({ error: 'Use POST' }); return }
   const u = await userForKey(String(req.params.key ?? ''))
-  if (!u) { res.status(401).json(rpcError(null, -32001, 'This Metriq key is not valid or was switched off. Make a new one in Metriq Settings.')); return }
+  if (!u) { res.status(401).json(rpcError(null, -32001, 'This Metriq key is not valid or was switched off. Make a new one in Metriq, under Connectors.')); return }
   const body = req.body as Rpc | Rpc[]
   if (Array.isArray(body)) {
     const out = (await Promise.all(body.map((m) => handle(u, m)))).filter(Boolean)
