@@ -35,6 +35,8 @@ export function AppShellRoute() {
   // Every page under /app checks the same access list as the menu (lib/access.ts), so a
   // screen for another department or role cannot be opened by typing its address.
   if (!canOpen(user, pathname)) return <Navigate to="/app/dashboard" replace />
+  // A new company's Super Admin starts in the setup wizard until it is done or skipped (step 7).
+  if (user.company && user.company.setupDone === false && user.permissions?.includes('company.settings') && pathname !== '/app/setup' && !user.supportSession) return <Navigate to="/app/setup" replace />
   return <AppShell user={user} />
 }
 

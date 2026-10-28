@@ -142,3 +142,14 @@ export function sendTaskDueSoonEmail(opts: { to: string; name: string; taskTitle
   const text = [`Hi ${opts.name},`, '', `Your urgent task "${opts.taskTitle}" is due at ${opts.dueLabel} (within the hour).`, link].join('\n')
   return sendMail({ to: opts.to, subject: `Due soon: ${opts.taskTitle}`, html, text, category: 'Tasks' })
 }
+
+/** Confirm the email of someone who signed up on their own (Phase 1, step 7). */
+export function sendVerifyEmail(opts: { to: string; name: string; token: string }): Promise<void> {
+  const link = `${APP_URL}/verify-email?token=${encodeURIComponent(opts.token)}`
+  const html = shell(`Confirm your email, ${opts.name}`, `<p style="font-size:14px;line-height:1.5">One click and your Metriq is ready to invite your people.</p>${button(link, 'Confirm my email')}<p style="font-size:13px;color:#64748B">This link is valid for 3 days.</p>`)
+  const text = [`Confirm your email, ${opts.name}`, '', 'One click and your Metriq is ready to invite your people:', link, '', 'This link is valid for 3 days.'].join('\n')
+  return sendMail({ to: opts.to, subject: 'Confirm your email for Metriq', html, text, category: 'Sign up' })
+}
+
+/** The address of the app (links in emails, sign-in pages). */
+export const appUrl = (): string => APP_URL

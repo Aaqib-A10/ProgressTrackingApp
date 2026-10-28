@@ -51,7 +51,7 @@ async function publicUser(userId: string) {
         include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
         orderBy: { createdAt: 'asc' },
       },
-      company: { select: { id: true, name: true, kind: true, plan: true, status: true, timeZone: true, modulesOff: true, modulesOn: true } },
+      company: { select: { id: true, name: true, slug: true, kind: true, plan: true, status: true, timeZone: true, modulesOff: true, modulesOn: true, trialEndsAt: true, setupDoneAt: true } },
       customRole: { select: { id: true, name: true, areasOff: true, powers: true } },
     },
   })
@@ -73,7 +73,11 @@ async function publicUser(userId: string) {
     })),
     // Phase 1: the company (or personal workspace), the company's own role, extra powers and
     // the parts of Metriq switched off for the role.
-    company: { id: user.company.id, name: user.company.name, kind: user.company.kind, plan: user.company.plan, status: user.company.status, timeZone: user.company.timeZone },
+    company: {
+      id: user.company.id, name: user.company.name, slug: user.company.slug, kind: user.company.kind, plan: user.company.plan, status: user.company.status, timeZone: user.company.timeZone,
+      trialEndsAt: user.company.status === 'TRIAL' ? user.company.trialEndsAt : null, setupDone: !!user.company.setupDoneAt,
+    },
+    emailCheckPending: user.emailCheckPending,
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,
     permissions: powersOf(user),
     // Switched off for the company's plan (or by the owner) and for the person's company role.

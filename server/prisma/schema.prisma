@@ -166,6 +166,12 @@ model User {
   customRole        CompanyRole? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
   /// Extra powers given to this one person (e.g. "finance").
   permissions       String[]     @default([])
+  /// When they confirmed their email (sign-up, step 7). Everyone from before has it set.
+  emailVerifiedAt   DateTime?
+  /// Signed up on their own and has not confirmed the email yet (only sign-up sets it).
+  emailCheckPending Boolean      @default(false)
+  /// Microsoft account id (sign in with Microsoft). Microsoft sign-in only opens accounts made with it.
+  microsoftId       String?      @unique
   passwordHash      String? // null for SSO-only accounts
   googleId          String?      @unique
   name              String
@@ -3407,6 +3413,12 @@ model Company {
   /// The company's Super Admin lets Metriq support sign in to help until then (help sign-in, step 6).
   supportAccessUntil DateTime?
   supportAccessById  String?
+  /// Free trial (Phase 1, step 7): 14 days from sign-up; billing (step 8) ends it.
+  trialEndsAt        DateTime?
+  /// The setup wizard was finished (or skipped).
+  setupDoneAt        DateTime?
+  /// Rows the "sample data" button made, so they can be taken out again: { table: [ids] }.
+  sampleIds          Json?
   /// The Help button for this company's people. Off for 99 Technologies until the owner turns it on.
   helpEnabled        Boolean       @default(false)
   createdAt          DateTime      @default(now())

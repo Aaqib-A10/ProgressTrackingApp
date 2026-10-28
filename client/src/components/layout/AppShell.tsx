@@ -1,6 +1,6 @@
 import { api } from '../../lib/api'
 import { createContext, useContext, useState, useEffect, useRef, Suspense, type ReactNode } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Activity } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import type { CurrentUser } from '../../lib/types'
@@ -121,6 +121,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
           <div className="flex min-w-0 flex-1 flex-col">
             {user.supportSession && <SupportBanner name={user.name} />}
+            <AccountBanners user={user} />
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
             <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:px-8 sm:py-7">
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
@@ -149,5 +150,29 @@ function SupportBanner({ name }: { name: string }) {
       <span>Metriq support is signed in as {name} to help, with your company's permission.</span>
       <button type="button" onClick={end} className="rounded-btn bg-ink/10 px-2.5 py-0.5 font-semibold hover:bg-ink/20">End</button>
     </div>
+  )
+}
+
+/** Confirm your email, and the free trial (Phase 1, step 7). */
+function AccountBanners({ user }: { user: CurrentUser }) {
+  const [sent, setSent] = useState(false)
+  const trialEnds = user.company?.status === 'TRIAL' && user.company.trialEndsAt ? new Date(user.company.trialEndsAt) : null
+  const days = trialEnds ? Math.ceil((trialEnds.getTime() - Date.now()) / 86400_000) : null
+  const admin = !!user.permissions?.includes('company.settings')
+  return (
+    <>
+      {user.emailCheckPending && (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-primary/10 px-4 py-1.5 text-center text-body-sm text-ink">
+          <span>Confirm your email: we sent a link to <b>{user.email}</b>.</span>
+          <button type="button" disabled={sent} className="font-semibold text-primary hover:underline disabled:no-underline disabled:opacity-60" onClick={async () => { try { await api.post('/auth/verify-email/resend'); setSent(true) } catch { /* try again later */ } }}>{sent ? 'Sent' : 'Send again'}</button>
+        </div>
+      )}
+      {days !== null && admin && (
+        <div className={cn('flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-1.5 text-center text-body-sm', days <= 0 ? 'bg-danger/10 text-danger' : days <= 3 ? 'bg-warning/15 text-ink' : 'bg-slate-100 text-ink-muted')}>
+          <span>{days <= 0 ? 'Your free trial has ended. You can still look at everything; choose a plan to keep going.' : `Free trial: ${days} day${days === 1 ? '' : 's'} left.`}</span>
+          <Link to="/app/billing" className="font-semibold text-primary hover:underline">{days <= 0 ? 'Choose a plan' : 'See plans'}</Link>
+        </div>
+      )}
+    </>
   )
 }

@@ -80,6 +80,9 @@ const AdminTargets = lazy(pageModule(() => import('../pages/app/admin/AdminTarge
 const AdminTags = lazy(pageModule(() => import('../pages/app/admin/AdminTags')))
 const AdminLeave = lazy(pageModule(() => import('../pages/app/admin/AdminLeave')))
 const AdminNetworks = lazy(pageModule(() => import('../pages/app/admin/AdminNetworks')))
+const Start = lazy(pageModule(() => import('../pages/auth/Start')))
+const Setup = lazy(pageModule(() => import('../pages/app/Setup')))
+const VerifyEmail = lazy(pageModule(() => import('../pages/auth/VerifyEmail')))
 const CompanySettings = lazy(pageModule(() => import('../pages/app/admin/CompanySettings')))
 const MyDailyReport = lazy(pageModule(() => import('../pages/app/dailyReport/MyDailyReport')))
 const TeamDailyReport = lazy(pageModule(() => import('../pages/app/dailyReport/TeamDailyReport')))
@@ -105,6 +108,9 @@ export const router = createBrowserRouter([
 
   // Public auth
   { path: '/login', element: <Login /> },
+  { path: '/c/:slug', element: <Login /> },
+  { path: '/start', element: <Page><Start /></Page> },
+  { path: '/verify-email', element: <Page><VerifyEmail /></Page> },
   { path: '/signup', element: <Page><Signup /></Page> },
   { path: '/forgot-password', element: <Page><ForgotPassword /></Page> },
   { path: '/reset-password', element: <Page><ResetPassword /></Page> },
@@ -131,6 +137,7 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <MyReports /> },
       { path: 'analytics', element: <MyPerformance /> },
       { path: 'todo', element: <MyTodo /> },
+      { path: 'setup', element: <RequirePower power="company.settings"><Setup /></RequirePower> },
       { path: 'daily-report', element: <RequireFlag flag="daily-report"><MyDailyReport /></RequireFlag> },
       { path: 'daily-report/team', element: <RequireFlag flag="daily-report"><TeamDailyReport /></RequireFlag> },
       { path: 'daily-report/forms', element: <RequireFlag flag="daily-report"><ReportForms /></RequireFlag> },

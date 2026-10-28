@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import * as C from '../controllers/companyController'
+import { invite } from '../controllers/setupController'
 
 // /api/company — Company settings (Phase 1, step 4): name, time zone, departments, roles.
 export const companyRouter = Router()
@@ -9,6 +10,7 @@ companyRouter.use(requireAuth)
 companyRouter.get('/', asyncHandler(C.getCompany))
 companyRouter.patch('/', asyncHandler(C.updateCompany))
 companyRouter.post('/support-access', asyncHandler(C.setSupportAccess))
+companyRouter.post('/invites', asyncHandler(invite))
 companyRouter.get('/departments', asyncHandler(C.listDepartments))
 companyRouter.post('/departments', asyncHandler(C.createDepartment))
 companyRouter.patch('/departments/:id', asyncHandler(C.renameDepartment))

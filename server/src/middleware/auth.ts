@@ -6,6 +6,9 @@ import { runAsCompany } from '../lib/tenancy'
 import { areaOf } from '../lib/permissions'
 import { companyAreasOff } from '../lib/plans'
 
+/** Open after a free trial ends: signing out, billing, and sending a complaint. */
+const TRIAL_OPEN = /^\/api\/(auth\/|billing|support)/
+
 /** Closed to a help sign-in: money, passwords, keys and the people's powers. */
 const SUPPORT_CLOSED = /^\/api\/(financials|claude|company\/people|auth\/(change-password|password))/
 
@@ -58,7 +61,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       where: { id: payload.sub },
       select: {
         id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true,
-        company: { select: { id: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true } },
+        company: { select: { id: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true, trialEndsAt: true } },
         customRole: { select: { areasOff: true } },
       },
     })
@@ -83,6 +86,12 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         res.status(403).json({ error: 'Metriq support cannot open this part.' })
         return
       }
+    }
+    // A free trial that has ended (Phase 1, step 7): everything can still be looked at, and
+    // Billing opens, but nothing new is saved until the company picks a plan.
+    if (user.company.status === 'TRIAL' && user.company.trialEndsAt && user.company.trialEndsAt < new Date() && req.method !== 'GET' && !TRIAL_OPEN.test(req.originalUrl)) {
+      res.status(402).json({ error: 'Your free trial has ended. Choose a plan in Billing to keep going; nothing has been lost.', trialEnded: true })
+      return
     }
     // Parts of Metriq can be switched off for the company (its plan, or the owner; Phase 1,
     // step 6) or for a company role (step 4).

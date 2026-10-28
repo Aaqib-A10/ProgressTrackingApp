@@ -69,6 +69,26 @@ export function signSupportToken(payload: { sub: string; role: Role; ownerId: st
   return jwt.sign({ sub: payload.sub, role: payload.role, support: payload.ownerId }, JWT_SECRET, { expiresIn: Math.max(60, Math.floor(seconds)) } as SignOptions)
 }
 
+// --- Confirm-your-email link (sign-up, Phase 1 step 7) ---
+export function signVerifyToken(userId: string): string {
+  return jwt.sign({ sub: userId, kind: 'verify' }, JWT_SECRET, { expiresIn: '3d' })
+}
+export function verifyVerifyToken(token: string): string {
+  const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { sub: string; kind?: string }
+  if (payload.kind !== 'verify') throw new Error('Not a confirm-email token')
+  return payload.sub
+}
+
+/** The short "who is signing in with Google / Microsoft" note kept in a cookie between the two steps. */
+export function signOAuthState(data: Record<string, string>): string {
+  return jwt.sign({ ...data, kind: 'oauth' }, JWT_SECRET, { expiresIn: '10m' })
+}
+export function verifyOAuthState(token: string): Record<string, string> {
+  const p = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as Record<string, string>
+  if (p.kind !== 'oauth') throw new Error('Not a sign-in state')
+  return p
+}
+
 // --- Stateless password-reset token (no DB table needed) ---
 export function signResetToken(userId: string): string {
   return jwt.sign({ sub: userId, kind: 'reset' }, JWT_SECRET, { expiresIn: RESET_EXPIRES_IN })

@@ -1,17 +1,25 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom'
+import { OAuthButtons } from '../../components/auth/OAuthButtons'
+import { api } from '../../lib/api'
 import { AuthLayout } from './AuthLayout'
 import { TextField, PasswordField } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
 import { useAuth, SESSION_EXPIRED_KEY } from '../../lib/auth'
-import { useToast } from '../../components/ui/Toast'
 import { ApiError } from '../../lib/api'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Login() {
   const { login } = useAuth()
-  const { addToast } = useToast()
+  const { slug } = useParams()
+  const [params] = useSearchParams()
+  // A company's own sign-in page (/c/<address>) shows its name (Phase 1, step 7).
+  const [companyName, setCompanyName] = useState<string | null>(null)
+  useEffect(() => {
+    if (!slug) return
+    api.get<{ company: { name: string } }>(`/auth/company/${encodeURIComponent(slug)}`).then((r) => setCompanyName(r.company.name)).catch(() => setCompanyName(null))
+  }, [slug])
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/app/dashboard'
@@ -62,10 +70,14 @@ export default function Login() {
         role: 'Verlex Inc.',
       }}
     >
-      <h1 className="text-headline-lg text-ink">Welcome back</h1>
+      <h1 className="text-headline-lg text-ink">{companyName ? `Sign in to ${companyName}` : 'Welcome back'}</h1>
       <p className="mt-1 text-body-md text-ink-muted">
         Log in to your account to continue tracking progress.
       </p>
+
+      {params.get('error') && (
+        <div className="mt-4 rounded-btn border border-danger/30 bg-danger/10 px-3 py-2 text-body-sm text-danger">{params.get('error')}</div>
+      )}
 
       {sessionEnded && (
         <div className="mt-4 rounded-btn border border-warning/30 bg-warning/10 px-3 py-2 text-body-sm text-warning">
@@ -109,22 +121,12 @@ export default function Login() {
         </Button>
       </form>
 
-      <div className="my-5 flex items-center gap-3 text-body-sm text-ink-muted">
-        <span className="h-px flex-1 bg-line" /> OR LOG IN WITH <span className="h-px flex-1 bg-line" />
-      </div>
-
-      <Button
-        variant="secondary"
-        className="w-full"
-        onClick={() => addToast({ type: 'info', message: 'Google SSO is coming in a later phase.' })}
-      >
-        Log in with Google
-      </Button>
+      <OAuthButtons intent="signin" label="OR LOG IN WITH" />
 
       <p className="mt-6 text-center text-body-sm text-ink-muted">
-        Don&apos;t have an account?{' '}
-        <Link to="/signup" className="font-semibold text-primary hover:underline">
-          Sign up
+        New to Metriq?{' '}
+        <Link to="/start" className="font-semibold text-primary hover:underline">
+          Start a free trial
         </Link>
       </p>
     </AuthLayout>

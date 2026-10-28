@@ -281,8 +281,18 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
   return canOpen(u, item.to)
 }
 
+/** Screens about other people: left out of a personal workspace ("Just me", Phase 1 step 7). */
+const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/admin/users', '/app/admin/targets', '/app/admin/tags', '/app/admin/leave', '/app/admin/activity', '/app/admin/networks', '/app/daily-report/team', '/app/reports/monthly', '/app/projects/dashboard', '/app/feedback'])
+
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
 export function filterNav(u: NavUser): NavGroup[] {
+  if (u.company?.kind === 'PERSONAL') {
+    return filterTeamNav(u).map((g) => ({ ...g, items: g.items.filter((i) => !TEAM_ONLY.has(i.to)), subgroups: g.subgroups?.map((sg) => ({ ...sg, items: sg.items.filter((i) => !TEAM_ONLY.has(i.to)) })).filter((sg) => sg.items.length) })).filter((g) => g.items.length || g.subgroups?.length)
+  }
+  return filterTeamNav(u)
+}
+
+function filterTeamNav(u: NavUser): NavGroup[] {
   // Inventory staff see only Inventory and the shared Projects tools (their lead also gets the dashboard).
   if (u.department === 'INVENTORY' && u.role !== 'SUPER_ADMIN') {
     return NAV_GROUPS
