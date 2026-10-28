@@ -54,7 +54,7 @@ describe('switches', () => {
     await a.patch('/api/owner/flags/help-button').send({ enabled: 'no' }).expect(400)
     const r = await a.patch('/api/owner/flags/help-button').send({ enabled: false }).expect(200)
     expect(r.body.flags.find((f: { key: string }) => f.key === 'help-button')).toMatchObject({ enabled: false, isDefault: false, updatedBy: 'Anees' })
-    expect(await prisma.ownerAuditLog.count({ where: { action: 'SWITCH', target: 'Help button (all companies)' } })).toBe(1)
+    expect(await prisma.ownerAuditLog.count({ where: { action: 'SWITCH', target: 'Help button' } })).toBe(1)
   })
 
   it('Help off hides the button for every company and refuses new complaints', async () => {

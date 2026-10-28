@@ -2,10 +2,13 @@ import type { Request, Response, NextFunction } from 'express'
 import type { Role } from '@prisma/client'
 import { verifyToken } from '../lib/auth'
 import { prisma } from '../lib/prisma'
+import { HOME_COMPANY_ID } from '../lib/company'
 
 export interface AuthUser {
   id: string
   role: Role
+  /** The person's company (99 Technologies, company 1, until step 2 fills every account). */
+  companyId: string
 }
 
 export interface AuthedRequest extends Request {
@@ -45,7 +48,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   try {
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, isActive: true, status: true, sessionsValidFrom: true, company: { select: { status: true } } },
+      select: { id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true, company: { select: { status: true } } },
     })
     // A suspended company (owner console) signs all its people out.
     if (!user || !user.isActive || user.status !== 'ACTIVE' || user.company?.status === 'SUSPENDED') {
@@ -58,7 +61,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       res.status(401).json({ error: 'Session is no longer valid' })
       return
     }
-    req.user = { id: user.id, role: user.role }
+    req.user = { id: user.id, role: user.role, companyId: user.companyId ?? HOME_COMPANY_ID }
     next()
   } catch {
     res.status(401).json({ error: 'Invalid or expired session' })

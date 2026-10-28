@@ -8,7 +8,7 @@ import { getClientIp } from '../lib/ip'
 import { companyUserWhere, HOME_COMPANY_ID } from '../lib/company'
 import { companyToday, dbDateFromString } from '../lib/time'
 import { OWNER_COOKIE, type OwnerRequest } from '../middleware/owner'
-import { FLAGS, FLAG_KEYS, allFlags, isOn, setFlag, type FlagKey } from '../lib/flags'
+import { FLAGS, FLAG_KEYS, allFlags, companyFlags, isOn, setCompanyFlag, setFlag, type FlagKey } from '../lib/flags'
 
 /**
  * The owner console (erp, step 0): where Metriq is run as a business. One owner account (Anees),
@@ -305,4 +305,30 @@ export async function updateFlag(req: OwnerRequest, res: Response): Promise<void
   await setFlag(key, req.body.enabled, req.owner!.name)
   await audit(req, req.owner!.id, 'SWITCH', { target: FLAGS[key].label, detail: { key, before, after: req.body.enabled } })
   res.json({ flags: await allFlags() })
+}
+
+/** GET /api/owner/companies/:id/flags — the switches as this company has them. */
+export async function listCompanyFlags(req: OwnerRequest, res: Response): Promise<void> {
+  const c = await prisma.company.findUnique({ where: { id: String(req.params.id) }, select: { id: true } })
+  if (!c) { res.status(404).json({ error: 'Company not found' }); return }
+  res.json({ flags: await companyFlags(c.id) })
+}
+
+/**
+ * PATCH /api/owner/companies/:id/flags/:key { enabled: true | false | null } — set a switch
+ * for this one company (show a part to some companies and not others). null = follow the
+ * all-companies setting again.
+ */
+export async function updateCompanyFlag(req: OwnerRequest, res: Response): Promise<void> {
+  const key = req.params.key as FlagKey
+  if (!FLAG_KEYS.includes(key)) { res.status(404).json({ error: 'No such switch' }); return }
+  if ((FLAGS[key] as { scope: string }).scope !== 'company') { res.status(400).json({ error: 'This switch is for the whole of Metriq and cannot be set per company' }); return }
+  const enabled = req.body?.enabled
+  if (enabled !== null && typeof enabled !== 'boolean') { res.status(400).json({ error: 'enabled must be true, false or null' }); return }
+  const c = await prisma.company.findUnique({ where: { id: String(req.params.id) }, select: { id: true, name: true } })
+  if (!c) { res.status(404).json({ error: 'Company not found' }); return }
+  const before = await isOn(key, c.id)
+  await setCompanyFlag(key, c.id, enabled, req.owner!.name)
+  await audit(req, req.owner!.id, 'SWITCH', { companyId: c.id, target: `${FLAGS[key].label} for ${c.name}`, detail: { key, before, after: enabled === null ? 'all-companies setting' : enabled } })
+  res.json({ flags: await companyFlags(c.id), all: await allFlags() })
 }

@@ -2965,8 +2965,9 @@ model Company {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  tickets SupportTicket[]
-  users   User[]
+  tickets       SupportTicket[]
+  users         User[]
+  flagOverrides FeatureFlagCompany[]
 }
 
 model PlatformOwner {
@@ -3067,4 +3068,18 @@ model FeatureFlag {
   enabled   Boolean
   updatedAt DateTime @updatedAt
   updatedBy String?
+}
+
+/// A switch set differently for one company (show a part to some companies and not others).
+/// No row = the company follows the switch's setting for all companies.
+model FeatureFlagCompany {
+  key       String
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  enabled   Boolean
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@id([key, companyId])
+  @@index([companyId])
 }

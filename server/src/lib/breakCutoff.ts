@@ -5,6 +5,7 @@ import { runTracked } from './health/jobs'
 import { COMPANY_TZ } from './time'
 import { clockAt } from './overtime'
 import { isOn } from './flags'
+import { HOME_COMPANY_ID } from './company'
 
 /**
  * Break cut-off (E-commerce, Oct 2026: "break cut off time if he forgets"). A break still running
@@ -21,10 +22,9 @@ function cutoffFor(rows: CutoffRow[], userId: string, departmentId: string | nul
 }
 
 export async function runBreakCutoffTick(now: Date = new Date()): Promise<{ ended: number }> {
-  if (!(await isOn('break-cutoff'))) return { ended: 0 } // switched off by the owner
   const open = await prisma.breakEntry.findMany({
     where: { endAt: null, day: { checkOutAt: null } },
-    select: { id: true, type: true, startAt: true, day: { select: { userId: true, user: { select: { name: true, departmentId: true } } } } },
+    select: { id: true, type: true, startAt: true, day: { select: { userId: true, user: { select: { name: true, departmentId: true, companyId: true } } } } },
   })
   if (!open.length) return { ended: 0 }
   const [rows, tls] = await Promise.all([
@@ -32,7 +32,12 @@ export async function runBreakCutoffTick(now: Date = new Date()): Promise<{ ende
     prisma.user.findMany({ where: { role: 'TEAM_LEAD', isActive: true, status: 'ACTIVE' }, select: { id: true, departmentId: true } }),
   ])
   let ended = 0
+  const switchedOn = new Map<string, boolean>()
   for (const b of open) {
+    // The owner can switch the cut-off off for all companies or for one company.
+    const company = b.day.user.companyId ?? HOME_COMPANY_ID
+    if (!switchedOn.has(company)) switchedOn.set(company, await isOn('break-cutoff', company))
+    if (!switchedOn.get(company)) continue
     const c = cutoffFor(rows, b.day.userId, b.day.user.departmentId)
     const limit = b.type === 'BRB' ? c.brbCutoffMin : c.breakCutoffMin
     if (!limit || limit <= 0) continue

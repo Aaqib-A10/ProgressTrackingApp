@@ -12,7 +12,7 @@ import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 import {
   ownerApi, ownerErr, OwnerApiError, STATUS_LABEL, PRIORITY_LABEL,
-  type OwnerCompany, type OwnerHome, type OwnerFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
+  type OwnerCompany, type OwnerHome, type OwnerFlag, type CompanyFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
 } from '../../lib/ownerApi'
 
 /**
@@ -436,6 +436,7 @@ function CompanyPage() {
           )}
         </div>
       </Panel>
+      <CompanySwitches companyId={c.id} />
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Panel>
           <PanelHead title="Their complaints" />
@@ -457,6 +458,63 @@ function CompanyPage() {
         </Panel>
       </div>
     </>
+  )
+}
+
+/** Switches for one company: follow the all-companies setting, or on / off just for them. */
+function CompanySwitches({ companyId }: { companyId: string }) {
+  const { addToast } = useToast()
+  const { data, error, setData } = useLoad(() => ownerApi.companyFlags(companyId), [companyId])
+  const [busy, setBusy] = useState<string | null>(null)
+  async function set(f: CompanyFlag, enabled: boolean | null) {
+    setBusy(f.key)
+    try {
+      const r = await ownerApi.setCompanyFlag(companyId, f.key, enabled)
+      setData({ flags: r.flags })
+      addToast({ type: 'success', message: enabled === null ? `${f.label} now follows the setting for all companies.` : `${f.label} ${enabled ? 'on' : 'off'} for this company. It takes effect within a minute.` })
+    } catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(null) }
+  }
+  return (
+    <Panel className="mt-6">
+      <PanelHead title="Switches for this company" />
+      <p className="-mt-1 px-5 pb-3 text-body-sm text-ink-muted">Show a part of Metriq to this company and not to others. "All companies" follows the setting on the Switches page.</p>
+      {!data ? <Loading error={error} /> : (
+        <ul className="divide-y divide-line border-t border-line">
+          {data.flags.map((f) => (
+            <li key={f.key} className="flex flex-wrap items-center gap-4 px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-body-md font-semibold text-ink">{f.label}</p>
+                  <Badge tone={f.enabled ? 'success' : 'danger'}>{f.enabled ? 'On' : 'Off'}</Badge>
+                  {f.own !== null && <Badge tone="accent">Set for this company</Badge>}
+                </div>
+                <p className="mt-1 text-body-sm text-ink-muted">{f.description}</p>
+              </div>
+              <Segmented
+                disabled={busy === f.key}
+                value={f.own === null ? 'all' : f.own ? 'on' : 'off'}
+                options={[['all', `All companies (${f.allCompanies ? 'on' : 'off'})`], ['on', 'On'], ['off', 'Off']]}
+                onChange={(v) => set(f, v === 'all' ? null : v === 'on')}
+                label={f.label}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
+
+function Segmented<T extends string>({ value, options, onChange, disabled, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; disabled?: boolean; label: string }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex shrink-0 rounded-btn border border-line bg-slate-50 p-0.5">
+      {options.map(([v, l]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} disabled={disabled || value === v} onClick={() => onChange(v)}
+          className={cn('rounded-[6px] px-3 py-1.5 text-body-sm font-medium transition-colors disabled:cursor-default', value === v ? 'bg-card text-ink shadow-sm' : 'text-ink-muted hover:text-ink')}>
+          {l}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -628,7 +686,7 @@ function SwitchesPage() {
   }
   return (
     <>
-      <Title sub="Turn a part of Metriq off in seconds if it causes trouble, with no deploy. It applies to every company within a minute.">Switches</Title>
+      <Title sub="Turn a part of Metriq on or off in seconds, with no deploy. The switch here is for all companies; to show a part to some companies and not others, set it on the company's page.">Switches</Title>
       {!data ? <Loading error={error} /> : (
         <Panel className="divide-y divide-line">
           {data.flags.map((f) => (
@@ -639,9 +697,22 @@ function SwitchesPage() {
                   <Badge tone={f.enabled ? 'success' : 'danger'}>{f.enabled ? 'On' : 'Off'}</Badge>
                 </div>
                 <p className="mt-1 text-body-sm text-ink-muted">{f.description}</p>
-                <p className="mt-1.5 text-[12px] text-ink-faint">{f.isDefault ? 'Never changed (on by default)' : `Last changed ${fmt(f.updatedAt)}${f.updatedBy ? ` by ${f.updatedBy}` : ''}`}</p>
+                <p className="mt-1.5 text-[12px] text-ink-faint">{f.isDefault ? `Never changed (${f.defaultValue ? 'on' : 'off'} by default)` : `Last changed ${fmt(f.updatedAt)}${f.updatedBy ? ` by ${f.updatedBy}` : ''}`}</p>
+                {f.overrides.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-body-sm">
+                    <span className="text-ink-muted">Set differently for</span>
+                    {f.overrides.map((o) => (
+                      <Link key={o.companyId} to={`/owner/companies/${o.companyId}`} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-slate-50 px-2.5 py-0.5 text-ink hover:border-primary/40">
+                        {o.companyName}<span className={o.enabled ? 'text-success' : 'text-danger'}>{o.enabled ? 'on' : 'off'}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="pt-1"><Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => flip(f, v)} label={f.label} /></div>
+              <div className="flex shrink-0 flex-col items-end gap-1 pt-1">
+                <Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => flip(f, v)} label={`${f.label} for all companies`} />
+                <span className="text-[12px] text-ink-faint">All companies</span>
+              </div>
             </div>
           ))}
         </Panel>

@@ -5,6 +5,7 @@ import { GUEST_CALL_PATH, readGuestPass } from '../lib/pm/guests'
 import * as G from '../controllers/guestController'
 import { pmHandler as h } from '../lib/pm/http'
 import * as C from '../controllers/chatController'
+import { HOME_COMPANY_ID } from '../lib/company'
 
 /** /api/chat — direct messages, groups and project channels (polling based). */
 export const chatRouter = Router()
@@ -21,7 +22,7 @@ function memberOrGuest(req: AuthedRequest, res: Response, next: NextFunction): v
   if (GUEST_CALL_PATH.test(req.path) && (wantsGuest || !hasLogin)) {
     const pass = readGuestPass(req)
     if (pass) {
-      req.user = { id: pass.gid, role: 'GUEST' as unknown as Role }
+      req.user = { id: pass.gid, role: 'GUEST' as unknown as Role, companyId: HOME_COMPANY_ID }
       next()
       return
     }

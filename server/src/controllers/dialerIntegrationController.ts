@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { whoAmI } from './dialerController'
 import { isOn } from '../lib/flags'
+import { HOME_COMPANY_ID } from '../lib/company'
 import {
   DEFAULT_DISPOSITIONS, FIELD_KEYS, FIELDS, KEY_PREFIX, OUTCOMES, OUTCOME_KEYS,
   applyToLead, findAgent, findLead, flatten, hashToken, newToken, outcomeOf, readCall, receiveCall, type Outcome,
@@ -201,7 +202,7 @@ export async function dialerHook(req: Request, res: Response): Promise<void> {
   if (!it || it.revokedAt) { res.status(404).json({ ok: false, error: 'Unknown link' }); return }
   if (!it.enabled) { res.status(403).json({ ok: false, error: 'The dialer link is switched off in Metriq.' }); return }
   // Owner switch (Phase 1 safety net): 503 so the dialer retries later instead of dropping the result.
-  if (!(await isOn('dialer-sync'))) { res.status(503).json({ ok: false, error: 'Dialer sync is paused in Metriq. Try again later.' }); return }
+  if (!(await isOn('dialer-sync', HOME_COMPANY_ID))) { res.status(503).json({ ok: false, error: 'Dialer sync is paused in Metriq. Try again later.' }); return }
   let body: unknown = req.body
   if (typeof body === 'string') { const t = body; try { body = JSON.parse(t) } catch { body = Object.fromEntries(new URLSearchParams(t)) } }
   const payload = { ...(req.query as Record<string, unknown>), ...(body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {}) }
