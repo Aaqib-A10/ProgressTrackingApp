@@ -68,9 +68,20 @@ describe('owner sign in', () => {
     await prisma.platformOwner.update({ where: { email: EMAIL }, data: { failedLogins: 0, lockedUntil: null } })
   })
 
+  it('signs in with the username too; a PC-only test owner never signs in on the live server', async () => {
+    await prisma.platformOwner.create({ data: { name: 'Test User', email: 'tester@local.test', username: 'tester', passwordHash: await hashPassword(PASSWORD) } })
+    expect((await request(app).post('/api/owner/login').send({ email: 'Tester', password: PASSWORD }).expect(200)).body.needCode).toBe(false)
+    const was = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      await request(app).post('/api/owner/login').send({ email: 'tester', password: PASSWORD }).expect(401)
+    } finally { process.env.NODE_ENV = was }
+    await prisma.platformOwner.delete({ where: { email: 'tester@local.test' } })
+  })
+
   it('an unknown email gets the same answer as a wrong password', async () => {
     const r = await request(app).post('/api/owner/login').send({ email: 'nobody@test.local', password: PASSWORD }).expect(401)
-    expect(r.body.error).toBe('Wrong email or password.')
+    expect(r.body.error).toBe('Wrong email, username or password.')
   })
 
   it('the password needs 8+ characters with letters and numbers', () => {

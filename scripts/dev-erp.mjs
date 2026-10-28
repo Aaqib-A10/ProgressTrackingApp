@@ -3,7 +3,8 @@
 // database is never touched. From the project folder, on the erp branch:
 //   npm run dev:erp            start it (the first time it copies your local database to pulsetrack_erp)
 //   npm run dev:erp -- --fresh copy your local database again (throws away erp test data)
-//   npm run dev:erp -- --demo  also add the two demo companies
+//   npm run dev:erp -- --demo  also add the two demo companies and the test owner (testuser / test123)
+//   npm run dev:erp -- --testuser  only the test owner
 //   npm run dev:erp -- owner create   set up the owner account in pulsetrack_erp (also: password, new-code, unlock)
 // Then open http://localhost:5173 (the app) and http://localhost:5173/owner (the owner console).
 import { execSync, spawn } from 'node:child_process'
@@ -50,6 +51,7 @@ say('Updating pulsetrack_erp to the erp version...')
 run('npx prisma migrate deploy')
 run('npx prisma generate')
 if (args.has('--demo')) run('npx tsx src/scripts/demoCompanies.ts')
+if (args.has('--demo') || args.has('--testuser')) run('npx tsx src/scripts/devOwner.ts')
 if (argv[0] === 'owner') {
   run(`npx tsx src/scripts/owner.ts ${argv[1] ?? ''}`)
   process.exit(0)

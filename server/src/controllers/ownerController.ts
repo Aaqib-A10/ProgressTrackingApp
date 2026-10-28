@@ -43,19 +43,24 @@ async function failed(req: Request, owner: { id: string; failedLogins: number },
 
 const lockedMessage = (until: Date) => `Too many wrong tries. The owner sign in is locked until ${until.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Karachi' })} (Pakistan time).`
 
-const loginSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(200) })
+/** "email" may be the email or the username. */
+const loginSchema = z.object({ email: z.string().trim().toLowerCase().min(1).max(200), password: z.string().min(1).max(200) })
+
+/** Test owners made on a PC (src/scripts/devOwner.ts) never sign in on the live server. */
+export const isLocalTestOwner = (o: { email: string }) => o.email.endsWith('@local.test')
 
 /** POST /api/owner/login { email, password } → { needCode, ticket } (step 1 of 2). */
 export async function ownerLogin(req: Request, res: Response): Promise<void> {
   const p = loginSchema.safeParse(req.body)
-  if (!p.success) { res.status(400).json({ error: 'Enter your email and password.' }); return }
-  const owner = await prisma.platformOwner.findUnique({ where: { email: p.data.email } })
+  if (!p.success) { res.status(400).json({ error: 'Enter your email or username and password.' }); return }
+  const found = await prisma.platformOwner.findFirst({ where: { OR: [{ email: p.data.email }, { username: p.data.email }] } })
+  const owner = found && process.env.NODE_ENV === 'production' && isLocalTestOwner(found) ? null : found
   if (owner?.lockedUntil && owner.lockedUntil > new Date()) { res.status(423).json({ error: lockedMessage(owner.lockedUntil) }); return }
   const ok = await verifyPassword(p.data.password, owner?.passwordHash ?? DUMMY_PASSWORD_HASH)
   if (!owner || !ok) {
     if (owner) await failed(req, owner, 'password')
     else await audit(req, null, 'LOGIN_FAILED', { detail: { what: 'unknown email' } })
-    res.status(401).json({ error: 'Wrong email or password.' })
+    res.status(401).json({ error: 'Wrong email, username or password.' })
     return
   }
   // Phone code switched on: a short ticket now, the session after the code.

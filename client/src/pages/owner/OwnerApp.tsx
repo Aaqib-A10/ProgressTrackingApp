@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, useLocation, useNavigate, useParams, useRoutes } from 'react-router-dom'
-import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, ShieldCheck, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug, ToggleRight } from 'lucide-react'
+import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug, ToggleRight } from 'lucide-react'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { useToast } from '../../components/ui/Toast'
 import { TextField, PasswordField } from '../../components/ui/Input'
 import { Toggle } from '../../components/ui/Toggle'
 import { StatCard } from '../../components/StatCard'
-import { AuthLayout } from '../auth/AuthLayout'
 import { cn } from '../../lib/cn'
 import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
@@ -65,27 +64,101 @@ function OwnerLogin() {
   }
 
   return (
-    <AuthLayout headline="Every company on Metriq, in one place.">
-      <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-card bg-primary/10 text-primary"><ShieldCheck size={22} /></div>
-      <h1 className="text-headline-lg text-ink">Owner console</h1>
-      <p className="mt-1 text-body-md text-ink-muted">{ticket ? 'Enter the 6 digit code from your phone app.' : 'For the Metriq owner only. Company people sign in on the normal page.'}</p>
-      <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
-        {!ticket ? (
-          <>
-            <TextField label="Email" type="email" placeholder="you@company.com" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-            <PasswordField label="Password" placeholder="••••••••" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </>
-        ) : (
-          <TextField label="Code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="text-center text-headline-md tracking-[0.4em]"
-            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus />
-        )}
-        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger" role="alert">{error}</p>}
-        <Button type="submit" className="w-full" disabled={busy || (!ticket ? !email || !password : code.length !== 6)}>
-          {busy ? 'Checking…' : 'Sign in'}
-        </Button>
-      </form>
-      <p className="mt-6 text-center text-body-sm text-ink-muted">Not the owner? <Link to="/login" className="font-semibold text-primary hover:underline">Company sign in</Link></p>
-    </AuthLayout>
+    <div className="grid min-h-screen bg-card lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      {/* Left: the owner's side of Metriq. Dark in both themes, quiet moving lines, no fake data. */}
+      <aside className="relative hidden overflow-hidden bg-[#0b1020] text-white lg:flex lg:flex-col">
+        <OwnerLines />
+        <div className="relative flex items-center gap-3 px-12 pt-10">
+          <img src={metriqLogoDark} alt="Metriq" className="h-6 w-auto" />
+          <span className="h-4 w-px bg-white/20" />
+          <span className="text-[13px] font-medium tracking-wide text-white/60">Owner console</span>
+        </div>
+        <div className="relative mt-auto px-12 pb-12">
+          <p className="max-w-md text-[34px] font-semibold leading-[1.15] tracking-[-0.02em]">
+            Every company on Metriq, <span className="text-white/45">run from one place.</span>
+          </p>
+          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-white/55">
+            {['Companies', 'Support', 'Switches', 'Activity log'].map((x) => (
+              <li key={x} className="flex items-center gap-2"><span className="h-1 w-1 rounded-full bg-[#818cf8]" />{x}</li>
+            ))}
+          </ul>
+        </div>
+      </aside>
+
+      {/* Right: the form */}
+      <main className="relative flex flex-col px-6 py-8 sm:px-12">
+        <div className="flex items-center justify-between">
+          <img src={metriqLogo} alt="Metriq" className="h-6 w-auto lg:invisible dark:hidden" />
+          <Link to="/login" className="inline-flex items-center gap-1.5 text-[14px] text-ink-muted hover:text-ink"><ArrowLeft size={15} />Company sign in</Link>
+        </div>
+        <div className="flex flex-1 items-center justify-center py-12">
+          <div className="w-full max-w-[400px]">
+            <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-primary">Owner access</p>
+            <h1 className="mt-3 text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-ink">{ticket ? 'One more step' : 'Sign in to the owner console'}</h1>
+            <p className="mt-3 text-[15px] leading-6 text-ink-muted">{ticket ? 'Enter the 6 digit code from your phone app.' : 'Only the Metriq owner signs in here. Company people use the normal sign in.'}</p>
+            <form onSubmit={submit} className="mt-8 space-y-5" noValidate>
+              {!ticket ? (
+                <>
+                  <TextField label="Email or username" type="text" placeholder="you@company.com or username" autoComplete="username" autoCapitalize="none" spellCheck={false}
+                    className="!h-11 !text-[15px]" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+                  <PasswordField label="Password" placeholder="Your password" autoComplete="current-password" className="!h-11 !text-[15px]" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </>
+              ) : (
+                <TextField label="Code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="!h-12 text-center !text-headline-md tracking-[0.4em]"
+                  value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus />
+              )}
+              {error && <p className="rounded-btn bg-danger/10 px-3 py-2.5 text-body-sm text-danger" role="alert">{error}</p>}
+              <Button type="submit" size="lg" className="h-11 w-full text-[15px]" disabled={busy || (!ticket ? !email || !password : code.length !== 6)}>
+                {busy ? 'Checking…' : ticket ? 'Verify and sign in' : 'Sign in'}
+              </Button>
+            </form>
+            <p className="mt-8 border-t border-line pt-5 text-[13px] leading-5 text-ink-faint">Every owner sign in is recorded with its time and address. Five wrong tries lock it for 15 minutes.</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+/** Slow, quiet flowing lines for the owner sign in panel (decoration only; still for reduced motion). */
+function OwnerLines() {
+  const lines = Array.from({ length: 28 }, (_, i) => {
+    const y = 250 + i * 13
+    const bend = 140 + i * 9
+    return `M -40 ${y} C 220 ${y - bend * 0.35}, 420 ${y + bend * 0.55}, 760 ${y - 60 + i * 6}`
+  })
+  return (
+    <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 720 900" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="owner-line" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor="#818cf8" stopOpacity="0" />
+          <stop offset="0.45" stopColor="#818cf8" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#2dd4bf" stopOpacity="0.15" />
+        </linearGradient>
+        <linearGradient id="owner-fade" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0.12" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.35" stopColor="#fff" stopOpacity="1" />
+          <stop offset="0.72" stopColor="#fff" stopOpacity="1" />
+          <stop offset="0.86" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <mask id="owner-mask"><rect width="720" height="900" fill="url(#owner-fade)" /></mask>
+        <radialGradient id="owner-glow" cx="0.75" cy="0.3" r="0.6">
+          <stop offset="0" stopColor="#4f46e5" stopOpacity="0.35" />
+          <stop offset="1" stopColor="#0b1020" stopOpacity="0" />
+        </radialGradient>
+        <style>{`
+          .owner-path { stroke-dasharray: 6 10; animation: owner-flow 14s linear infinite; }
+          @keyframes owner-flow { to { stroke-dashoffset: -320; } }
+          @media (prefers-reduced-motion: reduce) { .owner-path { animation: none; } }
+        `}</style>
+      </defs>
+      <rect width="720" height="900" fill="url(#owner-glow)" />
+      <g mask="url(#owner-mask)">
+      {lines.map((d, i) => (
+        <path key={i} d={d} fill="none" stroke="url(#owner-line)" strokeWidth={i % 4 === 0 ? 1.2 : 0.7} className={i % 3 === 0 ? 'owner-path' : undefined} style={i % 3 === 0 ? { animationDelay: `${-i * 0.7}s` } : undefined} />
+      ))}
+      </g>
+    </svg>
   )
 }
 
