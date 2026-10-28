@@ -5,7 +5,7 @@ import { requireOwner } from '../middleware/owner'
 import {
   ownerLogin, ownerLoginCode, ownerLogout, ownerMe, ownerHome,
   listCompanies, getCompany, updateCompany,
-  listTickets, getTicket, replyTicket, updateTicket, ownerActivity,
+  listTickets, getTicket, replyTicket, updateTicket, ownerActivity, listFlags, updateFlag,
 } from '../controllers/ownerController'
 
 // The owner console's API (erp, step 0). Only the owner's own session opens it.
@@ -24,3 +24,5 @@ ownerRouter.get('/support/:id', requireOwner, asyncHandler(getTicket))
 ownerRouter.post('/support/:id/reply', requireOwner, asyncHandler(replyTicket))
 ownerRouter.patch('/support/:id', requireOwner, asyncHandler(updateTicket))
 ownerRouter.get('/activity', requireOwner, asyncHandler(ownerActivity))
+ownerRouter.get('/flags', requireOwner, asyncHandler(listFlags))
+ownerRouter.patch('/flags/:key', requireOwner, asyncHandler(updateFlag))

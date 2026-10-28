@@ -43,6 +43,7 @@ export interface OwnerHome {
   tickets: { id: string; number: number; subject: string; company: string; status: TicketStatus; priority: TicketPriority; updatedAt: string }[]
   signInAlerts: { at: string; action: string; ip: string | null }[]
 }
+export interface OwnerFlag { key: string; label: string; description: string; enabled: boolean; isDefault: boolean; updatedAt: string | null; updatedBy: string | null }
 export interface ActivityRow { id: string; at: string; action: string; by: string; company: string | null; target: string | null; detail: unknown; ip: string | null }
 
 export const ownerApi = {
@@ -58,6 +59,8 @@ export const ownerApi = {
   ticket: (id: string) => call<{ ticket: TicketDetail }>('GET', `/support/${id}`),
   reply: (id: string, body: string, status?: TicketStatus) => call<{ ticket: TicketDetail }>('POST', `/support/${id}/reply`, { body, status }),
   updateTicket: (id: string, input: { status?: TicketStatus; priority?: TicketPriority }) => call<{ ticket: TicketDetail }>('PATCH', `/support/${id}`, input),
+  flags: () => call<{ flags: OwnerFlag[] }>('GET', '/flags'),
+  setFlag: (key: string, enabled: boolean) => call<{ flags: OwnerFlag[] }>('PATCH', `/flags/${key}`, { enabled }),
   activity: (q = '') => call<{ activity: ActivityRow[] }>('GET', `/activity?q=${encodeURIComponent(q)}`),
 }
 

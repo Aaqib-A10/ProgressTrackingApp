@@ -8,6 +8,7 @@ import { getClientIp } from '../lib/ip'
 import { companyUserWhere, HOME_COMPANY_ID } from '../lib/company'
 import { companyToday, dbDateFromString } from '../lib/time'
 import { OWNER_COOKIE, type OwnerRequest } from '../middleware/owner'
+import { FLAGS, FLAG_KEYS, allFlags, isOn, setFlag, type FlagKey } from '../lib/flags'
 
 /**
  * The owner console (erp, step 0): where Metriq is run as a business. One owner account (Anees),
@@ -281,4 +282,22 @@ export async function ownerActivity(req: OwnerRequest, res: Response): Promise<v
   res.json({
     activity: rows.map((a) => ({ id: a.id, at: a.createdAt.toISOString(), action: a.action, by: a.owner?.name ?? '—', company: a.companyId ? companies.get(a.companyId) ?? null : null, target: a.target, detail: a.detail, ip: a.ip })),
   })
+}
+
+// ------------------------------------------------------------------ switches
+
+/** GET /api/owner/flags — every on/off switch and who last changed it. */
+export async function listFlags(_req: OwnerRequest, res: Response): Promise<void> {
+  res.json({ flags: await allFlags() })
+}
+
+/** PATCH /api/owner/flags/:key { enabled } — takes effect everywhere within seconds, no deploy. */
+export async function updateFlag(req: OwnerRequest, res: Response): Promise<void> {
+  const key = req.params.key as FlagKey
+  if (!FLAG_KEYS.includes(key)) { res.status(404).json({ error: 'No such switch' }); return }
+  if (typeof req.body?.enabled !== 'boolean') { res.status(400).json({ error: 'enabled (true or false) is required' }); return }
+  const before = await isOn(key)
+  await setFlag(key, req.body.enabled, req.owner!.name)
+  await audit(req, req.owner!.id, 'SWITCH', { target: FLAGS[key].label, detail: { key, before, after: req.body.enabled } })
+  res.json({ flags: await allFlags() })
 }

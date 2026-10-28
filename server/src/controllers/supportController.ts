@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyIdOfUser } from '../lib/company'
+import { isOn } from '../lib/flags'
 
 /**
  * The Help button (erp, step 0): anyone in a company tells Metriq support about a problem. It
@@ -18,7 +19,7 @@ async function myCompany(userId: string) {
 /** GET /api/support/status → { enabled } (the app shows the Help button only when true). */
 export async function supportStatus(req: AuthedRequest, res: Response): Promise<void> {
   const c = await myCompany(req.user!.id)
-  res.json({ enabled: !!c?.helpEnabled })
+  res.json({ enabled: !!c?.helpEnabled && (await isOn('help-button')) })
 }
 
 const createSchema = z.object({
@@ -31,7 +32,7 @@ const createSchema = z.object({
 /** POST /api/support — send a complaint or question. */
 export async function createTicket(req: AuthedRequest, res: Response): Promise<void> {
   const c = await myCompany(req.user!.id)
-  if (!c?.helpEnabled) { res.status(403).json({ error: 'Help is not switched on for your company.' }); return }
+  if (!c?.helpEnabled || !(await isOn('help-button'))) { res.status(403).json({ error: 'Help is not switched on for your company.' }); return }
   const p = createSchema.safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Invalid input' }); return }
   const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { id: true, name: true, email: true } })

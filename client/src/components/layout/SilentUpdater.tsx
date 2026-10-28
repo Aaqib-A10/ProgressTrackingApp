@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useCalls } from '../calls/CallProvider'
+import { flagOn, refreshFlags } from '../../lib/flags'
 import { hasUnsavedText, shouldReload, updatesHeld, RELOADED_KEY, type Trigger } from '../../lib/silentUpdate'
 
 /**
@@ -45,6 +46,7 @@ export function SilentUpdater() {
   inCall.current = !!calls?.call
 
   const tryReload = (trigger: Trigger, since: number) => {
+    if (!flagOn('silent-updates')) return // switched off by the owner
     const now = Date.now()
     const ok = shouldReload({
       outdated: outdated.current,
@@ -68,6 +70,7 @@ export function SilentUpdater() {
       if (Date.now() - last < 30_000) return
       last = Date.now()
       try {
+        await refreshFlags()
         const live = await liveEntry()
         if (live && live !== running) outdated.current = true
       } catch { /* offline: try again later */ }

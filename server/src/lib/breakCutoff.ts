@@ -4,6 +4,7 @@ import { notifyAttendance } from './notify'
 import { runTracked } from './health/jobs'
 import { COMPANY_TZ } from './time'
 import { clockAt } from './overtime'
+import { isOn } from './flags'
 
 /**
  * Break cut-off (E-commerce, Oct 2026: "break cut off time if he forgets"). A break still running
@@ -20,6 +21,7 @@ function cutoffFor(rows: CutoffRow[], userId: string, departmentId: string | nul
 }
 
 export async function runBreakCutoffTick(now: Date = new Date()): Promise<{ ended: number }> {
+  if (!(await isOn('break-cutoff'))) return { ended: 0 } // switched off by the owner
   const open = await prisma.breakEntry.findMany({
     where: { endAt: null, day: { checkOutAt: null } },
     select: { id: true, type: true, startAt: true, day: { select: { userId: true, user: { select: { name: true, departmentId: true } } } } },

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, useLocation, useNavigate, useParams, useRoutes } from 'react-router-dom'
-import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, ShieldCheck, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug } from 'lucide-react'
+import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, ShieldCheck, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug, ToggleRight } from 'lucide-react'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { useToast } from '../../components/ui/Toast'
 import { TextField, PasswordField } from '../../components/ui/Input'
+import { Toggle } from '../../components/ui/Toggle'
 import { StatCard } from '../../components/StatCard'
 import { AuthLayout } from '../auth/AuthLayout'
 import { cn } from '../../lib/cn'
@@ -12,7 +13,7 @@ import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 import {
   ownerApi, ownerErr, OwnerApiError, STATUS_LABEL, PRIORITY_LABEL,
-  type OwnerCompany, type OwnerHome, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
+  type OwnerCompany, type OwnerHome, type OwnerFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
 } from '../../lib/ownerApi'
 
 /**
@@ -94,6 +95,7 @@ const NAV = [
   { to: '/owner', label: 'Home', icon: LayoutDashboard, end: true },
   { to: '/owner/companies', label: 'Companies', icon: Building2 },
   { to: '/owner/support', label: 'Support', icon: LifeBuoy },
+  { to: '/owner/switches', label: 'Switches', icon: ToggleRight },
   { to: '/owner/activity', label: 'Activity log', icon: ScrollText },
 ]
 
@@ -115,6 +117,7 @@ function OwnerShell() {
     { path: 'companies/:id', element: <CompanyPage /> },
     { path: 'support', element: <SupportPage /> },
     { path: 'support/:id', element: <TicketPage /> },
+    { path: 'switches', element: <SwitchesPage /> },
     { path: 'activity', element: <ActivityPage /> },
     { path: '*', element: <Navigate to="/owner" replace /> },
   ])
@@ -493,10 +496,13 @@ const ACTIONS: Record<string, string> = {
   LOGIN: 'Signed in', LOGOUT: 'Signed out', LOGIN_FAILED: 'Wrong password or code', LOCKED: 'Sign in locked (5 wrong tries)',
   OWNER_CREATED: 'Owner account created', PASSWORD_CHANGED: 'Password changed', CODE_RESET: 'Authenticator key changed', UNLOCKED: 'Sign in unlocked',
   COMPANY_UPDATE: 'Company changed', TICKET_REPLY: 'Replied to a complaint', TICKET_UPDATE: 'Complaint updated',
+  SWITCH: 'Switch changed', CODE_OFF: 'Phone code switched off',
 }
 function describe(action: string, detail: unknown): string {
   const base = ACTIONS[action] ?? action
   const d = detail as { after?: Record<string, unknown> } | null
+  const sw = detail as { key?: string; after?: unknown } | null
+  if (action === 'SWITCH' && sw && typeof sw.after === 'boolean') return `${base}: ${sw.after ? 'on' : 'off'}`
   if (action === 'COMPANY_UPDATE' && d?.after) {
     return `${base}: ${Object.entries(d.after).map(([k, v]) => (k === 'helpEnabled' ? `Help button ${v ? 'on' : 'off'}` : `${k} ${String(v)}`)).join(', ')}`
   }
@@ -529,6 +535,41 @@ function ActivityPage() {
               </tbody>
             </table>
           )}
+        </Panel>
+      )}
+    </>
+  )
+}
+
+// ------------------------------------------------------------------ switches
+
+function SwitchesPage() {
+  const { addToast } = useToast()
+  const { data, error, setData } = useLoad(() => ownerApi.flags())
+  const [busy, setBusy] = useState<string | null>(null)
+  async function flip(f: OwnerFlag, enabled: boolean) {
+    setBusy(f.key)
+    try { setData(await ownerApi.setFlag(f.key, enabled)); addToast({ type: 'success', message: `${f.label} ${enabled ? 'switched on' : 'switched off'}. It takes effect within a minute.` }) }
+    catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(null) }
+  }
+  return (
+    <>
+      <Title sub="Turn a part of Metriq off in seconds if it causes trouble, with no deploy. It applies to every company within a minute.">Switches</Title>
+      {!data ? <Loading error={error} /> : (
+        <Panel className="divide-y divide-line">
+          {data.flags.map((f) => (
+            <div key={f.key} className="flex items-start gap-4 px-5 py-5">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-body-md font-semibold text-ink">{f.label}</p>
+                  <Badge tone={f.enabled ? 'success' : 'danger'}>{f.enabled ? 'On' : 'Off'}</Badge>
+                </div>
+                <p className="mt-1 text-body-sm text-ink-muted">{f.description}</p>
+                <p className="mt-1.5 text-[12px] text-ink-faint">{f.isDefault ? 'Never changed (on by default)' : `Last changed ${fmt(f.updatedAt)}${f.updatedBy ? ` by ${f.updatedBy}` : ''}`}</p>
+              </div>
+              <div className="pt-1"><Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => flip(f, v)} label={f.label} /></div>
+            </div>
+          ))}
         </Panel>
       )}
     </>
