@@ -207,7 +207,8 @@ model User {
   notificationsActed    Notification[]         @relation("NotificationActor")
   stockAssignedTo       StockRequest[]         @relation("StockAssignee")
   stockAssignedBy       StockRequest[]         @relation("StockAssigner")
-  stockCreated        StockRequest[]       @relation("StockCreator")
+  stockCreated          StockRequest[]         @relation("StockCreator")
+  supportTickets        SupportTicket[]        @relation("SupportTickets")
   inventoryItemsCreated InventoryItem[]        @relation("InvItemCreator")
   inventoryRequested    InventoryMovement[]    @relation("InvReqBy")
   inventoryAssignedTo   InventoryMovement[]    @relation("InvAssignee")
@@ -995,6 +996,7 @@ enum NotificationType {
   SYSTEM_HEALTH
   BREAK_CUTOFF
   ATTENDANCE_EDITED
+  SUPPORT_REPLY
 }
 
 enum BreakType {
@@ -2924,4 +2926,118 @@ model UptimeEvent {
   createdAt DateTime @default(now())
 
   @@index([downAt(sort: Desc)])
+}
+
+// ================================================================== Owner console (erp, step 0)
+// Metriq as a product: the companies that use it, the owner who runs it (Anees), and the
+// complaints companies send from their Help button. 99 Technologies is company 1.
+// The owner is NOT a user of any company: own table, own sign in, own cookie.
+
+enum CompanyStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+}
+
+model Company {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  timeZone    String        @default("Asia/Karachi")
+  status      CompanyStatus @default(ACTIVE)
+  plan        String        @default("internal")
+  /// The Help button for this company's people. Off for 99 Technologies until the owner turns it on.
+  helpEnabled Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tickets SupportTicket[]
+}
+
+model PlatformOwner {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  /// Authenticator app key (base32). Sign in needs a 6 digit code from it.
+  totpSecret   String
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  lastLoginAt  DateTime?
+  /// Sessions signed before this are dead (set by the reset command).
+  sessionsFrom DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  actions OwnerAuditLog[]
+}
+
+/// Every owner action and every owner sign in (good or bad), kept for good.
+model OwnerAuditLog {
+  id        String         @id @default(cuid())
+  ownerId   String?
+  owner     PlatformOwner? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  action    String // "LOGIN", "LOGIN_FAILED", "LOCKED", "COMPANY_UPDATE", "TICKET_REPLY", ...
+  companyId String?
+  target    String?
+  detail    Json?
+  ip        String?
+  createdAt DateTime       @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([companyId, createdAt(sort: Desc)])
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_COMPANY
+  RESOLVED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model SupportTicket {
+  id         String         @id @default(cuid())
+  number     Int            @unique @default(autoincrement())
+  companyId  String
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?          @relation("SupportTickets", fields: [userId], references: [id], onDelete: SetNull)
+  userName   String
+  userEmail  String
+  subject    String
+  body       String
+  /// Where they were and what they were using, captured by the Help button.
+  pageUrl    String?
+  userAgent  String?
+  /// Errors this person hit in the 24 hours before (System Health error groups).
+  errorIds   String[]
+  status     TicketStatus   @default(OPEN)
+  priority   TicketPriority @default(NORMAL)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  resolvedAt DateTime?
+
+  messages SupportMessage[]
+
+  @@index([companyId, status])
+  @@index([status, updatedAt(sort: Desc)])
+}
+
+model SupportMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromOwner  Boolean
+  authorName String
+  body       String
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
 }

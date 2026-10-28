@@ -83,6 +83,8 @@ const AdminNetworks = lazy(pageModule(() => import('../pages/app/admin/AdminNetw
 const FinancialReports = lazy(pageModule(() => import('../pages/app/admin/FinancialReports')))
 const AdminActivity = lazy(pageModule(() => import('../pages/app/admin/AdminActivity')))
 const SystemHealth = lazy(pageModule(() => import('../pages/app/admin/SystemHealth')))
+const OwnerApp = lazy(pageModule(() => import('../pages/owner/OwnerApp')))
+const HelpPage = lazy(pageModule(() => import('../pages/app/HelpPage')))
 const ProjectsList = lazy(pageModule(() => import('../pages/app/projects/ProjectsList')))
 const ProjectBoard = lazy(pageModule(() => import('../pages/app/projects/ProjectBoard')))
 const ProjectSettings = lazy(pageModule(() => import('../pages/app/projects/ProjectSettings')))
@@ -103,6 +105,9 @@ export const router = createBrowserRouter([
   { path: '/forgot-password', element: <Page><ForgotPassword /></Page> },
   { path: '/reset-password', element: <Page><ResetPassword /></Page> },
   { path: '/reset-success', element: <Page><ResetSuccess /></Page> },
+
+  // The owner console (erp, step 0): only the Metriq owner signs in here.
+  { path: '/owner/*', errorElement: <RouteError />, element: <Suspense fallback={null}><OwnerApp /></Suspense> },
 
   // People outside Metriq joining a call by link (no login)
   { path: '/join/:token', element: <Suspense fallback={null}><GuestJoin /></Suspense> },
@@ -137,6 +142,7 @@ export const router = createBrowserRouter([
       { path: 'connectors', element: <Connectors /> },
       { path: 'connectors/:id', element: <Connectors /> },
       { path: 'feedback/:id', element: <FeedbackThread /> },
+      { path: 'help', element: <HelpPage /> },
 
       // Quality Assurance
       { path: 'qa/evaluate', element: <RequireRole roles={['QA', 'QA_LEAD', 'SUPER_ADMIN']}><QaEvaluate /></RequireRole> },

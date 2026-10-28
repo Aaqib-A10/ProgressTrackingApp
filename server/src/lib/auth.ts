@@ -70,3 +70,12 @@ export function verifyResetToken(token: string): string {
 export function signInviteToken(userId: string): string {
   return jwt.sign({ sub: userId, kind: 'reset' }, JWT_SECRET, { expiresIn: '7d' })
 }
+
+// --- Owner console (erp): its own audience, so a company user's session can never open it and an
+// owner session can never act as a company user (requireAuth also looks the user up by id).
+export function signOwnerToken(ownerId: string, kind: 'owner' | 'owner-2fa', expiresIn: string | number): string {
+  return jwt.sign({ sub: ownerId }, JWT_SECRET, { expiresIn, audience: kind, algorithm: 'HS256' } as SignOptions)
+}
+export function verifyOwnerToken(token: string, kind: 'owner' | 'owner-2fa'): { sub: string; iat?: number } {
+  return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'], audience: kind }) as { sub: string; iat?: number }
+}

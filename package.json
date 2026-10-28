@@ -2,7 +2,7 @@
   "name": "metriq",
   "version": "0.1.0",
   "private": true,
-  "description": "Metriq — internal progress tracking app (PERN, TypeScript)",
+  "description": "Metriq \u2014 internal progress tracking app (PERN, TypeScript)",
   "workspaces": [
     "client",
     "server"
@@ -16,7 +16,8 @@
     "prisma:generate": "npm run prisma:generate -w server",
     "prisma:migrate": "npm run prisma:migrate -w server",
     "prisma:studio": "npm run prisma:studio -w server",
-    "fetch:media": "node scripts/fetch-pexels.mjs"
+    "fetch:media": "node scripts/fetch-pexels.mjs",
+    "dev:erp": "node scripts/dev-erp.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

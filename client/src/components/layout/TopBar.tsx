@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessagesSquare, HelpCircle, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing } from 'lucide-react'
+import { Bell, MessagesSquare, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { DEPARTMENTS } from '../../lib/departments'
 import { useAuth } from '../../lib/auth'
@@ -13,6 +13,7 @@ import { Avatar } from './Sidebar'
 import { ClockWidget } from '../attendance/ClockWidget'
 import { GlobalSearch } from './GlobalSearch'
 import { ThemeSwitch } from '../ui/ThemeSwitch'
+import { HelpButton } from './HelpButton'
 
 export interface TopBarProps {
   user: CurrentUser
@@ -262,9 +263,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           )}
         </div>
 
-        <button className="hidden rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink sm:inline-flex" aria-label="Help">
-          <HelpCircle size={18} />
-        </button>
+        <HelpButton />
 
         <div className="mx-1 hidden h-5 w-px bg-line sm:block" />
 

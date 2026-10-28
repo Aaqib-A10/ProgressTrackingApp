@@ -36,6 +36,8 @@ import { claudeRouter, mcpRouter } from './routes/claude'
 import { systemHealthRouter } from './routes/systemHealth'
 import { auditProbeMiddleware, errorHandler, requestMonitor } from './lib/health/monitor'
 import { registerApiMounts } from './lib/health/audit'
+import { supportRouter } from './routes/support'
+import { ownerRouter } from './routes/owner'
 
 /**
  * Every API router and where it lives. The hourly self check (System Health) walks this list
@@ -76,6 +78,8 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/mcp', mcpRouter],
   ['/api/dialer-hook', dialerHookRouter],
   ['/api/system-health', systemHealthRouter],
+  ['/api/support', supportRouter],
+  ['/api/owner', ownerRouter],
 ]
 
 /**

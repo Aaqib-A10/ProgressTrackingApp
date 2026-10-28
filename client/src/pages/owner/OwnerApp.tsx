@@ -1,0 +1,480 @@
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, NavLink, Navigate, useLocation, useNavigate, useParams, useRoutes } from 'react-router-dom'
+import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, ShieldCheck, AlertTriangle, ArrowLeft, Search, ExternalLink } from 'lucide-react'
+import { Badge, type BadgeTone } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import { useToast } from '../../components/ui/Toast'
+import {
+  ownerApi, ownerErr, OwnerApiError, STATUS_LABEL, PRIORITY_LABEL,
+  type OwnerCompany, type OwnerHome, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
+} from '../../lib/ownerApi'
+
+/**
+ * The owner console (erp, step 0): where Metriq is run as a business. Only the owner signs in
+ * here (password + authenticator code); company people, Super Admins included, cannot.
+ * /owner/login, /owner (home), /owner/companies, /owner/support, /owner/activity.
+ */
+
+const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—')
+const inputCls = 'h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10'
+const STATUS_TONE: Record<TicketStatus, BadgeTone> = { OPEN: 'warning', IN_PROGRESS: 'primary', WAITING_ON_COMPANY: 'neutral', RESOLVED: 'success' }
+const PRIORITY_TONE: Record<TicketPriority, BadgeTone> = { LOW: 'neutral', NORMAL: 'neutral', HIGH: 'warning', URGENT: 'danger' }
+const COMPANY_TONE: Record<OwnerCompany['status'], BadgeTone> = { TRIAL: 'accent', ACTIVE: 'success', SUSPENDED: 'danger' }
+
+export default function OwnerApp() {
+  const { pathname } = useLocation()
+  if (pathname === '/owner/login') return <OwnerLogin />
+  return <OwnerShell />
+}
+
+// ------------------------------------------------------------------ sign in
+
+function OwnerLogin() {
+  const navigate = useNavigate()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [ticket, setTicket] = useState<string | null>(null)
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(''); setBusy(true)
+    try {
+      if (!ticket) {
+        const r = await ownerApi.login(email, password)
+        setTicket(r.ticket); setPassword('')
+      } else {
+        await ownerApi.code(ticket, code)
+        navigate('/owner', { replace: true })
+      }
+    } catch (err) {
+      setError(ownerErr(err))
+      if (err instanceof OwnerApiError && ticket && /sign in again|too long/i.test(err.message)) { setTicket(null); setCode('') }
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-ink px-4">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-card bg-card p-6 shadow-overlay">
+        <div className="mb-5 flex items-center gap-2">
+          <ShieldCheck className="text-primary" size={22} />
+          <div>
+            <h1 className="text-headline-md text-ink">Metriq owner console</h1>
+            <p className="text-body-sm text-ink-muted">{ticket ? 'Enter the 6 digit code from your authenticator app.' : 'For the Metriq owner only.'}</p>
+          </div>
+        </div>
+        {!ticket ? (
+          <div className="space-y-3">
+            <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Email</span>
+              <input className={inputCls} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus /></label>
+            <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Password</span>
+              <input className={inputCls} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+          </div>
+        ) : (
+          <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Code</span>
+            <input className={inputCls + ' text-center text-headline-md tracking-[0.4em]'} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+              value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus aria-label="Code" /></label>
+        )}
+        {error && <p className="mt-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger" role="alert">{error}</p>}
+        <Button type="submit" className="mt-4 w-full" disabled={busy || (!ticket ? !email || !password : code.length !== 6)}>
+          {busy ? 'Checking…' : ticket ? 'Sign in' : 'Continue'}
+        </Button>
+        <p className="mt-4 text-center text-body-sm text-ink-muted"><Link to="/login" className="hover:text-ink">Company sign in</Link></p>
+      </form>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------ shell
+
+function OwnerShell() {
+  const navigate = useNavigate()
+  const [owner, setOwner] = useState<{ name: string; email: string } | null>(null)
+  const [checked, setChecked] = useState(false)
+  useEffect(() => {
+    ownerApi.me().then((r) => setOwner(r.owner)).catch(() => setOwner(null)).finally(() => setChecked(true))
+  }, [])
+  const routes = useRoutes([
+    // Relative to /owner (this screen is mounted at /owner/*).
+    { index: true, element: <OwnerHomePage /> },
+    { path: 'companies', element: <CompaniesPage /> },
+    { path: 'companies/:id', element: <CompanyPage /> },
+    { path: 'support', element: <SupportPage /> },
+    { path: 'support/:id', element: <TicketPage /> },
+    { path: 'activity', element: <ActivityPage /> },
+    { path: '*', element: <Navigate to="/owner" replace /> },
+  ])
+  if (!checked) return <div className="flex min-h-screen items-center justify-center bg-bg text-body-md text-ink-muted">Loading…</div>
+  if (!owner) return <Navigate to="/owner/login" replace />
+
+  const nav = [
+    { to: '/owner', label: 'Home', icon: LayoutDashboard, end: true },
+    { to: '/owner/companies', label: 'Companies', icon: Building2 },
+    { to: '/owner/support', label: 'Support', icon: LifeBuoy },
+    { to: '/owner/activity', label: 'Activity log', icon: ScrollText },
+  ]
+  return (
+    <div className="flex min-h-screen bg-bg">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-ink p-4 text-card md:flex">
+        <div className="mb-6 flex items-center gap-2 px-2"><ShieldCheck size={20} className="text-primary-100" /><span className="text-body-md font-semibold">Metriq owner</span></div>
+        <nav className="space-y-1">
+          {nav.map((n) => (
+            <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => 'flex items-center gap-2.5 rounded-btn px-3 py-2 text-body-md transition-colors ' + (isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white')}>
+              <n.icon size={17} />{n.label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="mt-auto border-t border-white/15 pt-3">
+          <p className="px-2 text-body-sm font-semibold">{owner.name}</p>
+          <p className="truncate px-2 text-[12px] text-white/60">{owner.email}</p>
+          <button type="button" onClick={async () => { await ownerApi.logout().catch(() => undefined); navigate('/owner/login', { replace: true }) }}
+            className="mt-2 flex w-full items-center gap-2 rounded-btn px-2 py-1.5 text-body-sm text-white/70 hover:bg-white/10 hover:text-white"><LogOut size={15} />Sign out</button>
+        </div>
+      </aside>
+      <div className="min-w-0 flex-1">
+        <div className="flex gap-1 overflow-x-auto border-b border-line bg-card px-3 py-2 md:hidden">
+          {nav.map((n) => <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => 'whitespace-nowrap rounded-full px-3 py-1.5 text-body-sm ' + (isActive ? 'bg-ink text-card' : 'text-ink-muted')}>{n.label}</NavLink>)}
+        </div>
+        <main className="mx-auto max-w-6xl p-4 md:p-8">{routes}</main>
+      </div>
+    </div>
+  )
+}
+
+function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
+  const [data, setData] = useState<T | null>(null)
+  const [error, setError] = useState('')
+  const navigate = useNavigate()
+  const reload = useCallback(() => load().then((d) => { setData(d); setError('') }).catch((e) => {
+    if (e instanceof OwnerApiError && e.status === 401) navigate('/owner/login', { replace: true })
+    else setError(ownerErr(e, 'Could not load.'))
+  }), deps) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void reload() }, [reload])
+  return { data, error, reload, setData }
+}
+
+function Title({ children, sub, back }: { children: ReactNode; sub?: ReactNode; back?: string }) {
+  return (
+    <div className="mb-5">
+      {back && <Link to={back} className="mb-2 inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><ArrowLeft size={14} />Back</Link>}
+      <h1 className="text-headline-lg text-ink">{children}</h1>
+      {sub && <p className="mt-0.5 text-body-md text-ink-muted">{sub}</p>}
+    </div>
+  )
+}
+const Panel = ({ children, className = '' }: { children: ReactNode; className?: string }) => <div className={'rounded-card border border-line bg-card ' + className}>{children}</div>
+const Empty = ({ children }: { children: ReactNode }) => <p className="px-4 py-10 text-center text-body-md text-ink-muted">{children}</p>
+const Loading = ({ error }: { error?: string }) => <p className="text-body-md text-ink-muted">{error || 'Loading…'}</p>
+
+// ------------------------------------------------------------------ home
+
+function OwnerHomePage() {
+  const { data, error } = useLoad<OwnerHome>(() => ownerApi.home())
+  if (!data) return <Loading error={error} />
+  const c = data.counts
+  const tiles: { label: string; value: number; to: string; warn?: boolean }[] = [
+    { label: 'Companies', value: c.companies, to: '/owner/companies' },
+    { label: 'People', value: c.people, to: '/owner/companies' },
+    { label: 'Checked in today', value: c.inToday, to: '/owner/companies' },
+    { label: 'Open complaints', value: c.openTickets, to: '/owner/support', warn: c.urgentTickets > 0 },
+    { label: 'Errors in 24 hours', value: c.errors24h, to: '/app/admin/health', warn: c.errors24h > 0 },
+  ]
+  return (
+    <>
+      <Title sub="Every company on Metriq, their complaints and their health.">Home</Title>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {tiles.map((t) => (
+          <Link key={t.label} to={t.to} target={t.to.startsWith('/app') ? '_blank' : undefined} className="rounded-card border border-line bg-card p-4 hover:border-primary/40">
+            <p className="text-body-sm text-ink-muted">{t.label}</p>
+            <p className={'mt-1 text-headline-lg tabular-nums ' + (t.warn ? 'text-warning' : 'text-ink')}>{t.value}</p>
+          </Link>
+        ))}
+      </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-[2fr_1fr]">
+        <Panel>
+          <div className="flex items-center justify-between border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Complaints waiting</h2><Link to="/owner/support" className="text-body-sm text-primary">All</Link></div>
+          {data.tickets.length === 0 ? <Empty>No open complaints.</Empty> : (
+            <ul className="divide-y divide-line">
+              {data.tickets.map((t) => (
+                <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                  <span className="text-body-sm tabular-nums text-ink-muted">#{t.number}</span>
+                  <span className="min-w-0 flex-1 truncate text-body-md text-ink">{t.subject}<span className="ml-2 text-body-sm text-ink-muted">{t.company}</span></span>
+                  <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
+                  <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                </Link></li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+        <Panel>
+          <div className="border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Owner sign in alerts (7 days)</h2></div>
+          {data.signInAlerts.length === 0 ? <Empty>No wrong tries.</Empty> : (
+            <ul className="divide-y divide-line">
+              {data.signInAlerts.map((a, i) => (
+                <li key={i} className="flex items-center gap-2 px-4 py-2.5 text-body-sm">
+                  <AlertTriangle size={14} className={a.action === 'LOCKED' ? 'text-danger' : 'text-warning'} />
+                  <span className="text-ink">{a.action === 'LOCKED' ? 'Locked after 5 wrong tries' : 'Wrong password or code'}</span>
+                  <span className="ml-auto text-ink-muted">{fmt(a.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+    </>
+  )
+}
+
+// ------------------------------------------------------------------ companies
+
+function CompaniesPage() {
+  const { data, error } = useLoad(() => ownerApi.companies())
+  if (!data) return <Loading error={error} />
+  return (
+    <>
+      <Title sub="Every company using Metriq. New companies appear here once sign up is switched on.">Companies</Title>
+      <Panel className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-body-sm">
+          <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted">
+            <th className="px-4 py-2.5">Company</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Plan</th>
+            <th className="px-3 py-2.5 text-right">People</th><th className="px-3 py-2.5 text-right">In today</th><th className="px-3 py-2.5">Last active</th><th className="px-4 py-2.5 text-right">Open complaints</th>
+          </tr></thead>
+          <tbody className="divide-y divide-line">
+            {data.companies.map((c) => (
+              <tr key={c.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3"><Link to={`/owner/companies/${c.id}`} className="font-medium text-ink hover:text-primary">{c.name}</Link>{c.home && <span className="ml-2 text-[12px] text-ink-muted">company 1</span>}</td>
+                <td className="px-3 py-3"><Badge tone={COMPANY_TONE[c.status]}>{c.status === 'TRIAL' ? 'Trial' : c.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge></td>
+                <td className="px-3 py-3 capitalize text-ink-muted">{c.plan}</td>
+                <td className="px-3 py-3 text-right tabular-nums">{c.people}</td>
+                <td className="px-3 py-3 text-right tabular-nums">{c.inToday}</td>
+                <td className="px-3 py-3 text-ink-muted">{fmt(c.lastActiveAt)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{c.openTickets}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+    </>
+  )
+}
+
+function CompanyPage() {
+  const { id = '' } = useParams()
+  const { addToast } = useToast()
+  const { data, error, setData } = useLoad(() => ownerApi.company(id), [id])
+  const [busy, setBusy] = useState(false)
+  if (!data) return <Loading error={error} />
+  const c = data.company
+  async function patch(input: Parameters<typeof ownerApi.updateCompany>[1], ok: string) {
+    setBusy(true)
+    try { const r = await ownerApi.updateCompany(c.id, input); setData({ ...data!, company: r.company }); addToast({ type: 'success', message: ok }) }
+    catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(false) }
+  }
+  return (
+    <>
+      <Title back="/owner/companies" sub={c.home ? 'Company 1: the team Metriq was built with. It always stays active and is never billed.' : `Joined ${fmt(c.createdAt)}`}>{c.name}</Title>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[['People', c.people], ['Checked in today', c.inToday], ['Open complaints', c.openTickets], ['Plan', c.plan]].map(([l, v]) => (
+          <Panel key={String(l)} className="p-4"><p className="text-body-sm text-ink-muted">{l}</p><p className="mt-1 text-headline-md capitalize tabular-nums text-ink">{v}</p></Panel>
+        ))}
+      </div>
+      <Panel className="mt-4 divide-y divide-line">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-body-md font-semibold text-ink">Help button</p>
+            <p className="text-body-sm text-ink-muted">{c.helpEnabled ? 'On: their people can send complaints and questions to you from inside Metriq.' : 'Off: their people do not see a Help button.'}</p>
+          </div>
+          <Button size="sm" variant={c.helpEnabled ? 'secondary' : 'primary'} disabled={busy} onClick={() => patch({ helpEnabled: !c.helpEnabled }, c.helpEnabled ? 'Help button switched off.' : 'Help button switched on.')}>
+            {c.helpEnabled ? 'Switch off' : 'Switch on'}
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-body-md font-semibold text-ink">Status</p>
+            <p className="text-body-sm text-ink-muted">{c.home ? '99 Technologies cannot be suspended.' : c.status === 'SUSPENDED' ? 'Suspended: nobody in this company can sign in.' : 'Active.'}</p>
+          </div>
+          {!c.home && (
+            <Button size="sm" variant={c.status === 'SUSPENDED' ? 'primary' : 'danger'} disabled={busy}
+              onClick={() => patch({ status: c.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' }, c.status === 'SUSPENDED' ? 'Reactivated.' : 'Suspended.')}>
+              {c.status === 'SUSPENDED' ? 'Reactivate' : 'Suspend'}
+            </Button>
+          )}
+        </div>
+      </Panel>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <Panel>
+          <div className="border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Their complaints</h2></div>
+          {data.tickets.length === 0 ? <Empty>None yet.</Empty> : (
+            <ul className="divide-y divide-line">{data.tickets.map((t) => (
+              <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex items-center gap-2 px-4 py-2.5 text-body-sm hover:bg-slate-50">
+                <span className="tabular-nums text-ink-muted">#{t.number}</span><span className="min-w-0 flex-1 truncate text-ink">{t.subject}</span><Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+              </Link></li>
+            ))}</ul>
+          )}
+        </Panel>
+        <Panel>
+          <div className="border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Changes made by you</h2></div>
+          {data.activity.length === 0 ? <Empty>No changes yet.</Empty> : (
+            <ul className="divide-y divide-line">{data.activity.map((a, i) => (
+              <li key={i} className="flex gap-2 px-4 py-2.5 text-body-sm"><span className="w-28 shrink-0 text-ink-muted">{fmt(a.at)}</span><span className="text-ink">{describe(a.action, a.detail)}</span></li>
+            ))}</ul>
+          )}
+        </Panel>
+      </div>
+    </>
+  )
+}
+
+// ------------------------------------------------------------------ support
+
+function SupportPage() {
+  const [filter, setFilter] = useState('open')
+  const { data, error } = useLoad(() => ownerApi.tickets(filter), [filter])
+  return (
+    <>
+      <Title sub="Complaints and questions sent from the Help button inside each company's Metriq.">Support</Title>
+      <div className="mb-3 flex flex-wrap gap-1">
+        {([['open', 'Open'], ['OPEN', 'New'], ['IN_PROGRESS', 'Working on it'], ['WAITING_ON_COMPANY', 'Waiting for them'], ['RESOLVED', 'Solved'], ['all', 'All']] as const).map(([v, l]) => (
+          <button key={v} type="button" onClick={() => setFilter(v)} className={'rounded-full px-3 py-1.5 text-body-sm font-medium ' + (filter === v ? 'bg-ink text-card' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{l}</button>
+        ))}
+      </div>
+      {!data ? <Loading error={error} /> : (
+        <Panel>
+          {data.tickets.length === 0 ? <Empty>Nothing here.</Empty> : (
+            <ul className="divide-y divide-line">
+              {data.tickets.map((t: TicketRow) => (
+                <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-slate-50">
+                  <span className="text-body-sm tabular-nums text-ink-muted">#{t.number}</span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{t.subject}</span>
+                    <span className="text-body-sm text-ink-muted">{t.company.name} · {t.userName} · {fmt(t.updatedAt)}{t.replies ? ` · ${t.replies} ${t.replies === 1 ? 'message' : 'messages'}` : ''}</span></span>
+                  <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
+                  <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                </Link></li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
+    </>
+  )
+}
+
+function TicketPage() {
+  const { id = '' } = useParams()
+  const { addToast } = useToast()
+  const { data, error, setData } = useLoad(() => ownerApi.ticket(id), [id])
+  const [reply, setReply] = useState('')
+  const [solve, setSolve] = useState(false)
+  const [busy, setBusy] = useState(false)
+  if (!data) return <Loading error={error} />
+  const t: TicketDetail = data.ticket
+  async function send() {
+    if (!reply.trim()) return
+    setBusy(true)
+    try { const r = await ownerApi.reply(t.id, reply.trim(), solve ? 'RESOLVED' : undefined); setData(r); setReply(''); setSolve(false); addToast({ type: 'success', message: 'Reply sent. They see it in their bell.' }) }
+    catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(false) }
+  }
+  async function change(input: { status?: TicketStatus; priority?: TicketPriority }) {
+    try { setData(await ownerApi.updateTicket(t.id, input)) } catch (e) { addToast({ type: 'error', message: ownerErr(e) }) }
+  }
+  return (
+    <>
+      <Title back="/owner/support" sub={<>#{t.number} · {t.company.name} · {t.userName} ({t.userEmail}) · {fmt(t.createdAt)}</>}>{t.subject}</Title>
+      <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
+        <div className="space-y-3">
+          <Panel className="p-4"><p className="whitespace-pre-wrap text-body-md text-ink">{t.body}</p></Panel>
+          {t.messages.map((m) => (
+            <div key={m.id} className={'rounded-card border p-4 ' + (m.fromOwner ? 'ml-8 border-primary/20 bg-primary/5' : 'mr-8 border-line bg-card')}>
+              <p className="mb-1 text-body-sm text-ink-muted"><span className="font-semibold text-ink">{m.authorName}</span> · {fmt(m.createdAt)}</p>
+              <p className="whitespace-pre-wrap text-body-md text-ink">{m.body}</p>
+            </div>
+          ))}
+          <Panel className="p-4">
+            <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={4} placeholder="Write your reply…" className={inputCls + ' h-auto py-2'} aria-label="Reply" />
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" checked={solve} onChange={(e) => setSolve(e.target.checked)} />Mark as solved</label>
+              <Button className="ml-auto" size="sm" onClick={send} disabled={busy || !reply.trim()}>{busy ? 'Sending…' : 'Send reply'}</Button>
+            </div>
+          </Panel>
+        </div>
+        <div className="space-y-3">
+          <Panel className="space-y-3 p-4">
+            <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Status</span>
+              <select aria-label="Status" className={inputCls} value={t.status} onChange={(e) => change({ status: e.target.value as TicketStatus })}>
+                {(Object.keys(STATUS_LABEL) as TicketStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              </select></label>
+            <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Priority</span>
+              <select aria-label="Priority" className={inputCls} value={t.priority} onChange={(e) => change({ priority: e.target.value as TicketPriority })}>
+                {(Object.keys(PRIORITY_LABEL) as TicketPriority[]).map((s) => <option key={s} value={s}>{PRIORITY_LABEL[s]}</option>)}
+              </select></label>
+          </Panel>
+          <Panel className="space-y-1 p-4 text-body-sm">
+            <p className="font-semibold text-ink">Where they were</p>
+            <p className="break-all text-ink-muted">{t.pageUrl ?? '—'}</p>
+            <p className="pt-2 font-semibold text-ink">Browser</p>
+            <p className="break-all text-ink-muted">{t.userAgent ?? '—'}</p>
+          </Panel>
+          <Panel className="p-4 text-body-sm">
+            <p className="mb-2 font-semibold text-ink">Errors they hit (24 hours before)</p>
+            {t.errors.length === 0 ? <p className="text-ink-muted">None recorded.</p> : (
+              <ul className="space-y-2">{t.errors.map((e) => (
+                <li key={e.id}><p className="text-ink">{e.message}</p><p className="text-ink-muted">{e.route ?? e.source} · {e.count}× · {e.state === 'RESOLVED' ? 'fixed' : 'open'}</p></li>
+              ))}</ul>
+            )}
+            <a href="/app/admin/health" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-primary">System Health <ExternalLink size={12} /></a>
+          </Panel>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ------------------------------------------------------------------ activity
+
+const ACTIONS: Record<string, string> = {
+  LOGIN: 'Signed in', LOGOUT: 'Signed out', LOGIN_FAILED: 'Wrong password or code', LOCKED: 'Sign in locked (5 wrong tries)',
+  OWNER_CREATED: 'Owner account created', PASSWORD_CHANGED: 'Password changed', CODE_RESET: 'Authenticator key changed', UNLOCKED: 'Sign in unlocked',
+  COMPANY_UPDATE: 'Company changed', TICKET_REPLY: 'Replied to a complaint', TICKET_UPDATE: 'Complaint updated',
+}
+function describe(action: string, detail: unknown): string {
+  const base = ACTIONS[action] ?? action
+  const d = detail as { after?: Record<string, unknown> } | null
+  if (action === 'COMPANY_UPDATE' && d?.after) {
+    return `${base}: ${Object.entries(d.after).map(([k, v]) => (k === 'helpEnabled' ? `Help button ${v ? 'on' : 'off'}` : `${k} ${String(v)}`)).join(', ')}`
+  }
+  return base
+}
+
+function ActivityPage() {
+  const [q, setQ] = useState('')
+  const [term, setTerm] = useState('')
+  useEffect(() => { const t = window.setTimeout(() => setTerm(q), 300); return () => window.clearTimeout(t) }, [q])
+  const { data, error } = useLoad(() => ownerApi.activity(term), [term])
+  const rows = useMemo(() => data?.activity ?? [], [data])
+  return (
+    <>
+      <Title sub="Every owner sign in and every change made from this console, kept for good.">Activity log</Title>
+      <div className="relative mb-3 max-w-sm">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search action, company or address…" className={inputCls + ' pl-9'} />
+      </div>
+      {!data ? <Loading error={error} /> : (
+        <Panel className="overflow-x-auto">
+          {rows.length === 0 ? <Empty>Nothing yet.</Empty> : (
+            <table className="w-full min-w-[640px] text-body-sm">
+              <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted"><th className="px-4 py-2.5">When</th><th className="px-3 py-2.5">What</th><th className="px-3 py-2.5">Company</th><th className="px-3 py-2.5">On</th><th className="px-4 py-2.5">Address</th></tr></thead>
+              <tbody className="divide-y divide-line">
+                {rows.map((a: ActivityRow) => (
+                  <tr key={a.id}><td className="whitespace-nowrap px-4 py-2.5 text-ink-muted">{fmt(a.at)}</td><td className="px-3 py-2.5 text-ink">{describe(a.action, a.detail)}</td>
+                    <td className="px-3 py-2.5 text-ink-muted">{a.company ?? '—'}</td><td className="px-3 py-2.5 text-ink-muted">{a.target ?? '—'}</td><td className="px-4 py-2.5 tabular-nums text-ink-muted">{a.ip ?? '—'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      )}
+    </>
+  )
+}
