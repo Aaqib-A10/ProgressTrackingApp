@@ -30,6 +30,12 @@ const erpUrl = withDb('pulsetrack_erp')
 const adminUrl = withDb('postgres').replace(/\?.*$/, '')
 
 const sql = (q) => execSync('npx prisma db execute --stdin --url "' + adminUrl + '"', { cwd: server, input: q, stdio: ['pipe', 'pipe', 'pipe'] })
+try { sql('SELECT 1;') } catch (e) {
+  say('Cannot reach PostgreSQL on this computer. Start PostgreSQL (Windows: Services > postgresql) and run this again.')
+  const msg = String(e.stderr ?? '').split('\n').filter((l) => /error|P1\d{3}|denied|refused/i.test(l)).slice(0, 3).join('\n')
+  if (msg) console.log(msg)
+  process.exit(1)
+}
 let exists = true
 try { execSync('npx prisma db execute --stdin --url "' + erpUrl + '"', { cwd: server, input: 'SELECT 1;', stdio: ['pipe', 'pipe', 'pipe'] }) } catch { exists = false }
 if (!exists || args.has('--fresh')) {

@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, useLocation, useNavigate, useParams, useRoutes } from 'react-router-dom'
-import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, ShieldCheck, AlertTriangle, ArrowLeft, Search, ExternalLink } from 'lucide-react'
+import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, ShieldCheck, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug } from 'lucide-react'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { useToast } from '../../components/ui/Toast'
+import { TextField, PasswordField } from '../../components/ui/Input'
+import { StatCard } from '../../components/StatCard'
+import { AuthLayout } from '../auth/AuthLayout'
+import { cn } from '../../lib/cn'
+import metriqLogo from '../../assets/metriq-logo.svg'
+import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 import {
   ownerApi, ownerErr, OwnerApiError, STATUS_LABEL, PRIORITY_LABEL,
   type OwnerCompany, type OwnerHome, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
@@ -58,46 +64,50 @@ function OwnerLogin() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-ink px-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-card bg-card p-6 shadow-overlay">
-        <div className="mb-5 flex items-center gap-2">
-          <ShieldCheck className="text-primary" size={22} />
-          <div>
-            <h1 className="text-headline-md text-ink">Metriq owner console</h1>
-            <p className="text-body-sm text-ink-muted">{ticket ? 'Enter the 6 digit code from your phone app.' : 'For the Metriq owner only.'}</p>
-          </div>
-        </div>
+    <AuthLayout headline="Every company on Metriq, in one place.">
+      <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-card bg-primary/10 text-primary"><ShieldCheck size={22} /></div>
+      <h1 className="text-headline-lg text-ink">Owner console</h1>
+      <p className="mt-1 text-body-md text-ink-muted">{ticket ? 'Enter the 6 digit code from your phone app.' : 'For the Metriq owner only. Company people sign in on the normal page.'}</p>
+      <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
         {!ticket ? (
-          <div className="space-y-3">
-            <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Email</span>
-              <input className={inputCls} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus /></label>
-            <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Password</span>
-              <input className={inputCls} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-          </div>
+          <>
+            <TextField label="Email" type="email" placeholder="you@company.com" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+            <PasswordField label="Password" placeholder="••••••••" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </>
         ) : (
-          <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Code</span>
-            <input className={inputCls + ' text-center text-headline-md tracking-[0.4em]'} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
-              value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus aria-label="Code" /></label>
+          <TextField label="Code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="text-center text-headline-md tracking-[0.4em]"
+            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus />
         )}
-        {error && <p className="mt-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger" role="alert">{error}</p>}
-        <Button type="submit" className="mt-4 w-full" disabled={busy || (!ticket ? !email || !password : code.length !== 6)}>
+        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger" role="alert">{error}</p>}
+        <Button type="submit" className="w-full" disabled={busy || (!ticket ? !email || !password : code.length !== 6)}>
           {busy ? 'Checking…' : 'Sign in'}
         </Button>
-        <p className="mt-4 text-center text-body-sm text-ink-muted"><Link to="/login" className="hover:text-ink">Company sign in</Link></p>
       </form>
-    </div>
+      <p className="mt-6 text-center text-body-sm text-ink-muted">Not the owner? <Link to="/login" className="font-semibold text-primary hover:underline">Company sign in</Link></p>
+    </AuthLayout>
   )
 }
 
-// ------------------------------------------------------------------ shell
+// ------------------------------------------------------------------ shell (same look as the app)
+
+const NAV = [
+  { to: '/owner', label: 'Home', icon: LayoutDashboard, end: true },
+  { to: '/owner/companies', label: 'Companies', icon: Building2 },
+  { to: '/owner/support', label: 'Support', icon: LifeBuoy },
+  { to: '/owner/activity', label: 'Activity log', icon: ScrollText },
+]
 
 function OwnerShell() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [owner, setOwner] = useState<{ name: string; email: string } | null>(null)
   const [checked, setChecked] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => {
     ownerApi.me().then((r) => setOwner(r.owner)).catch(() => setOwner(null)).finally(() => setChecked(true))
   }, [])
+  useEffect(() => { setNavOpen(false); setMenuOpen(false) }, [pathname])
   const routes = useRoutes([
     // Relative to /owner (this screen is mounted at /owner/*).
     { index: true, element: <OwnerHomePage /> },
@@ -108,38 +118,63 @@ function OwnerShell() {
     { path: 'activity', element: <ActivityPage /> },
     { path: '*', element: <Navigate to="/owner" replace /> },
   ])
-  if (!checked) return <div className="flex min-h-screen items-center justify-center bg-bg text-body-md text-ink-muted">Loading…</div>
+  if (!checked) return <div className="flex h-screen items-center justify-center bg-bg"><Activity size={26} className="animate-pulse text-primary" /></div>
   if (!owner) return <Navigate to="/owner/login" replace />
 
-  const nav = [
-    { to: '/owner', label: 'Home', icon: LayoutDashboard, end: true },
-    { to: '/owner/companies', label: 'Companies', icon: Building2 },
-    { to: '/owner/support', label: 'Support', icon: LifeBuoy },
-    { to: '/owner/activity', label: 'Activity log', icon: ScrollText },
-  ]
+  const signOut = async () => { await ownerApi.logout().catch(() => undefined); navigate('/owner/login', { replace: true }) }
+  const initials = owner.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+  const here = NAV.find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)))
+
   return (
-    <div className="flex min-h-screen bg-bg">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-ink p-4 text-card md:flex">
-        <div className="mb-6 flex items-center gap-2 px-2"><ShieldCheck size={20} className="text-primary-100" /><span className="text-body-md font-semibold">Metriq owner</span></div>
-        <nav className="space-y-1">
-          {nav.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => 'flex items-center gap-2.5 rounded-btn px-3 py-2 text-body-md transition-colors ' + (isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white')}>
-              <n.icon size={17} />{n.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="mt-auto border-t border-white/15 pt-3">
-          <p className="px-2 text-body-sm font-semibold">{owner.name}</p>
-          <p className="truncate px-2 text-[12px] text-white/60">{owner.email}</p>
-          <button type="button" onClick={async () => { await ownerApi.logout().catch(() => undefined); navigate('/owner/login', { replace: true }) }}
-            className="mt-2 flex w-full items-center gap-2 rounded-btn px-2 py-1.5 text-body-sm text-white/70 hover:bg-white/10 hover:text-white"><LogOut size={15} />Sign out</button>
-        </div>
-      </aside>
-      <div className="min-w-0 flex-1">
-        <div className="flex gap-1 overflow-x-auto border-b border-line bg-card px-3 py-2 md:hidden">
-          {nav.map((n) => <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => 'whitespace-nowrap rounded-full px-3 py-1.5 text-body-sm ' + (isActive ? 'bg-ink text-card' : 'text-ink-muted')}>{n.label}</NavLink>)}
-        </div>
-        <main className="mx-auto max-w-6xl p-4 md:p-8">{routes}</main>
+    <div className="flex h-screen overflow-hidden bg-bg">
+      <div className={cn('fixed inset-0 z-40 bg-black/40 transition-opacity lg:hidden', navOpen ? 'opacity-100' : 'pointer-events-none opacity-0')} onClick={() => setNavOpen(false)} aria-hidden={!navOpen} />
+      <div className={cn('fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0')}>
+        <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-line bg-sidebar">
+          <div className="flex h-[52px] items-center gap-2 px-4">
+            <img src={metriqLogo} alt="Metriq" className="h-[22px] w-auto dark:hidden" />
+            <img src={metriqLogoDark} alt="Metriq" className="hidden h-[22px] w-auto dark:block" />
+            <Badge tone="primary" className="ml-auto">Owner</Badge>
+          </div>
+          <nav className="flex-1 overflow-y-auto px-2.5 pb-3 pt-2">
+            <p className="flex h-6 items-center px-2 text-[11.5px] font-medium text-ink-faint">Owner console</p>
+            <ul className="space-y-px">
+              {NAV.map((n) => (
+                <li key={n.to}>
+                  <NavLink to={n.to} end={n.end} className={({ isActive }) => cn('flex h-[34px] items-center gap-2.5 rounded-md px-2 text-[13.5px] transition-colors', isActive ? 'bg-slate-200/70 font-medium text-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}>
+                    <n.icon size={16} className="shrink-0" />{n.label}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <div className="border-t border-line p-3">
+            <div className="flex items-center gap-2.5 px-1">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[12px] font-semibold text-primary">{initials}</span>
+              <div className="min-w-0"><p className="truncate text-[13px] font-medium text-ink">{owner.name}</p><p className="truncate text-[12px] text-ink-muted">Metriq owner</p></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="relative z-30 flex h-[52px] shrink-0 items-center gap-2 border-b border-line bg-bg/85 px-2.5 backdrop-blur-md sm:px-4">
+          <button onClick={() => setNavOpen((o) => !o)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink lg:hidden" aria-label="Open menu"><Menu size={18} /></button>
+          <span className="text-[13.5px] font-medium text-ink">{here?.label ?? 'Owner console'}</span>
+          <div className="relative ml-auto">
+            <button onClick={() => setMenuOpen((o) => !o)} className="flex items-center gap-2 rounded-btn p-1 pr-1.5 hover:bg-slate-100" aria-label="Owner menu">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11.5px] font-semibold text-primary">{initials}</span>
+              <span className="hidden text-left sm:block"><span className="block text-[13px] font-medium leading-4 text-ink">{owner.name}</span><span className="block text-[11.5px] leading-4 text-ink-muted">Owner</span></span>
+              <ChevronDown size={14} className="text-ink-muted" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 overflow-hidden rounded-card border border-line bg-card shadow-overlay">
+                <div className="border-b border-line px-4 py-3"><p className="text-body-sm font-semibold text-ink">{owner.name}</p><p className="truncate text-body-sm text-ink-muted">{owner.email}</p></div>
+                <button onClick={signOut} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-body-sm text-ink hover:bg-slate-50"><LogOut size={15} className="text-ink-muted" />Sign out</button>
+              </div>
+            )}
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto overscroll-contain p-4 sm:px-8 sm:py-7">{routes}</main>
       </div>
     </div>
   )
@@ -159,71 +194,90 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
 
 function Title({ children, sub, back }: { children: ReactNode; sub?: ReactNode; back?: string }) {
   return (
-    <div className="mb-5">
+    <div className="mb-6">
       {back && <Link to={back} className="mb-2 inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><ArrowLeft size={14} />Back</Link>}
       <h1 className="text-headline-lg text-ink">{children}</h1>
       {sub && <p className="mt-0.5 text-body-md text-ink-muted">{sub}</p>}
     </div>
   )
 }
-const Panel = ({ children, className = '' }: { children: ReactNode; className?: string }) => <div className={'rounded-card border border-line bg-card ' + className}>{children}</div>
-const Empty = ({ children }: { children: ReactNode }) => <p className="px-4 py-10 text-center text-body-md text-ink-muted">{children}</p>
-const Loading = ({ error }: { error?: string }) => <p className="text-body-md text-ink-muted">{error || 'Loading…'}</p>
+const Panel = ({ children, className = '' }: { children: ReactNode; className?: string }) => <div className={'rounded-card border border-line bg-card shadow-card ' + className}>{children}</div>
+const PanelHead = ({ title, action }: { title: ReactNode; action?: ReactNode }) => (
+  <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5"><h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>{action}</div>
+)
+const Empty = ({ children }: { children: ReactNode }) => <p className="px-5 py-12 text-center text-body-md text-ink-muted">{children}</p>
+const Loading = ({ error }: { error?: string }) => (error ? <p className="text-body-md text-ink-muted">{error}</p> : <div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>)
 
 // ------------------------------------------------------------------ home
 
 function OwnerHomePage() {
   const { data, error } = useLoad<OwnerHome>(() => ownerApi.home())
+  const companies = useLoad(() => ownerApi.companies())
   if (!data) return <Loading error={error} />
   const c = data.counts
-  const tiles: { label: string; value: number; to: string; warn?: boolean }[] = [
-    { label: 'Companies', value: c.companies, to: '/owner/companies' },
-    { label: 'People', value: c.people, to: '/owner/companies' },
-    { label: 'Checked in today', value: c.inToday, to: '/owner/companies' },
-    { label: 'Open complaints', value: c.openTickets, to: '/owner/support', warn: c.urgentTickets > 0 },
-    { label: 'Errors in 24 hours', value: c.errors24h, to: '/app/admin/health', warn: c.errors24h > 0 },
-  ]
   return (
     <>
       <Title sub="Every company on Metriq, their complaints and their health.">Home</Title>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {tiles.map((t) => (
-          <Link key={t.label} to={t.to} target={t.to.startsWith('/app') ? '_blank' : undefined} className="rounded-card border border-line bg-card p-4 hover:border-primary/40">
-            <p className="text-body-sm text-ink-muted">{t.label}</p>
-            <p className={'mt-1 text-headline-lg tabular-nums ' + (t.warn ? 'text-warning' : 'text-ink')}>{t.value}</p>
-          </Link>
-        ))}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard to="/owner/companies" label="Companies" value={c.companies} caption={c.trials ? `${c.trials} on trial` : 'Using Metriq'} icon={<Building2 size={16} />} />
+        <StatCard to="/owner/companies" label="People" value={c.people} caption="Active accounts" icon={<Users size={16} />} />
+        <StatCard to="/owner/companies" label="Checked in today" value={c.inToday} caption="Across all companies" icon={<UserCheck size={16} />} />
+        <StatCard to="/owner/support" label="Open complaints" value={c.openTickets} caption={c.urgentTickets ? `${c.urgentTickets} high or urgent` : 'Nothing urgent'}
+          icon={<LifeBuoy size={16} />} valueClassName={cn('text-metric-lg', c.urgentTickets > 0 && 'text-warning')} />
+        <StatCard label="Errors in 24 hours" value={c.errors24h} caption={c.errors24h ? 'See System Health' : 'All clear'} icon={<Bug size={16} />}
+          valueClassName={cn('text-metric-lg', c.errors24h > 0 && 'text-danger')} />
       </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-[2fr_1fr]">
-        <Panel>
-          <div className="flex items-center justify-between border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Complaints waiting</h2><Link to="/owner/support" className="text-body-sm text-primary">All</Link></div>
-          {data.tickets.length === 0 ? <Empty>No open complaints.</Empty> : (
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Panel className="xl:col-span-2">
+          <PanelHead title="Complaints waiting" action={<Link to="/owner/support" className="text-body-sm font-semibold text-primary hover:underline">See all</Link>} />
+          {data.tickets.length === 0 ? <Empty>No open complaints. When a company sends one from its Help button, it shows here.</Empty> : (
             <ul className="divide-y divide-line">
               {data.tickets.map((t) => (
-                <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
-                  <span className="text-body-sm tabular-nums text-ink-muted">#{t.number}</span>
-                  <span className="min-w-0 flex-1 truncate text-body-md text-ink">{t.subject}<span className="ml-2 text-body-sm text-ink-muted">{t.company}</span></span>
-                  <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
-                  <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50">
+                  <span className="w-9 shrink-0 text-body-sm tabular-nums text-ink-muted">#{t.number}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-body-md font-medium text-ink">{t.subject}</span>
+                    <span className="block truncate text-body-sm text-ink-muted">{t.company} · {fmt(t.updatedAt)}</span>
+                  </span>
+                  <Badge tone={PRIORITY_TONE[t.priority]} className="hidden sm:inline-flex">{PRIORITY_LABEL[t.priority]}</Badge>
+                  <Badge tone={STATUS_TONE[t.status]} className="shrink-0">{STATUS_LABEL[t.status]}</Badge>
                 </Link></li>
               ))}
             </ul>
           )}
         </Panel>
-        <Panel>
-          <div className="border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Owner sign in alerts (7 days)</h2></div>
-          {data.signInAlerts.length === 0 ? <Empty>No wrong tries.</Empty> : (
-            <ul className="divide-y divide-line">
-              {data.signInAlerts.map((a, i) => (
-                <li key={i} className="flex items-center gap-2 px-4 py-2.5 text-body-sm">
-                  <AlertTriangle size={14} className={a.action === 'LOCKED' ? 'text-danger' : 'text-warning'} />
-                  <span className="text-ink">{a.action === 'LOCKED' ? 'Locked after 5 wrong tries' : 'Wrong password or code'}</span>
-                  <span className="ml-auto text-ink-muted">{fmt(a.at)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+
+        <div className="space-y-6">
+          <Panel>
+            <PanelHead title="Companies" action={<Link to="/owner/companies" className="text-body-sm font-semibold text-primary hover:underline">Open</Link>} />
+            {!companies.data ? <Empty>Loading…</Empty> : (
+              <ul className="divide-y divide-line">
+                {companies.data.companies.map((co) => (
+                  <li key={co.id}><Link to={`/owner/companies/${co.id}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-primary/10 text-body-sm font-semibold text-primary">{co.name.slice(0, 2).toUpperCase()}</span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{co.name}</span><span className="block text-body-sm text-ink-muted">{co.people} people{co.openTickets ? ` · ${co.openTickets} open` : ''}</span></span>
+                    <Badge tone={COMPANY_TONE[co.status]}>{co.status === 'TRIAL' ? 'Trial' : co.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge>
+                  </Link></li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+          <Panel>
+            <PanelHead title="Owner sign in alerts" action={<span className="text-body-sm text-ink-muted">Last 7 days</span>} />
+            {data.signInAlerts.length === 0 ? <Empty>No wrong tries.</Empty> : (
+              <ul className="divide-y divide-line">
+                {data.signInAlerts.map((a, i) => (
+                  <li key={i} className="flex items-center gap-3 px-5 py-3 text-body-sm">
+                    <AlertTriangle size={16} className={a.action === 'LOCKED' ? 'text-danger' : 'text-warning'} />
+                    <span className="min-w-0 flex-1 text-ink">{a.action === 'LOCKED' ? 'Locked after 5 wrong tries' : 'Wrong password or code'}{a.ip ? <span className="text-ink-muted"> · {a.ip}</span> : null}</span>
+                    <span className="shrink-0 text-ink-muted">{fmt(a.at)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
       </div>
     </>
   )
@@ -238,21 +292,21 @@ function CompaniesPage() {
     <>
       <Title sub="Every company using Metriq. New companies appear here once sign up is switched on.">Companies</Title>
       <Panel className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-body-sm">
+        <table className="w-full min-w-[720px] text-body-md">
           <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted">
-            <th className="px-4 py-2.5">Company</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Plan</th>
-            <th className="px-3 py-2.5 text-right">People</th><th className="px-3 py-2.5 text-right">In today</th><th className="px-3 py-2.5">Last active</th><th className="px-4 py-2.5 text-right">Open complaints</th>
+            <th className="px-5 py-3">Company</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Plan</th>
+            <th className="px-3 py-2.5 text-right">People</th><th className="px-3 py-2.5 text-right">In today</th><th className="px-3 py-2.5">Last active</th><th className="px-5 py-3 text-right">Open complaints</th>
           </tr></thead>
           <tbody className="divide-y divide-line">
             {data.companies.map((c) => (
               <tr key={c.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3"><Link to={`/owner/companies/${c.id}`} className="font-medium text-ink hover:text-primary">{c.name}</Link>{c.home && <span className="ml-2 text-[12px] text-ink-muted">company 1</span>}</td>
-                <td className="px-3 py-3"><Badge tone={COMPANY_TONE[c.status]}>{c.status === 'TRIAL' ? 'Trial' : c.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge></td>
-                <td className="px-3 py-3 capitalize text-ink-muted">{c.plan}</td>
-                <td className="px-3 py-3 text-right tabular-nums">{c.people}</td>
-                <td className="px-3 py-3 text-right tabular-nums">{c.inToday}</td>
-                <td className="px-3 py-3 text-ink-muted">{fmt(c.lastActiveAt)}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{c.openTickets}</td>
+                <td className="px-5 py-4"><Link to={`/owner/companies/${c.id}`} className="font-medium text-ink hover:text-primary">{c.name}</Link>{c.home && <span className="ml-2 text-[12px] text-ink-muted">company 1</span>}</td>
+                <td className="px-3 py-4"><Badge tone={COMPANY_TONE[c.status]}>{c.status === 'TRIAL' ? 'Trial' : c.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge></td>
+                <td className="px-3 py-4 capitalize text-ink-muted">{c.plan}</td>
+                <td className="px-3 py-4 text-right tabular-nums">{c.people}</td>
+                <td className="px-3 py-4 text-right tabular-nums">{c.inToday}</td>
+                <td className="px-3 py-4 text-ink-muted">{fmt(c.lastActiveAt)}</td>
+                <td className="px-5 py-4 text-right tabular-nums">{c.openTickets}</td>
               </tr>
             ))}
           </tbody>
@@ -277,13 +331,13 @@ function CompanyPage() {
   return (
     <>
       <Title back="/owner/companies" sub={c.home ? 'Company 1: the team Metriq was built with. It always stays active and is never billed.' : `Joined ${fmt(c.createdAt)}`}>{c.name}</Title>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[['People', c.people], ['Checked in today', c.inToday], ['Open complaints', c.openTickets], ['Plan', c.plan]].map(([l, v]) => (
-          <Panel key={String(l)} className="p-4"><p className="text-body-sm text-ink-muted">{l}</p><p className="mt-1 text-headline-md capitalize tabular-nums text-ink">{v}</p></Panel>
+          <Panel key={String(l)} className="p-5"><p className="text-[13px] font-medium text-ink-muted">{l}</p><p className="mt-2.5 text-metric-lg capitalize tabular-nums text-ink">{v}</p></Panel>
         ))}
       </div>
-      <Panel className="mt-4 divide-y divide-line">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+      <Panel className="mt-6 divide-y divide-line">
+        <div className="flex flex-wrap items-center gap-4 px-5 py-5">
           <div className="min-w-0 flex-1">
             <p className="text-body-md font-semibold text-ink">Help button</p>
             <p className="text-body-sm text-ink-muted">{c.helpEnabled ? 'On: their people can send complaints and questions to you from inside Metriq.' : 'Off: their people do not see a Help button.'}</p>
@@ -292,7 +346,7 @@ function CompanyPage() {
             {c.helpEnabled ? 'Switch off' : 'Switch on'}
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+        <div className="flex flex-wrap items-center gap-4 px-5 py-5">
           <div className="min-w-0 flex-1">
             <p className="text-body-md font-semibold text-ink">Status</p>
             <p className="text-body-sm text-ink-muted">{c.home ? '99 Technologies cannot be suspended.' : c.status === 'SUSPENDED' ? 'Suspended: nobody in this company can sign in.' : 'Active.'}</p>
@@ -305,22 +359,22 @@ function CompanyPage() {
           )}
         </div>
       </Panel>
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Panel>
-          <div className="border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Their complaints</h2></div>
+          <PanelHead title="Their complaints" />
           {data.tickets.length === 0 ? <Empty>None yet.</Empty> : (
             <ul className="divide-y divide-line">{data.tickets.map((t) => (
-              <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex items-center gap-2 px-4 py-2.5 text-body-sm hover:bg-slate-50">
-                <span className="tabular-nums text-ink-muted">#{t.number}</span><span className="min-w-0 flex-1 truncate text-ink">{t.subject}</span><Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+              <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex items-center gap-3 px-5 py-3.5 text-body-md hover:bg-slate-50">
+                <span className="tabular-nums text-ink-muted">#{t.number}</span><span className="min-w-0 flex-1 truncate text-ink">{t.subject}</span><Badge tone={STATUS_TONE[t.status]} className="shrink-0">{STATUS_LABEL[t.status]}</Badge>
               </Link></li>
             ))}</ul>
           )}
         </Panel>
         <Panel>
-          <div className="border-b border-line px-4 py-3"><h2 className="text-body-md font-semibold text-ink">Changes made by you</h2></div>
+          <PanelHead title="Changes made by you" />
           {data.activity.length === 0 ? <Empty>No changes yet.</Empty> : (
             <ul className="divide-y divide-line">{data.activity.map((a, i) => (
-              <li key={i} className="flex gap-2 px-4 py-2.5 text-body-sm"><span className="w-28 shrink-0 text-ink-muted">{fmt(a.at)}</span><span className="text-ink">{describe(a.action, a.detail)}</span></li>
+              <li key={i} className="flex gap-3 px-5 py-3 text-body-sm"><span className="w-28 shrink-0 text-ink-muted">{fmt(a.at)}</span><span className="text-ink">{describe(a.action, a.detail)}</span></li>
             ))}</ul>
           )}
         </Panel>
@@ -347,12 +401,12 @@ function SupportPage() {
           {data.tickets.length === 0 ? <Empty>Nothing here.</Empty> : (
             <ul className="divide-y divide-line">
               {data.tickets.map((t: TicketRow) => (
-                <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-slate-50">
+                <li key={t.id}><Link to={`/owner/support/${t.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-4 hover:bg-slate-50">
                   <span className="text-body-sm tabular-nums text-ink-muted">#{t.number}</span>
                   <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{t.subject}</span>
                     <span className="text-body-sm text-ink-muted">{t.company.name} · {t.userName} · {fmt(t.updatedAt)}{t.replies ? ` · ${t.replies} ${t.replies === 1 ? 'message' : 'messages'}` : ''}</span></span>
-                  <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
-                  <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                  <Badge tone={PRIORITY_TONE[t.priority]} className="hidden sm:inline-flex">{PRIORITY_LABEL[t.priority]}</Badge>
+                  <Badge tone={STATUS_TONE[t.status]} className="shrink-0">{STATUS_LABEL[t.status]}</Badge>
                 </Link></li>
               ))}
             </ul>
@@ -384,7 +438,7 @@ function TicketPage() {
   return (
     <>
       <Title back="/owner/support" sub={<>#{t.number} · {t.company.name} · {t.userName} ({t.userEmail}) · {fmt(t.createdAt)}</>}>{t.subject}</Title>
-      <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
         <div className="space-y-3">
           <Panel className="p-4"><p className="whitespace-pre-wrap text-body-md text-ink">{t.body}</p></Panel>
           {t.messages.map((m) => (
@@ -465,12 +519,12 @@ function ActivityPage() {
       {!data ? <Loading error={error} /> : (
         <Panel className="overflow-x-auto">
           {rows.length === 0 ? <Empty>Nothing yet.</Empty> : (
-            <table className="w-full min-w-[640px] text-body-sm">
-              <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted"><th className="px-4 py-2.5">When</th><th className="px-3 py-2.5">What</th><th className="px-3 py-2.5">Company</th><th className="px-3 py-2.5">On</th><th className="px-4 py-2.5">Address</th></tr></thead>
+            <table className="w-full min-w-[640px] text-body-md">
+              <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted"><th className="px-5 py-3">When</th><th className="px-3 py-2.5">What</th><th className="px-3 py-2.5">Company</th><th className="px-3 py-2.5">On</th><th className="px-5 py-3">Address</th></tr></thead>
               <tbody className="divide-y divide-line">
                 {rows.map((a: ActivityRow) => (
-                  <tr key={a.id}><td className="whitespace-nowrap px-4 py-2.5 text-ink-muted">{fmt(a.at)}</td><td className="px-3 py-2.5 text-ink">{describe(a.action, a.detail)}</td>
-                    <td className="px-3 py-2.5 text-ink-muted">{a.company ?? '—'}</td><td className="px-3 py-2.5 text-ink-muted">{a.target ?? '—'}</td><td className="px-4 py-2.5 tabular-nums text-ink-muted">{a.ip ?? '—'}</td></tr>
+                  <tr key={a.id}><td className="whitespace-nowrap px-5 py-3.5 text-ink-muted">{fmt(a.at)}</td><td className="px-3 py-3.5 text-ink">{describe(a.action, a.detail)}</td>
+                    <td className="px-3 py-3.5 text-ink-muted">{a.company ?? '—'}</td><td className="px-3 py-3.5 text-ink-muted">{a.target ?? '—'}</td><td className="px-5 py-3.5 tabular-nums text-ink-muted">{a.ip ?? '—'}</td></tr>
                 ))}
               </tbody>
             </table>
