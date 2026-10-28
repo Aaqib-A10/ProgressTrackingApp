@@ -47,7 +47,7 @@ export async function exportTeamCsv(req: AuthedRequest, res: Response): Promise<
     res.status(400).json({ error: 'Specify a valid department (ITAD or LEAD_GEN)' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: deptType } })
+  const dept = await prisma.department.findFirst({ where: { type: deptType } })
   if (!dept) {
     res.status(404).json({ error: 'Department not found' })
     return

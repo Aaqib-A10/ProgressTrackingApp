@@ -121,7 +121,7 @@ export async function createRdp(req: AuthedRequest, res: Response): Promise<void
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
     return
   }
-  const exists = await prisma.rdp.findUnique({ where: { provider_address: { provider: parsed.data.provider, address: parsed.data.address } } })
+  const exists = await prisma.rdp.findFirst({ where: { provider: parsed.data.provider, address: parsed.data.address } })
   if (exists) {
     res.status(409).json({ error: 'An RDP with this provider + address already exists.' })
     return

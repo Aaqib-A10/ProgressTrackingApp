@@ -28,6 +28,7 @@ beforeAll(async () => {
   w = await seedWorld()
   await prisma.featureFlag.deleteMany()
   await prisma.featureFlagCompany.deleteMany()
+  await prisma.ownerAuditLog.deleteMany()
   await prisma.platformOwner.deleteMany()
   await prisma.platformOwner.create({ data: { name: 'Anees', email: EMAIL, passwordHash: await hashPassword(PASSWORD) } })
   await ensureHomeCompany()
@@ -100,5 +101,15 @@ describe('company-wise switches', () => {
     await request(app).patch('/api/owner/companies/sw-a/flags/help-button').set(...auth(w.superAdmin)).send({ enabled: false }).expect(401)
     const alpha = await signIn('swalpha')
     await alpha.patch('/api/owner/companies/sw-a/flags/help-button').send({ enabled: false }).expect(401)
+  })
+})
+
+describe('the company walls switch', () => {
+  it('cannot be turned off while other companies use Metriq, and is not set per company', async () => {
+    const a = await owner()
+    const r = await a.patch('/api/owner/flags/company-walls').send({ enabled: false }).expect(409)
+    expect(r.body.error).toMatch(/cannot be turned off/)
+    await a.patch('/api/owner/companies/sw-a/flags/company-walls').send({ enabled: false }).expect(400)
+    expect((await a.get('/api/owner/companies/sw-a/flags').expect(200)).body.flags.map((f: { key: string }) => f.key)).not.toContain('company-walls')
   })
 })

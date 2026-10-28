@@ -12,7 +12,7 @@ export const ARCHIVED_ITAD = [
 ]
 
 async function main() {
-  const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'ITAD' } })
   if (!dept) throw new Error('ITAD department not found — run the base seed first.')
   for (const a of ARCHIVED_ITAD) {
     await prisma.user.upsert({

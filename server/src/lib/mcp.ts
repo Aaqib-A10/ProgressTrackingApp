@@ -14,6 +14,7 @@ import { canSeeHealth } from '../controllers/systemHealthController'
 import { auditReport, errorBrief, errorList } from './health/report'
 import { startAudit } from './health/audit'
 import { DEPARTMENT_TOOLS } from './mcp/departmentTools'
+import { runAsCompany } from './tenancy'
 
 /**
  * Metriq as a connector for Claude, ChatGPT and Gemini (Model Context Protocol, "streamable
@@ -32,7 +33,7 @@ export const KEY_PREFIX = 'mtq_'
 export const hashKey = (key: string) => crypto.createHash('sha256').update(key).digest('hex')
 export function newKey(): string { return KEY_PREFIX + crypto.randomBytes(32).toString('base64url') }
 
-type User = { id: string; role: Role; name: string }
+type User = { id: string; role: Role; name: string; companyId: string }
 
 const INSTRUCTIONS = `Metriq is the team's work app: project tickets, plus each team's own work (ITAD Lead Dialer, daily logs and deals; E-commerce board, listings and stock; Lead Gen; Marketing; attendance; to-dos; reports).
 For anything that is not a project ticket, call metriq_guide first: it lists what this person can see and how to read it (metriq_read, or the Lead Dialer tools dialer_summary, dialer_leads, dialer_lead, dialer_update_lead). Answer from that real data; never guess or ask for screenshots.
@@ -202,7 +203,7 @@ const TOOLS: Tool[] = [
     async run(u, a) {
       const { task, error } = await loadTicket(u, code(a.code))
       if (!task) return fail(error!)
-      const project = await prisma.pmProject.findUnique({ where: { key: task.projectKey }, select: { workFolder: true } })
+      const project = await prisma.pmProject.findFirst({ where: { key: task.projectKey }, select: { workFolder: true } })
       const brief = ticketBrief(task, { workFolder: project?.workFolder ?? null, appUrl: APP_URL(), forConnector: true })
       const ids = task.checklist.length ? `\n\nChecklist item ids (for update_checklist_item): ${task.checklist.map((c) => `${c.id} = "${c.text}"`).join('; ')}` : ''
       return text(brief + ids)
@@ -653,10 +654,10 @@ async function handle(u: User, m: Rpc): Promise<object | null> {
 /** The person behind a key, or null (unknown, switched off, or the account is no longer active). */
 async function userForKey(key: string): Promise<User | null> {
   if (!key.startsWith(KEY_PREFIX) || key.length < 20 || key.length > 100) return null
-  const k = await prisma.claudeKey.findUnique({ where: { tokenHash: hashKey(key) }, include: { user: { select: { id: true, role: true, name: true, isActive: true, status: true } } } })
-  if (!k || k.revokedAt || !k.user.isActive || k.user.status !== 'ACTIVE') return null
+  const k = await prisma.claudeKey.findUnique({ where: { tokenHash: hashKey(key) }, include: { user: { select: { id: true, role: true, name: true, isActive: true, status: true, companyId: true, company: { select: { status: true } } } } } })
+  if (!k || k.revokedAt || k.user.company.status === 'SUSPENDED' || !k.user.isActive || k.user.status !== 'ACTIVE') return null
   if (!k.lastUsedAt || Date.now() - k.lastUsedAt.getTime() > 5 * 60_000) await prisma.claudeKey.update({ where: { id: k.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined)
-  return { id: k.user.id, role: k.user.role, name: k.user.name }
+  return { id: k.user.id, role: k.user.role, name: k.user.name, companyId: k.user.companyId }
 }
 
 /** POST /api/mcp/:key — every MCP message. GET / DELETE answer 405 (no server-sent stream, no sessions). */
@@ -666,13 +667,14 @@ export async function mcpEndpoint(req: Request, res: Response): Promise<void> {
   const u = await userForKey(String(req.params.key ?? ''))
   if (!u) { res.status(401).json(rpcError(null, -32001, 'This Metriq key is not valid or was switched off. Make a new one in Metriq, under Connectors.')); return }
   const body = req.body as Rpc | Rpc[]
+  // Company walls: the connector only ever sees the person's own company.
   if (Array.isArray(body)) {
-    const out = (await Promise.all(body.map((m) => handle(u, m)))).filter(Boolean)
+    const out = (await runAsCompany(u.companyId, () => Promise.all(body.map((m) => handle(u, m))))).filter(Boolean)
     if (!out.length) { res.status(202).end(); return }
     res.json(out)
     return
   }
-  const out = await handle(u, body)
+  const out = await runAsCompany(u.companyId, () => handle(u, body))
   if (!out) { res.status(202).end(); return }
   res.json(out)
 }

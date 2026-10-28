@@ -5,6 +5,7 @@ import { renderManagementReportEmail } from './reportEmail'
 import { sendMail } from './mail'
 import { reportRecipients, previousMonth } from '../controllers/reportsController'
 import { runTracked } from './health/jobs'
+import { forEachCompany } from './company'
 
 /**
  * Scheduled monthly management report.
@@ -41,7 +42,7 @@ export function startMonthlyReports(): void {
   // Hourly on the 1st–2nd; the per-month claim guarantees a single send even if
   // the process was down for a few hours around the rollover.
   cron.schedule('0 * 1-2 * *', () => {
-    runTracked('monthly-report', runMonthlyReportTick).catch((e) => {
+    runTracked('monthly-report', () => forEachCompany(() => runMonthlyReportTick())).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[monthly-report] tick failed:', e)
     })

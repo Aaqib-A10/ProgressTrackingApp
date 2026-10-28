@@ -132,7 +132,7 @@ export async function createMeeting(req: AuthedRequest, res: Response): Promise<
   const attendees = await activeUsers(body.attendeeIds.filter((id) => id !== me.id))
   let projectId: string | null = null
   if (body.projectKey) {
-    const p = await prisma.pmProject.findUnique({ where: { key: body.projectKey }, select: { id: true } })
+    const p = await prisma.pmProject.findFirst({ where: { key: body.projectKey }, select: { id: true } })
     if (!p) throw new HttpError(422, 'Project not found')
     projectId = p.id
   }

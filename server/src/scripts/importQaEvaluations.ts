@@ -35,7 +35,7 @@ async function main() {
   if (!file) throw new Error('Usage: importQaEvaluations.ts <data.json>')
   const { meta, records } = JSON.parse(readFileSync(file, 'utf8')) as Payload
 
-  const dept = await prisma.department.findUnique({ where: { type: meta.department } })
+  const dept = await prisma.department.findFirst({ where: { type: meta.department } })
   if (!dept) throw new Error(`Department ${meta.department} not found`)
 
   const scorecard = await prisma.qaScorecard.findFirst({

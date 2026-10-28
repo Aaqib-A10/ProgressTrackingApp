@@ -90,7 +90,7 @@ async function itadMonthTotals(ids: string[], month: string): Promise<Omit<ItadT
 }
 
 export async function buildItadReport(month: string): Promise<ItadReport | null> {
-  const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'ITAD' } })
   if (!dept) return null
   const { start, end, monthLabel, weeks } = monthBounds(month)
   // Team Leads are excluded from ITAD stats (matches the ITAD team view) — the
@@ -203,7 +203,7 @@ export interface LeadGenReport {
 }
 
 export async function buildLeadGenReport(month: string): Promise<LeadGenReport | null> {
-  const dept = await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
   if (!dept) return null
   const { start, end, monthLabel } = monthBounds(month)
   const members = await prisma.user.findMany({ where: { departmentId: dept.id, role: { in: ['MEMBER', 'SUB_DEPT_LEAD', 'TEAM_LEAD'] }, isActive: true }, orderBy: { name: 'asc' } })
@@ -324,7 +324,7 @@ async function bidTotals(deptId: string, month: string) {
 }
 
 export async function buildBidReport(month: string): Promise<BidReport | null> {
-  const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'ITAD' } })
   if (!dept) return null
   const { monthLabel } = monthBounds(month)
   const cur = await bidTotals(dept.id, month)
@@ -390,7 +390,7 @@ async function marketingSocialTotals(brandIds: string[], month: string) {
 }
 
 export async function buildMarketingReport(month: string): Promise<MarketingReport | null> {
-  const dept = await prisma.department.findUnique({ where: { type: 'MARKETING' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'MARKETING' } })
   if (!dept) return null
   const { start, end, monthLabel } = monthBounds(month)
   const prevM = prevMonthStr(month)

@@ -64,7 +64,7 @@ async function deptLeadTypes(departmentId: string) {
 /** Resolve the caller's Lead Gen department, or 403/500 via the returned null. */
 async function resolveLeadGenDept(me: Awaited<ReturnType<typeof loadUser>>) {
   if (me.department?.type === 'LEAD_GEN') return me.department
-  if (me.role === 'SUPER_ADMIN') return prisma.department.findUnique({ where: { type: 'LEAD_GEN' } })
+  if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
   return null
 }
 
@@ -75,7 +75,7 @@ export async function getMyEntry(req: AuthedRequest, res: Response): Promise<voi
     res.status(403).json({ error: 'Not a Lead Gen member' })
     return
   }
-  const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } }))
+  const dept = me.department ?? (await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } }))
   if (!dept) {
     res.status(500).json({ error: 'Lead Gen department missing' })
     return
@@ -132,7 +132,7 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     res.status(403).json({ error: 'Not a Lead Gen member' })
     return
   }
-  const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } }))
+  const dept = me.department ?? (await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } }))
   if (!dept) {
     res.status(500).json({ error: 'Lead Gen department missing' })
     return
@@ -235,7 +235,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
   if (!dept) {
     res.status(500).json({ error: 'Lead Gen department missing' })
     return

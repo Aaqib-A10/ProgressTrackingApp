@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString } from '../lib/time'
 import { contentDisposition } from '../lib/contentDisposition'
+import { companyFileName, ensureFolderFor } from '../lib/companyFiles'
 
 const UPLOAD_DIR = path.resolve('uploads')
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
@@ -92,8 +93,8 @@ export async function uploadAttachment(req: AuthedRequest, res: Response): Promi
     return
   }
 
-  await fs.mkdir(UPLOAD_DIR, { recursive: true })
-  const storedName = `${randomUUID()}${ext ? `.${ext}` : ''}`
+  const storedName = companyFileName(ext)
+  await ensureFolderFor(UPLOAD_DIR, storedName)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
 
   const row = await prisma.entryAttachment.create({

@@ -25,7 +25,7 @@ function canManage(me: Me): boolean {
 /** Resolve the Inventory department for the caller, or null if not allowed. */
 async function inventoryDept(me: Me) {
   if (me.department?.type === 'INVENTORY') return me.department
-  if (me.role === 'SUPER_ADMIN') return prisma.department.findUnique({ where: { type: 'INVENTORY' } })
+  if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'INVENTORY' } })
   return null
 }
 

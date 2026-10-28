@@ -35,7 +35,7 @@ const STAKEHOLDER = 'Rizwan Haider'
 const dbDate = (s: string) => new Date(`${s}T00:00:00.000Z`)
 
 async function main() {
-  const dept = await prisma.department.findUnique({ where: { type: 'MARKETING' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'MARKETING' } })
   if (!dept) throw new Error('Marketing department not found — run the base seed first.')
 
   // Brands (idempotent by departmentId+slug)

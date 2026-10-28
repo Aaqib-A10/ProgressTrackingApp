@@ -55,7 +55,7 @@ function serialize(b: BidRow) {
 async function scopeFilter(me: Me): Promise<Prisma.BidWhereInput> {
   if (me.role === 'SUPER_ADMIN') return {}
   if (me.role === 'TEAM_LEAD') {
-    const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'ITAD' } }))
+    const dept = me.department ?? (await prisma.department.findFirst({ where: { type: 'ITAD' } }))
     return { departmentId: dept?.id }
   }
   return { agentId: me.id }
@@ -141,7 +141,7 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
     res.status(400).json({ error: 'Awarded price is required to mark a bid as Won' })
     return
   }
-  const deptId = me.department?.id ?? (await prisma.department.findUnique({ where: { type: 'ITAD' } }))?.id ?? null
+  const deptId = me.department?.id ?? (await prisma.department.findFirst({ where: { type: 'ITAD' } }))?.id ?? null
   const bid = await prisma.bid.create({
     data: {
       title: v.title,
@@ -282,7 +282,7 @@ export async function teamActiveBids(req: AuthedRequest, res: Response): Promise
     res.status(403).json({ error: 'ITAD access only' })
     return
   }
-  const dept = me.department?.type === 'ITAD' ? me.department : await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  const dept = me.department?.type === 'ITAD' ? me.department : await prisma.department.findFirst({ where: { type: 'ITAD' } })
   const bids = await prisma.bid.findMany({
     where: { departmentId: dept?.id ?? '__none__', status: { in: ['ACTIVE', 'SUBMITTED'] } },
     orderBy: [{ dueDate: 'asc' }],

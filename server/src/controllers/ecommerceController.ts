@@ -19,7 +19,7 @@ function isEcommerce(me: Awaited<ReturnType<typeof loadUser>>): boolean {
 /** Resolve the Ecommerce department for the caller, or null if not allowed. */
 async function ecommerceDept(me: Awaited<ReturnType<typeof loadUser>>) {
   if (me.department?.type === 'ECOMMERCE') return me.department
-  if (me.role === 'SUPER_ADMIN') return prisma.department.findUnique({ where: { type: 'ECOMMERCE' } })
+  if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'ECOMMERCE' } })
   return null
 }
 
@@ -182,7 +182,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: 'ECOMMERCE' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'ECOMMERCE' } })
   if (!dept) {
     res.status(500).json({ error: 'Ecommerce department missing' })
     return

@@ -99,7 +99,10 @@ enum FeedbackSentiment {
 
 model Department {
   id        String         @id @default(cuid())
-  type      DepartmentType @unique
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String         @default("")
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type      DepartmentType
   name      String
   createdAt DateTime       @default(now())
 
@@ -119,10 +122,16 @@ model Department {
   marketingPlans  MarketingPlan[]
   salaryRecords   SalaryRecord[]
   inventoryItems  InventoryItem[]
+
+  @@unique([companyId, type])
+  @@index([companyId])
 }
 
 model SubDepartment {
   id           String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String     @default("")
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name         String
   slug         String
   departmentId String
@@ -135,6 +144,7 @@ model SubDepartment {
   marketingPlans  MarketingPlan[]
 
   @@unique([departmentId, slug])
+  @@index([companyId])
 }
 
 // ---------- Users & auth ----------
@@ -144,10 +154,9 @@ model User {
   email             String     @unique
   /// Optional short sign in name (used by local test accounts); sign in takes email or username.
   username          String?    @unique
-  /// The company (or personal workspace) this person belongs to. Empty = 99 Technologies
-  /// (company 1) until phase 1 step 2 fills it on every row.
-  companyId         String?
-  company           Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  /// The company (or personal workspace) this person belongs to.
+  companyId         String     @default("")
+  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   passwordHash      String? // null for SSO-only accounts
   googleId          String?    @unique
   name              String
@@ -282,6 +291,9 @@ model User {
 /// swapped by the department switcher (POST /api/auth/active-department).
 model UserDepartment {
   id              String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId       String         @default("")
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId          String
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   departmentId    String
@@ -294,6 +306,7 @@ model UserDepartment {
   @@unique([userId, departmentId])
   @@index([userId])
   @@index([departmentId])
+  @@index([companyId])
 }
 
 // ---------- Daily-log file attachments (ITAD / Lead Gen) ----------
@@ -309,6 +322,9 @@ enum AttachmentKind {
 /// Daily-log files are linked by user + kind + date; board-card files by taskId.
 model EntryAttachment {
   id           String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String         @default("")
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId       String
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind         AttachmentKind
@@ -325,16 +341,20 @@ model EntryAttachment {
 
   @@index([userId, kind, date])
   @@index([taskId])
+  @@index([companyId])
 }
 
 // ---------- ITAD daily entries (§4.1) ----------
 
 model ItadDailyEntry {
-  id     String    @id @default(cuid())
-  userId String
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime  @db.Date
-  status DayStatus @default(SUBMITTED)
+  id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  status    DayStatus @default(SUBMITTED)
 
   callsDialed Int @default(0)
   connected   Int @default(0)
@@ -352,16 +372,20 @@ model ItadDailyEntry {
   // One entry per user per day — re-submitting upserts, never duplicates.
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 // ---------- Lead Gen daily entries (§5.1) ----------
 
 model LeadGenDailyEntry {
-  id     String    @id @default(cuid())
-  userId String
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime  @db.Date
-  status DayStatus @default(SUBMITTED)
+  id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  status    DayStatus @default(SUBMITTED)
 
   leadsGenerated     Int @default(0)
   accountsResearched Int @default(0)
@@ -378,28 +402,36 @@ model LeadGenDailyEntry {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 /// Leads-per-vertical breakdown for a Lead Gen entry (§5.1).
 model LeadGenVerticalCount {
-  id      String            @id @default(cuid())
-  entryId String
-  entry   LeadGenDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  tagId   String
-  tag     Tag               @relation(fields: [tagId], references: [id])
-  count   Int               @default(0)
+  id        String            @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String            @default("")
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entryId   String
+  entry     LeadGenDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag               @relation(fields: [tagId], references: [id])
+  count     Int               @default(0)
 
   @@unique([entryId, tagId])
+  @@index([companyId])
 }
 
 // ---------- Talkloop daily entries (outbound calls + demos, per-country) ----------
 
 model TalkloopDailyEntry {
-  id     String    @id @default(cuid())
-  userId String
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime  @db.Date
-  status DayStatus @default(SUBMITTED)
+  id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  status    DayStatus @default(SUBMITTED)
 
   callsMade      Int @default(0)
   connects       Int @default(0)
@@ -414,19 +446,24 @@ model TalkloopDailyEntry {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 /// Per-country calls + demos breakdown for a Talkloop entry.
 model TalkloopCountryCount {
-  id      String             @id @default(cuid())
-  entryId String
-  entry   TalkloopDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  tagId   String
-  tag     Tag                @relation(fields: [tagId], references: [id])
-  calls   Int                @default(0)
-  demos   Int                @default(0)
+  id        String             @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String             @default("")
+  company   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entryId   String
+  entry     TalkloopDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag                @relation(fields: [tagId], references: [id])
+  calls     Int                @default(0)
+  demos     Int                @default(0)
 
   @@unique([entryId, tagId])
+  @@index([companyId])
 }
 
 // ---------- Team roster history (Team Lead invites / removals) ----------
@@ -435,6 +472,9 @@ model TalkloopCountryCount {
 /// Member name/email are snapshotted so history reads correctly over time.
 model TeamMemberEvent {
   id           String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String        @default("")
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departmentId String
   actorId      String? // who performed the action (Team Lead / Admin)
   actorName    String
@@ -445,12 +485,16 @@ model TeamMemberEvent {
   createdAt    DateTime      @default(now())
 
   @@index([departmentId, createdAt])
+  @@index([companyId])
 }
 
 // ---------- Tags (TL-managed lists: verticals, platforms, ...) ----------
 
 model Tag {
   id           String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String      @default("")
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name         String
   type         TagType
   group        String? // for Ecommerce TASK_TYPE fields: the parent Type (Listings, Pricing, ...)
@@ -467,12 +511,16 @@ model Tag {
   ecomMarketplaceLines EcommerceListingLine[] @relation("LineMarketplace")
 
   @@unique([departmentId, type, name])
+  @@index([companyId])
 }
 
 // ---------- Targets (§3) ----------
 
 model Target {
   id        String       @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String       @default("")
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   scope     TargetScope
   metricKey String // e.g. "callsDialed", "leadsGenerated", "connectRate"
   period    TargetPeriod
@@ -497,6 +545,7 @@ model Target {
   @@index([departmentId, metricKey])
   @@index([userId, metricKey])
   @@index([brandId, metricKey])
+  @@index([companyId])
 }
 
 // ---------- Financials (Super Admin only): per-person cost vs revenue/ROI ----------
@@ -506,6 +555,9 @@ model Target {
 /// `userId` optionally links to an app account; `name` is the display label.
 model SalaryRecord {
   id           String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String     @default("")
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name         String
   userId       String?
   user         User?      @relation("UserSalaries", fields: [userId], references: [id])
@@ -523,6 +575,7 @@ model SalaryRecord {
 
   @@index([departmentId])
   @@index([userId])
+  @@index([companyId])
 }
 
 // ---------- Leave / holidays (§3, leave-aware rule) ----------
@@ -530,14 +583,23 @@ model SalaryRecord {
 /// Company-wide non-working days.
 model Holiday {
   id        String   @id @default(cuid())
-  date      DateTime @unique @db.Date
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
   name      String
   createdAt DateTime @default(now())
+
+  @@unique([companyId, date])
+  @@index([companyId])
 }
 
 /// Per-user leave/off days (set by user or admin). Excluded from averages.
 model LeaveDay {
   id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime  @db.Date
@@ -547,6 +609,7 @@ model LeaveDay {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 // ---------- Time & attendance (check-in / check-out / breaks) ----------
@@ -556,6 +619,9 @@ model LeaveDay {
 /// computed on read from these + the breaks, never stored.
 model AttendanceDay {
   id             String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String    @default("")
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId         String
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   date           DateTime  @db.Date
@@ -579,6 +645,7 @@ model AttendanceDay {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 /// Admin-managed allowlist of office networks. A check-in/out is accepted only
@@ -586,16 +653,24 @@ model AttendanceDay {
 /// Super Admin). `cidr` accepts a bare IP (treated as /32) or CIDR range.
 model OfficeNetwork {
   id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   label     String
   cidr      String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+
+  @@index([companyId])
 }
 
 /// A check-in refused because the network was not on the office list. Shown to Super
 /// Admins on Office Networks with one click to allow the address (or its whole range).
 model BlockedCheckIn {
   id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   ip        String
@@ -603,6 +678,7 @@ model BlockedCheckIn {
 
   @@index([createdAt])
   @@index([ip])
+  @@index([companyId])
 }
 
 enum ReminderKind {
@@ -613,15 +689,19 @@ enum ReminderKind {
 /// One row per (user, day, kind) once a reminder email has been sent — the
 /// scheduler uses it to avoid sending duplicate check-in/out reminders.
 model AttendanceReminder {
-  id     String       @id @default(cuid())
-  userId String
-  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime     @db.Date
-  kind   ReminderKind
-  sentAt DateTime     @default(now())
+  id        String       @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String       @default("")
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime     @db.Date
+  kind      ReminderKind
+  sentAt    DateTime     @default(now())
 
   @@unique([userId, date, kind])
   @@index([date])
+  @@index([companyId])
 }
 
 /// One row per (user, day, kind) violation — the dedupe ledger for break/grace
@@ -629,6 +709,9 @@ model AttendanceReminder {
 /// LATE_LIMIT rows use date = first-of-month (fire once per month).
 model AttendanceViolation {
   id        String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String        @default("")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime      @db.Date
@@ -638,11 +721,15 @@ model AttendanceViolation {
 
   @@unique([userId, date, kind])
   @@index([userId, date])
+  @@index([companyId])
 }
 
 /// A single break within an attendance day. `endAt` null = break still open.
 model BreakEntry {
   id          String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String        @default("")
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   dayId       String
   day         AttendanceDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
   type        BreakType     @default(BREAK)
@@ -661,6 +748,7 @@ model BreakEntry {
   createdAt   DateTime      @default(now())
 
   @@index([dayId])
+  @@index([companyId])
 }
 
 /// Expected working hours that drive the late / early-leave / shift-completion
@@ -669,6 +757,9 @@ model BreakEntry {
 /// (departmentId set), or a per-account override (userId set).
 model AttendanceShift {
   id                String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId         String      @default("")
+  company           Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departmentId      String?     @unique
   department        Department? @relation(fields: [departmentId], references: [id])
   userId            String?     @unique
@@ -689,6 +780,8 @@ model AttendanceShift {
   workingDays       Int[]       @default([1, 2, 3, 4, 5]) // 0=Sun … 6=Sat; which weekdays are worked
   timeZone          String? // IANA tz (e.g. "America/New_York"); null = company timezone
   updatedAt         DateTime    @updatedAt
+
+  @@index([companyId])
 }
 
 // ---------- RDP inventory & assignment history (Ecommerce/CSR/Shipping) ----------
@@ -704,6 +797,9 @@ enum RdpTeam {
 /// One RDP can be used by several agents; usage over time lives in assignments.
 model Rdp {
   id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   team      RdpTeam
   provider  String // Sj Computers, MaxE Computers, Anydesk, ...
   address   String // IP address or Anydesk ID (free text)
@@ -715,14 +811,18 @@ model Rdp {
 
   assignments RdpAssignment[]
 
-  @@unique([provider, address])
+  @@unique([companyId, provider, address])
   @@index([team])
+  @@index([companyId])
 }
 
 /// A period an agent used an RDP. `unassignedAt` null = currently assigned.
 /// Agent is stored by name (snapshot) so history survives staff changes.
 model RdpAssignment {
   id           String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String    @default("")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   rdpId        String
   rdp          Rdp       @relation(fields: [rdpId], references: [id], onDelete: Cascade)
   agentName    String
@@ -733,6 +833,7 @@ model RdpAssignment {
 
   @@index([rdpId])
   @@index([agentName])
+  @@index([companyId])
 }
 
 // ---------- Audit trail (§9) ----------
@@ -740,6 +841,9 @@ model RdpAssignment {
 /// Edit history so submitted numbers cannot be quietly changed.
 model AuditLog {
   id         String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String   @default("")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId     String?
   user       User?    @relation(fields: [userId], references: [id])
   entityType String // "ItadDailyEntry", "Target", ...
@@ -754,11 +858,15 @@ model AuditLog {
   // orders by createdAt desc; AuditLog is append-only and the largest table.
   @@index([createdAt])
   @@index([userId, createdAt])
+  @@index([companyId])
 }
 
 /// A sign-in event — who logged in, when, from where (IP) and on which device.
 model LoginEvent {
   id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Nullable + SetNull so deleting a user preserves the sign-in audit trail
   // (matches AuditLog). In practice users are soft-deleted (isActive=false).
   userId    String?
@@ -773,6 +881,7 @@ model LoginEvent {
 
   @@index([userId, createdAt])
   @@index([createdAt])
+  @@index([companyId])
 }
 
 // ========== Marketing (Phase 3) — §6 ==========
@@ -840,11 +949,14 @@ enum BlogStatus {
 
 // ---------- SEO daily activity (§6.1) ----------
 model SeoDailyEntry {
-  id     String    @id @default(cuid())
-  userId String
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime  @db.Date
-  status DayStatus @default(SUBMITTED)
+  id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  status    DayStatus @default(SUBMITTED)
 
   keywordsTracked Int @default(0)
   pagesOptimized  Int @default(0)
@@ -859,15 +971,19 @@ model SeoDailyEntry {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 // ---------- Content daily activity (free-text log) ----------
 model ContentDailyEntry {
-  id     String    @id @default(cuid())
-  userId String
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime  @db.Date
-  status DayStatus @default(SUBMITTED)
+  id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  status    DayStatus @default(SUBMITTED)
 
   body      String? // free-text daily log
   notes     String?
@@ -876,15 +992,19 @@ model ContentDailyEntry {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 // ---------- Social daily activity (§6.2) ----------
 model SocialDailyEntry {
-  id     String    @id @default(cuid())
-  userId String
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date   DateTime  @db.Date
-  status DayStatus @default(SUBMITTED)
+  id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime  @db.Date
+  status    DayStatus @default(SUBMITTED)
 
   postsPublished  Int @default(0)
   postsScheduled  Int @default(0)
@@ -900,23 +1020,31 @@ model SocialDailyEntry {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 /// Posts-per-platform breakdown for a social entry.
 model SocialPlatformCount {
-  id      String           @id @default(cuid())
-  entryId String
-  entry   SocialDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
-  tagId   String
-  tag     Tag              @relation(fields: [tagId], references: [id])
-  posts   Int              @default(0)
+  id        String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String           @default("")
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entryId   String
+  entry     SocialDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag              @relation(fields: [tagId], references: [id])
+  posts     Int              @default(0)
 
   @@unique([entryId, tagId])
+  @@index([companyId])
 }
 
 // ---------- Marketing tasks: Kanban board + editorial calendar + content (§6.3/§6.4) ----------
 model MarketingTask {
   id          String              @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String              @default("")
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title       String
   description String?
   discipline  MarketingDiscipline
@@ -961,17 +1089,22 @@ model MarketingTask {
   @@index([discipline, scheduledDate])
   @@index([assigneeId])
   @@index([priority, dueAt])
+  @@index([companyId])
 }
 
 /// Once-only claim so the scheduled monthly report emails each (month, department)
 /// exactly once, even across restarts or multiple cron ticks on the 1st–2nd.
 model SentMonthlyReport {
   id         String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String   @default("")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   month      String // 'YYYY-MM'
   department String
   sentAt     DateTime @default(now())
 
-  @@unique([month, department])
+  @@unique([companyId, month, department])
+  @@index([companyId])
 }
 
 enum NotificationType {
@@ -1022,6 +1155,9 @@ enum ViolationKind {
 /// Read state is per row; the bell shows unread ones and marks them read on click.
 model Notification {
   id         String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String           @default("")
+  company    Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId     String // recipient
   user       User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   type       NotificationType @default(MENTION)
@@ -1036,10 +1172,14 @@ model Notification {
   createdAt  DateTime         @default(now())
 
   @@index([userId, readAt, createdAt(sort: Desc)])
+  @@index([companyId])
 }
 
 model MarketingTaskComment {
   id        String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String        @default("")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId    String
   task      MarketingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   authorId  String
@@ -1049,6 +1189,7 @@ model MarketingTaskComment {
   createdAt DateTime      @default(now())
 
   @@index([taskId])
+  @@index([companyId])
 }
 
 // ---------- Marketing brands / profiles + monthly reporting (§6) ----------
@@ -1058,6 +1199,9 @@ model MarketingTaskComment {
 /// blog counts and master-plan items together. User-manageable (add/edit).
 model Brand {
   id               String       @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId        String       @default("")
+  company          Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departmentId     String // always the MARKETING department
   department       Department   @relation(fields: [departmentId], references: [id])
   name             String
@@ -1097,6 +1241,7 @@ model Brand {
 
   @@unique([departmentId, slug])
   @@index([departmentId, isActive])
+  @@index([companyId])
 }
 
 /// A single SEO search-term landing page for a brand (one keyword/term → one URL).
@@ -1104,6 +1249,9 @@ model Brand {
 /// numerator of the live/target ratio.
 model SearchTermPage {
   id        String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String           @default("")
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   brandId   String
   brand     Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
   term      String // the search term / keyword this page targets
@@ -1114,6 +1262,7 @@ model SearchTermPage {
   updatedAt DateTime         @updatedAt
 
   @@index([brandId])
+  @@index([companyId])
 }
 
 /// Build state of a search-term page. LIVE counts toward the live/target ratio.
@@ -1153,6 +1302,9 @@ enum CrmStatus {
 /// platform (e.g. regional pages), so no per-platform uniqueness is enforced.
 model BrandProfile {
   id              String          @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId       String          @default("")
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   brandId         String
   brand           Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
   platform        ProfilePlatform
@@ -1173,6 +1325,7 @@ model BrandProfile {
 
   @@index([brandId])
   @@index([businessSuiteId])
+  @@index([companyId])
 }
 
 /// A Meta Business Suite / Business Manager account. Dept-scoped and shared across
@@ -1180,6 +1333,9 @@ model BrandProfile {
 /// "99 Technologies" BM). FB/IG profiles connect to one via businessSuiteId.
 model BusinessSuite {
   id                String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId         String     @default("")
+  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departmentId      String
   department        Department @relation(fields: [departmentId], references: [id])
   name              String
@@ -1191,6 +1347,7 @@ model BusinessSuite {
   profiles BrandProfile[]
 
   @@unique([departmentId, name])
+  @@index([companyId])
 }
 
 /// Platforms a brand profile can live on. Dedicated (superset incl. REDDIT +
@@ -1241,11 +1398,14 @@ enum StatSource {
 /// One monthly snapshot per brand + platform. `followers` is a total snapshot;
 /// month-over-month growth is derived. Upsert key = (brandId, platform, month).
 model BrandSocialMonthly {
-  id       String         @id @default(cuid())
-  brandId  String
-  brand    Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  platform SocialPlatform
-  month    String // "YYYY-MM"
+  id        String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String         @default("")
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  brandId   String
+  brand     Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platform  SocialPlatform
+  month     String // "YYYY-MM"
 
   followers   Int @default(0) // total followers at month end
   impressions Int @default(0)
@@ -1271,6 +1431,7 @@ model BrandSocialMonthly {
   @@unique([brandId, platform, month])
   @@index([brandId, month])
   @@index([month])
+  @@index([companyId])
 }
 
 /// One day of SEO metrics per brand, pulled from Google Search Console (GSC) and
@@ -1278,10 +1439,13 @@ model BrandSocialMonthly {
 /// Upsert key = (brandId, date). CTR and position are averages, not sums —
 /// aggregate them impressions-weighted, never added.
 model BrandSeoDaily {
-  id      String   @id @default(cuid())
-  brandId String
-  brand   Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  date    DateTime @db.Date
+  id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
 
   // Google Search Console
   clicks      Int   @default(0)
@@ -1303,11 +1467,15 @@ model BrandSeoDaily {
 
   @@unique([brandId, date])
   @@index([brandId, date])
+  @@index([companyId])
 }
 
 /// A blog/article attributed to a brand, for month-end per-brand counts.
 model BlogPost {
   id          String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String     @default("")
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   brandId     String
   brand       Brand      @relation(fields: [brandId], references: [id])
   title       String
@@ -1324,6 +1492,7 @@ model BlogPost {
 
   @@index([brandId, month])
   @@index([month])
+  @@index([companyId])
 }
 
 /// A single ad campaign record under the ADS Campaign sub-department. Per brand +
@@ -1331,6 +1500,9 @@ model BlogPost {
 /// from these rows (see /marketing/ads/summary).
 model AdCampaign {
   id           String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String           @default("")
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   brandId      String
   brand        Brand            @relation(fields: [brandId], references: [id])
   platform     AdPlatform
@@ -1355,11 +1527,15 @@ model AdCampaign {
   @@index([brandId, platform, month])
   @@index([month])
   @@index([brandId, date])
+  @@index([companyId])
 }
 
 /// The content lead's monthly Master Plan — a month-scoped container of items.
 model MarketingPlan {
   id              String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId       String         @default("")
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departmentId    String
   department      Department     @relation(fields: [departmentId], references: [id])
   subDepartmentId String? // usually the "content" sub-dept; null = whole-Marketing plan
@@ -1375,6 +1551,7 @@ model MarketingPlan {
 
   @@unique([departmentId, subDepartmentId, month])
   @@index([month])
+  @@index([companyId])
 }
 
 enum PlanItemStatus {
@@ -1386,9 +1563,12 @@ enum PlanItemStatus {
 
 /// A single Master Plan task. Fields mirror the "MONTHLY TASKS" reference sheet.
 model MarketingPlanItem {
-  id     String        @id @default(cuid())
-  planId String
-  plan   MarketingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  id        String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String        @default("")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId    String
+  plan      MarketingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   title       String // TASK TITLE
   taskType    String? // TASK TYPE (Strategy & Planning, Website Content, Social Media, …)
@@ -1409,6 +1589,7 @@ model MarketingPlanItem {
   updatedAt DateTime @updatedAt
 
   @@index([planId, order])
+  @@index([companyId])
 }
 
 // ========== Feedback & reviews (TL ↔ employee) ==========
@@ -1418,6 +1599,9 @@ model MarketingPlanItem {
 /// bell + dashboard badge (latest activity newer than your read = unread).
 model Feedback {
   id           String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String      @default("")
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   authorId     String
   author       User        @relation("FeedbackAuthored", fields: [authorId], references: [id])
   recipientId  String
@@ -1439,11 +1623,15 @@ model Feedback {
 
   @@index([recipientId])
   @@index([authorId])
+  @@index([companyId])
 }
 
 /// A reply within a feedback thread, from either participant.
 model FeedbackReply {
   id         String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String   @default("")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   feedbackId String
   feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
   authorId   String
@@ -1452,6 +1640,7 @@ model FeedbackReply {
   createdAt  DateTime @default(now())
 
   @@index([feedbackId])
+  @@index([companyId])
 }
 
 // ========== Quality Assurance (call-quality evaluations) ==========
@@ -1469,6 +1658,9 @@ enum QaEvaluationStatus {
 /// A configurable scorecard template: weighted categories of questions.
 model QaScorecard {
   id             String          @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String          @default("")
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name           String
   description    String?
   departmentType DepartmentType? // null = applies to any department
@@ -1483,10 +1675,15 @@ model QaScorecard {
 
   categories  QaCategory[]
   evaluations QaEvaluation[]
+
+  @@index([companyId])
 }
 
 model QaCategory {
   id          String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String      @default("")
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   scorecardId String
   scorecard   QaScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
   name        String
@@ -1496,10 +1693,14 @@ model QaCategory {
   questions QaQuestion[]
 
   @@index([scorecardId])
+  @@index([companyId])
 }
 
 model QaQuestion {
   id           String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String         @default("")
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   categoryId   String
   category     QaCategory     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   text         String
@@ -1510,12 +1711,16 @@ model QaQuestion {
   order        Int            @default(0)
 
   @@index([categoryId])
+  @@index([companyId])
 }
 
 /// A completed evaluation of an agent. Stores SNAPSHOTS of the scorecard so
 /// later template edits never change historical scores.
 model QaEvaluation {
   id            String       @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String       @default("")
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   scorecardId   String?
   scorecard     QaScorecard? @relation(fields: [scorecardId], references: [id])
   scorecardName String
@@ -1554,11 +1759,15 @@ model QaEvaluation {
   @@index([agentId])
   @@index([evaluatorId])
   @@index([departmentId, createdAt])
+  @@index([companyId])
 }
 
 /// Per-category snapshot of a completed evaluation (powers category analytics).
 model QaEvaluationCategory {
   id           String       @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String       @default("")
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   evaluationId String
   evaluation   QaEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   name         String
@@ -1570,11 +1779,15 @@ model QaEvaluationCategory {
   order        Int          @default(0)
 
   @@index([evaluationId])
+  @@index([companyId])
 }
 
 /// Per-question snapshot of a completed evaluation (powers the detail view).
 model QaAnswer {
   id           String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String         @default("")
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   evaluationId String
   evaluation   QaEvaluation   @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   categoryName String
@@ -1587,6 +1800,7 @@ model QaAnswer {
   order        Int            @default(0)
 
   @@index([evaluationId])
+  @@index([companyId])
 }
 
 /// Kind of a Lead Gen monthly breakdown row.
@@ -1600,6 +1814,9 @@ enum BreakdownKind {
 /// summary cards. One row per (month, category); month is "YYYY-MM".
 model LeadGenBreakdown {
   id        String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String        @default("")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   month     String // "YYYY-MM"
   category  String
   kind      BreakdownKind @default(INDUSTRY)
@@ -1607,8 +1824,9 @@ model LeadGenBreakdown {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  @@unique([month, category])
+  @@unique([companyId, month, category])
   @@index([month])
+  @@index([companyId])
 }
 
 // ============================ Ecommerce department ============================
@@ -1633,6 +1851,9 @@ enum StockAction {
 /// One Ecommerce daily report per user per day; listing counts live in the lines.
 model EcommerceDailyEntry {
   id           String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String    @default("")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId       String
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   date         DateTime  @db.Date
@@ -1647,11 +1868,15 @@ model EcommerceDailyEntry {
 
   @@unique([userId, date])
   @@index([date])
+  @@index([companyId])
 }
 
 /// A single (task type × marketplace × #listings) line on a daily report.
 model EcommerceListingLine {
   id            String              @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String              @default("")
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   entryId       String
   entry         EcommerceDailyEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   taskTypeId    String
@@ -1661,11 +1886,15 @@ model EcommerceListingLine {
   listings      Int                 @default(0)
 
   @@index([entryId])
+  @@index([companyId])
 }
 
 /// Shared Ecommerce task board (Kanban). HOD assigns; the whole team sees all.
 model EcommerceTask {
   id           String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String         @default("")
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title        String
   description  String?
   source       String? // free-text "from" — who/where the task came from
@@ -1684,12 +1913,16 @@ model EcommerceTask {
 
   @@index([status])
   @@index([assignedToId])
+  @@index([companyId])
 }
 
 /// A comment on an Ecommerce task (Jira/Trello-style thread). `mentions` holds the
 /// mentioned users' ids so they can be highlighted (and later notified).
 model EcomTaskComment {
   id        String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String        @default("")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId    String
   task      EcommerceTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   authorId  String
@@ -1699,11 +1932,15 @@ model EcomTaskComment {
   createdAt DateTime      @default(now())
 
   @@index([taskId])
+  @@index([companyId])
 }
 
 /// Out-of-stock request → HOD assigns a stock-in/out action to an agent.
 model StockRequest {
   id              String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId       String      @default("")
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departmentId    String
   department      Department  @relation(fields: [departmentId], references: [id])
   itemName        String
@@ -1729,6 +1966,7 @@ model StockRequest {
   resolvedAt   DateTime?
 
   @@index([departmentId, status])
+  @@index([companyId])
 }
 
 // ---------- Inventory Management (Operations team) ----------
@@ -1751,6 +1989,9 @@ enum InventoryReqStatus {
 /// (entityType "InventoryItem") so they appear in the per-item activity timeline.
 model InventoryItem {
   id            String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String     @default("")
+  company       Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   departmentId  String
   department    Department @relation(fields: [departmentId], references: [id])
   name          String
@@ -1773,12 +2014,16 @@ model InventoryItem {
 
   @@index([departmentId])
   @@index([category])
+  @@index([companyId])
 }
 
 /// A stock-in / stock-out request against an item. Doubles as the per-item
 /// activity log. Quantity is applied to the item only when status = COMPLETED.
 model InventoryMovement {
   id              String                @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId       String                @default("")
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   itemId          String
   item            InventoryItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
   type            InventoryMovementType
@@ -1798,11 +2043,15 @@ model InventoryMovement {
 
   @@index([itemId])
   @@index([status])
+  @@index([companyId])
 }
 
 // Personal, private to-do list — one owner, not shared. Every user gets one.
 model TodoItem {
   id          String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String    @default("")
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   title       String
@@ -1814,6 +2063,7 @@ model TodoItem {
   updatedAt   DateTime  @updatedAt
 
   @@index([userId])
+  @@index([companyId])
 }
 
 // Ecommerce meeting notes — shared across the department. Author edits/deletes
@@ -1821,6 +2071,9 @@ model TodoItem {
 // (auto submission date); deadline is optional.
 model MeetingNote {
   id           String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String      @default("")
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   authorId     String
   author       User        @relation("MeetingNoteAuthor", fields: [authorId], references: [id])
   departmentId String?
@@ -1833,6 +2086,7 @@ model MeetingNote {
   updatedAt    DateTime    @updatedAt
 
   @@index([departmentId, meetingDate])
+  @@index([companyId])
 }
 
 // ---------- ITAD Bid Tracker ----------
@@ -1861,6 +2115,9 @@ enum BidSubmissionType {
 /// is required once status = WON.
 model Bid {
   id             String             @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String             @default("")
+  owningCompany  Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   number         Int                @unique @default(autoincrement()) // human-facing bid_id
   title          String
   company        String
@@ -1886,6 +2143,7 @@ model Bid {
   @@index([agentId])
   @@index([dueDate])
   @@index([status, closedDate])
+  @@index([companyId])
 }
 
 // ========== Projects (project management) + Team Chat ==========
@@ -1926,8 +2184,11 @@ enum ChatConversationType {
 
 model PmProject {
   id                     String          @id @default(cuid())
-  name                   String          @unique
-  key                    String          @unique // 2-6 uppercase chars, used in task codes (RTI-12)
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId              String          @default("")
+  company                Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name                   String
+  key                    String // 2-6 uppercase chars, used in task codes (RTI-12); one per company
   description            String?
   color                  String          @default("#4F46E5")
   status                 PmProjectStatus @default(ACTIVE)
@@ -1954,11 +2215,17 @@ model PmProject {
   conversation ChatConversation?
   meetings     Meeting[]
 
+  @@unique([companyId, name])
+  @@unique([companyId, key])
   @@index([status])
+  @@index([companyId])
 }
 
 model PmProjectMember {
   id        String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String        @default("")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projectId String
   project   PmProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId    String
@@ -1969,10 +2236,14 @@ model PmProjectMember {
 
   @@unique([projectId, userId])
   @@index([userId])
+  @@index([companyId])
 }
 
 model PmColumn {
   id        String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String           @default("")
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projectId String
   project   PmProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
@@ -1986,13 +2257,17 @@ model PmColumn {
   tasks PmTask[]
 
   @@index([projectId, position])
+  @@index([companyId])
 }
 
 model PmTask {
   id                    String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId             String    @default("")
+  company               Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projectId             String
   project               PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  code                  String    @unique // e.g. RTI-142
+  code                  String // e.g. RTI-142; one per company
   title                 String
   description           String?
   columnId              String
@@ -2024,14 +2299,19 @@ model PmTask {
   dispatches        PmDispatchLog[]
   chatRefs          ChatMessage[]
 
+  @@unique([companyId, code])
   @@index([projectId, columnId, position])
   @@index([dueAt])
   @@index([isOverdue])
   @@index([createdById])
+  @@index([companyId])
 }
 
 model PmTaskAssignee {
   id           String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String   @default("")
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId       String
   task         PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   userId       String
@@ -2041,21 +2321,29 @@ model PmTaskAssignee {
 
   @@unique([taskId, userId])
   @@index([userId])
+  @@index([companyId])
 }
 
 model PmTaskWatcher {
-  id     String @id @default(cuid())
-  taskId String
-  task   PmTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation("PmWatching", fields: [userId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String  @default("")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      PmTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation("PmWatching", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
   @@index([userId])
+  @@index([companyId])
 }
 
 model PmLabel {
   id        String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String        @default("")
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projectId String
   project   PmProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
@@ -2063,19 +2351,27 @@ model PmLabel {
   tasks     PmTaskLabel[]
 
   @@unique([projectId, name])
+  @@index([companyId])
 }
 
 model PmTaskLabel {
-  taskId  String
-  task    PmTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  labelId String
-  label   PmLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  taskId    String
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String  @default("")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  task      PmTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  labelId   String
+  label     PmLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@id([taskId, labelId])
+  @@index([companyId])
 }
 
 model PmChecklistItem {
   id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId    String
   task      PmTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   text      String
@@ -2086,6 +2382,7 @@ model PmChecklistItem {
   createdAt DateTime  @default(now())
 
   @@index([taskId])
+  @@index([companyId])
 }
 
 /// A review on a task: who reviewed it, their verdict and feedback.
@@ -2097,6 +2394,9 @@ enum PmReviewVerdict {
 
 model PmReview {
   id         String          @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String          @default("")
+  company    Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId     String
   task       PmTask          @relation(fields: [taskId], references: [id], onDelete: Cascade)
   reviewerId String
@@ -2109,10 +2409,14 @@ model PmReview {
 
   @@index([taskId, createdAt])
   @@index([reviewerId])
+  @@index([companyId])
 }
 
 model PmComment {
   id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId    String
   task      PmTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   authorId  String
@@ -2124,10 +2428,14 @@ model PmComment {
   createdAt DateTime  @default(now())
 
   @@index([taskId, createdAt])
+  @@index([companyId])
 }
 
 model PmAttachment {
   id           String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String   @default("")
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId       String
   task         PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   uploadedById String
@@ -2139,11 +2447,15 @@ model PmAttachment {
   createdAt    DateTime @default(now())
 
   @@index([taskId])
+  @@index([companyId])
 }
 
 /// Append-only audit trail for a task (who changed what, when).
 model PmActivity {
   id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId    String
   task      PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   userId    String?
@@ -2153,10 +2465,14 @@ model PmActivity {
   createdAt DateTime @default(now())
 
   @@index([taskId, createdAt])
+  @@index([companyId])
 }
 
 model PmExtensionRequest {
   id             String            @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String            @default("")
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId         String
   task           PmTask            @relation(fields: [taskId], references: [id], onDelete: Cascade)
   requestedById  String
@@ -2172,12 +2488,16 @@ model PmExtensionRequest {
   createdAt      DateTime          @default(now())
 
   @@index([taskId, status])
+  @@index([companyId])
 }
 
 /// Idempotency log for the deadline cron: one row per (task, user, kind, due snapshot)
 /// so a reminder is never sent twice, and changing the due date re-arms reminders.
 model PmDispatchLog {
   id            String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String   @default("")
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   taskId        String
   task          PmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   userId        String
@@ -2186,21 +2506,30 @@ model PmDispatchLog {
   sentAt        DateTime @default(now())
 
   @@unique([taskId, userId, kind, dueAtSnapshot])
+  @@index([companyId])
 }
 
 /// Per-user email preferences for project + chat notifications (in-app is always on).
 model PmNotifyPref {
   userId        String   @id
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String   @default("")
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user          User     @relation("PmNotifyPref", fields: [userId], references: [id], onDelete: Cascade)
   emailAssigned Boolean  @default(true)
   emailMention  Boolean  @default(true)
   emailComment  Boolean  @default(false)
   emailDueSoon  Boolean  @default(true)
   updatedAt     DateTime @updatedAt
+
+  @@index([companyId])
 }
 
 model ChatConversation {
   id            String               @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String               @default("")
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   type          ChatConversationType
   projectId     String?              @unique
   project       PmProject?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -2221,11 +2550,15 @@ model ChatConversation {
   meetings Meeting[]
 
   @@index([lastMessageAt])
+  @@index([companyId])
 }
 
 /// A voice or video call in a conversation (media is browser to browser; the server only connects people).
 model ChatCall {
   id             String               @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String               @default("")
+  company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversationId String
   conversation   ChatConversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   startedById    String
@@ -2248,11 +2581,15 @@ model ChatCall {
 
   @@index([conversationId, endedAt])
   @@index([meetingId])
+  @@index([companyId])
 }
 
 /// One spoken sentence in a call (each person's browser transcribes their own microphone).
 model CallTranscriptLine {
   id          String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String   @default("")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   callId      String
   call        ChatCall @relation(fields: [callId], references: [id], onDelete: Cascade)
   userId      String
@@ -2265,11 +2602,15 @@ model CallTranscriptLine {
   at          DateTime @default(now())
 
   @@index([callId, at])
+  @@index([companyId])
 }
 
 /// A recording of a call, uploaded in chunks while it is being made.
 model CallRecording {
   id          String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String   @default("")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   callId      String
   call        ChatCall @relation(fields: [callId], references: [id], onDelete: Cascade)
   userId      String
@@ -2283,11 +2624,15 @@ model CallRecording {
   createdAt   DateTime @default(now())
 
   @@index([callId])
+  @@index([companyId])
 }
 
 /// Emoji reaction on a chat message.
 model ChatReaction {
   id        String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String      @default("")
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   messageId String
   message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
   userId    String
@@ -2296,11 +2641,15 @@ model ChatReaction {
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+  @@index([companyId])
 }
 
 /// A scheduled meeting. Each meeting (or repeating series) has its own group chat.
 model Meeting {
   id             String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String           @default("")
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title          String
   agenda         String           @default("")
   startsAt       DateTime
@@ -2327,10 +2676,14 @@ model Meeting {
   @@index([startsAt])
   @@index([seriesId])
   @@index([conversationId])
+  @@index([companyId])
 }
 
 model MeetingAttendee {
   id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   meetingId String
   meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   userId    String
@@ -2340,10 +2693,14 @@ model MeetingAttendee {
 
   @@unique([meetingId, userId])
   @@index([userId])
+  @@index([companyId])
 }
 
 model ChatMember {
   id             String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String           @default("")
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   conversationId String
   conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   userId         String
@@ -2356,10 +2713,14 @@ model ChatMember {
 
   @@unique([conversationId, userId])
   @@index([userId])
+  @@index([companyId])
 }
 
 model ChatMessage {
   id             String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String           @default("")
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   seq            Int              @default(autoincrement()) // monotonic cursor for polling + unread
   conversationId String
   conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -2392,11 +2753,15 @@ model ChatMessage {
 
   @@unique([seq])
   @@index([conversationId, seq])
+  @@index([companyId])
 }
 
 /// A browser / phone that gets pop-up notifications even when PulseTrack is closed (Web Push).
 model PushSubscription {
   id        String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   endpoint  String    @unique
@@ -2407,6 +2772,7 @@ model PushSubscription {
   lastOkAt  DateTime?
 
   @@index([userId])
+  @@index([companyId])
 }
 
 /// Keys the server makes for itself once and keeps (e.g. the Web Push key pair).
@@ -2419,6 +2785,9 @@ model AppSecret {
 /// A person's own saved documents and links (Docs & Links): only they can see them.
 model SavedDoc {
   id             String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String   @default("")
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId         String
   user           User     @relation("SavedDocOwner", fields: [userId], references: [id], onDelete: Cascade)
   title          String
@@ -2436,6 +2805,7 @@ model SavedDoc {
   updatedAt      DateTime @updatedAt
 
   @@index([userId, pinned, updatedAt])
+  @@index([companyId])
 }
 
 enum WfhRequestStatus {
@@ -2449,6 +2819,9 @@ enum WfhRequestStatus {
 /// days are marked Work From Home (LeaveDay WFH), so check-in works from any network.
 model WfhRequest {
   id           String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String           @default("")
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId       String
   user         User             @relation("WfhRequester", fields: [userId], references: [id], onDelete: Cascade)
   startDate    DateTime         @db.Date
@@ -2465,6 +2838,7 @@ model WfhRequest {
 
   @@index([userId, status])
   @@index([status, createdAt])
+  @@index([companyId])
 }
 
 /// ---------------------------------------------------------------------------
@@ -2476,6 +2850,9 @@ model WfhRequest {
 
 model DialerLead {
   id              String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId       String    @default("")
+  owningCompany   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   ownerId         String
   owner           User      @relation("DialerLeadOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   /// The value used to recognise the lead between imports: CRM lead ID, else email, else company + phone.
@@ -2556,10 +2933,14 @@ model DialerLead {
   @@unique([ownerId, matchKey])
   @@index([matchKey])
   @@index([ownerId, inLatestImport])
+  @@index([companyId])
 }
 
 model DialerImport {
   id              String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId       String   @default("")
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId          String
   user            User     @relation("DialerImporter", fields: [userId], references: [id], onDelete: Cascade)
   fileName        String
@@ -2574,11 +2955,15 @@ model DialerImport {
   createdAt       DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([companyId])
 }
 
 /// Change log: every status change per lead, kept for good.
 model DialerStatusChange {
   id         String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String     @default("")
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   leadId     String
   lead       DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   fromStatus String?
@@ -2589,11 +2974,15 @@ model DialerStatusChange {
   createdAt  DateTime   @default(now())
 
   @@index([leadId, createdAt])
+  @@index([companyId])
 }
 
 /// What a rep did on the dashboard: Call now, Call later, Snooze, Log note, state fixed, back to lead gen.
 model DialerAction {
   id        String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String     @default("")
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   leadId    String
   lead      DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   userId    String
@@ -2604,11 +2993,15 @@ model DialerAction {
   createdAt DateTime   @default(now())
 
   @@index([leadId, createdAt])
+  @@index([companyId])
 }
 
 /// A note on a lead: author, time, pinned, edited, optional next-action date (feeds follow-ups).
 model DialerNote {
   id           String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String     @default("")
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   leadId       String
   lead         DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   userId       String
@@ -2621,20 +3014,29 @@ model DialerNote {
 
   @@index([leadId, createdAt])
   @@index([userId, createdAt])
+  @@index([companyId])
 }
 
 /// Each rep's own dialer settings: saved views (filter sets) and follow-up alert days (3 to 60).
 model DialerUserPrefs {
   userId    String   @id
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user      User     @relation("DialerPrefsOwner", fields: [userId], references: [id], onDelete: Cascade)
   data      Json
   updatedAt DateTime @updatedAt
+
+  @@index([companyId])
 }
 
 /// A predictive dialer sending call results to Metriq (Oct 2026). The dialer calls a private link
 /// after every call; Metriq finds the lead, logs the call and updates the lead.
 model DialerIntegration {
   id             String       @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String       @default("")
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name           String
   tokenHash      String       @unique
   /// First characters of the link's key, to tell links apart.
@@ -2651,11 +3053,16 @@ model DialerIntegration {
   revokedAt      DateTime?
   createdAt      DateTime     @default(now())
   calls          DialerCall[]
+
+  @@index([companyId])
 }
 
 /// One call reported by the predictive dialer, matched to a lead (or waiting to be matched).
 model DialerCall {
   id             String            @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String            @default("")
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   integrationId  String
   integration    DialerIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   /// The dialer's own id for the call, so the same call sent twice is logged once.
@@ -2685,14 +3092,20 @@ model DialerCall {
   @@unique([integrationId, externalCallId])
   @@index([leadId, calledAt])
   @@index([integrationId, createdAt])
+  @@index([companyId])
 }
 
 /// One row ("default"): stage map, follow-up rules, highlight thresholds, calling slots.
 model DialerSettings {
   id          String   @id
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String   @default("")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   data        Json
   updatedById String?
   updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
 }
 
 /// My To-Do: Day / Week / Month / Year (Oct 2026). Plan ahead or log what was already done, on any
@@ -2713,6 +3126,9 @@ enum WorkLogStatus {
 
 model WorkLogEntry {
   id          String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String        @default("")
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId      String
   user        User          @relation("WorkLogOwner", fields: [userId], references: [id], onDelete: Cascade)
   period      WorkLogPeriod
@@ -2738,6 +3154,7 @@ model WorkLogEntry {
 
   @@index([userId, periodStart])
   @@index([userId, period, periodStart])
+  @@index([companyId])
 }
 
 /// A note on a My To-Do item, e.g. the WhatsApp message from a manager that asked for it.
@@ -2745,6 +3162,9 @@ model WorkLogEntry {
 /// `sender` is who it came from (optional).
 model WorkLogNote {
   id        String       @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String       @default("")
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   entryId   String
   entry     WorkLogEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   userId    String
@@ -2757,6 +3177,7 @@ model WorkLogNote {
 
   @@index([entryId])
   @@index([userId, source])
+  @@index([companyId])
 }
 
 enum WorkLogRating {
@@ -2768,6 +3189,9 @@ enum WorkLogRating {
 /// optional rating and comment (like work report confirmation in other ERPs).
 model WorkLogReview {
   id          String         @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId   String         @default("")
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId      String
   user        User           @relation("WorkLogReviewOwner", fields: [userId], references: [id], onDelete: Cascade)
   period      WorkLogPeriod
@@ -2781,12 +3205,16 @@ model WorkLogReview {
 
   @@unique([userId, period, periodStart])
   @@index([reviewerId])
+  @@index([companyId])
 }
 
 /// A private key that lets Claude (a connector) work in Metriq as this person: read the tickets
 /// they can see, comment on them and move them. Only a hash is stored; the key is shown once.
 model ClaudeKey {
   id         String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String    @default("")
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId     String
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
@@ -2800,6 +3228,7 @@ model ClaudeKey {
   createdAt  DateTime  @default(now())
 
   @@index([userId])
+  @@index([companyId])
 }
 
 // ---------------------------------------------------------------------------
@@ -2968,6 +3397,114 @@ model Company {
   tickets       SupportTicket[]
   users         User[]
   flagOverrides FeatureFlagCompany[]
+
+  // Everything a company owns (Phase 1, step 2). Deleting a company deletes all of it;
+  // company 1 (99 Technologies) can never be deleted (database trigger).
+  departmentRows           Department[]
+  subDepartmentRows        SubDepartment[]
+  userDepartmentRows       UserDepartment[]
+  entryAttachmentRows      EntryAttachment[]
+  itadDailyEntryRows       ItadDailyEntry[]
+  leadGenDailyEntryRows    LeadGenDailyEntry[]
+  leadGenVerticalCountRows LeadGenVerticalCount[]
+  talkloopDailyEntryRows   TalkloopDailyEntry[]
+  talkloopCountryCountRows TalkloopCountryCount[]
+  teamMemberEventRows      TeamMemberEvent[]
+  tagRows                  Tag[]
+  targetRows               Target[]
+  salaryRecordRows         SalaryRecord[]
+  holidayRows              Holiday[]
+  leaveDayRows             LeaveDay[]
+  attendanceDayRows        AttendanceDay[]
+  officeNetworkRows        OfficeNetwork[]
+  blockedCheckInRows       BlockedCheckIn[]
+  attendanceReminderRows   AttendanceReminder[]
+  attendanceViolationRows  AttendanceViolation[]
+  breakEntryRows           BreakEntry[]
+  attendanceShiftRows      AttendanceShift[]
+  rdpRows                  Rdp[]
+  rdpAssignmentRows        RdpAssignment[]
+  auditLogRows             AuditLog[]
+  loginEventRows           LoginEvent[]
+  seoDailyEntryRows        SeoDailyEntry[]
+  contentDailyEntryRows    ContentDailyEntry[]
+  socialDailyEntryRows     SocialDailyEntry[]
+  socialPlatformCountRows  SocialPlatformCount[]
+  marketingTaskRows        MarketingTask[]
+  sentMonthlyReportRows    SentMonthlyReport[]
+  notificationRows         Notification[]
+  marketingTaskCommentRows MarketingTaskComment[]
+  brandRows                Brand[]
+  searchTermPageRows       SearchTermPage[]
+  brandProfileRows         BrandProfile[]
+  businessSuiteRows        BusinessSuite[]
+  brandSocialMonthlyRows   BrandSocialMonthly[]
+  brandSeoDailyRows        BrandSeoDaily[]
+  blogPostRows             BlogPost[]
+  adCampaignRows           AdCampaign[]
+  marketingPlanRows        MarketingPlan[]
+  marketingPlanItemRows    MarketingPlanItem[]
+  feedbackRows             Feedback[]
+  feedbackReplyRows        FeedbackReply[]
+  qaScorecardRows          QaScorecard[]
+  qaCategoryRows           QaCategory[]
+  qaQuestionRows           QaQuestion[]
+  qaEvaluationRows         QaEvaluation[]
+  qaEvaluationCategoryRows QaEvaluationCategory[]
+  qaAnswerRows             QaAnswer[]
+  leadGenBreakdownRows     LeadGenBreakdown[]
+  ecommerceDailyEntryRows  EcommerceDailyEntry[]
+  ecommerceListingLineRows EcommerceListingLine[]
+  ecommerceTaskRows        EcommerceTask[]
+  ecomTaskCommentRows      EcomTaskComment[]
+  stockRequestRows         StockRequest[]
+  inventoryItemRows        InventoryItem[]
+  inventoryMovementRows    InventoryMovement[]
+  todoItemRows             TodoItem[]
+  meetingNoteRows          MeetingNote[]
+  bidRows                  Bid[]
+  pmProjectRows            PmProject[]
+  pmProjectMemberRows      PmProjectMember[]
+  pmColumnRows             PmColumn[]
+  pmTaskRows               PmTask[]
+  pmTaskAssigneeRows       PmTaskAssignee[]
+  pmTaskWatcherRows        PmTaskWatcher[]
+  pmLabelRows              PmLabel[]
+  pmTaskLabelRows          PmTaskLabel[]
+  pmChecklistItemRows      PmChecklistItem[]
+  pmReviewRows             PmReview[]
+  pmCommentRows            PmComment[]
+  pmAttachmentRows         PmAttachment[]
+  pmActivityRows           PmActivity[]
+  pmExtensionRequestRows   PmExtensionRequest[]
+  pmDispatchLogRows        PmDispatchLog[]
+  pmNotifyPrefRows         PmNotifyPref[]
+  chatConversationRows     ChatConversation[]
+  chatCallRows             ChatCall[]
+  callTranscriptLineRows   CallTranscriptLine[]
+  callRecordingRows        CallRecording[]
+  chatReactionRows         ChatReaction[]
+  meetingRows              Meeting[]
+  meetingAttendeeRows      MeetingAttendee[]
+  chatMemberRows           ChatMember[]
+  chatMessageRows          ChatMessage[]
+  pushSubscriptionRows     PushSubscription[]
+  savedDocRows             SavedDoc[]
+  wfhRequestRows           WfhRequest[]
+  dialerLeadRows           DialerLead[]
+  dialerImportRows         DialerImport[]
+  dialerStatusChangeRows   DialerStatusChange[]
+  dialerActionRows         DialerAction[]
+  dialerNoteRows           DialerNote[]
+  dialerUserPrefsRows      DialerUserPrefs[]
+  dialerIntegrationRows    DialerIntegration[]
+  dialerCallRows           DialerCall[]
+  dialerSettingsRows       DialerSettings[]
+  workLogEntryRows         WorkLogEntry[]
+  workLogNoteRows          WorkLogNote[]
+  workLogReviewRows        WorkLogReview[]
+  claudeKeyRows            ClaudeKey[]
+  supportMessageRows       SupportMessage[]
 }
 
 model PlatformOwner {
@@ -3024,7 +3561,7 @@ enum TicketPriority {
 model SupportTicket {
   id         String         @id @default(cuid())
   number     Int            @unique @default(autoincrement())
-  companyId  String
+  companyId  String         @default("")
   company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId     String?
   user       User?          @relation("SupportTickets", fields: [userId], references: [id], onDelete: SetNull)
@@ -3051,6 +3588,9 @@ model SupportTicket {
 
 model SupportMessage {
   id         String        @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String        @default("")
+  company    Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   ticketId   String
   ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   fromOwner  Boolean
@@ -3059,6 +3599,7 @@ model SupportMessage {
   createdAt  DateTime      @default(now())
 
   @@index([ticketId, createdAt])
+  @@index([companyId])
 }
 
 /// On/off switches for new parts of Metriq (Phase 1, step 1). A switch with no row uses its

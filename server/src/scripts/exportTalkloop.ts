@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     for (const c of e.countryCounts) countries.push(csvRow([e.date, e.user.name, e.user.email, c.tag.name, c.calls, c.demos]))
   }
 
-  const dept = await prisma.department.findUnique({ where: { type: 'TALKLOOP' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'TALKLOOP' } })
   const people = dept
     ? await prisma.user.findMany({ where: { departmentId: dept.id }, select: { name: true, email: true, role: true, isActive: true, status: true }, orderBy: { name: 'asc' } })
     : []

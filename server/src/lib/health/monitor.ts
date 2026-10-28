@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import type { AuthedRequest } from '../../middleware/auth'
 import { AUDIT_HEADER, AUDIT_SECRET, AuditWriteBlocked, PROBE_HEADER, auditStore, openProbe } from './auditContext'
+import { isWallRefusal } from '../tenancy'
 import { captureError, normalizePath } from './errors'
 
 /** Requests slower than this are listed as slow (System Health). */
@@ -71,6 +72,16 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   // The self check's test mode stopped a save: that is the expected end of the request.
   if (err instanceof AuditWriteBlocked) {
     res.status(200).json({ auditBlocked: true })
+    return
+  }
+  // Company walls: a record of another company (or an id that points at one) is simply not found.
+  // A record that is not there (deleted, never existed, or another company's): 404, not a crash.
+  if ((err as { code?: string })?.code === 'P2025' && (err as Error)?.constructor?.name === 'PrismaClientKnownRequestError') {
+    if (!res.headersSent) res.status(404).json({ error: 'Not found' })
+    return
+  }
+  if (isWallRefusal(err)) {
+    if (!res.headersSent) res.status(404).json({ error: 'Not found' })
     return
   }
   // eslint-disable-next-line no-console

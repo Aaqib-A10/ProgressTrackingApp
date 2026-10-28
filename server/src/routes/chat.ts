@@ -5,7 +5,8 @@ import { GUEST_CALL_PATH, readGuestPass } from '../lib/pm/guests'
 import * as G from '../controllers/guestController'
 import { pmHandler as h } from '../lib/pm/http'
 import * as C from '../controllers/chatController'
-import { HOME_COMPANY_ID } from '../lib/company'
+import { prisma } from '../lib/prisma'
+import { runAsCompany } from '../lib/tenancy'
 
 /** /api/chat — direct messages, groups and project channels (polling based). */
 export const chatRouter = Router()
@@ -22,8 +23,12 @@ function memberOrGuest(req: AuthedRequest, res: Response, next: NextFunction): v
   if (GUEST_CALL_PATH.test(req.path) && (wantsGuest || !hasLogin)) {
     const pass = readGuestPass(req)
     if (pass) {
-      req.user = { id: pass.gid, role: 'GUEST' as unknown as Role, companyId: HOME_COMPANY_ID }
-      next()
+      // A guest is inside the company of the chat they were let into.
+      void prisma.chatConversation.findUnique({ where: { id: pass.conv }, select: { companyId: true } }).then((c) => {
+        if (!c) { res.status(401).json({ error: 'Not authenticated' }); return }
+        req.user = { id: pass.gid, role: 'GUEST' as unknown as Role, companyId: c.companyId }
+        void runAsCompany(c.companyId, next)
+      }, next)
       return
     }
   }

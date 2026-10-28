@@ -5,6 +5,7 @@ import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
 import { shiftDayString, timesForWeekday, type DayTimes } from './shiftDay'
 import { sendAttendanceReminderEmail } from './mail'
 import { runTracked } from './health/jobs'
+import { forEachCompany } from './company'
 
 /**
  * Scheduled check-in / check-out email reminders.
@@ -143,7 +144,7 @@ export async function runAttendanceReminderTick(now: Date = new Date()): Promise
 /** Start the cron scheduler (every 5 minutes). Call once on server boot. */
 export function startAttendanceReminders(): void {
   cron.schedule('*/5 * * * *', () => {
-    runTracked('attendance-reminders', runAttendanceReminderTick).catch((e) => {
+    runTracked('attendance-reminders', () => forEachCompany(() => runAttendanceReminderTick())).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[reminders] tick failed:', e)
     })

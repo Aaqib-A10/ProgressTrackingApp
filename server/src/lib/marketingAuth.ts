@@ -35,7 +35,7 @@ export async function resolveMarketingActor(req: AuthedRequest, res: Response): 
     return null
   }
   const marketingDept =
-    me.department?.type === 'MARKETING' ? me.department : await prisma.department.findUnique({ where: { type: 'MARKETING' } })
+    me.department?.type === 'MARKETING' ? me.department : await prisma.department.findFirst({ where: { type: 'MARKETING' } })
   const isLead = isAdmin || me.role === 'TEAM_LEAD'
   const subDeptSlug = me.subDepartment?.slug ?? null
   return {

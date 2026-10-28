@@ -6,6 +6,8 @@ import { COMPANY_TZ } from '../time'
 import { logActivity } from './tasks'
 import { fmtDue, fmtDuration, pmNotify, taskLink, trunc } from './pmNotify'
 import { runTracked } from '../health/jobs'
+import { forEachCompany } from '../company'
+import { maybeCompanyId } from '../tenancy'
 
 /**
  * Deadline watcher for project tasks (runs every 5 minutes).
@@ -198,6 +200,7 @@ export async function runDeadlineTick(now: Date = new Date()): Promise<TickResul
     const waiting = await prisma.$queryRaw<{ id: string }[]>`
       SELECT t.id FROM "PmTask" t
       WHERE t."isOverdue" = true AND t."deletedAt" IS NULL AND t."completedAt" IS NULL AND t."dueAt" < ${now}
+        AND (${maybeCompanyId()}::text IS NULL OR t."companyId" = ${maybeCompanyId()})
         AND NOT EXISTS (SELECT 1 FROM "PmDispatchLog" l WHERE l."taskId" = t.id AND l.kind = 'overdue_email' AND l."dueAtSnapshot" = t."dueAt")
       ORDER BY t."dueAt" ASC
       LIMIT ${BATCH}`
@@ -279,7 +282,7 @@ async function emailOnly(userId: string, t: DeadlineTask, mail: { subject: strin
 /** Start the deadline cron (every 5 minutes). Call once on boot. */
 export function startPmDeadlines(): void {
   cron.schedule('*/5 * * * *', () => {
-    runTracked('pm-deadlines', runDeadlineTick).catch((e) => {
+    runTracked('pm-deadlines', () => forEachCompany(() => runDeadlineTick())).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[pm-deadlines] tick failed:', e)
     })

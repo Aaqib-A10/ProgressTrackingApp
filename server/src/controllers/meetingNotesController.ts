@@ -24,7 +24,7 @@ function isManager(me: Awaited<ReturnType<typeof loadUser>>): boolean {
 
 async function ecommerceDept(me: Awaited<ReturnType<typeof loadUser>>) {
   if (me.department?.type === 'ECOMMERCE') return me.department
-  if (me.role === 'SUPER_ADMIN') return prisma.department.findUnique({ where: { type: 'ECOMMERCE' } })
+  if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'ECOMMERCE' } })
   return null
 }
 

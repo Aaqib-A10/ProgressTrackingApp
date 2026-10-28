@@ -12,6 +12,7 @@ import { JOBS } from '../lib/health/jobs'
 import { errorBrief } from '../lib/health/report'
 import { lastUptimePing, recordOutage, recordPing, uptimeConfigured, uptimeTokenOk } from '../lib/health/uptime'
 import { invokeAs, invokedError } from '../lib/pm/invoke'
+import { HOME_COMPANY_ID } from '../lib/company'
 import * as T from './pmTasksController'
 
 /**
@@ -20,17 +21,19 @@ import * as T from './pmTasksController'
  */
 
 /** Super Admins and developers only. Use after requireAuth. */
+/**
+ * System Health is Metriq's own engineering view (errors from every company, the self check):
+ * only 99 Technologies' Super Admins and developers see it, never another company's.
+ */
 export async function requireHealthAccess(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
-  if (req.user?.role === 'SUPER_ADMIN') { next(); return }
-  const u = req.user ? await prisma.user.findUnique({ where: { id: req.user.id }, select: { isDeveloper: true } }) : null
-  if (!u?.isDeveloper) { res.status(403).json({ error: 'Only developers and Super Admins can open System Health' }); return }
-  next()
+  if (req.user && (await canSeeHealth(req.user))) { next(); return }
+  res.status(403).json({ error: 'Only developers and Super Admins can open System Health' })
 }
 
 export async function canSeeHealth(user: { id: string; role: string }): Promise<boolean> {
-  if (user.role === 'SUPER_ADMIN') return true
-  const u = await prisma.user.findUnique({ where: { id: user.id }, select: { isDeveloper: true } })
-  return !!u?.isDeveloper
+  const u = await prisma.user.findUnique({ where: { id: user.id }, select: { isDeveloper: true, role: true, companyId: true } })
+  if (!u || u.companyId !== HOME_COMPANY_ID) return false
+  return u.role === 'SUPER_ADMIN' || u.isDeveloper
 }
 
 const iso = (d: Date | null | undefined) => d?.toISOString() ?? null

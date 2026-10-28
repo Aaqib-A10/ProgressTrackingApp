@@ -9,7 +9,7 @@ let w: SeededWorld
 let second: SeededWorld['itadMember']
 beforeAll(async () => {
   w = await seedWorld()
-  const itad = await prisma.department.findUniqueOrThrow({ where: { type: 'ITAD' } })
+  const itad = await prisma.department.findFirstOrThrow({ where: { type: 'ITAD' } })
   const u = await prisma.user.create({ data: { name: 'itad second', email: 'itad.second@test.local', role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash: await hashPassword('Password123!'), departmentId: itad.id } })
   second = { id: u.id, role: u.role }
 })

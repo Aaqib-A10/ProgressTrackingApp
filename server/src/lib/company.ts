@@ -1,9 +1,9 @@
 import { prisma } from './prisma'
+import { runAsCompany } from './tenancy'
 
 /**
- * Companies (erp, step 0). Until phase 1 step 2 puts a company on every record, everyone in
- * Metriq belongs to 99 Technologies, company 1. This is the one place that answers "which
- * company is this person in", so step 2 only changes it here.
+ * Companies. 99 Technologies is company 1 ('company-1'); every record has a company (Phase 1,
+ * step 2) and lib/tenancy keeps each company inside its own walls.
  */
 export const HOME_COMPANY_ID = 'company-1'
 
@@ -21,7 +21,27 @@ export async function ensureHomeCompany() {
   })
 }
 
-/** The people of a company. Company 1 also has everyone whose company is still empty (until step 2 fills it). */
+/** The people of a company. */
 export function companyUserWhere(companyId: string) {
-  return companyId === HOME_COMPANY_ID ? { OR: [{ companyId: null }, { companyId: HOME_COMPANY_ID }] } : { companyId }
+  return { companyId }
+}
+
+/**
+ * Background jobs (reminders, alerts, auto check-out…) run once for each company, inside that
+ * company's walls (lib/tenancy), so a job never mixes two companies (a reminder to one
+ * company's Super Admin about another company's people). Paused companies are skipped. One
+ * company's failure does not stop the others; it is reported at the end.
+ */
+export async function forEachCompany(fn: (companyId: string) => Promise<unknown>): Promise<void> {
+  const companies = await prisma.company.findMany({ where: { status: { not: 'SUSPENDED' } }, select: { id: true }, orderBy: { createdAt: 'asc' } })
+  const failed: string[] = []
+  let first: unknown = null
+  for (const c of companies) {
+    try { await runAsCompany(c.id, () => fn(c.id)) } catch (e) { failed.push(c.id); first ??= e }
+  }
+  if (first) {
+    const e = first instanceof Error ? first : new Error(String(first))
+    if (failed.length > 1) e.message = `${e.message} (in ${failed.length} companies)`
+    throw e
+  }
 }

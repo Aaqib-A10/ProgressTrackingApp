@@ -43,7 +43,7 @@ function summarize(rows: Row[]) {
 async function monthLeads(month: string): Promise<number> {
   const start = DateTime.fromISO(month + '-01', { zone: 'utc' }).startOf('month')
   const end = start.endOf('month')
-  const dept = await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
   if (!dept) return 0
   const users = await prisma.user.findMany({ where: { departmentId: dept.id, isActive: true }, select: { id: true } })
   const agg = await prisma.leadGenDailyEntry.aggregate({

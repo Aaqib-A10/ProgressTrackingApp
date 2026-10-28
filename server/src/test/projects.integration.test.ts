@@ -442,7 +442,7 @@ describe('@all mentions', () => {
   it('@all in a task comment mentions every project member except the author', async () => {
     const t = await request(app).post('/api/projects/RTI/tasks').set(...auth(w.itadLead)).send({ title: 'All hands' }).expect(201)
     await request(app).post(`/api/projects/tasks/${t.body.task.code}/comments`).set(...auth(w.itadLead)).send({ body: '@all please read' }).expect(201)
-    const proj = await prisma.pmProject.findUniqueOrThrow({ where: { key: 'RTI' } })
+    const proj = await prisma.pmProject.findFirstOrThrow({ where: { key: 'RTI' } })
     const members = (await prisma.pmProjectMember.findMany({ where: { projectId: proj.id }, select: { userId: true } })).map((m) => m.userId).filter((id) => id !== w.itadLead.id)
     const notes = await prisma.notification.findMany({ where: { type: 'MENTION', entityId: t.body.task.id } })
     expect(new Set(notes.map((n) => n.userId))).toEqual(new Set(members))

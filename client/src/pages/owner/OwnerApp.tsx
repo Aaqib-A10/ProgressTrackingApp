@@ -680,6 +680,7 @@ function SwitchesPage() {
   const { data, error, setData } = useLoad(() => ownerApi.flags())
   const [busy, setBusy] = useState<string | null>(null)
   async function flip(f: OwnerFlag, enabled: boolean) {
+    if (f.key === 'company-walls' && !enabled && !window.confirm('Turn the company walls off? Every company would see every other company\'s records. Only do this in an emergency while 99 Technologies is the only company.')) return
     setBusy(f.key)
     try { setData(await ownerApi.setFlag(f.key, enabled)); addToast({ type: 'success', message: `${f.label} ${enabled ? 'switched on' : 'switched off'}. It takes effect within a minute.` }) }
     catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(null) }
@@ -695,6 +696,7 @@ function SwitchesPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-body-md font-semibold text-ink">{f.label}</p>
                   <Badge tone={f.enabled ? 'success' : 'danger'}>{f.enabled ? 'On' : 'Off'}</Badge>
+                  {f.scope === 'platform' && <Badge tone="neutral">Whole of Metriq</Badge>}
                 </div>
                 <p className="mt-1 text-body-sm text-ink-muted">{f.description}</p>
                 <p className="mt-1.5 text-[12px] text-ink-faint">{f.isDefault ? `Never changed (${f.defaultValue ? 'on' : 'off'} by default)` : `Last changed ${fmt(f.updatedAt)}${f.updatedBy ? ` by ${f.updatedBy}` : ''}`}</p>
@@ -711,7 +713,7 @@ function SwitchesPage() {
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1 pt-1">
                 <Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => flip(f, v)} label={`${f.label} for all companies`} />
-                <span className="text-[12px] text-ink-faint">All companies</span>
+                <span className="text-[12px] text-ink-faint">{f.scope === 'platform' ? 'Everywhere' : 'All companies'}</span>
               </div>
             </div>
           ))}

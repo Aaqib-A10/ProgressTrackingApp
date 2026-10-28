@@ -163,7 +163,7 @@ describe('team lead dashboards for every department', () => {
   })
 
   it('Inventory: requests completed, open, low stock', async () => {
-    const inv = await prisma.department.findUniqueOrThrow({ where: { type: 'INVENTORY' } })
+    const inv = await prisma.department.findFirstOrThrow({ where: { type: 'INVENTORY' } })
     const item = await prisma.inventoryItem.create({ data: { departmentId: inv.id, name: 'SSD', category: 'Parts', quantity: 1, lowStockAt: 2 } })
     await prisma.inventoryMovement.create({ data: { itemId: item.id, type: 'STOCK_OUT', quantity: 3, status: 'COMPLETED', resolvedAt: new Date(), assignedToId: w.inventoryMember.id } })
     await prisma.inventoryMovement.create({ data: { itemId: item.id, type: 'STOCK_IN', quantity: 1 } })

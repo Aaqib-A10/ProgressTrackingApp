@@ -31,11 +31,11 @@ async function main(): Promise<void> {
   if (!admin) throw new Error('No Super Admin')
   const people = await prisma.user.findMany({ where: { isActive: true, status: 'ACTIVE', role: { in: ['TEAM_LEAD', 'MEMBER'] }, department: { type: 'MARKETING' } }, take: 8 })
   for (const p of STANDARD_PROJECTS) {
-    if (!(await prisma.pmProject.findUnique({ where: { key: p.key } }))) await createProjectWithDefaults({ ...p, ownerId: admin.id })
+    if (!(await prisma.pmProject.findFirst({ where: { key: p.key } }))) await createProjectWithDefaults({ ...p, ownerId: admin.id })
   }
   let n = 0
   for (const key of ['RTI', 'MNC', 'PLS']) {
-    const project = await prisma.pmProject.findUniqueOrThrow({ where: { key }, include: { columns: { orderBy: { position: 'asc' } } } })
+    const project = await prisma.pmProject.findFirstOrThrow({ where: { key }, include: { columns: { orderBy: { position: 'asc' } } } })
     const roles: PmProjectRole[] = ['ADMIN', 'MEMBER', 'MEMBER', 'MEMBER', 'VIEWER']
     for (const [i, u] of people.slice(0, 5).entries()) {
       await prisma.pmProjectMember.upsert({ where: { projectId_userId: { projectId: project.id, userId: u.id } }, create: { projectId: project.id, userId: u.id, role: roles[i], addedById: admin.id }, update: {} })

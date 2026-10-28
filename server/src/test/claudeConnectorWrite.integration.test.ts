@@ -25,7 +25,7 @@ async function call(u: U, name: string, args: object) {
   const res = r.body.result as { content: { type: string; text?: string }[]; isError?: boolean }
   return { isError: !!res.isError, text: res.content.map((c) => c.text ?? '').join('\n') }
 }
-const task = (code: string) => prisma.pmTask.findUniqueOrThrow({ where: { code }, include: { column: true, assignees: true, checklist: true } })
+const task = (code: string) => prisma.pmTask.findFirstOrThrow({ where: { code }, include: { column: true, assignees: true, checklist: true } })
 const acts = async (code: string) => (await prisma.pmActivity.findMany({ where: { task: { code } }, orderBy: { createdAt: 'asc' } })).map((a) => a.action)
 
 beforeAll(async () => {

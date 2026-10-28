@@ -241,7 +241,7 @@ async function buildMePayload(me: Awaited<ReturnType<typeof loadUser>>) {
   const [dayRaw, leave, holiday] = await Promise.all([
     prisma.attendanceDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } }, include: { breaks: { orderBy: { startAt: 'asc' } } } }),
     prisma.leaveDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } }),
-    prisma.holiday.findUnique({ where: { date: dateValue } }),
+    prisma.holiday.findFirst({ where: { date: dateValue } }),
   ])
   // A row can be left on today's date under an OLD timezone (its own check-in
   // actually belongs to a different shift-day). Don't surface it as "today" — a
@@ -494,7 +494,7 @@ export async function checkIn(req: AuthedRequest, res: Response): Promise<void> 
 
   const [leave, holiday] = await Promise.all([
     prisma.leaveDay.findUnique({ where: { userId_date: { userId: me.id, date: dateValue } } }),
-    prisma.holiday.findUnique({ where: { date: dateValue } }),
+    prisma.holiday.findFirst({ where: { date: dateValue } }),
   ])
   const isWfh = leave?.type === 'WFH'
   if ((leave && !isWfh) || holiday) {
@@ -820,7 +820,7 @@ export async function register(req: AuthedRequest, res: Response): Promise<void>
   if (DateTime.fromISO(end).diff(DateTime.fromISO(start), 'days').days > 62) { res.status(400).json({ error: 'Pick two months or less.' }); return }
   let departmentId: string | undefined
   if (me.role === 'SUPER_ADMIN' && req.query.department) {
-    const d = await prisma.department.findUnique({ where: { type: String(req.query.department) as DepartmentType } })
+    const d = await prisma.department.findFirst({ where: { type: String(req.query.department) as DepartmentType } })
     departmentId = d?.id ?? '__none__'
   }
   const members = await scopedMembers(me, departmentId)
@@ -915,7 +915,7 @@ export async function exportTeamAttendanceCsv(req: AuthedRequest, res: Response)
   let departmentId: string | undefined
   let scopeLabel = me.role === 'SUPER_ADMIN' ? 'company' : (me.department?.type ?? 'team')
   if (me.role === 'SUPER_ADMIN' && deptType) {
-    const d = await prisma.department.findUnique({ where: { type: deptType as DepartmentType } })
+    const d = await prisma.department.findFirst({ where: { type: deptType as DepartmentType } })
     departmentId = d?.id
     scopeLabel = deptType
   }
@@ -1039,7 +1039,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   const deptType = req.query.department as string | undefined
   let departmentId: string | undefined
   if (me.role === 'SUPER_ADMIN' && deptType) {
-    const d = await prisma.department.findUnique({ where: { type: deptType as DepartmentType } })
+    const d = await prisma.department.findFirst({ where: { type: deptType as DepartmentType } })
     departmentId = d?.id
   }
 

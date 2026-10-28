@@ -162,7 +162,7 @@ describe('server errors', () => {
 
     await request(app).post('/api/projects').set(...auth(w.superAdmin)).send({ name: 'Metriq Dev', key: 'DEV', members: [{ userId: w.itadMember.id, role: 'MEMBER' }] }).expect(201)
     const t = await request(app).post(`/api/system-health/errors/${g.id}/ticket`).set(...auth(w.superAdmin)).send({ project: 'dev', assigneeIds: [w.itadMember.id] }).expect(201)
-    const task = await prisma.pmTask.findUniqueOrThrow({ where: { code: t.body.code }, include: { assignees: true } })
+    const task = await prisma.pmTask.findFirstOrThrow({ where: { code: t.body.code }, include: { assignees: true } })
     expect(task.title).toMatch(/^Fix error: Database said no/)
     expect(task.priority).toBe('HIGH')
     expect(task.description).toContain('Stack trace:')

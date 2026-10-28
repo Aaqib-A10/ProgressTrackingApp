@@ -25,6 +25,7 @@ import { needsRebalance, rankBetween, RANK_STEP } from '../lib/pm/rank'
 import { CARD_INCLUDE, clearOverdueIfResolved, isTaskOverdue, logActivity, rebalanceColumn, serializeCard } from '../lib/pm/tasks'
 import { fmtDue, pmNotify, taskLink, trunc } from '../lib/pm/pmNotify'
 import { contentDisposition } from '../lib/contentDisposition'
+import { companyFileName, ensureFolderFor } from '../lib/companyFiles'
 
 /**
  * Tasks inside a project: create/edit/move/delete, assignees, comments,
@@ -546,8 +547,8 @@ export async function uploadAttachment(req: AuthedRequest, res: Response): Promi
   const originalName = String(req.query.name || 'file').slice(0, 200).replace(/[\r\n"]/g, '').trim() || 'file'
   const ext = path.extname(originalName).replace('.', '').toLowerCase()
   if (BLOCKED_EXT.has(ext)) throw new HttpError(415, 'That file type is not allowed')
-  await fs.mkdir(UPLOAD_DIR, { recursive: true })
-  const storedName = `${randomUUID()}${ext ? `.${ext}` : ''}`
+  const storedName = companyFileName(ext)
+  await ensureFolderFor(UPLOAD_DIR, storedName)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
   const a = await prisma.pmAttachment.create({
     data: { taskId: task.id, uploadedById: ctx.me.id, storedName, originalName, mimeType: String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), size: buf.length },
@@ -829,6 +830,6 @@ export async function getTaskBrief(req: AuthedRequest, res: Response): Promise<v
   const r = await invokeAs(getTask, viewer(req), { params: { code: req.params.code } })
   if (r.status >= 400) throw new HttpError(r.status, invokedError(r))
   const task = (r.body as { task: BriefTask }).task
-  const project = await prisma.pmProject.findUnique({ where: { key: task.projectKey }, select: { workFolder: true } })
+  const project = await prisma.pmProject.findFirst({ where: { key: task.projectKey }, select: { workFolder: true } })
   res.json({ text: ticketBrief(task, { workFolder: project?.workFolder ?? null, appUrl: (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '') }) })
 }

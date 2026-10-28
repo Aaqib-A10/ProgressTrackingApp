@@ -10,6 +10,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString, periodRange, type RangeKey } from '../lib/time'
 import { scoreEvaluation, type ScoredCategory } from '../lib/qa'
 import { contentDisposition } from '../lib/contentDisposition'
+import { companyFileName, ensureFolderFor } from '../lib/companyFiles'
 
 const UPLOAD_DIR = path.resolve('uploads')
 const RECORDING_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -220,7 +221,7 @@ export async function listAgents(req: AuthedRequest, res: Response): Promise<voi
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: deptType as 'ITAD' | 'CSR' } })
+  const dept = await prisma.department.findFirst({ where: { type: deptType as 'ITAD' | 'CSR' } })
   if (!dept) {
     res.json({ agents: [] })
     return
@@ -718,7 +719,7 @@ export async function qaTeamDashboard(req: AuthedRequest, res: Response): Promis
   } else if (!isQa(me.role)) {
     res.status(403).json({ error: 'Forbidden' }); return
   } else if (deptType && QA_DEPTS.includes(deptType as (typeof QA_DEPTS)[number])) {
-    const d = await prisma.department.findUnique({ where: { type: deptType as 'ITAD' | 'CSR' } })
+    const d = await prisma.department.findFirst({ where: { type: deptType as 'ITAD' | 'CSR' } })
     departmentId = d?.id
   }
 
@@ -915,8 +916,8 @@ export async function uploadRecording(req: AuthedRequest, res: Response): Promis
   }
   const originalName = String(req.query.name || 'recording').slice(0, 200).replace(/[\r\n]/g, '').trim() || 'recording'
   const ext = path.extname(originalName).replace('.', '').toLowerCase()
-  await fs.mkdir(UPLOAD_DIR, { recursive: true })
-  const storedName = `${randomUUID()}${ext ? `.${ext}` : ''}`
+  const storedName = companyFileName(ext)
+  await ensureFolderFor(UPLOAD_DIR, storedName)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
   const row = await prisma.entryAttachment.create({
     data: { userId: me.id, kind: 'QA_RECORDING', date: dbDateFromString(companyToday()), storedName, originalName, mimeType: mime, size: buf.length },

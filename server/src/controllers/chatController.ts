@@ -20,6 +20,7 @@ import { generateNotes, notesProvider, transcriptText, type MeetingNotes } from 
 import { groqEnabled } from '../lib/pm/groq'
 import * as Stt from '../lib/pm/stt'
 import { meetingFor } from '../lib/pm/meetings'
+import { companyFileName, ensureFolderFor } from '../lib/companyFiles'
 
 /** Presence with "busy" while the person is in a call. */
 function presenceOf(userId: string): 'online' | 'away' | 'offline' | 'busy' {
@@ -390,7 +391,7 @@ const sendSchema = z.object({
 async function resolveTaskRef(body: string): Promise<string | null> {
   const m = body.match(TASK_CODE_RE)
   if (!m) return null
-  const t = await prisma.pmTask.findUnique({ where: { code: `${m[1]}-${m[2]}` }, select: { id: true, deletedAt: true } })
+  const t = await prisma.pmTask.findFirst({ where: { code: `${m[1]}-${m[2]}` }, select: { id: true, deletedAt: true } })
   return t && !t.deletedAt ? t.id : null
 }
 
@@ -461,8 +462,8 @@ export async function sendFile(req: AuthedRequest, res: Response): Promise<void>
   const ext = path.extname(originalName).replace('.', '').toLowerCase()
   if (BLOCKED_EXT.has(ext)) throw new HttpError(415, 'That file type is not allowed')
   const caption = String(req.query.caption || '').slice(0, MAX_BODY).trim()
-  await fs.mkdir(UPLOAD_DIR, { recursive: true })
-  const storedName = `${randomUUID()}${ext ? `.${ext}` : ''}`
+  const storedName = companyFileName(ext)
+  await ensureFolderFor(UPLOAD_DIR, storedName)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
   const msg = await prisma.chatMessage.create({
     data: {
@@ -554,7 +555,8 @@ export async function finishUpload(req: AuthedRequest, res: Response): Promise<v
   rateLimitSend(me.id)
   const caption = parse(z.object({ caption: z.string().max(MAX_BODY).default('') }), req.body ?? {}).caption.trim()
   uploads.delete(u.id)
-  const storedName = `${randomUUID()}${u.ext ? `.${u.ext}` : ''}`
+  const storedName = companyFileName(u.ext)
+  await ensureFolderFor(UPLOAD_DIR, storedName)
   await fs.rename(u.tmp, path.join(UPLOAD_DIR, storedName))
   const msg = await prisma.chatMessage.create({
     data: {
@@ -1034,8 +1036,8 @@ export async function startRecording(req: AuthedRequest, res: Response): Promise
   if (!call.participants.has(me.id)) throw new HttpError(409, 'Join the call first')
   const { mime } = parse(z.object({ mime: z.string().max(120).default('video/webm') }), req.body ?? {})
   if (!/^video\/(webm|mp4)/.test(mime)) throw new HttpError(415, 'Recordings must be video')
-  await fs.mkdir(UPLOAD_DIR, { recursive: true })
-  const storedName = `rec-${randomUUID()}.${mime.startsWith('video/mp4') ? 'mp4' : 'webm'}`
+  const storedName = companyFileName(mime.startsWith('video/mp4') ? 'mp4' : 'webm', 'rec-')
+  await ensureFolderFor(UPLOAD_DIR, storedName)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), Buffer.alloc(0))
   const rec = await prisma.callRecording.create({ data: { callId: call.callId, userId: me.id, storedName, mime: mime.split(';')[0] } })
   res.status(201).json({ recording: { id: rec.id } })

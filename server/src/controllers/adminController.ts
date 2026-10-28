@@ -80,7 +80,7 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
     res.status(409).json({ error: 'Email already in use' })
     return
   }
-  const dept = v.department ? await prisma.department.findUnique({ where: { type: v.department } }) : null
+  const dept = v.department ? await prisma.department.findFirst({ where: { type: v.department } }) : null
   // Reject a department that has no row (e.g. a new dept whose row wasn't seeded) —
   // otherwise the user would be saved with no department at all, silently.
   if (v.department && !dept) {
@@ -142,7 +142,7 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
   // Disabling/suspending an account revokes its existing sessions immediately.
   if (v.isActive === false || (v.status !== undefined && v.status !== 'ACTIVE')) data.sessionsValidFrom = new Date()
   if (v.department !== undefined) {
-    const dept = v.department ? await prisma.department.findUnique({ where: { type: v.department } }) : null
+    const dept = v.department ? await prisma.department.findFirst({ where: { type: v.department } }) : null
     if (v.department && !dept) {
       res.status(400).json({ error: `Unknown department ${v.department}` })
       return
@@ -210,7 +210,7 @@ export async function setUserDepartments(req: AuthedRequest, res: Response): Pro
   const rows: { departmentId: string; subDepartmentId: string | null; role: Role }[] = []
   const seen = new Set<string>()
   for (const m of parsed.data.memberships) {
-    const dept = await prisma.department.findUnique({ where: { type: m.department } })
+    const dept = await prisma.department.findFirst({ where: { type: m.department } })
     if (!dept) {
       res.status(400).json({ error: `Unknown department ${m.department}` })
       return
@@ -573,7 +573,7 @@ export async function listTeamHistory(req: AuthedRequest, res: Response): Promis
 async function scopedDepartmentId(me: Awaited<ReturnType<typeof loadUser>>, requested?: DepartmentType | null): Promise<string | null | undefined> {
   if (me.role === 'SUPER_ADMIN') {
     if (!requested) return undefined // all
-    const d = await prisma.department.findUnique({ where: { type: requested } })
+    const d = await prisma.department.findFirst({ where: { type: requested } })
     return d?.id ?? null
   }
   return me.departmentId // TL scoped to own department
@@ -627,7 +627,7 @@ export async function upsertTarget(req: AuthedRequest, res: Response): Promise<v
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: parsed.data.department } })
+  const dept = await prisma.department.findFirst({ where: { type: parsed.data.department } })
   if (!dept) {
     res.status(400).json({ error: 'Unknown department' })
     return
@@ -710,7 +710,7 @@ export async function createTag(req: AuthedRequest, res: Response): Promise<void
     res.status(400).json({ error: 'Invalid input' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: parsed.data.department } })
+  const dept = await prisma.department.findFirst({ where: { type: parsed.data.department } })
   if (!dept) {
     res.status(400).json({ error: 'Unknown department' })
     return
@@ -774,7 +774,7 @@ export async function createHoliday(req: AuthedRequest, res: Response): Promise<
     return
   }
   const holiday = await prisma.holiday.upsert({
-    where: { date: dbDateFromString(parsed.data.date) },
+    where: { companyId_date: { companyId: req.user!.companyId, date: dbDateFromString(parsed.data.date) } },
     update: { name: parsed.data.name },
     create: { date: dbDateFromString(parsed.data.date), name: parsed.data.name },
   })

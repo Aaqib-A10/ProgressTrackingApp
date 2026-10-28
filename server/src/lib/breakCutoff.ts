@@ -6,6 +6,7 @@ import { COMPANY_TZ } from './time'
 import { clockAt } from './overtime'
 import { isOn } from './flags'
 import { HOME_COMPANY_ID } from './company'
+import { forEachCompany } from './company'
 
 /**
  * Break cut-off (E-commerce, Oct 2026: "break cut off time if he forgets"). A break still running
@@ -72,6 +73,6 @@ export async function runBreakCutoffTick(now: Date = new Date()): Promise<{ ende
 /** Every minute, so a break is ended right at its cut-off. */
 export function startBreakCutoff(): void {
   cron.schedule('* * * * *', () => {
-    runTracked('break-cutoff', runBreakCutoffTick).catch((e) => console.error('[break-cutoff] tick failed:', e)) // eslint-disable-line no-console
+    runTracked('break-cutoff', () => forEachCompany(() => runBreakCutoffTick())).catch((e) => console.error('[break-cutoff] tick failed:', e)) // eslint-disable-line no-console
   })
 }

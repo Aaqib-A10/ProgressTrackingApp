@@ -11,6 +11,7 @@ import { notifyMentions, notifyTaskAssigned } from '../lib/notify'
 import { sendTaskAssignedEmail } from '../lib/mail'
 import { resolveMarketingActor, type MarketingActor } from '../lib/marketingAuth'
 import { contentDisposition } from '../lib/contentDisposition'
+import { companyFileName, ensureFolderFor } from '../lib/companyFiles'
 
 const UPLOAD_DIR = path.resolve('uploads')
 const MAX_ATT_BYTES = 25 * 1024 * 1024
@@ -62,7 +63,7 @@ function scopeWhere(actor: MarketingActor): Prisma.MarketingTaskWhereInput {
 
 /** Active Marketing team members — for assignee pickers and @mentions. */
 async function marketingMembers() {
-  const dept = await prisma.department.findUnique({ where: { type: 'MARKETING' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'MARKETING' } })
   if (!dept) return { deptId: null as string | null, members: [] as { id: string; name: string }[] }
   const members = await prisma.user.findMany({
     where: { departmentId: dept.id, isActive: true },
@@ -430,8 +431,8 @@ export async function uploadTaskAttachment(req: AuthedRequest, res: Response): P
   const ext = path.extname(originalName).replace('.', '').toLowerCase()
   if (BLOCKED_EXT.has(ext)) { res.status(415).json({ error: 'That file type is not allowed' }); return }
 
-  await fs.mkdir(UPLOAD_DIR, { recursive: true })
-  const storedName = `${randomUUID()}${ext ? `.${ext}` : ''}`
+  const storedName = companyFileName(ext)
+  await ensureFolderFor(UPLOAD_DIR, storedName)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
 
   const row = await prisma.entryAttachment.create({

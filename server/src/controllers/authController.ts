@@ -126,7 +126,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: 'Unknown department' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: department as DepartmentType } })
+  const dept = await prisma.department.findFirst({ where: { type: department as DepartmentType } })
   if (!dept) {
     res.status(400).json({ error: 'Unknown department' })
     return

@@ -23,7 +23,7 @@ export async function itadAnalytics(req: AuthedRequest, res: Response): Promise<
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'ITAD' } })
   if (!dept) {
     res.status(500).json({ error: 'ITAD department missing' })
     return
@@ -105,7 +105,7 @@ export async function leadgenAnalytics(req: AuthedRequest, res: Response): Promi
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: 'LEAD_GEN' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
   if (!dept) {
     res.status(500).json({ error: 'Lead Gen department missing' })
     return

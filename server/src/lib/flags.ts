@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import { refreshWalls } from './tenancy'
 
 /**
  * On/off switches (Phase 1, step 1: safety net). Every new part that could disturb 99
@@ -39,6 +40,13 @@ export const FLAGS = {
     default: true,
     client: false,
     scope: 'company',
+  },
+  'company-walls': {
+    label: 'Company walls',
+    description: 'Each company sees only its own records. Off is an emergency brake for while 99 Technologies is the only company: every company would then see every other company\'s records. Never turn it off once other companies use Metriq.',
+    default: true,
+    client: false,
+    scope: 'platform',
   },
 } as const
 
@@ -109,6 +117,7 @@ export async function allFlags(): Promise<FlagView[]> {
 export async function setFlag(key: FlagKey, enabled: boolean, by: string): Promise<void> {
   await prisma.featureFlag.upsert({ where: { key }, update: { enabled, updatedBy: by }, create: { key, enabled, updatedBy: by } })
   cache = null
+  if (key === 'company-walls') await refreshWalls(prisma)
 }
 
 export type CompanyFlagView = { key: FlagKey; label: string; description: string; enabled: boolean; own: boolean | null; allCompanies: boolean; updatedAt: string | null; updatedBy: string | null }

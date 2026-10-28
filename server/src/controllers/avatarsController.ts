@@ -32,7 +32,7 @@ async function target(kind: Kind, idOrKey: string, me: { id: string; role: strin
     return { dbId: u.id, avatarAt: u.avatarAt, canEdit: u.id === me.id || me.role === 'SUPER_ADMIN', chatId: null as string | null }
   }
   if (kind === 'project') {
-    const p = await prisma.pmProject.findUnique({ where: { key: idOrKey.toUpperCase() }, select: { id: true, avatarAt: true } })
+    const p = await prisma.pmProject.findFirst({ where: { key: idOrKey.toUpperCase() }, select: { id: true, avatarAt: true } })
     if (!p) throw new HttpError(404, 'Project not found')
     const channel = await prisma.chatConversation.findUnique({ where: { projectId: p.id }, select: { id: true } })
     return { dbId: p.id, avatarAt: p.avatarAt, canEdit: await canChangeProjectPicture(p.id, me), chatId: channel?.id ?? null }

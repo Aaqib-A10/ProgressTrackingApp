@@ -43,7 +43,7 @@ export async function getMyEntry(req: AuthedRequest, res: Response): Promise<voi
     res.status(403).json({ error: 'Not an ITAD member' })
     return
   }
-  const dept = me.department ?? (await prisma.department.findUnique({ where: { type: 'ITAD' } }))
+  const dept = me.department ?? (await prisma.department.findFirst({ where: { type: 'ITAD' } }))
   const dateStr = (req.query.date as string) || (await userToday(me.id, me.departmentId))
 
   const entry = await prisma.itadDailyEntry.findUnique({
@@ -140,7 +140,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: 'ITAD' } })
+  const dept = await prisma.department.findFirst({ where: { type: 'ITAD' } })
   if (!dept) {
     res.status(500).json({ error: 'ITAD department missing' })
     return

@@ -149,7 +149,7 @@ export async function updateProject(req: AuthedRequest, res: Response): Promise<
   const body = parse(updateSchema, req.body)
   if (body.key && body.key !== ctx.project.key) {
     if (ctx.project.taskCounter > 0) throw new HttpError(422, 'The key cannot change after tasks have been created')
-    if (await prisma.pmProject.findUnique({ where: { key: body.key } })) throw new HttpError(409, `Key ${body.key} is already used`)
+    if (await prisma.pmProject.findFirst({ where: { key: body.key } })) throw new HttpError(409, `Key ${body.key} is already used`)
   }
   if (body.name && body.name !== ctx.project.name) {
     const clash = await prisma.pmProject.findFirst({ where: { name: { equals: body.name, mode: 'insensitive' }, id: { not: ctx.project.id } } })

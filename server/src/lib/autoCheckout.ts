@@ -6,6 +6,7 @@ import { shiftDayString, isOvernight, timesForWeekday, weekdayOfDate, type Shift
 import { shiftSpanMin, autoCheckoutAt, clockAt, OVERTIME_MAX_MIN } from './overtime'
 import { pickShift, type ReminderShift } from './attendanceReminders'
 import { runTracked } from './health/jobs'
+import { forEachCompany } from './company'
 
 /**
  * Automatic check-out.
@@ -111,7 +112,7 @@ export async function runAutoCheckoutTick(
 /** Start the auto-checkout sweep (every minute, so the check-out lands on time). Call once on server boot. */
 export function startAutoCheckout(): void {
   cron.schedule('* * * * *', () => {
-    runTracked('auto-checkout', runAutoCheckoutTick).catch((e) => {
+    runTracked('auto-checkout', () => forEachCompany(() => runAutoCheckoutTick())).catch((e) => {
       // eslint-disable-next-line no-console
       console.error('[auto-checkout] tick failed:', e)
     })

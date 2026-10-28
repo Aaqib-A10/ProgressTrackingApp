@@ -122,7 +122,7 @@ export async function createSalary(req: AuthedRequest, res: Response): Promise<v
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
     return
   }
-  const dept = await prisma.department.findUnique({ where: { type: parsed.data.department } })
+  const dept = await prisma.department.findFirst({ where: { type: parsed.data.department } })
   if (!dept) {
     res.status(400).json({ error: 'Unknown department' })
     return
@@ -159,7 +159,7 @@ export async function updateSalary(req: AuthedRequest, res: Response): Promise<v
   }
   let departmentId = existing.departmentId
   if (parsed.data.department) {
-    const dept = await prisma.department.findUnique({ where: { type: parsed.data.department } })
+    const dept = await prisma.department.findFirst({ where: { type: parsed.data.department } })
     if (!dept) {
       res.status(400).json({ error: 'Unknown department' })
       return

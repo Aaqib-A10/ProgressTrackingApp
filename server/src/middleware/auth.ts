@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 import type { Role } from '@prisma/client'
 import { verifyToken } from '../lib/auth'
 import { prisma } from '../lib/prisma'
-import { HOME_COMPANY_ID } from '../lib/company'
+import { runAsCompany } from '../lib/tenancy'
 
 export interface AuthUser {
   id: string
@@ -61,11 +61,13 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       res.status(401).json({ error: 'Session is no longer valid' })
       return
     }
-    req.user = { id: user.id, role: user.role, companyId: user.companyId ?? HOME_COMPANY_ID }
-    next()
+    req.user = { id: user.id, role: user.role, companyId: user.companyId }
   } catch {
     res.status(401).json({ error: 'Invalid or expired session' })
+    return
   }
+  // Company walls: everything this request reads or writes is limited to the person's company.
+  runAsCompany(req.user.companyId, next)
 }
 
 /** RBAC guard — allow only the given roles. Use after requireAuth. */

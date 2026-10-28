@@ -8,7 +8,7 @@ const prisma = new PrismaClient()
 
 async function main(): Promise<void> {
   const dept = await prisma.department.upsert({
-    where: { type: 'INVENTORY' },
+    where: { companyId_type: { companyId: 'company-1', type: 'INVENTORY' } },
     update: { name: 'Inventory' },
     create: { type: 'INVENTORY', name: 'Inventory' },
   })

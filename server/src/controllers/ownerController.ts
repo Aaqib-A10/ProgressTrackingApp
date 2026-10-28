@@ -301,6 +301,10 @@ export async function updateFlag(req: OwnerRequest, res: Response): Promise<void
   const key = req.params.key as FlagKey
   if (!FLAG_KEYS.includes(key)) { res.status(404).json({ error: 'No such switch' }); return }
   if (typeof req.body?.enabled !== 'boolean') { res.status(400).json({ error: 'enabled (true or false) is required' }); return }
+  if (key === 'company-walls' && req.body.enabled === false && (await prisma.company.count()) > 1) {
+    res.status(409).json({ error: 'Other companies use Metriq, so the company walls cannot be turned off.' })
+    return
+  }
   const before = await isOn(key)
   await setFlag(key, req.body.enabled, req.owner!.name)
   await audit(req, req.owner!.id, 'SWITCH', { target: FLAGS[key].label, detail: { key, before, after: req.body.enabled } })

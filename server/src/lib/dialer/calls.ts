@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import type { DialerIntegration, DialerLead, Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
 import { STATUSES, withDefaults } from './rules'
+import { maybeCompanyId } from '../tenancy'
 
 /** The Lead Dialer settings (same row the settings screen saves). */
 const loadSettings = async () => withDefaults((await prisma.dialerSettings.findUnique({ where: { id: 'default' } }))?.data)
@@ -188,8 +189,9 @@ export async function findLead(c: ReadCall, agentId: string | null): Promise<{ l
     const tail = d.slice(-7)
     const rows = await prisma.$queryRaw<{ id: string }[]>`
       SELECT id FROM "DialerLead"
-      WHERE right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 7) = ${tail}
-         OR right(regexp_replace(coalesce(phone2, ''), '\\D', '', 'g'), 7) = ${tail}
+      WHERE (right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 7) = ${tail}
+         OR right(regexp_replace(coalesce(phone2, ''), '\\D', '', 'g'), 7) = ${tail})
+        AND (${maybeCompanyId()}::text IS NULL OR "companyId" = ${maybeCompanyId()})
       LIMIT 200`
     const cands = rows.length ? await prisma.dialerLead.findMany({ where: { id: { in: rows.map((r) => r.id) } }, select: leadSel }) : []
     const same = cands.filter((l) => digitsOf(l.phone) === d || digitsOf(l.phone2) === d)
