@@ -13,6 +13,7 @@ import {
 import type { AuthedRequest } from '../middleware/auth'
 import { getClientIp } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
+import { powersOf } from '../lib/permissions'
 
 /** Record a sign-in for the Activity Log. Best-effort — never blocks auth. */
 async function logSignIn(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP'): Promise<void> {
@@ -46,9 +47,11 @@ async function publicUser(userId: string) {
       department: { select: { type: true, name: true } },
       subDepartment: { select: { slug: true, name: true } },
       memberships: {
-        include: { department: { select: { type: true } }, subDepartment: { select: { slug: true } } },
+        include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
         orderBy: { createdAt: 'asc' },
       },
+      company: { select: { id: true, name: true, kind: true, plan: true, status: true, timeZone: true } },
+      customRole: { select: { id: true, name: true, areasOff: true, powers: true } },
     },
   })
   return {
@@ -63,9 +66,16 @@ async function publicUser(userId: string) {
     memberships: user.memberships.map((m) => ({
       departmentId: m.departmentId,
       department: m.department.type,
+      departmentName: m.department.name,
       subDepartment: m.subDepartment?.slug ?? null,
       role: m.role,
     })),
+    // Phase 1: the company (or personal workspace), the company's own role, extra powers and
+    // the parts of Metriq switched off for the role.
+    company: user.company,
+    customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,
+    permissions: powersOf(user),
+    areasOff: user.customRole?.areasOff ?? [],
   }
 }
 

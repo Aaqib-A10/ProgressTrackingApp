@@ -44,7 +44,10 @@ import {
 import type { CurrentUser, Role } from '../../lib/types'
 import { canOpen } from '../../lib/access'
 import type { BadgeTone } from '../ui/Badge'
-import { FINANCE_EMAILS } from '../../lib/finance'
+import { canViewFinance } from '../../lib/finance'
+import { areaBlocked } from '../../lib/areas'
+import { flagOn } from '../../lib/flags'
+import { inHomeCompany } from '../../lib/types'
 
 export interface NavItem {
   label: string
@@ -54,8 +57,12 @@ export interface NavItem {
   projectAdminOnly?: boolean
   /** Hidden for these roles, even Super Admin (who otherwise sees everything). */
   hideFor?: Role[]
-  /** Restricted to these exact emails (identity gate) — overrides even Super Admin. */
-  requireEmail?: string[]
+  /** Only for people with the finance power — overrides even Super Admin. */
+  financeOnly?: boolean
+  /** Only for people with this power (e.g. Company settings), when the switch of the same name is on. */
+  power?: string
+  /** Hidden while this owner switch (company-wise) is off. */
+  flag?: string
   /** System Health: Super Admins and developers (User.isDeveloper) only. */
   healthOnly?: boolean
   badge?: { text: string; tone: BadgeTone }
@@ -231,27 +238,30 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Shield,
     color: '#EF4444',
     items: [
-      { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, requireEmail: FINANCE_EMAILS },
+      { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, financeOnly: true },
       { label: 'Activity Log', to: '/app/admin/activity', icon: History },
       { label: 'Users', to: '/app/admin/users', icon: UserCog, badge: { text: 'ADMIN', tone: 'danger' } },
       { label: 'Targets', to: '/app/admin/targets', icon: TargetIcon },
       { label: 'Tags', to: '/app/admin/tags', icon: Tags },
       { label: 'Holidays & Leave', to: '/app/admin/leave', icon: CalendarOff },
       { label: 'Office Networks', to: '/app/admin/networks', icon: Wifi },
+      { label: 'Company Settings', to: '/app/admin/company', icon: Building2, power: 'company.settings', flag: 'company-settings' },
       { label: 'System Health', to: '/app/admin/health', icon: Activity, healthOnly: true },
     ],
   },
 ]
 
-type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper'>
+type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company'>
 
 /** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
 function itemVisible(item: NavItem, u: NavUser): boolean {
-  if (item.healthOnly) return u.role === 'SUPER_ADMIN' || !!u.isDeveloper
-  // Identity gate wins over everything, including Super Admin: only the listed emails see it.
-  if (item.requireEmail) {
-    return !!u.email && item.requireEmail.map((e) => e.toLowerCase()).includes(u.email.toLowerCase())
-  }
+  // System Health is Metriq's own engineering view: 99 Technologies only.
+  if (item.healthOnly) return inHomeCompany(u) && (u.role === 'SUPER_ADMIN' || !!u.isDeveloper)
+  if (item.flag && !flagOn(item.flag)) return false
+  // The finance power wins over everything, including Super Admin.
+  if (item.financeOnly) return canViewFinance(u)
+  if (item.power) return !!u.permissions?.includes(item.power)
+  if (areaBlocked(u, item.to)) return false
   // Super Admin sees every screen (management oversight), regardless of per-item opt-outs.
   if (u.role === 'SUPER_ADMIN') return true
   if (item.hideFor?.includes(u.role)) return false

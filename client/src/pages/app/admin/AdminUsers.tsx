@@ -10,6 +10,7 @@ import { ListToolbar } from '../../../components/ListToolbar'
 import { useToast } from '../../../components/ui/Toast'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
 import { DEPARTMENTS } from '../../../lib/departments'
+import { useDeptOptions, type DeptOption } from '../../../lib/companyApi'
 import { listUsers, createUser, updateUser, setUserDepartments, deleteUser, resetUserPassword, type AdminUser, type MembershipInput } from '../../../lib/adminApi'
 
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
@@ -29,6 +30,8 @@ const deptLabel = (d: string) => DEPARTMENTS.find((x) => x.value === d)?.label ?
 
 export default function AdminUsers() {
   const { addToast } = useToast()
+  const depts = useDeptOptions()
+  const label = (m: { department: string; departmentId?: string; departmentName?: string | null }) => (depts.byId ? m.departmentName ?? depts.options.find((o) => o.value === m.departmentId)?.label ?? '—' : deptLabel(m.department))
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -84,7 +87,7 @@ export default function AdminUsers() {
     const q = query.trim().toLowerCase()
     return users.filter((u) => {
       if (roleF && u.role !== roleF) return false
-      if (deptF && (u.department ?? '') !== deptF) return false
+      if (deptF && (depts.byId ? u.activeDepartmentId ?? '' : u.department ?? '') !== deptF) return false
       if (statusF && (u.status ?? '') !== statusF) return false
       if (!q) return true
       return [u.name, u.email, u.department ?? '', u.subDepartment ?? ''].some((f) => f.toLowerCase().includes(q))
@@ -112,7 +115,7 @@ export default function AdminUsers() {
           <div className="flex flex-wrap gap-1">
             {ms.map((m) => (
               <Badge key={m.departmentId} tone={m.departmentId === u.activeDepartmentId ? 'primary' : 'neutral'}>
-                {deptLabel(m.department)}
+                {label(m)}
                 {m.subDepartment ? ` / ${m.subDepartment}` : ''}
               </Badge>
             ))}
@@ -193,7 +196,7 @@ export default function AdminUsers() {
                 <div className="min-w-0 flex-1">
                   <p className="text-body-md font-medium text-ink">{u.name}</p>
                   <p className="text-body-sm text-ink-muted">
-                    {u.email} · {u.department ? u.department.replace('_', ' ') : 'No department'}
+                    {u.email} · {u.department ? (depts.byId ? u.departmentName ?? u.department : u.department.replace('_', ' ')) : 'No department'}
                   </p>
                 </div>
                 <Button size="sm" variant="secondary" leadingIcon={<Check size={16} />} onClick={() => patch(u.id, { status: 'ACTIVE' })}>
@@ -220,7 +223,7 @@ export default function AdminUsers() {
                 placeholder="Search by name, email or department…"
                 filters={[
                   { key: 'role', allLabel: 'All roles', value: roleF, onChange: setRoleF, options: ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] })) },
-                  { key: 'dept', allLabel: 'All departments', value: deptF, onChange: setDeptF, options: DEPARTMENTS.map((d) => ({ value: d.value, label: d.label })) },
+                  { key: 'dept', allLabel: 'All departments', value: deptF, onChange: setDeptF, options: depts.options.map((d) => ({ value: d.value, label: d.label })) },
                   { key: 'status', allLabel: 'All statuses', value: statusF, onChange: setStatusF, options: (['ACTIVE', 'PENDING', 'REJECTED'] as UserStatus[]).map((s) => ({ value: s, label: STATUS_META[s].label })) },
                 ]}
               />
@@ -229,13 +232,15 @@ export default function AdminUsers() {
           </>
         )}
       </Card>
-      <InviteModal open={open} onClose={() => setOpen(false)} onCreated={(u) => setUsers((us) => [u, ...us])} />
-      <DepartmentsModal user={deptUser} onClose={() => setDeptUser(null)} onSaved={(u) => setUsers((us) => us.map((x) => (x.id === u.id ? u : x)))} />
+      <InviteModal depts={depts} open={open} onClose={() => setOpen(false)} onCreated={(u) => setUsers((us) => [u, ...us])} />
+      <DepartmentsModal depts={depts} user={deptUser} onClose={() => setDeptUser(null)} onSaved={(u) => setUsers((us) => us.map((x) => (x.id === u.id ? u : x)))} />
     </div>
   )
 }
 
-function DepartmentsModal({ user, onClose, onSaved }: { user: AdminUser | null; onClose: () => void; onSaved: (u: AdminUser) => void }) {
+function DepartmentsModal({ user, onClose, onSaved, depts }: { user: AdminUser | null; onClose: () => void; onSaved: (u: AdminUser) => void; depts: { options: DeptOption[]; byId: boolean } }) {
+  const OPTS = depts.options
+  const typeOf = (v: string) => OPTS.find((o) => o.value === v)?.type
   const { addToast } = useToast()
   const [rows, setRows] = useState<MembershipInput[]>([])
   const [saving, setSaving] = useState(false)
@@ -244,17 +249,17 @@ function DepartmentsModal({ user, onClose, onSaved }: { user: AdminUser | null; 
     if (user) {
       setRows(
         (user.memberships ?? []).map((m) => ({
-          department: m.department,
+          department: (depts.byId ? m.departmentId : m.department) as Department,
           role: m.role,
           subDepartmentSlug: m.subDepartment ?? null,
         })),
       )
     }
-  }, [user])
+  }, [user, depts.byId])
 
   const used = new Set(rows.map((r) => r.department))
   const addRow = () => {
-    const free = DEPARTMENTS.find((d) => !used.has(d.value as Department))
+    const free = OPTS.find((d) => !used.has(d.value as Department))
     if (!free) return
     setRows((rs) => [...rs, { department: free.value as Department, role: 'MEMBER', subDepartmentSlug: null }])
   }
@@ -270,7 +275,9 @@ function DepartmentsModal({ user, onClose, onSaved }: { user: AdminUser | null; 
     }
     setSaving(true)
     try {
-      const { user: updated } = await setUserDepartments(user.id, rows)
+      // A company's own departments go by id; 99 Technologies' by kind, as before.
+      const out = depts.byId ? rows.map(({ department, ...r }) => ({ ...r, departmentId: department as string })) : rows
+      const { user: updated } = await setUserDepartments(user.id, out)
       onSaved(updated)
       addToast({ type: 'success', message: 'Departments updated.' })
       onClose()
@@ -300,7 +307,7 @@ function DepartmentsModal({ user, onClose, onSaved }: { user: AdminUser | null; 
               <div className="min-w-[130px] flex-1">
                 <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
                 <select className={sel + ' h-9 w-full'} value={r.department} onChange={(e) => setRow(i, { department: e.target.value as Department, subDepartmentSlug: null })}>
-                  {DEPARTMENTS.filter((d) => d.value === r.department || !used.has(d.value as Department)).map((d) => (
+                  {OPTS.filter((d) => d.value === r.department || !used.has(d.value as Department)).map((d) => (
                     <option key={d.value} value={d.value}>{d.label}</option>
                   ))}
                 </select>
@@ -311,7 +318,7 @@ function DepartmentsModal({ user, onClose, onSaved }: { user: AdminUser | null; 
                   {ROLES.map((role) => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}
                 </select>
               </div>
-              {r.department === 'MARKETING' && (
+              {typeOf(r.department as string) === 'MARKETING' && (
                 <div className="min-w-[120px] flex-1">
                   <label className="mb-1 block text-body-sm font-semibold text-ink">Sub-dept</label>
                   <select className={sel + ' h-9 w-full'} value={r.subDepartmentSlug ?? ''} onChange={(e) => setRow(i, { subDepartmentSlug: e.target.value || null })}>
@@ -326,7 +333,7 @@ function DepartmentsModal({ user, onClose, onSaved }: { user: AdminUser | null; 
             </div>
           ))}
         </div>
-        {used.size < DEPARTMENTS.length && (
+        {used.size < OPTS.length && (
           <Button variant="secondary" size="sm" leadingIcon={<Plus size={15} />} onClick={addRow}>Add department</Button>
         )}
       </div>
@@ -350,7 +357,7 @@ function PasswordCell({ u }: { u: AdminUser }) {
   )
 }
 
-function InviteModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (u: AdminUser) => void }) {
+function InviteModal({ open, onClose, onCreated, depts }: { open: boolean; onClose: () => void; onCreated: (u: AdminUser) => void; depts: { options: DeptOption[]; byId: boolean } }) {
   const { addToast } = useToast()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -368,8 +375,8 @@ function InviteModal({ open, onClose, onCreated }: { open: boolean; onClose: () 
         name,
         email,
         role,
-        department: department || null,
-        subDepartmentSlug: department === 'MARKETING' ? subDept || null : null,
+        ...(depts.byId ? { departmentId: department || null } : { department: department || null }),
+        subDepartmentSlug: depts.options.find((o) => o.value === department)?.type === 'MARKETING' ? subDept || null : null,
       })
       onCreated({ ...res.user, tempPassword: res.tempPassword ?? res.user.tempPassword ?? null })
       addToast({ type: 'success', message: res.tempPassword ? `Created. Temp password: ${res.tempPassword}` : 'User created.', duration: 9000 })
@@ -400,11 +407,11 @@ function InviteModal({ open, onClose, onCreated }: { open: boolean; onClose: () 
             <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
             <select className={sel + ' h-10 w-full'} value={department} onChange={(e) => setDepartment(e.target.value as Department)}>
               <option value="">None</option>
-              {DEPARTMENTS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+              {depts.options.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
             </select>
           </div>
         </div>
-        {department === 'MARKETING' && (
+        {depts.options.find((o) => o.value === department)?.type === 'MARKETING' && (
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Sub-department</label>
             <select className={sel + ' h-10 w-full'} value={subDept} onChange={(e) => setSubDept(e.target.value)}>

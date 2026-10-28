@@ -9,7 +9,7 @@ import { invokeAs, invokedError } from './pm/invoke'
 import { ticketBrief, fmtWhen, type BriefTask } from './pm/brief'
 import * as T from '../controllers/pmTasksController'
 import * as P from '../controllers/projectsController'
-import { COMPANY_TZ } from './time'
+import { companyTz } from './time'
 import { canSeeHealth } from '../controllers/systemHealthController'
 import { auditReport, errorBrief, errorList } from './health/report'
 import { startAudit } from './health/audit'
@@ -142,7 +142,7 @@ function parseDue(v: unknown): { iso?: string | null; error?: string } {
   if (!s || /^(none|no|clear|null)$/i.test(s)) return { iso: null }
   const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/)
   if (!m) return { error: `"${s}" is not a date. Use YYYY-MM-DD, e.g. 2026-10-30 (optionally with a time, 2026-10-30 17:00).` }
-  const d = m[2] ? DateTime.fromISO(`${m[1]}T${m[2].padStart(2, '0')}:${m[3]}`, { zone: COMPANY_TZ }) : DateTime.fromISO(m[1], { zone: COMPANY_TZ }).set({ hour: 23, minute: 59 })
+  const d = m[2] ? DateTime.fromISO(`${m[1]}T${m[2].padStart(2, '0')}:${m[3]}`, { zone: companyTz() }) : DateTime.fromISO(m[1], { zone: companyTz() }).set({ hour: 23, minute: 59 })
   if (!d.isValid) return { error: `"${s}" is not a real date.` }
   return { iso: d.toUTC().toISO() }
 }

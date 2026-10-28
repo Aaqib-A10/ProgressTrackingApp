@@ -308,7 +308,8 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   )
 }
 
-const deptLabel = (d: string) => DEPARTMENTS.find((x) => x.value === d)?.label ?? d.replace('_', ' ')
+// A company's own departments show their own name (several can be General); 99 Technologies' the usual label.
+const deptLabel = (d: string, name?: string) => (d === 'GENERAL' && name ? name : DEPARTMENTS.find((x) => x.value === d)?.label ?? name ?? d.replace('_', ' '))
 
 /** Lets a user who belongs to several departments switch which one they're acting as. */
 function DepartmentSwitcher({ user }: { user: CurrentUser }) {
@@ -351,7 +352,7 @@ function DepartmentSwitcher({ user }: { user: CurrentUser }) {
         title="Switch department"
       >
         <Building2 size={16} className="text-primary" />
-        <span className="hidden max-w-[120px] truncate sm:inline">{deptLabel(active.department)}</span>
+        <span className="hidden max-w-[120px] truncate sm:inline">{deptLabel(active.department, active.departmentName)}</span>
         <ChevronDown size={14} className={'text-ink-muted transition-transform ' + (open ? 'rotate-180' : '')} />
       </button>
       {open && (
@@ -367,7 +368,7 @@ function DepartmentSwitcher({ user }: { user: CurrentUser }) {
                     className={'flex w-full items-center gap-2.5 rounded-btn px-3 py-2 text-left transition-colors ' + (isActive ? 'bg-slate-100' : 'hover:bg-slate-50')}
                   >
                     <span className="flex-1 min-w-0">
-                      <span className="block truncate text-body-md font-medium text-ink">{deptLabel(m.department)}</span>
+                      <span className="block truncate text-body-md font-medium text-ink">{deptLabel(m.department, m.departmentName)}</span>
                       <span className="block text-body-sm text-ink-muted">{ROLE_LABEL[m.role]}{m.subDepartment ? ` · ${m.subDepartment}` : ''}</span>
                     </span>
                     {isActive && <Check size={16} className="shrink-0 text-primary" />}

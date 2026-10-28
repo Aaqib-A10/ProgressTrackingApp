@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { COMPANY_TZ, type DateString } from './time'
+import { companyTz, type DateString } from './time'
 
 /**
  * The subset of a shift needed to decide which calendar date a moment belongs
@@ -84,7 +84,7 @@ export function belongsToPreviousShift(shift: ShiftWindow, nowMin: number): bool
  * Night shift 19:00–04:00, 18:30 local -> that day (early check-in for tonight).
  */
 export function shiftDayString(shift: ShiftWindow, now: Date = new Date()): DateString {
-  const zone = shift.timeZone || COMPANY_TZ
+  const zone = shift.timeZone || companyTz()
   const local = DateTime.fromJSDate(now).setZone(zone)
   const nowMin = local.hour * 60 + local.minute
   if (belongsToPreviousShift(shift, nowMin)) {

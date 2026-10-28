@@ -7,11 +7,10 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main(): Promise<void> {
-  const dept = await prisma.department.upsert({
-    where: { companyId_type: { companyId: 'company-1', type: 'INVENTORY' } },
-    update: { name: 'Inventory' },
-    create: { type: 'INVENTORY', name: 'Inventory' },
-  })
+  const found = await prisma.department.findFirst({ where: { companyId: 'company-1', type: 'INVENTORY' } })
+  const dept = found
+    ? await prisma.department.update({ where: { id: found.id }, data: { name: 'Inventory' } })
+    : await prisma.department.create({ data: { companyId: 'company-1', type: 'INVENTORY', name: 'Inventory' } })
   // eslint-disable-next-line no-console
   console.log('INVENTORY department ready:', dept.id)
 }

@@ -1,5 +1,6 @@
 import { matchPath } from 'react-router-dom'
 import type { CurrentUser, Department, Role } from './types'
+import { areaBlocked } from './areas'
 
 /**
  * Who may open which screen: ONE list used by both the side menu and the page guard, so a
@@ -115,7 +116,7 @@ export const ACCESS: Record<string, AccessLine[]> = {
   '/app/admin/activity': [{ roles: LEAD }],
 }
 
-type Who = Pick<CurrentUser, 'role' | 'department' | 'subDepartment'>
+type Who = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'areasOff'>
 
 function lineAllows(line: AccessLine, u: Who): boolean {
   if (line.roles && !line.roles.includes(u.role)) return false
@@ -138,6 +139,8 @@ export function accessRuleFor(pathname: string): AccessLine[] | undefined {
 /** May this person open this screen? */
 export function canOpen(u: Who | null | undefined, pathname: string): boolean {
   if (!u) return false
+  // A company role can have parts of Metriq switched off (Phase 1, step 4), Super Admin based ones too.
+  if (areaBlocked(u, pathname)) return false
   if (u.role === 'SUPER_ADMIN') return true
   const rule = accessRuleFor(pathname.replace(/\/+$/, '') || '/')
   if (!rule) return true

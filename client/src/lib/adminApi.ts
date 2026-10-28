@@ -10,6 +10,7 @@ export interface AdminUser {
   email: string
   role: Role
   department: Department | null
+  departmentName?: string | null
   subDepartment: string | null
   activeDepartmentId?: string | null
   memberships?: Membership[]
@@ -19,7 +20,9 @@ export interface AdminUser {
   tempPassword: string | null
 }
 export interface MembershipInput {
-  department: Department
+  department?: Department
+  /** A company's own department (Phase 1, step 4), instead of the kind. */
+  departmentId?: string
   role: Role
   subDepartmentSlug?: string | null
 }
@@ -28,6 +31,7 @@ export interface CreateUserInput {
   email: string
   role: Role
   department?: Department | null
+  departmentId?: string | null
   subDepartmentSlug?: string | null
   password?: string
 }

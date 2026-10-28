@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { contextTimeZone } from './tenancy'
 
 /**
  * Single source of truth for "what day is it" and period windows.
@@ -18,6 +19,14 @@ import { DateTime } from 'luxon'
 /** Company-local timezone (IANA). Override with APP_TIMEZONE env var. */
 export const COMPANY_TZ = process.env.APP_TIMEZONE || 'Asia/Karachi'
 
+/**
+ * The time zone of the company this request or job runs for (Company settings; Phase 1,
+ * step 4). 99 Technologies' is COMPANY_TZ. Outside a company (scripts, tests): COMPANY_TZ.
+ */
+export function companyTz(): string {
+  return contextTimeZone() ?? COMPANY_TZ
+}
+
 /** A pure calendar date in ISO form, 'YYYY-MM-DD'. */
 export type DateString = string
 
@@ -31,7 +40,7 @@ export interface DateRange {
 }
 
 /** Today's calendar date in the company timezone. */
-export function companyToday(now: Date = new Date(), zone: string = COMPANY_TZ): DateString {
+export function companyToday(now: Date = new Date(), zone: string = companyTz()): DateString {
   return DateTime.fromJSDate(now).setZone(zone).toISODate()!
 }
 
@@ -59,7 +68,7 @@ export function periodRange(
   range: RangeKey,
   opts: { now?: Date; zone?: string; start?: DateString; end?: DateString } = {},
 ): DateRange {
-  const zone = opts.zone ?? COMPANY_TZ
+  const zone = opts.zone ?? companyTz()
   const today = DateTime.fromJSDate(opts.now ?? new Date()).setZone(zone).startOf('day')
 
   switch (range) {

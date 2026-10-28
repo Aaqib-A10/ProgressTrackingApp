@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
-import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
+import { companyTz, dbDateFromString, dateStringFromDb } from './time'
 import { shiftDayString, timesForWeekday, type DayTimes } from './shiftDay'
 import { sendAttendanceReminderEmail } from './mail'
 import { runTracked } from './health/jobs'
@@ -49,7 +49,7 @@ function toMin(hhmm: string): number {
  * clock in the shift's timezone and is overnight-aware. Returns the kind or null.
  */
 export function reminderDue(shift: ReminderShift, now: Date, state: ReminderState): ReminderKind | null {
-  const zoned = DateTime.fromJSDate(now).setZone(shift.timeZone || COMPANY_TZ)
+  const zoned = DateTime.fromJSDate(now).setZone(shift.timeZone || companyTz())
   // Luxon weekday: 1=Mon … 7=Sun → 0=Sun … 6=Sat
   const weekday = zoned.weekday % 7
   if (!shift.workingDays.includes(weekday)) return null

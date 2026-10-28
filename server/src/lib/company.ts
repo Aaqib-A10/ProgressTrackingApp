@@ -33,11 +33,11 @@ export function companyUserWhere(companyId: string) {
  * company's failure does not stop the others; it is reported at the end.
  */
 export async function forEachCompany(fn: (companyId: string) => Promise<unknown>): Promise<void> {
-  const companies = await prisma.company.findMany({ where: { status: { not: 'SUSPENDED' } }, select: { id: true }, orderBy: { createdAt: 'asc' } })
+  const companies = await prisma.company.findMany({ where: { status: { not: 'SUSPENDED' } }, select: { id: true, timeZone: true }, orderBy: { createdAt: 'asc' } })
   const failed: string[] = []
   let first: unknown = null
   for (const c of companies) {
-    try { await runAsCompany(c.id, () => fn(c.id)) } catch (e) { failed.push(c.id); first ??= e }
+    try { await runAsCompany(c.id, () => fn(c.id), c.timeZone) } catch (e) { failed.push(c.id); first ??= e }
   }
   if (first) {
     const e = first instanceof Error ? first : new Error(String(first))

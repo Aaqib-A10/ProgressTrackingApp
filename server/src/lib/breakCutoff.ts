@@ -2,7 +2,7 @@ import cron from 'node-cron'
 import { prisma } from './prisma'
 import { notifyAttendance } from './notify'
 import { runTracked } from './health/jobs'
-import { COMPANY_TZ } from './time'
+import { companyTz } from './time'
 import { clockAt } from './overtime'
 import { isOn } from './flags'
 import { HOME_COMPANY_ID } from './company'
@@ -48,7 +48,7 @@ export async function runBreakCutoffTick(now: Date = new Date()): Promise<{ ende
     const r = await prisma.breakEntry.updateMany({ where: { id: b.id, endAt: null }, data: { endAt: at, autoEnded: true } })
     if (!r.count) continue
     ended++
-    const zone = c.timeZone || COMPANY_TZ
+    const zone = c.timeZone || companyTz()
     const kind = b.type === 'BRB' ? 'BRB' : 'break'
     const leads = tls.filter((t) => t.departmentId && t.departmentId === b.day.user.departmentId).map((t) => t.id)
     await notifyAttendance({

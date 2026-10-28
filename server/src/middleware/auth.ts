@@ -3,6 +3,7 @@ import type { Role } from '@prisma/client'
 import { verifyToken } from '../lib/auth'
 import { prisma } from '../lib/prisma'
 import { runAsCompany } from '../lib/tenancy'
+import { areaOf } from '../lib/permissions'
 
 export interface AuthUser {
   id: string
@@ -45,10 +46,11 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     res.status(401).json({ error: 'Invalid or expired session' })
     return
   }
+  let timeZone: string | undefined
   try {
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true, company: { select: { status: true } } },
+      select: { id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true, company: { select: { status: true, timeZone: true } }, customRole: { select: { areasOff: true } } },
     })
     // A suspended company (owner console) signs all its people out.
     if (!user || !user.isActive || user.status !== 'ACTIVE' || user.company?.status === 'SUSPENDED') {
@@ -61,13 +63,20 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       res.status(401).json({ error: 'Session is no longer valid' })
       return
     }
+    // A company role can have parts of Metriq switched off (Phase 1, step 4).
+    const area = user.customRole?.areasOff.length ? areaOf(req.originalUrl, 'api') : null
+    if (area && user.customRole!.areasOff.includes(area)) {
+      res.status(403).json({ error: 'This part of Metriq is switched off for your role.' })
+      return
+    }
     req.user = { id: user.id, role: user.role, companyId: user.companyId }
+    timeZone = user.company.timeZone
   } catch {
     res.status(401).json({ error: 'Invalid or expired session' })
     return
   }
   // Company walls: everything this request reads or writes is limited to the person's company.
-  runAsCompany(req.user.companyId, next)
+  void runAsCompany(req.user.companyId, next, timeZone)
 }
 
 /** RBAC guard — allow only the given roles. Use after requireAuth. */

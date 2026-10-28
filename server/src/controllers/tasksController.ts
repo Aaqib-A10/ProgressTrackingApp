@@ -2,7 +2,7 @@ import type { Response } from 'express'
 import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { COMPANY_TZ, companyToday, dateStringFromDb } from '../lib/time'
+import { companyTz, companyToday, dateStringFromDb } from '../lib/time'
 import { visibleProjectIds } from '../lib/pm/access'
 
 /**
@@ -38,7 +38,7 @@ const MKT_STATUS_LABEL: Record<string, string> = {
 export async function getMyTasks(req: AuthedRequest, res: Response): Promise<void> {
   const userId = req.user!.id
   const today = companyToday()
-  const now = DateTime.now().setZone(COMPANY_TZ)
+  const now = DateTime.now().setZone(companyTz())
   const startOfWeek = now.startOf('week') // Luxon weeks start Monday
   const startOfMonth = now.startOf('month')
   const monthStartJs = startOfMonth.toJSDate()
@@ -102,7 +102,7 @@ export async function getMyTasks(req: AuthedRequest, res: Response): Promise<voi
       code: t.code,
       projectName: t.project.name,
       status: t.column.name,
-      dueDate: t.dueAt ? DateTime.fromJSDate(t.dueAt).setZone(COMPANY_TZ).toISODate() : null,
+      dueDate: t.dueAt ? DateTime.fromJSDate(t.dueAt).setZone(companyTz()).toISODate() : null,
       overdue: !!t.dueAt && t.dueAt.getTime() < Date.now(),
       link: `/app/projects/${t.project.key}?task=${t.code}`,
     })),
@@ -120,7 +120,7 @@ export async function getMyTasks(req: AuthedRequest, res: Response): Promise<voi
   const completedDates = [...ecomDone, ...mktDone, ...pmDone]
     .map((t) => t.completedAt)
     .filter((d): d is Date => d != null)
-  const inWindow = (d: Date, start: DateTime) => DateTime.fromJSDate(d).setZone(COMPANY_TZ) >= start
+  const inWindow = (d: Date, start: DateTime) => DateTime.fromJSDate(d).setZone(companyTz()) >= start
   const completedToday = completedDates.filter((d) => inWindow(d, now.startOf('day'))).length
   const completedThisWeek = completedDates.filter((d) => inWindow(d, startOfWeek)).length
   const completedThisMonth = completedDates.length

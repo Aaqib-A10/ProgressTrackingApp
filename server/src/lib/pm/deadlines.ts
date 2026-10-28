@@ -2,7 +2,7 @@ import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
-import { COMPANY_TZ } from '../time'
+import { companyTz } from '../time'
 import { logActivity } from './tasks'
 import { fmtDue, fmtDuration, pmNotify, taskLink, trunc } from './pmNotify'
 import { runTracked } from '../health/jobs'
@@ -34,7 +34,7 @@ const QUIET_START = 22
 const QUIET_END = 8
 const BATCH = 500
 
-export function isQuietHours(now: Date, zone = COMPANY_TZ): boolean {
+export function isQuietHours(now: Date, zone = companyTz()): boolean {
   const h = DateTime.fromJSDate(now).setZone(zone).hour
   return h >= QUIET_START || h < QUIET_END
 }

@@ -8,9 +8,10 @@ import fs from 'node:fs'
 // role, department, Marketing discipline, finance access and developer is checked against it.
 // Loaded by path (the server build must not pull in client files).
 
-type U = { role: string; department: string | null; subDepartment: string | null; email: string; isDeveloper: boolean; permissions?: string[] }
+type U = { role: string; department: string | null; subDepartment: string | null; email: string; isDeveloper: boolean; permissions?: string[]; areasOff?: string[] }
 type Group = { title?: string; items: { to: string }[]; subgroups?: { title: string; items: { to: string }[] }[] }
 let filterNav: (u: U) => Group[]
+let setFlags: (f: Record<string, boolean>) => void
 
 const FINANCE = 'aqibalishehzad3@gmail.com'
 const ROLES = ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD', 'QA', 'QA_LEAD', 'SUPER_ADMIN']
@@ -29,17 +30,60 @@ const menu = (g: Group[]) => g.flatMap((x) => [...x.items.map((i) => i.to), ...(
 
 beforeAll(async () => {
   filterNav = (await import(path.resolve(__dirname, '../../../client/src/components/layout/navConfig.ts'))).filterNav
+  setFlags = (await import(path.resolve(__dirname, '../../../client/src/lib/flags.ts'))).setFlagsForTest
 })
+
+// The powers 99 Technologies' people have (server lib/permissions powersOf).
+const powers = (u: U) => [...(u.email === FINANCE ? ['finance'] : []), ...(u.role === 'SUPER_ADMIN' ? ['company.settings', 'holidays.manage'] : [])]
 
 describe("99 Technologies' menus", () => {
   it('are exactly what everyone had before step 4', () => {
     const file = path.resolve(__dirname, 'fixtures/menus-before-step4.json')
     const now: Record<string, string[]> = {}
-    // 99 Technologies' finance person has the finance permission (step 4 turns the email list into a permission).
-    for (const u of people()) now[key(u)] = menu(filterNav({ ...u, permissions: u.email === FINANCE ? ['finance'] : [] }))
+    // As 99 Technologies has its switches: the Company settings page starts off for them.
+    setFlags({ 'company-settings': false })
+    for (const u of people()) now[key(u)] = menu(filterNav({ ...u, permissions: powers(u) }))
     if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(now, null, 1))
     const before = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, string[]>
     expect(Object.keys(now).length).toBe(Object.keys(before).length)
     for (const k of Object.keys(before)) expect(now[k], k).toEqual(before[k])
+  })
+})
+
+describe('the Company settings page', () => {
+  it('shows for a Super Admin once the owner switches it on for the company, and for nobody else', () => {
+    setFlags({ 'company-settings': true })
+    const admin: U = { role: 'SUPER_ADMIN', department: null, subDepartment: null, email: 'a@x.example', isDeveloper: false }
+    expect(menu(filterNav({ ...admin, permissions: powers(admin) }))).toContain('/app/admin/company')
+    const lead: U = { role: 'TEAM_LEAD', department: 'ITAD', subDepartment: null, email: 'b@x.example', isDeveloper: false }
+    expect(menu(filterNav({ ...lead, permissions: [] }))).not.toContain('/app/admin/company')
+    expect(menu(filterNav({ ...lead, permissions: ['company.settings'] }))).toContain('/app/admin/company')
+    setFlags({ 'company-settings': false })
+    expect(menu(filterNav({ ...admin, permissions: powers(admin) }))).not.toContain('/app/admin/company')
+  })
+
+  it("a company role's switched-off parts disappear from the menu, even for a Super Admin based role", () => {
+    const m: U = { role: 'MEMBER', department: 'ITAD', subDepartment: null, email: 'c@x.example', isDeveloper: false }
+    const before = menu(filterNav({ ...m, permissions: [] }))
+    expect(before).toContain('/app/itad/dialer')
+    const after = menu(filterNav({ ...m, permissions: [], areasOff: ['dialer'] } as U))
+    expect(after).not.toContain('/app/itad/dialer')
+    expect(after).toContain('/app/itad/log')
+    const sa: U = { role: 'SUPER_ADMIN', department: null, subDepartment: null, email: 'd@x.example', isDeveloper: false }
+    expect(menu(filterNav({ ...sa, permissions: [], areasOff: ['marketing'] } as U)).some((p) => p.includes('/app/marketing'))).toBe(false)
+  })
+
+  it("another company's Super Admin does not see System Health", () => {
+    const sa = { role: 'SUPER_ADMIN', department: null, subDepartment: null, email: 'e@x.example', isDeveloper: true, permissions: [], company: { id: 'other-co' } }
+    expect(menu(filterNav(sa as unknown as U))).not.toContain('/app/admin/health')
+  })
+})
+
+describe('parts of Metriq a role can switch off', () => {
+  it('the app and the server have the same list', async () => {
+    const { AREAS } = await import('../lib/permissions')
+    const { AREA_APP } = await import(path.resolve(__dirname, '../../../client/src/lib/areas.ts'))
+    expect(Object.keys(AREA_APP).sort()).toEqual(AREAS.map((a) => a.key).sort())
+    for (const a of AREAS) expect(AREA_APP[a.key], a.key).toEqual([...a.app])
   })
 })

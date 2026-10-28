@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
-import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
+import { companyTz, dbDateFromString, dateStringFromDb } from './time'
 import { shiftDayString, timesForWeekday, type DayTimes } from './shiftDay'
 import { notifyAttendance } from './notify'
 import { runTracked } from './health/jobs'
@@ -56,7 +56,7 @@ export const breakOverrunDue = (regularMin: number, allowance: number) => allowa
  * checked in or checked in after grace. Overnight-aware. Pure.
  */
 export function lateSigninDue(shift: ViolationShift, now: Date, checkInAt: Date | null): boolean {
-  const tz = shift.timeZone || COMPANY_TZ
+  const tz = shift.timeZone || companyTz()
   const zoned = DateTime.fromJSDate(now).setZone(tz)
   const weekday = zoned.weekday % 7 // Luxon 1=Mon..7=Sun → 0=Sun..6=Sat
   if (!shift.workingDays.includes(weekday)) return false
@@ -119,7 +119,7 @@ export async function runAttendanceViolationTick(now: Date = new Date()): Promis
   const shiftByUser = new Map(users.map((u) => [u.id, pickShift(shifts, u.id, u.departmentId)]))
   const dayStrByUser = new Map(users.map((u) => [u.id, shiftDayString(shiftByUser.get(u.id)!, now)]))
   const dateValues = [...new Set(dayStrByUser.values())].map(dbDateFromString)
-  const monthStartStr = DateTime.fromJSDate(now).setZone(COMPANY_TZ).startOf('month').toISODate()!
+  const monthStartStr = DateTime.fromJSDate(now).setZone(companyTz()).startOf('month').toISODate()!
   const monthStartValue = dbDateFromString(monthStartStr)
 
   const [days, leaves, holidays, todayViol, lateViol] = await Promise.all([

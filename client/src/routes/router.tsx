@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import Login from '../pages/auth/Login'
 import NotFound from '../pages/NotFound'
-import { RequireAuth, RequireRole, RequireFinance, AppShellRoute, RequireHealth } from './guards'
+import { RequireAuth, RequireRole, RequireFinance, AppShellRoute, RequireHealth, RequirePower } from './guards'
 import { RouteError } from './RouteError'
 import { pageModule } from '../lib/staleChunks'
 
@@ -80,6 +80,7 @@ const AdminTargets = lazy(pageModule(() => import('../pages/app/admin/AdminTarge
 const AdminTags = lazy(pageModule(() => import('../pages/app/admin/AdminTags')))
 const AdminLeave = lazy(pageModule(() => import('../pages/app/admin/AdminLeave')))
 const AdminNetworks = lazy(pageModule(() => import('../pages/app/admin/AdminNetworks')))
+const CompanySettings = lazy(pageModule(() => import('../pages/app/admin/CompanySettings')))
 const FinancialReports = lazy(pageModule(() => import('../pages/app/admin/FinancialReports')))
 const AdminActivity = lazy(pageModule(() => import('../pages/app/admin/AdminActivity')))
 const SystemHealth = lazy(pageModule(() => import('../pages/app/admin/SystemHealth')))
@@ -225,6 +226,7 @@ export const router = createBrowserRouter([
       { path: 'admin/tags', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminTags /></RequireRole> },
       { path: 'admin/leave', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminLeave /></RequireRole> },
       { path: 'admin/networks', element: <RequireRole roles={['SUPER_ADMIN']}><AdminNetworks /></RequireRole> },
+      { path: 'admin/company', element: <RequirePower power="company.settings"><CompanySettings /></RequirePower> },
       { path: 'admin/financials', element: <RequireFinance><FinancialReports /></RequireFinance> },
       { path: 'admin/activity', element: <RequireRole roles={['SUPER_ADMIN', 'TEAM_LEAD']}><AdminActivity /></RequireRole> },
       { path: 'admin/health', element: <RequireHealth><SystemHealth /></RequireHealth> },

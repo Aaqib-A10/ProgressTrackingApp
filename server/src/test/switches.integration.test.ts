@@ -24,6 +24,7 @@ async function owner() {
 beforeAll(async () => {
   w = await seedWorld()
   await prisma.featureFlag.deleteMany()
+  await prisma.featureFlagCompany.deleteMany()
   await prisma.ownerAuditLog.deleteMany()
   await prisma.platformOwner.deleteMany()
   await prisma.platformOwner.create({ data: { name: 'Anees', email: EMAIL, passwordHash: await hashPassword(PASSWORD) } })
@@ -41,10 +42,10 @@ describe('switches', () => {
   it('everything is on by default, and the app can read its switches', async () => {
     const a = await owner()
     const list = (await a.get('/api/owner/flags').expect(200)).body.flags
-    expect(list.map((f: { key: string }) => f.key)).toEqual(['silent-updates', 'help-button', 'break-cutoff', 'dialer-sync', 'company-walls'])
+    expect(list.map((f: { key: string }) => f.key)).toEqual(['silent-updates', 'help-button', 'break-cutoff', 'dialer-sync', 'company-settings', 'company-walls'])
     expect(list.every((f: { enabled: boolean; isDefault: boolean }) => f.enabled && f.isDefault)).toBe(true)
     const app1 = (await request(app).get('/api/flags').set(...auth(w.itadMember)).expect(200)).body.flags
-    expect(app1).toEqual({ 'silent-updates': true, 'help-button': true })
+    expect(app1).toEqual({ 'silent-updates': true, 'help-button': true, 'company-settings': true })
     await request(app).get('/api/flags').expect(401)
   })
 

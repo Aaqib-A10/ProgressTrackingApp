@@ -18,7 +18,7 @@ const LEAVE_TONE = { ON_LEAVE: 'primary', HOLIDAY: 'accent', OFF: 'neutral', WFH
 export default function AdminLeave() {
   const { addToast } = useToast()
   // Holidays are company wide, so only the Super Admin adds or removes them; team leads see the list.
-  const canEditHolidays = useAuth().user?.role === 'SUPER_ADMIN'
+  const canEditHolidays = !!useAuth().user?.permissions?.includes('holidays.manage')
   const [holidays, setHolidays] = useState<Holiday[]>([])
   const [leave, setLeave] = useState<LeaveRow[]>([])
   const [members, setMembers] = useState<{ id: string; name: string }[]>([])

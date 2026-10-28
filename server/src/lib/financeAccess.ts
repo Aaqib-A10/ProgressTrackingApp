@@ -1,22 +1,14 @@
 import type { Response, NextFunction } from 'express'
-import { prisma } from './prisma'
 import type { AuthedRequest } from '../middleware/auth'
+import { hasPower } from './permissions'
 
 /**
- * The financial system is restricted to specific people (Aqib), not merely to the
- * SUPER_ADMIN role — so even another Super Admin cannot see cost/revenue/salary data.
- * The allowlist is configurable via FINANCE_ALLOWED_EMAILS (comma-separated); it
- * defaults to Aqib's account.
+ * The financial system is for people with the finance power (Phase 1, step 4), not merely for
+ * the Super Admin role, so another Super Admin cannot see cost, revenue or salary data.
+ * 99 Technologies' finance people (FINANCE_ALLOWED_EMAILS, Aqib by default) have it as before.
  */
-export const FINANCE_EMAILS = (process.env.FINANCE_ALLOWED_EMAILS ?? 'aqibalishehzad3@gmail.com')
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean)
-
-/** Express guard: allow only allowlisted identities. Use after requireAuth. */
 export async function requireFinanceAccess(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
-  const u = req.user ? await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } }) : null
-  if (u && FINANCE_EMAILS.includes(u.email.toLowerCase())) {
+  if (req.user && (await hasPower(req.user.id, 'finance'))) {
     next()
     return
   }

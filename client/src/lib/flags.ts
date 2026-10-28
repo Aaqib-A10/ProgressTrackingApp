@@ -16,3 +16,6 @@ export async function refreshFlags(): Promise<Record<string, boolean>> {
 
 /** On unless the owner switched it off. */
 export const flagOn = (key: string): boolean => flags[key] !== false
+
+/** Tests only: set the switches as the server would send them. */
+export function setFlagsForTest(f: Record<string, boolean>): void { flags = f; loadedAt = Date.now() }

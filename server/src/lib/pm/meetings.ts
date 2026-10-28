@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from '../prisma'
-import { COMPANY_TZ } from '../time'
+import { companyTz } from '../time'
 import { pmNotify } from './pmNotify'
 import { runTracked } from '../health/jobs'
 import { forEachCompany } from '../company'
@@ -16,13 +16,13 @@ export const REMINDER_MIN = 10
 
 /** "Fri 10 Oct, 3:00 PM" (company time zone). */
 export function fmtWhen(d: Date): string {
-  return DateTime.fromJSDate(d).setZone(COMPANY_TZ).toFormat('ccc d LLL, h:mm a')
+  return DateTime.fromJSDate(d).setZone(companyTz()).toFormat('ccc d LLL, h:mm a')
 }
 
 /** "3:00 PM to 3:30 PM" or across days. */
 export function fmtRange(a: Date, b: Date): string {
-  const x = DateTime.fromJSDate(a).setZone(COMPANY_TZ)
-  const y = DateTime.fromJSDate(b).setZone(COMPANY_TZ)
+  const x = DateTime.fromJSDate(a).setZone(companyTz())
+  const y = DateTime.fromJSDate(b).setZone(companyTz())
   return x.hasSame(y, 'day') ? `${x.toFormat('ccc d LLL, h:mm a')} to ${y.toFormat('h:mm a')}` : `${x.toFormat('ccc d LLL, h:mm a')} to ${y.toFormat('ccc d LLL, h:mm a')}`
 }
 
@@ -44,7 +44,7 @@ export async function meetingFor(conversationId: string, now = new Date()): Prom
 export function occurrences(start: Date, repeat: 'none' | 'daily' | 'weekdays' | 'weekly', count: number): Date[] {
   const n = repeat === 'none' ? 1 : Math.min(Math.max(count, 1), 52)
   const out: Date[] = []
-  let d = DateTime.fromJSDate(start).setZone(COMPANY_TZ)
+  let d = DateTime.fromJSDate(start).setZone(companyTz())
   while (out.length < n) {
     if (repeat !== 'weekdays' || d.weekday <= 5) out.push(d.toJSDate())
     d = repeat === 'weekly' ? d.plus({ weeks: 1 }) : d.plus({ days: 1 })

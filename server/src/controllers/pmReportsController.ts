@@ -5,7 +5,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
 import { viewer } from '../lib/pm/http'
 import { memberTaskMetrics, taskMetrics } from '../lib/pm/metrics'
-import { COMPANY_TZ } from '../lib/time'
+import { companyTz } from '../lib/time'
 import { sendCsv } from '../lib/csv'
 
 /**
@@ -25,11 +25,11 @@ async function scopeProjects(me: { id: string; role: string }, only?: string): P
 }
 
 function range(req: AuthedRequest): { from: Date; to: Date; fromStr: string; toStr: string } {
-  const today = DateTime.now().setZone(COMPANY_TZ)
+  const today = DateTime.now().setZone(companyTz())
   const fromStr = typeof req.query.from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from) ? req.query.from : today.minus({ days: 29 }).toISODate()!
   const toStr = typeof req.query.to === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to) ? req.query.to : today.toISODate()!
-  const from = DateTime.fromISO(fromStr, { zone: COMPANY_TZ }).startOf('day').toJSDate()
-  const to = DateTime.fromISO(toStr, { zone: COMPANY_TZ }).endOf('day').toJSDate()
+  const from = DateTime.fromISO(fromStr, { zone: companyTz() }).startOf('day').toJSDate()
+  const to = DateTime.fromISO(toStr, { zone: companyTz() }).endOf('day').toJSDate()
   if (from > to) throw new HttpError(422, 'Start date is after end date')
   return { from, to, fromStr, toStr }
 }

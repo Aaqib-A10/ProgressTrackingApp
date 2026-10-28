@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { reminderDue, type ReminderShift, type ReminderState } from './attendanceReminders'
 
 // Fixed reference: 2026-07-08 is a Wednesday. Times below are UTC; the default
-// shift has no timezone so it evaluates in COMPANY_TZ (Asia/Karachi, +5) unless
+// shift has no timezone so it evaluates in companyTz() (Asia/Karachi, +5) unless
 // APP_TIMEZONE overrides. Tests set an explicit UTC timezone to stay deterministic.
 const utcShift = (over: Partial<ReminderShift> = {}): ReminderShift => ({
   startTime: '09:00',

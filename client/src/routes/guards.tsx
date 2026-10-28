@@ -4,6 +4,7 @@ import { Activity } from 'lucide-react'
 import type { Role } from '../lib/types'
 import { useAuth } from '../lib/auth'
 import { canViewFinance } from '../lib/finance'
+import { inHomeCompany } from '../lib/types'
 import { canOpen } from '../lib/access'
 import { AppShell } from '../components/layout/AppShell'
 
@@ -51,10 +52,18 @@ export function RequireFinance({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-/** System Health: Super Admins and developers. */
+/** Only for people with this power (Company settings, Holidays…; Phase 1, step 4). */
+export function RequirePower({ power, children }: { power: string; children: ReactNode }) {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.permissions?.includes(power)) return <Navigate to="/app/dashboard" replace />
+  return <>{children}</>
+}
+
+/** System Health: 99 Technologies' Super Admins and developers. */
 export function RequireHealth({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  if (user.role !== 'SUPER_ADMIN' && !user.isDeveloper) return <Navigate to="/app/dashboard" replace />
+  if (!inHomeCompany(user) || (user.role !== 'SUPER_ADMIN' && !user.isDeveloper)) return <Navigate to="/app/dashboard" replace />
   return <>{children}</>
 }

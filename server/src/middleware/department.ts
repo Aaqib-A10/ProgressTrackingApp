@@ -11,6 +11,7 @@ const LABEL: Record<DepartmentType, string> = {
   ECOMMERCE: 'Ecommerce',
   TALKLOOP: 'Talkloop',
   INVENTORY: 'Inventory',
+  GENERAL: 'General',
 }
 
 /**

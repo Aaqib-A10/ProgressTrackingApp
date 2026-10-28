@@ -1,4 +1,6 @@
 import 'dotenv/config'
+import { prisma } from './lib/prisma'
+import { HOME_COMPANY_ID } from './lib/company'
 import { createApp } from './app'
 import { startAttendanceReminders } from './lib/attendanceReminders'
 import { startAttendanceViolations } from './lib/attendanceViolations'
@@ -41,6 +43,8 @@ const app = createApp()
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[server] Metriq API listening on http://localhost:${PORT}`)
+  // 99 Technologies' time zone stays the one the server was set up with (APP_TIMEZONE).
+  if (process.env.APP_TIMEZONE) void prisma.company.updateMany({ where: { id: HOME_COMPANY_ID }, data: { timeZone: process.env.APP_TIMEZONE } }).catch(() => undefined)
   startAttendanceReminders()
   startAttendanceViolations()
   startBreakCutoff()

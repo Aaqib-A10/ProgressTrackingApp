@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
-import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
+import { companyTz, dbDateFromString, dateStringFromDb } from './time'
 import { shiftDayString, isOvernight, timesForWeekday, weekdayOfDate, type ShiftWindow, type DayTimes } from './shiftDay'
 import { shiftSpanMin, autoCheckoutAt, clockAt, OVERTIME_MAX_MIN } from './overtime'
 import { pickShift, type ReminderShift } from './attendanceReminders'
@@ -28,7 +28,7 @@ export const AUTO_CHECKOUT_OVERTIME_NOTE = `Auto-checked out after ${OVERTIME_MA
 /** The instant a shift ends for an attendance day whose stored date is `dateStr`
  *  (the date the shift STARTED — an overnight shift ends on the next calendar day). */
 export function shiftEndForDate(shift: ShiftWindow & { dayTimes?: DayTimes }, dateStr: string): Date {
-  const zone = shift.timeZone || COMPANY_TZ
+  const zone = shift.timeZone || companyTz()
   const t = timesForWeekday(shift, shift.dayTimes, weekdayOfDate(dateStr)) // per-day end
   const [h, m] = t.endTime.split(':').map(Number)
   let end = DateTime.fromISO(dateStr, { zone }).set({ hour: h, minute: m, second: 0, millisecond: 0 })
@@ -87,7 +87,7 @@ export async function runAutoCheckoutTick(
     const overtime = !!day.overtimeAt
     rows.push({ userId: day.userId, date: dateStr, checkOutAt: at.toISOString(), overtime })
     if (opts.dryRun) continue
-    const zone = shift.timeZone || COMPANY_TZ
+    const zone = shift.timeZone || companyTz()
     await prisma.$transaction([
       // A break still running ends at the same moment (one that "started" later is dropped).
       prisma.breakEntry.updateMany({ where: { dayId: day.id, endAt: null, startAt: { lt: at } }, data: { endAt: at } }),

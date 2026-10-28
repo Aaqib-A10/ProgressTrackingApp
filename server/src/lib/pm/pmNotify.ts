@@ -2,7 +2,7 @@ import type { NotificationType } from '@prisma/client'
 import { DateTime } from 'luxon'
 import { prisma } from '../prisma'
 import { sendMail } from '../mail'
-import { COMPANY_TZ } from '../time'
+import { companyTz } from '../time'
 
 /**
  * Notification fan out for the Projects module: one in-app Notification row per
@@ -38,7 +38,7 @@ export const trunc = (s: string, n = 80) => (s.length > n ? s.slice(0, n - 1) + 
 /** "7 Oct, 6:00 PM" in the company timezone. */
 export function fmtDue(d: Date | null | undefined): string {
   if (!d) return ''
-  return DateTime.fromJSDate(d).setZone(COMPANY_TZ).toFormat('d LLL, h:mm a')
+  return DateTime.fromJSDate(d).setZone(companyTz()).toFormat('d LLL, h:mm a')
 }
 
 /** "2 hours", "3 days" (rounded down, min 1 minute). */

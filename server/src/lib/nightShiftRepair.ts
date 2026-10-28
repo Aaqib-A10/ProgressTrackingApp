@@ -18,7 +18,7 @@
  */
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
-import { COMPANY_TZ, dbDateFromString, dateStringFromDb } from './time'
+import { companyTz, dbDateFromString, dateStringFromDb } from './time'
 import { isOvernight, overnightCutoffMinutes, shiftMinutes, type ShiftWindow } from './shiftDay'
 import { pickShift } from './attendanceReminders'
 
@@ -27,7 +27,7 @@ class DryRun extends Error {}
 
 /** The day an instant should be filed under, if it is one the old rule filed a day early; else null. */
 function misfiledTo(shift: ShiftWindow, at: Date, filed: string): string | null {
-  const local = DateTime.fromJSDate(at).setZone(shift.timeZone || COMPANY_TZ)
+  const local = DateTime.fromJSDate(at).setZone(shift.timeZone || companyTz())
   const min = local.hour * 60 + local.minute
   if (min < overnightCutoffMinutes(shift) || min >= shiftMinutes(shift.startTime)) return null
   const right = local.toISODate()!
@@ -59,7 +59,7 @@ export async function repairNightShiftDays(opts: { apply: boolean; since: string
             const r = await tx.attendanceDay.findUnique({ where: { id }, include: { breaks: true } })
             if (!r) continue
             const filed = dateStringFromDb(r.date)
-            const label = (d: Date) => DateTime.fromJSDate(d).setZone(shift.timeZone || COMPANY_TZ).toFormat('ccc d LLL, h:mm a')
+            const label = (d: Date) => DateTime.fromJSDate(d).setZone(shift.timeZone || companyTz()).toFormat('ccc d LLL, h:mm a')
 
             if (r.checkInAt) {
               const to = misfiledTo(shift, r.checkInAt, filed)

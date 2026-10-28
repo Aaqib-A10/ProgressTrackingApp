@@ -22,15 +22,38 @@ import { Prisma, type PrismaClient } from '@prisma/client'
  * for while 99 Technologies is the only company); new rows still get their company.
  */
 
-type Ctx = { companyId: string }
+type Ctx = { companyId: string; timeZone?: string }
 const als = new AsyncLocalStorage<Ctx | null>()
 
 /**
  * Run fn (and everything it awaits) as this company. fn's result is awaited inside, because a
  * Prisma query only runs when it is awaited and must run while the company is set.
  */
-export function runAsCompany<T>(companyId: string, fn: () => T | PromiseLike<T>): Promise<T> {
-  return als.run({ companyId }, async () => await fn())
+export function runAsCompany<T>(companyId: string, fn: () => T | PromiseLike<T>, timeZone?: string): Promise<T> {
+  const ctx: Ctx = { companyId, timeZone }
+  return als.run(ctx, async () => {
+    if (!ctx.timeZone) ctx.timeZone = await timeZoneOf(companyId)
+    return await fn()
+  })
+}
+
+// Each company's time zone, kept for a minute (the loader is set by lib/prisma).
+const zones = new Map<string, { tz: string | undefined; at: number }>()
+let zoneLoader: ((companyId: string) => Promise<string | undefined>) | null = null
+export function setTimeZoneLoader(fn: (companyId: string) => Promise<string | undefined>): void { zoneLoader = fn }
+async function timeZoneOf(companyId: string): Promise<string | undefined> {
+  const hit = zones.get(companyId)
+  if (hit && Date.now() - hit.at < 60_000) return hit.tz
+  const tz = zoneLoader ? await zoneLoader(companyId).catch(() => undefined) : undefined
+  zones.set(companyId, { tz, at: Date.now() })
+  return tz
+}
+/** After a company's time zone changes. */
+export function forgetTimeZone(companyId: string): void { zones.delete(companyId) }
+
+/** The time zone of the company the current request runs as (set when it started), if known. */
+export function contextTimeZone(): string | undefined {
+  return als.getStore()?.timeZone
 }
 
 /** Run fn with no company: nothing is limited (owner console, jobs that look at every company). */

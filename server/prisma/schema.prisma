@@ -46,6 +46,9 @@ enum DepartmentType {
   ECOMMERCE
   TALKLOOP
   INVENTORY
+  /// A department a company made itself (Phase 1, step 4): the shared tools (attendance,
+  /// projects, chat, daily report…) but none of the department-specific screens.
+  GENERAL
 }
 
 /// Status of a daily entry. A non-SUBMITTED day carries no metrics and is
@@ -123,7 +126,7 @@ model Department {
   salaryRecords   SalaryRecord[]
   inventoryItems  InventoryItem[]
 
-  @@unique([companyId, type])
+  @@index([companyId, type])
   @@index([companyId])
 }
 
@@ -150,23 +153,28 @@ model SubDepartment {
 // ---------- Users & auth ----------
 
 model User {
-  id                String     @id @default(cuid())
-  email             String     @unique
+  id                String       @id @default(cuid())
+  email             String       @unique
   /// Optional short sign in name (used by local test accounts); sign in takes email or username.
-  username          String?    @unique
+  username          String?      @unique
   /// The company (or personal workspace) this person belongs to.
-  companyId         String     @default("")
-  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String       @default("")
+  company           Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// A role the company made itself (Phase 1, step 4), on top of the built-in `role`.
+  customRoleId      String?
+  customRole        CompanyRole? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
+  /// Extra powers given to this one person (e.g. "finance").
+  permissions       String[]     @default([])
   passwordHash      String? // null for SSO-only accounts
-  googleId          String?    @unique
+  googleId          String?      @unique
   name              String
-  role              Role       @default(MEMBER)
-  status            UserStatus @default(ACTIVE)
-  isActive          Boolean    @default(true)
+  role              Role         @default(MEMBER)
+  status            UserStatus   @default(ACTIVE)
+  isActive          Boolean      @default(true)
   /// Sees System Health (error log, hourly checks) and gets its alerts. Super Admins see it too.
-  isDeveloper       Boolean    @default(false)
+  isDeveloper       Boolean      @default(false)
   // Permanently remote: exempt from the office-network IP check-in restriction.
-  attendanceRemote  Boolean    @default(false)
+  attendanceRemote  Boolean      @default(false)
   // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
   // password change, and admin password reset to revoke existing tokens.
   sessionsValidFrom DateTime?
@@ -3505,6 +3513,7 @@ model Company {
   workLogReviewRows        WorkLogReview[]
   claudeKeyRows            ClaudeKey[]
   supportMessageRows       SupportMessage[]
+  companyRoles             CompanyRole[]
 }
 
 model PlatformOwner {
@@ -3622,5 +3631,26 @@ model FeatureFlagCompany {
   updatedBy String?
 
   @@id([key, companyId])
+  @@index([companyId])
+}
+
+/// A role a company made itself (Phase 1, step 4): a name, the built-in role it starts from
+/// (what it can do everywhere), parts of Metriq switched off for it, and extra powers.
+model CompanyRole {
+  id        String   @id @default(cuid())
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  baseRole  Role
+  /// Parts of Metriq (lib/permissions AREAS) people with this role do not see.
+  areasOff  String[] @default([])
+  /// Extra powers (lib/permissions POWERS), e.g. "finance", "company.settings".
+  powers    String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@unique([companyId, name])
   @@index([companyId])
 }

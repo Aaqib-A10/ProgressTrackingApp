@@ -4,7 +4,7 @@ import { DateTime } from 'luxon'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
-import { COMPANY_TZ, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
+import { companyTz, companyToday, dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { isOvernight, shiftMinutes, shiftDayString, belongsToPreviousShift, timesForWeekday, type DayTimes } from '../lib/shiftDay'
 import { getClientIp, ipAllowed, isLoopback, networkOf } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
@@ -86,12 +86,12 @@ export async function resolveShift(userId: string, departmentId: string | null):
 }
 
 function hhmm(d: Date, shift?: Shift): string {
-  return DateTime.fromJSDate(d).setZone(shift?.timeZone || COMPANY_TZ).toFormat('HH:mm')
+  return DateTime.fromJSDate(d).setZone(shift?.timeZone || companyTz()).toFormat('HH:mm')
 }
 
 /** 12-hour label in the shift's timezone (company tz fallback), e.g. "9:03 AM". */
 function clockLabel(d: Date, shift?: Shift): string {
-  return DateTime.fromJSDate(d).setZone(shift?.timeZone || COMPANY_TZ).toFormat('h:mm a')
+  return DateTime.fromJSDate(d).setZone(shift?.timeZone || companyTz()).toFormat('h:mm a')
 }
 
 /** Shift end on a continuous axis where an overnight end rolls into the next day (+1440). */
@@ -102,7 +102,7 @@ function shiftEndMinutes(shift: Shift): number {
 
 /** Raw minutes-after-midnight of an instant in the shift's timezone (company tz fallback). */
 function localMinutes(d: Date, shift?: Shift): number {
-  const l = DateTime.fromJSDate(d).setZone(shift?.timeZone || COMPANY_TZ)
+  const l = DateTime.fromJSDate(d).setZone(shift?.timeZone || companyTz())
   return l.hour * 60 + l.minute
 }
 
@@ -724,7 +724,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   // "Today" is the shift's own day: for a night shift at 02:00 that is still the
   // date the shift started, so the open shift shows instead of an empty page.
   const todayStr = shiftDayString(shift, now)
-  const calendar = periodRange(rangeKey, { now, zone: shift.timeZone || COMPANY_TZ, start: req.query.start as string, end: req.query.end as string })
+  const calendar = periodRange(rangeKey, { now, zone: shift.timeZone || companyTz(), start: req.query.start as string, end: req.query.end as string })
   const range = rangeKey === 'today' ? { startDate: todayStr, endDate: todayStr } : calendar
   const startValue = dbDateFromString(range.startDate)
   const endValue = dbDateFromString(range.endDate)
@@ -927,7 +927,7 @@ export async function exportTeamAttendanceCsv(req: AuthedRequest, res: Response)
   // Resolve the period per member in their own shift timezone, then query the
   // widest union window and filter each record back into its member's window.
   const shiftByUser = new Map(members.map((m) => [m.id, pickShiftFor(shifts, m.id, m.departmentId)]))
-  const rangeByUser = new Map(members.map((m) => [m.id, periodRange(rangeKey, { now, zone: shiftByUser.get(m.id)!.timeZone || COMPANY_TZ, start, end })]))
+  const rangeByUser = new Map(members.map((m) => [m.id, periodRange(rangeKey, { now, zone: shiftByUser.get(m.id)!.timeZone || companyTz(), start, end })]))
   const allStarts = [...rangeByUser.values()].map((r) => r.startDate).sort()
   const allEnds = [...rangeByUser.values()].map((r) => r.endDate).sort()
   const companyRange = periodRange(rangeKey, { now, start, end }) // for the filename label
@@ -1053,7 +1053,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   // midnight, where company "today" is already tomorrow. That mismatch is why the
   // live board can show someone working while the period columns read zero.
   const shiftByUser = new Map(members.map((m) => [m.id, pickShiftFor(shifts, m.id, m.departmentId)]))
-  const rangeByUser = new Map(members.map((m) => [m.id, periodRange(rangeKey, { now, zone: shiftByUser.get(m.id)!.timeZone || COMPANY_TZ, start, end })]))
+  const rangeByUser = new Map(members.map((m) => [m.id, periodRange(rangeKey, { now, zone: shiftByUser.get(m.id)!.timeZone || companyTz(), start, end })]))
   const starts = [...rangeByUser.values()].map((r) => r.startDate).sort()
   const ends = [...rangeByUser.values()].map((r) => r.endDate).sort()
   const startValue = dbDateFromString(starts[0])
@@ -1097,7 +1097,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
   }
 
   // Late sign-ins this calendar month (company tz) for the 3-per-month limit flag.
-  const monthStartStr = DateTime.fromJSDate(now).setZone(COMPANY_TZ).startOf('month').toISODate()!
+  const monthStartStr = DateTime.fromJSDate(now).setZone(companyTz()).startOf('month').toISODate()!
   const lateRows = await prisma.attendanceViolation.findMany({
     where: { userId: { in: memberIds }, kind: 'LATE_SIGNIN', date: { gte: dbDateFromString(monthStartStr) } },
     select: { userId: true },
@@ -1354,7 +1354,7 @@ const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull, o
  */
 function instantFrom(dateStr: string, hhmmStr: string, baseShift: Shift): Date {
   const shift = baseShift.dayTimes ? shiftForDate(baseShift, dateStr) : baseShift
-  const zone = shift.timeZone || COMPANY_TZ
+  const zone = shift.timeZone || companyTz()
   let dt = DateTime.fromISO(`${dateStr}T${hhmmStr}`, { zone })
   if (belongsToPreviousShift(shift, shiftMinutes(hhmmStr))) {
     dt = dt.plus({ days: 1 })

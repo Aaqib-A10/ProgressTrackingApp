@@ -18,6 +18,7 @@ export const DEPARTMENT_LABEL: Record<Department, string> = {
   ECOMMERCE: 'Ecommerce',
   TALKLOOP: 'Talkloop',
   INVENTORY: 'Inventory',
+  GENERAL: 'General',
 }
 
 /** Team a self-registering lead can request — departments + the QA team. */

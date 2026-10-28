@@ -9,9 +9,17 @@ import { sendInviteEmail } from '../lib/mail'
 import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { getClientIp, ipAllowed, isIpv6, isValidCidr, networkOf, suggestRange } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
+import { hasPower } from '../lib/permissions'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
+}
+
+/** A department by its id (a company's own) or by its kind (the built-in ones, as before). */
+async function resolveDepartment(v: { department?: DepartmentType | null; departmentId?: string | null }) {
+  if (v.departmentId) return prisma.department.findUnique({ where: { id: v.departmentId } })
+  if (v.department) return prisma.department.findFirst({ where: { type: v.department } })
+  return null
 }
 
 // =================== Users (Super Admin) ===================
@@ -24,10 +32,10 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
   }
   const users = await prisma.user.findMany({
     include: {
-      department: { select: { type: true } },
+      department: { select: { type: true, name: true } },
       subDepartment: { select: { slug: true, name: true } },
       memberships: {
-        include: { department: { select: { type: true } }, subDepartment: { select: { slug: true } } },
+        include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
         orderBy: { createdAt: 'asc' },
       },
     },
@@ -40,11 +48,13 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
       email: u.email,
       role: u.role,
       department: u.department?.type ?? null,
+      departmentName: u.department?.name ?? null,
       subDepartment: u.subDepartment?.slug ?? null,
       activeDepartmentId: u.departmentId ?? null,
       memberships: u.memberships.map((m) => ({
         departmentId: m.departmentId,
         department: m.department.type,
+        departmentName: m.department.name,
         subDepartment: m.subDepartment?.slug ?? null,
         role: m.role,
       })),
@@ -60,6 +70,8 @@ const createUserSchema = z.object({
   email: z.string().email().transform((v) => v.trim().toLowerCase()),
   role: z.nativeEnum(Role),
   department: z.nativeEnum(DepartmentType).nullable().optional(),
+  /** A company's own department, by id (step 4: a company can have several General ones). */
+  departmentId: z.string().max(40).nullable().optional(),
   subDepartmentSlug: z.string().nullable().optional(),
   password: z.string().min(8).optional(),
 })
@@ -80,15 +92,15 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
     res.status(409).json({ error: 'Email already in use' })
     return
   }
-  const dept = v.department ? await prisma.department.findFirst({ where: { type: v.department } }) : null
+  const dept = await resolveDepartment(v)
   // Reject a department that has no row (e.g. a new dept whose row wasn't seeded) —
   // otherwise the user would be saved with no department at all, silently.
-  if (v.department && !dept) {
-    res.status(400).json({ error: `Unknown department ${v.department}` })
+  if ((v.department || v.departmentId) && !dept) {
+    res.status(400).json({ error: `Unknown department ${v.department ?? v.departmentId}` })
     return
   }
   let subDepartmentId: string | undefined
-  if (dept && v.department === 'MARKETING' && v.subDepartmentSlug) {
+  if (dept && dept.type === 'MARKETING' && v.subDepartmentSlug) {
     const sub = await prisma.subDepartment.findUnique({ where: { departmentId_slug: { departmentId: dept.id, slug: v.subDepartmentSlug } } })
     subDepartmentId = sub?.id
   }
@@ -108,7 +120,7 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
   // Email the invitee a "set password & join" link (best-effort).
   await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword: v.password ? undefined : tempPassword })
   res.status(201).json({
-    user: { id: user.id, name: user.name, email: user.email, role: user.role, department: v.department ?? null, subDepartment: v.subDepartmentSlug ?? null, status: user.status, isActive: user.isActive },
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, department: dept?.type ?? null, subDepartment: v.subDepartmentSlug ?? null, status: user.status, isActive: user.isActive },
     tempPassword: v.password ? undefined : tempPassword,
   })
 }
@@ -116,6 +128,7 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
 const updateUserSchema = z.object({
   role: z.nativeEnum(Role).optional(),
   department: z.nativeEnum(DepartmentType).nullable().optional(),
+  departmentId: z.string().max(40).nullable().optional(),
   subDepartmentSlug: z.string().nullable().optional(),
   status: z.nativeEnum(UserStatus).optional(),
   isActive: z.boolean().optional(),
@@ -141,15 +154,15 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
   if (v.status !== undefined) data.status = v.status
   // Disabling/suspending an account revokes its existing sessions immediately.
   if (v.isActive === false || (v.status !== undefined && v.status !== 'ACTIVE')) data.sessionsValidFrom = new Date()
-  if (v.department !== undefined) {
-    const dept = v.department ? await prisma.department.findFirst({ where: { type: v.department } }) : null
-    if (v.department && !dept) {
-      res.status(400).json({ error: `Unknown department ${v.department}` })
+  if (v.department !== undefined || v.departmentId !== undefined) {
+    const dept = await resolveDepartment(v)
+    if ((v.department || v.departmentId) && !dept) {
+      res.status(400).json({ error: `Unknown department ${v.department ?? v.departmentId}` })
       return
     }
     data.departmentId = dept?.id ?? null
     data.subDepartmentId = null
-    if (dept && v.department === 'MARKETING' && v.subDepartmentSlug) {
+    if (dept && dept.type === 'MARKETING' && v.subDepartmentSlug) {
       const sub = await prisma.subDepartment.findUnique({ where: { departmentId_slug: { departmentId: dept.id, slug: v.subDepartmentSlug } } })
       data.subDepartmentId = sub?.id ?? null
     }
@@ -161,7 +174,7 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
   })
   // Keep the active membership in sync with a role/department/sub-dept change so
   // switching away and back doesn't revert it. Other memberships are untouched.
-  if ((v.role !== undefined || v.department !== undefined) && u.departmentId) {
+  if ((v.role !== undefined || v.department !== undefined || v.departmentId !== undefined) && u.departmentId) {
     await prisma.userDepartment.upsert({
       where: { userId_departmentId: { userId: u.id, departmentId: u.departmentId } },
       update: { role: u.role, subDepartmentId: u.subDepartmentId },
@@ -175,7 +188,8 @@ const membershipsSchema = z.object({
   memberships: z
     .array(
       z.object({
-        department: z.nativeEnum(DepartmentType),
+        department: z.nativeEnum(DepartmentType).optional(),
+        departmentId: z.string().max(40).optional(),
         role: z.nativeEnum(Role),
         subDepartmentSlug: z.string().nullable().optional(),
       }),
@@ -210,15 +224,15 @@ export async function setUserDepartments(req: AuthedRequest, res: Response): Pro
   const rows: { departmentId: string; subDepartmentId: string | null; role: Role }[] = []
   const seen = new Set<string>()
   for (const m of parsed.data.memberships) {
-    const dept = await prisma.department.findFirst({ where: { type: m.department } })
+    const dept = await resolveDepartment(m)
     if (!dept) {
-      res.status(400).json({ error: `Unknown department ${m.department}` })
+      res.status(400).json({ error: `Unknown department ${m.department ?? m.departmentId}` })
       return
     }
     if (seen.has(dept.id)) continue
     seen.add(dept.id)
     let subDepartmentId: string | null = null
-    if (m.department === 'MARKETING' && m.subDepartmentSlug) {
+    if (dept.type === 'MARKETING' && m.subDepartmentSlug) {
       const sub = await prisma.subDepartment.findUnique({ where: { departmentId_slug: { departmentId: dept.id, slug: m.subDepartmentSlug } } })
       subDepartmentId = sub?.id ?? null
     }
@@ -762,9 +776,9 @@ export async function listHolidays(_req: AuthedRequest, res: Response): Promise<
 }
 
 export async function createHoliday(req: AuthedRequest, res: Response): Promise<void> {
-  const me = await loadUser(req.user!.id)
-  // Holidays are company wide (every department's attendance and averages), so only the Super Admin sets them.
-  if (me.role !== 'SUPER_ADMIN') {
+  // Holidays are company wide (every department's attendance and averages): the Super Admin
+  // sets them, or someone given the Holidays power (Company settings, step 4).
+  if (!(await hasPower(req.user!.id, 'holidays.manage'))) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -782,8 +796,7 @@ export async function createHoliday(req: AuthedRequest, res: Response): Promise<
 }
 
 export async function deleteHoliday(req: AuthedRequest, res: Response): Promise<void> {
-  const me = await loadUser(req.user!.id)
-  if (me.role !== 'SUPER_ADMIN') {
+  if (!(await hasPower(req.user!.id, 'holidays.manage'))) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }

@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon'
 import type { Department, User } from '@prisma/client'
 import { prisma } from './prisma'
-import { COMPANY_TZ, dbDateFromString, dateStringFromDb, type DateRange, type RangeKey } from './time'
+import { companyTz, dbDateFromString, dateStringFromDb, type DateRange, type RangeKey } from './time'
 import { buildSeries, pctDelta, improvementLine } from './trends'
 
 /**
@@ -52,12 +52,12 @@ const dateIn = (r: DateRange) => ({ gte: dbDateFromString(r.startDate), lte: dbD
 /** Timestamps (completedAt, resolvedAt, createdAt) inside the range, by the company's clock. */
 export function timeIn(r: DateRange) {
   return {
-    gte: DateTime.fromISO(r.startDate, { zone: COMPANY_TZ }).startOf('day').toJSDate(),
-    lte: DateTime.fromISO(r.endDate, { zone: COMPANY_TZ }).endOf('day').toJSDate(),
+    gte: DateTime.fromISO(r.startDate, { zone: companyTz() }).startOf('day').toJSDate(),
+    lte: DateTime.fromISO(r.endDate, { zone: companyTz() }).endOf('day').toJSDate(),
   }
 }
 /** Company calendar day of a timestamp. */
-const dayOf = (d: Date) => DateTime.fromJSDate(d).setZone(COMPANY_TZ).toISODate()!
+const dayOf = (d: Date) => DateTime.fromJSDate(d).setZone(companyTz()).toISODate()!
 const submitted = <T extends { status: string }>(rows: T[]) => rows.filter((e) => e.status === 'SUBMITTED')
 const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + f(r), 0)
 const statusFor = (e: { status: string } | undefined): SubmissionStatus => (!e ? 'PENDING' : e.status === 'SUBMITTED' ? 'SUBMITTED' : 'ON_LEAVE')

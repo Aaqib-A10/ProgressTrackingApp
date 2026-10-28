@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { DateTime } from 'luxon'
 import { prisma } from './prisma'
-import { COMPANY_TZ } from './time'
+import { companyTz } from './time'
 import { notifyTaskDueSoon } from './notify'
 import { sendTaskDueSoonEmail } from './mail'
 import { runTracked } from './health/jobs'
@@ -31,7 +31,7 @@ export async function runTaskReminderTick(now: Date = new Date()): Promise<numbe
     // Claim so two ticks (or two instances) never double-send.
     const claim = await prisma.marketingTask.updateMany({ where: { id: t.id, dueReminderSentAt: null }, data: { dueReminderSentAt: new Date() } })
     if (claim.count !== 1 || !t.assignee) continue
-    const dueLabel = t.dueAt ? DateTime.fromJSDate(t.dueAt).setZone(COMPANY_TZ).toFormat('MMM d, h:mm a') : ''
+    const dueLabel = t.dueAt ? DateTime.fromJSDate(t.dueAt).setZone(companyTz()).toFormat('MMM d, h:mm a') : ''
     await notifyTaskDueSoon({ assigneeId: t.assignee.id, taskTitle: t.title, taskId: t.id }).catch(() => undefined)
     await sendTaskDueSoonEmail({ to: t.assignee.email, name: t.assignee.name, taskTitle: t.title, taskId: t.id, dueLabel }).catch(() => undefined)
     sent++

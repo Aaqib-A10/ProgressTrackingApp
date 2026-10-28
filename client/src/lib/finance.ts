@@ -1,12 +1,10 @@
 import type { CurrentUser } from './types'
 
 /**
- * The financial system is restricted to specific people (Aqib) by identity — not to the
- * SUPER_ADMIN role — so no other admin sees it. Mirrors the server allowlist in
- * server/src/lib/financeAccess.ts (keep the two in sync).
+ * The financial system is for people with the finance power (Phase 1, step 4), not for the
+ * Super Admin role, so no other admin at 99 Technologies sees it. The server decides who has it
+ * (server/src/lib/permissions.ts) and sends it with the signed-in person.
  */
-export const FINANCE_EMAILS = ['aqibalishehzad3@gmail.com']
-
-export function canViewFinance(user: CurrentUser | null | undefined): boolean {
-  return !!user && FINANCE_EMAILS.includes(user.email.toLowerCase())
+export function canViewFinance(user: Pick<CurrentUser, 'permissions'> | null | undefined): boolean {
+  return !!user?.permissions?.includes('finance')
 }
