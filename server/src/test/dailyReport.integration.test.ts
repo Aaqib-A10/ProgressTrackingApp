@@ -26,7 +26,7 @@ beforeAll(async () => {
   await prisma.featureFlagCompany.create({ data: { key: 'daily-report', companyId: HOME_COMPANY_ID, enabled: false } })
   resetFlagCache()
   await prisma.company.deleteMany({ where: { id: F } })
-  await prisma.company.create({ data: { id: F, name: 'Foxtrot Test Co', slug: F, timeZone: 'Asia/Karachi' } })
+  await prisma.company.create({ data: { id: F, name: 'Foxtrot Test Co', slug: F, timeZone: 'Asia/Karachi', plan: 'business' } })
   sales = (await prisma.department.create({ data: { companyId: F, type: 'GENERAL', name: 'Sales' } })).id
   const opsDept = (await prisma.department.create({ data: { companyId: F, type: 'GENERAL', name: 'Ops' } })).id
   const passwordHash = await hashPassword('Pass-for-tests-9')

@@ -80,6 +80,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     if (!res.headersSent) res.status(404).json({ error: 'Not found' })
     return
   }
+  // A plan limit (people, file space): 402 with the words for the person.
+  if (err instanceof Error && err.name === 'PlanLimit') {
+    if (!res.headersSent) res.status(402).json({ error: err.message })
+    return
+  }
   if (isWallRefusal(err)) {
     if (!res.headersSent) res.status(404).json({ error: 'Not found' })
     return

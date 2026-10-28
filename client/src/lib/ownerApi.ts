@@ -26,7 +26,8 @@ export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_COMPANY' | 'RESO
 export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
 
 export interface OwnerCompany {
-  id: string; name: string; slug: string; kind: 'TEAM' | 'PERSONAL'; timeZone: string; status: CompanyStatus; plan: string; helpEnabled: boolean
+  id: string; name: string; slug: string; kind: 'TEAM' | 'PERSONAL'; timeZone: string; status: CompanyStatus; plan: string; planLabel?: string; helpEnabled: boolean
+  supportAccessUntil?: string | null
   createdAt: string; home: boolean; people: number; peopleTotal: number; inToday: number; lastActiveAt: string | null; openTickets: number
 }
 export interface TicketRow {
@@ -50,6 +51,14 @@ export interface OwnerFlag {
 }
 /** A switch as one company has it: own = its own setting (null = follows the all-companies one). */
 export interface CompanyFlag { key: string; label: string; description: string; enabled: boolean; own: boolean | null; allCompanies: boolean; updatedAt: string | null; updatedBy: string | null }
+export interface CompanyUsage {
+  plan: string
+  people: { used: number; limit: number | null }
+  storage: { usedBytes: number; limitBytes: number | null }
+  aiHours: { used: number; limit: number | null }
+}
+export interface CompanyModule { key: string; label: string; on: boolean; byPlan: boolean; set: 'on' | 'off' | null }
+export interface PlanOption { key: string; label: string; people: number | null; storageGb: number | null; aiHours: number | null; sellable: boolean }
 export interface ActivityRow { id: string; at: string; action: string; by: string; company: string | null; target: string | null; detail: unknown; ip: string | null }
 
 export const ownerApi = {
@@ -59,8 +68,14 @@ export const ownerApi = {
   me: () => call<{ owner: { id: string; name: string; email: string } }>('GET', '/me'),
   home: () => call<OwnerHome>('GET', '/home'),
   companies: () => call<{ companies: OwnerCompany[] }>('GET', '/companies'),
-  company: (id: string) => call<{ company: OwnerCompany; tickets: TicketRow[]; activity: { at: string; action: string; by: string; detail: unknown }[] }>('GET', `/companies/${id}`),
-  updateCompany: (id: string, input: { name?: string; status?: CompanyStatus; helpEnabled?: boolean }) => call<{ company: OwnerCompany }>('PATCH', `/companies/${id}`, input),
+  company: (id: string) => call<{
+    company: OwnerCompany; usage: CompanyUsage; modules: CompanyModule[]; plans: PlanOption[]; people: { id: string; name: string; email: string; role: string }[]
+    tickets: TicketRow[]; activity: { at: string; action: string; by: string; detail: unknown }[]
+  }>('GET', `/companies/${id}`),
+  updateCompany: (id: string, input: { name?: string; status?: CompanyStatus; helpEnabled?: boolean; plan?: string; module?: { key: string; on: boolean | null } }) => call<{ company: OwnerCompany }>('PATCH', `/companies/${id}`, input),
+  exportUrl: (id: string) => `/api/owner/companies/${id}/export`,
+  removeCompany: (id: string, confirm: string) => call<void>('DELETE', `/companies/${id}`, { confirm }),
+  helpSignIn: (id: string, userId: string) => call<{ ok: true; until: string; go: string }>('POST', `/companies/${id}/help-sign-in`, { userId }),
   tickets: (status = 'open') => call<{ tickets: TicketRow[] }>('GET', `/support?status=${encodeURIComponent(status)}`),
   ticket: (id: string) => call<{ ticket: TicketDetail }>('GET', `/support/${id}`),
   reply: (id: string, body: string, status?: TicketStatus) => call<{ ticket: TicketDetail }>('POST', `/support/${id}/reply`, { body, status }),

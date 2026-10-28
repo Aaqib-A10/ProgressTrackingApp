@@ -463,7 +463,7 @@ export async function sendFile(req: AuthedRequest, res: Response): Promise<void>
   if (BLOCKED_EXT.has(ext)) throw new HttpError(415, 'That file type is not allowed')
   const caption = String(req.query.caption || '').slice(0, MAX_BODY).trim()
   const storedName = companyFileName(ext)
-  await ensureFolderFor(UPLOAD_DIR, storedName)
+  await ensureFolderFor(UPLOAD_DIR, storedName, buf.length)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
   const msg = await prisma.chatMessage.create({
     data: {
@@ -556,7 +556,7 @@ export async function finishUpload(req: AuthedRequest, res: Response): Promise<v
   const caption = parse(z.object({ caption: z.string().max(MAX_BODY).default('') }), req.body ?? {}).caption.trim()
   uploads.delete(u.id)
   const storedName = companyFileName(u.ext)
-  await ensureFolderFor(UPLOAD_DIR, storedName)
+  await ensureFolderFor(UPLOAD_DIR, storedName, u.size)
   await fs.rename(u.tmp, path.join(UPLOAD_DIR, storedName))
   const msg = await prisma.chatMessage.create({
     data: {

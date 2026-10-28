@@ -132,7 +132,7 @@ export async function uploadDocFile(req: AuthedRequest, res: Response): Promise<
     return
   }
   const storedName = companyFileName(ext)
-  await ensureFolderFor(UPLOAD_DIR, storedName)
+  await ensureFolderFor(UPLOAD_DIR, storedName, buf.length)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
   const doc = await prisma.savedDoc.update({
     where: { id: existing.id },

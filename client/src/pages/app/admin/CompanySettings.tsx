@@ -10,7 +10,7 @@ import { useAuth } from '../../../lib/auth'
 import { cn } from '../../../lib/cn'
 import { ROLE_LABEL, type Department, type Role } from '../../../lib/types'
 import {
-  companyApi, type CompanyInfo, type CompanyDepartment, type DepartmentKind, type RolesData, type CompanyRoleRow, type CompanyPerson,
+  companyApi, type CompanyInfo, type CompanyUsage, type CompanyDepartment, type DepartmentKind, type RolesData, type CompanyRoleRow, type CompanyPerson,
 } from '../../../lib/companyApi'
 
 /**
@@ -65,7 +65,7 @@ function zones(): string[] {
 function GeneralTab() {
   const { addToast } = useToast()
   const { refresh } = useAuth()
-  const [data, setData] = useState<{ company: CompanyInfo; canEdit: boolean; timeZoneLocked: boolean } | null>(null)
+  const [data, setData] = useState<{ company: CompanyInfo; canEdit: boolean; timeZoneLocked: boolean; usage: CompanyUsage | null } | null>(null)
   const [name, setName] = useState('')
   const [tz, setTz] = useState('')
   const [saving, setSaving] = useState(false)
@@ -84,7 +84,13 @@ function GeneralTab() {
     } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not save.') }) } finally { setSaving(false) }
   }
   const changed = name.trim() !== c.name || tz !== c.timeZone
+  async function allow(hours: 0 | 24 | 72 | 168) {
+    try { const r = await companyApi.supportAccess(hours); setData({ ...data!, company: { ...c, supportAccessUntil: r.supportAccessUntil } }); addToast({ type: 'success', message: hours ? 'Metriq support can sign in to help.' : 'Help sign-in stopped.' }) }
+    catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not change it.') }) }
+  }
+  const u = data.usage
   return (
+    <>
     <Card title="Company" subtitle={c.kind === 'PERSONAL' ? 'Your own workspace' : `On Metriq since ${new Date(c.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}>
       <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
         <label className="block">
@@ -104,6 +110,39 @@ function GeneralTab() {
         {data.canEdit && <div className="sm:col-span-2"><Button type="submit" disabled={saving || !changed || name.trim().length < 2}>{saving ? 'Saving…' : 'Save'}</Button></div>}
       </form>
     </Card>
+    {u && (
+      <Card title="Your plan" subtitle={c.home ? 'Internal: no limits.' : 'Change it in Billing.'}>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Use label="People" used={String(u.people.used)} limit={u.people.limit === null ? null : String(u.people.limit)} pct={u.people.limit ? u.people.used / u.people.limit : 0} />
+          <Use label="Files" used={gb(u.storage.usedBytes)} limit={u.storage.limitBytes === null ? null : gb(u.storage.limitBytes)} pct={u.storage.limitBytes ? u.storage.usedBytes / u.storage.limitBytes : 0} />
+          <Use label="AI meeting notes this month" used={`${u.aiHours.used} h`} limit={u.aiHours.limit === null ? null : `${u.aiHours.limit} h`} pct={u.aiHours.limit ? u.aiHours.used / u.aiHours.limit : 0} />
+        </div>
+      </Card>
+    )}
+    {data.canEdit && !c.home && (
+      <Card title="Help from Metriq support" subtitle="When you ask us for help, you can let us see Metriq as one of your people for a while. You see it in your activity log, and they see a banner the whole time. Finance stays closed to us.">
+        <div className="flex flex-wrap items-center gap-2">
+          {c.supportAccessUntil ? (
+            <>
+              <Badge tone="warning">Allowed until {new Date(c.supportAccessUntil).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Badge>
+              <Button size="sm" variant="secondary" onClick={() => allow(0)}>Stop now</Button>
+            </>
+          ) : ([[24, 'Allow for a day'], [72, 'For 3 days'], [168, 'For a week']] as const).map(([h, l]) => <Button key={h} size="sm" variant={h === 24 ? 'primary' : 'secondary'} onClick={() => allow(h)}>{l}</Button>)}
+        </div>
+      </Card>
+    )}
+    </>
+  )
+}
+
+const gb = (n: number) => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(0)} MB` : `${Math.round(n / 1024)} KB`)
+function Use({ label, used, limit, pct }: { label: string; used: string; limit: string | null; pct: number }) {
+  return (
+    <div>
+      <p className="text-body-sm text-ink-muted">{label}</p>
+      <p className="mt-0.5 text-body-lg font-semibold tabular-nums text-ink">{used}<span className="text-body-sm font-normal text-ink-muted">{limit === null ? '' : ` of ${limit}`}</span></p>
+      {limit !== null && <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={cn('h-full rounded-full', pct >= 1 ? 'bg-danger' : pct >= 0.8 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.min(100, pct * 100)}%` }} /></div>}
+    </div>
   )
 }
 

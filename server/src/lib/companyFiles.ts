@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { maybeCompanyId } from './tenancy'
 import { HOME_COMPANY_ID } from './company'
+import { checkStorageRoom } from './plans'
 
 /**
  * Files people upload are kept per company (Phase 1, step 3): another company's files go in a
@@ -16,7 +17,8 @@ export function companyFileName(ext?: string | null, prefix = ''): string {
   return companyId && companyId !== HOME_COMPANY_ID ? `${companyId}/${name}` : name
 }
 
-/** Make sure the folder for this stored name exists. */
-export async function ensureFolderFor(dir: string, storedName: string): Promise<void> {
+/** Make sure the plan has space for the file (Phase 1, step 6) and its folder exists. */
+export async function ensureFolderFor(dir: string, storedName: string, bytes = 0): Promise<void> {
+  if (bytes > 0) await checkStorageRoom(bytes)
   await fs.mkdir(path.dirname(path.join(dir, storedName)), { recursive: true })
 }

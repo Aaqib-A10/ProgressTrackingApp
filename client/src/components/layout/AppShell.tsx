@@ -1,3 +1,4 @@
+import { api } from '../../lib/api'
 import { createContext, useContext, useState, useEffect, useRef, Suspense, type ReactNode } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Activity } from 'lucide-react'
@@ -119,6 +120,7 @@ export function AppShell({ user, children }: AppShellProps) {
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col">
+            {user.supportSession && <SupportBanner name={user.name} />}
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
             <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:px-8 sm:py-7">
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
@@ -133,5 +135,19 @@ export function AppShell({ user, children }: AppShellProps) {
         <SilentUpdater />
       </CallProvider>
     </RangeContext.Provider>
+  )
+}
+
+/** Help sign-in (Phase 1, step 6): Metriq support is using Metriq as this person, with the company's consent. */
+function SupportBanner({ name }: { name: string }) {
+  async function end() {
+    try { await api.post('/auth/logout') } catch { /* signed out anyway */ }
+    window.location.assign('/owner/companies')
+  }
+  return (
+    <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-warning px-4 py-1.5 text-center text-body-sm font-medium text-ink">
+      <span>Metriq support is signed in as {name} to help, with your company's permission.</span>
+      <button type="button" onClick={end} className="rounded-btn bg-ink/10 px-2.5 py-0.5 font-semibold hover:bg-ink/20">End</button>
+    </div>
   )
 }

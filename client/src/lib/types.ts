@@ -44,8 +44,10 @@ export interface CurrentUser {
   customRole?: { id: string; name: string } | null
   /** Extra powers: 'finance', 'company.settings', 'holidays.manage'. */
   permissions?: string[]
-  /** Parts of Metriq switched off for their company role (lib/areas.ts). */
+  /** Parts of Metriq switched off for their company (plan) or company role (lib/areas.ts). */
   areasOff?: string[]
+  /** Help sign-in: Metriq support is using Metriq as this person (a banner shows). */
+  supportSession?: boolean
 }
 
 /** 99 Technologies, the company Metriq was built with. */

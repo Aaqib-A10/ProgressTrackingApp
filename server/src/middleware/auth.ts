@@ -4,12 +4,18 @@ import { verifyToken } from '../lib/auth'
 import { prisma } from '../lib/prisma'
 import { runAsCompany } from '../lib/tenancy'
 import { areaOf } from '../lib/permissions'
+import { companyAreasOff } from '../lib/plans'
+
+/** Closed to a help sign-in: money, passwords, keys and the people's powers. */
+const SUPPORT_CLOSED = /^\/api\/(financials|claude|company\/people|auth\/(change-password|password))/
 
 export interface AuthUser {
   id: string
   role: Role
-  /** The person's company (99 Technologies, company 1, until step 2 fills every account). */
+  /** The person's company (or personal workspace). */
   companyId: string
+  /** Help sign-in: the owner (Metriq support) signed in as this person. */
+  supportBy?: string
 }
 
 export interface AuthedRequest extends Request {
@@ -50,7 +56,11 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   try {
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true, company: { select: { status: true, timeZone: true } }, customRole: { select: { areasOff: true } } },
+      select: {
+        id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true,
+        company: { select: { id: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true } },
+        customRole: { select: { areasOff: true } },
+      },
     })
     // A suspended company (owner console) signs all its people out.
     if (!user || !user.isActive || user.status !== 'ACTIVE' || user.company?.status === 'SUSPENDED') {
@@ -63,13 +73,31 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       res.status(401).json({ error: 'Session is no longer valid' })
       return
     }
-    // A company role can have parts of Metriq switched off (Phase 1, step 4).
-    const area = user.customRole?.areasOff.length ? areaOf(req.originalUrl, 'api') : null
-    if (area && user.customRole!.areasOff.includes(area)) {
+    // Help sign-in only while the company still allows it, and never for money or passwords.
+    if (payload.support) {
+      if (!user.company.supportAccessUntil || user.company.supportAccessUntil < new Date()) {
+        res.status(401).json({ error: 'Help sign-in has ended' })
+        return
+      }
+      if (SUPPORT_CLOSED.test(req.originalUrl)) {
+        res.status(403).json({ error: 'Metriq support cannot open this part.' })
+        return
+      }
+    }
+    // Parts of Metriq can be switched off for the company (its plan, or the owner; Phase 1,
+    // step 6) or for a company role (step 4).
+    const companyOff = companyAreasOff(user.company)
+    const roleOff = user.customRole?.areasOff ?? []
+    const area = companyOff.length || roleOff.length ? areaOf(req.originalUrl, 'api') : null
+    if (area && companyOff.includes(area)) {
+      res.status(403).json({ error: 'This part of Metriq is not in your company\'s plan.' })
+      return
+    }
+    if (area && roleOff.includes(area)) {
       res.status(403).json({ error: 'This part of Metriq is switched off for your role.' })
       return
     }
-    req.user = { id: user.id, role: user.role, companyId: user.companyId }
+    req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}) }
     timeZone = user.company.timeZone
   } catch {
     res.status(401).json({ error: 'Invalid or expired session' })

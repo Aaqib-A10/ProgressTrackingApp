@@ -10,8 +10,8 @@
 //  2. refuses a row that points at a record of another company;
 //  3. refuses moving a row to another company.
 import { Prisma } from '@prisma/client'
+import { NOT_WALLED } from '../lib/tenancy'
 
-const NOT_WALLED = new Set(['FeatureFlagCompany', 'OwnerAuditLog', 'Company'])
 
 export type WalledTable = { table: string; parents: { column: string; table: string }[] }
 

@@ -9,6 +9,12 @@ import { companyUserWhere, HOME_COMPANY_ID } from '../lib/company'
 import { companyToday, dbDateFromString } from '../lib/time'
 import { OWNER_COOKIE, type OwnerRequest } from '../middleware/owner'
 import { FLAGS, FLAG_KEYS, allFlags, companyFlags, isOn, setCompanyFlag, setFlag, type FlagKey } from '../lib/flags'
+import { PLANS, PLAN_KEYS, companyAreasOff, planOf, usageOf } from '../lib/plans'
+import { AREAS, AREA_KEYS } from '../lib/permissions'
+import { signSupportToken } from '../lib/auth'
+import { walledTables } from '../scripts/companyWallsSql'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 /**
  * The owner console (erp, step 0): where Metriq is run as a business. One owner account (Anees),
@@ -139,10 +145,18 @@ export async function ownerHome(_req: OwnerRequest, res: Response): Promise<void
 
 // ------------------------------------------------------------------ companies
 
-const companyView = async (c: { id: string; name: string; slug: string; kind: string; timeZone: string; status: string; plan: string; helpEnabled: boolean; createdAt: Date }) => ({
-  id: c.id, name: c.name, slug: c.slug, kind: c.kind, timeZone: c.timeZone, status: c.status, plan: c.plan, helpEnabled: c.helpEnabled,
+const companyView = async (c: { id: string; name: string; slug: string; kind: string; timeZone: string; status: string; plan: string; helpEnabled: boolean; createdAt: Date; supportAccessUntil?: Date | null }) => ({
+  id: c.id, name: c.name, slug: c.slug, kind: c.kind, timeZone: c.timeZone, status: c.status, plan: c.plan, planLabel: planOf(c.plan).label, helpEnabled: c.helpEnabled,
   createdAt: c.createdAt.toISOString(), home: c.id === HOME_COMPANY_ID, ...(await companyStats(c.id)),
+  supportAccessUntil: c.supportAccessUntil && c.supportAccessUntil > new Date() ? c.supportAccessUntil.toISOString() : null,
 })
+
+/** The parts of Metriq for one company: on or off, and why (its plan, or the owner). */
+function modulesView(c: { id: string; plan: string; modulesOff: string[]; modulesOn: string[] }) {
+  const off = new Set(companyAreasOff(c))
+  const planOff = new Set(c.id === HOME_COMPANY_ID ? [] : planOf(c.plan).areasOff)
+  return AREAS.map((a) => ({ key: a.key, label: a.label, on: !off.has(a.key), byPlan: planOff.has(a.key), set: c.modulesOff.includes(a.key) ? 'off' : c.modulesOn.includes(a.key) ? 'on' : null }))
+}
 
 /** GET /api/owner/companies */
 export async function listCompanies(_req: OwnerRequest, res: Response): Promise<void> {
@@ -160,6 +174,10 @@ export async function getCompany(req: OwnerRequest, res: Response): Promise<void
   ])
   res.json({
     company: await companyView(c),
+    usage: await usageOf(c.id),
+    modules: modulesView(c),
+    plans: PLAN_KEYS.map((k) => ({ key: k, label: PLANS[k].label, people: PLANS[k].people, storageGb: PLANS[k].storageGb, aiHours: PLANS[k].aiHours, sellable: PLANS[k].sellable })),
+    people: (await prisma.user.findMany({ where: { companyId: c.id, isActive: true, status: 'ACTIVE' }, select: { id: true, name: true, email: true, role: true }, orderBy: [{ role: 'desc' }, { name: 'asc' }], take: 200 })),
     tickets: tickets.map((t) => ({ id: t.id, number: t.number, subject: t.subject, status: t.status, priority: t.priority, userName: t.userName, updatedAt: t.updatedAt.toISOString() })),
     activity: activity.map((a) => ({ at: a.createdAt.toISOString(), action: a.action, by: a.owner?.name ?? 'system', detail: a.detail })),
   })
@@ -169,6 +187,9 @@ const companyPatch = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   status: z.enum(['TRIAL', 'ACTIVE', 'SUSPENDED']).optional(),
   helpEnabled: z.boolean().optional(),
+  plan: z.enum(PLAN_KEYS as [string, ...string[]]).optional(),
+  /** One part of Metriq: on, off, or back to what the plan says (null). */
+  module: z.object({ key: z.enum(AREA_KEYS as [string, ...string[]]), on: z.boolean().nullable() }).optional(),
 })
 
 /** PATCH /api/owner/companies/:id — rename, suspend or reactivate, turn the Help button on or off. */
@@ -181,9 +202,27 @@ export async function updateCompany(req: OwnerRequest, res: Response): Promise<v
     res.status(400).json({ error: '99 Technologies is company 1 and always stays active.' })
     return
   }
+  if (c.id === HOME_COMPANY_ID && p.data.plan && p.data.plan !== 'internal') {
+    res.status(400).json({ error: '99 Technologies stays on the internal plan (no limits, never billed).' })
+    return
+  }
+  if (c.id !== HOME_COMPANY_ID && p.data.plan === 'internal') {
+    res.status(400).json({ error: 'The internal plan is for 99 Technologies only.' })
+    return
+  }
   const before: Record<string, unknown> = {}, after: Record<string, unknown> = {}
-  for (const k of ['name', 'status', 'helpEnabled'] as const) {
+  for (const k of ['name', 'status', 'helpEnabled', 'plan'] as const) {
     if (p.data[k] !== undefined && p.data[k] !== c[k]) { before[k] = c[k]; after[k] = p.data[k] }
+  }
+  if (p.data.module) {
+    const { key, on } = p.data.module
+    const modulesOff = c.modulesOff.filter((k) => k !== key)
+    const modulesOn = c.modulesOn.filter((k) => k !== key)
+    if (on === false) modulesOff.push(key)
+    if (on === true && c.id !== HOME_COMPANY_ID && planOf(p.data.plan ?? c.plan).areasOff.includes(key as never)) modulesOn.push(key)
+    before.module = { key, was: !companyAreasOff(c).includes(key as never) }
+    after.modulesOff = modulesOff
+    after.modulesOn = modulesOn
   }
   if (!Object.keys(after).length) { res.json({ company: await companyView(c) }); return }
   const next = await prisma.company.update({ where: { id: c.id }, data: after })
@@ -335,4 +374,74 @@ export async function updateCompanyFlag(req: OwnerRequest, res: Response): Promi
   await setCompanyFlag(key, c.id, enabled, req.owner!.name)
   await audit(req, req.owner!.id, 'SWITCH', { companyId: c.id, target: `${FLAGS[key].label} for ${c.name}`, detail: { key, before, after: enabled === null ? 'all-companies setting' : enabled } })
   res.json({ flags: await companyFlags(c.id), all: await allFlags() })
+}
+
+// ------------------------------------------------------------------ export, delete, help sign-in
+
+/**
+ * GET /api/owner/companies/:id/export — everything the company has in Metriq, as one JSON file
+ * (every table, row by row; files they uploaded stay on the server). For a company leaving, or
+ * asking for its data.
+ */
+export async function exportCompany(req: OwnerRequest, res: Response): Promise<void> {
+  const c = await prisma.company.findUnique({ where: { id: req.params.id } })
+  if (!c) { res.status(404).json({ error: 'Company not found' }); return }
+  await audit(req, req.owner!.id, 'COMPANY_EXPORT', { companyId: c.id, target: c.name })
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  res.setHeader('Content-Disposition', `attachment; filename="metriq-${c.slug}-${new Date().toISOString().slice(0, 10)}.json"`)
+  res.write(`{"exportedAt":${JSON.stringify(new Date().toISOString())},"company":${JSON.stringify(c)},"tables":{`)
+  let first = true
+  for (const t of walledTables()) {
+    const delegate = (prisma as unknown as Record<string, { findMany: (a: unknown) => Promise<Record<string, unknown>[]> }>)[t.table[0].toLowerCase() + t.table.slice(1)]
+    res.write(`${first ? '' : ','}${JSON.stringify(t.table)}:[`)
+    first = false
+    // Page through the table so a big company does not fill the server's memory.
+    let skip = 0
+    for (;;) {
+      const rows = await delegate.findMany({ where: { companyId: c.id }, take: 1000, skip })
+      rows.forEach((r, i) => {
+        // Never hand out password hashes or keys.
+        const { passwordHash: _p, tokenHash: _t, ...safe } = r as Record<string, unknown>
+        res.write(`${skip + i ? ',' : ''}${JSON.stringify(safe)}`)
+      })
+      if (rows.length < 1000) break
+      skip += rows.length
+    }
+    res.write(']')
+  }
+  res.end('}}')
+}
+
+/**
+ * DELETE /api/owner/companies/:id { confirm: "<company name>" } — remove a company and
+ * everything it has, for good (its files too). 99 Technologies can never be removed.
+ */
+export async function deleteCompany(req: OwnerRequest, res: Response): Promise<void> {
+  const c = await prisma.company.findUnique({ where: { id: req.params.id } })
+  if (!c) { res.status(404).json({ error: 'Company not found' }); return }
+  if (c.id === HOME_COMPANY_ID) { res.status(400).json({ error: '99 Technologies is company 1 and can never be removed.' }); return }
+  if (String(req.body?.confirm ?? '').trim() !== c.name) { res.status(400).json({ error: `Type the company's name (${c.name}) to remove it.` }); return }
+  await prisma.company.delete({ where: { id: c.id } })
+  for (const area of ['', 'chat', 'projects', 'docs']) await fs.rm(path.resolve('uploads', area, c.id), { recursive: true, force: true }).catch(() => undefined)
+  await audit(req, req.owner!.id, 'COMPANY_DELETE', { companyId: c.id, target: c.name, detail: { slug: c.slug, plan: c.plan } })
+  res.status(204).end()
+}
+
+/**
+ * POST /api/owner/companies/:id/help-sign-in { userId } — open the company's Metriq as one of its
+ * people to help, only while the company's Super Admin allows it, for at most an hour. Logged
+ * here and in the company's own activity log; the person sees a banner the whole time.
+ */
+export async function helpSignIn(req: OwnerRequest, res: Response): Promise<void> {
+  const c = await prisma.company.findUnique({ where: { id: req.params.id } })
+  if (!c) { res.status(404).json({ error: 'Company not found' }); return }
+  if (!c.supportAccessUntil || c.supportAccessUntil < new Date()) { res.status(403).json({ error: 'This company has not allowed help sign-in. Their Super Admin can allow it in Company settings.' }); return }
+  const u = await prisma.user.findFirst({ where: { id: String(req.body?.userId ?? ''), companyId: c.id, isActive: true, status: 'ACTIVE' }, select: { id: true, name: true, role: true } })
+  if (!u) { res.status(404).json({ error: 'Person not found in this company' }); return }
+  const seconds = Math.min(3600, (c.supportAccessUntil.getTime() - Date.now()) / 1000)
+  const token = signSupportToken({ sub: u.id, role: u.role, ownerId: req.owner!.id }, seconds)
+  await audit(req, req.owner!.id, 'HELP_SIGN_IN', { companyId: c.id, target: `${u.name} (${c.name})`, detail: { userId: u.id, minutes: Math.round(seconds / 60) } })
+  await prisma.auditLog.create({ data: { companyId: c.id, userId: u.id, action: 'SUPPORT_SIGN_IN', entityType: 'User', entityId: u.id, after: { by: 'Metriq support', minutes: Math.round(seconds / 60) } } }).catch(() => undefined)
+  res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: seconds * 1000, path: '/' })
+  res.json({ ok: true, until: new Date(Date.now() + seconds * 1000).toISOString(), go: '/app/dashboard' })
 }

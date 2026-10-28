@@ -19,7 +19,7 @@ beforeAll(async () => {
   w = await seedWorld()
   await ensureHomeCompany()
   await prisma.company.deleteMany({ where: { id: E } })
-  await prisma.company.create({ data: { id: E, name: 'Echo Test Co', slug: E } })
+  await prisma.company.create({ data: { id: E, name: 'Echo Test Co', slug: E, plan: 'business' } })
   echoItad = (await prisma.department.create({ data: { companyId: E, type: 'ITAD', name: 'Sales' } })).id
   const passwordHash = await hashPassword('Pass-for-tests-9')
   const mk = (name: string, role: Role, dep?: string) => prisma.user.create({ data: { companyId: E, name, email: `${name.replace(/\s+/g, '.').toLowerCase()}@echo.local.test`, role, status: 'ACTIVE', isActive: true, passwordHash, departmentId: dep } })

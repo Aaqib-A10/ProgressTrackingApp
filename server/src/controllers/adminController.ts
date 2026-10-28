@@ -10,6 +10,7 @@ import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '
 import { getClientIp, ipAllowed, isIpv6, isValidCidr, networkOf, suggestRange } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { hasPower } from '../lib/permissions'
+import { checkPeopleRoom } from '../lib/plans'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -82,6 +83,8 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
     res.status(403).json({ error: 'Forbidden' })
     return
   }
+  // The plan's number of people (Phase 1, step 6).
+  await checkPeopleRoom()
   const parsed = createUserSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
@@ -407,6 +410,7 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
     res.status(400).json({ error: 'You are not assigned to a department' })
     return
   }
+  await checkPeopleRoom()
   const parsed = inviteMemberSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })

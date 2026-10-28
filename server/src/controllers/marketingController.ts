@@ -432,7 +432,7 @@ export async function uploadTaskAttachment(req: AuthedRequest, res: Response): P
   if (BLOCKED_EXT.has(ext)) { res.status(415).json({ error: 'That file type is not allowed' }); return }
 
   const storedName = companyFileName(ext)
-  await ensureFolderFor(UPLOAD_DIR, storedName)
+  await ensureFolderFor(UPLOAD_DIR, storedName, buf.length)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
 
   const row = await prisma.entryAttachment.create({

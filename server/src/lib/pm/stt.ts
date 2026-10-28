@@ -5,6 +5,8 @@ import { prisma } from '../prisma'
 import * as Calls from './calls'
 import { transcribeAudio, type SpeechMode } from './groq'
 import * as Translate from './translate'
+import { maybeCompanyId, runAsCompany, runAsSystem } from '../tenancy'
+import { addAiSeconds, aiRoomLeft } from '../plans'
 
 /**
  * Server-side transcription for the AI note taker.
@@ -34,6 +36,8 @@ interface Job {
   mode: SpeechMode
   /** How long the person was actually speaking in this piece (to spot made-up text). */
   speechMs?: number
+  /** The company of the call: the piece is written inside its walls, and counts towards its plan's AI hours. */
+  companyId?: string | null
 }
 
 const queue: Job[] = []
@@ -45,13 +49,16 @@ export function pendingFor(callId: string): number {
   return pendingByCall.get(callId) ?? 0
 }
 
-export async function enqueue(input: Omit<Job, 'id' | 'file'> & { audio: Buffer }): Promise<void> {
+export async function enqueue(input: Omit<Job, 'id' | 'file' | 'companyId'> & { audio: Buffer }): Promise<void> {
+  const companyId = maybeCompanyId()
+  // The plan's AI hours for this month are used up: the piece is not sent for notes.
+  if (companyId && !(await aiRoomLeft(companyId))) return
   await fs.mkdir(DIR, { recursive: true })
   const id = randomUUID()
   const file = path.join(DIR, `${id}.audio`)
   await fs.writeFile(file, input.audio)
   const { audio: _audio, ...rest } = input
-  queue.push({ ...rest, id, file })
+  queue.push({ ...rest, id, file, companyId })
   pendingByCall.set(input.callId, pendingFor(input.callId) + 1)
   pump()
 }
@@ -70,7 +77,9 @@ function pump(): void {
   while (active < CONCURRENCY() && queue.length) {
     const job = queue.shift()!
     active++
-    void run(job).finally(() => { active--; pump() })
+    // Each piece runs as its own call's company (the queue is shared by every company).
+    const go = () => run(job)
+    void (job.companyId ? runAsCompany(job.companyId, go) : runAsSystem(go)).finally(() => { active--; pump() })
   }
 }
 
@@ -86,6 +95,7 @@ async function run(job: Job): Promise<void> {
     const audio = await fs.readFile(job.file)
     const prompt = await previousWords(job).catch(() => undefined)
     const text = await transcribeAudio(audio, { mode: job.mode, prompt, mime: job.mime, speechMs: job.speechMs })
+    if (job.companyId) await addAiSeconds(job.companyId, (job.speechMs ?? 5000) / 1000).catch(() => undefined)
     if (!text) return
     const line = await prisma.callTranscriptLine.create({ data: { callId: job.callId, userId: job.userId, speakerName: job.speakerName, text, at: job.at } })
     // The two lines before this one help to read names and half sentences right.

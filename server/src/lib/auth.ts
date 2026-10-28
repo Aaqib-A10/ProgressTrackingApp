@@ -36,6 +36,8 @@ export interface JwtPayload {
   /** issued-at, seconds since epoch — added by jwt.sign, read for session-revocation. */
   iat?: number
   exp?: number
+  /** Help sign-in: the owner who is signed in as this person (see signSupportToken). */
+  support?: string
 }
 
 export function signToken(payload: { sub: string; role: Role }): string {
@@ -52,7 +54,19 @@ export function signConnectorToken(payload: { sub: string; role: Role }): string
 
 export function verifyToken(token: string): JwtPayload {
   // Pin the algorithm so a token can't be verified under an unexpected alg.
-  return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload
+  const p = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload & { kind?: string; aud?: unknown }
+  // Only a session: never a password-reset link or an owner console token.
+  if (p.kind || p.aud) throw new Error('Not a session')
+  return p
+}
+
+/**
+ * Help sign-in (Phase 1, step 6): Metriq support, with the company's consent, opens Metriq as
+ * one of its people for at most an hour. The session says so (support = the owner's id), the
+ * person's company sees it in its activity log, and a few things stay closed to it.
+ */
+export function signSupportToken(payload: { sub: string; role: Role; ownerId: string }, seconds: number): string {
+  return jwt.sign({ sub: payload.sub, role: payload.role, support: payload.ownerId }, JWT_SECRET, { expiresIn: Math.max(60, Math.floor(seconds)) } as SignOptions)
 }
 
 // --- Stateless password-reset token (no DB table needed) ---

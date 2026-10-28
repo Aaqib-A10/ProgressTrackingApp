@@ -24,7 +24,7 @@ beforeAll(async () => {
   await prisma.featureFlag.deleteMany({ where: { key: 'company-walls' } })
   await refreshWalls(prisma)
   await prisma.company.deleteMany({ where: { id: D } })
-  await prisma.company.create({ data: { id: D, name: 'Delta Test Co', slug: D } })
+  await prisma.company.create({ data: { id: D, name: 'Delta Test Co', slug: D, plan: 'business' } })
   const itad = await prisma.department.create({ data: { companyId: D, type: 'ITAD', name: 'Delta ITAD' } })
   const passwordHash = await hashPassword('Pass-for-tests-9')
   const mk = (name: string, role: Role) => prisma.user.create({ data: { companyId: D, name, email: `${name.replace(/\s+/g, '.').toLowerCase()}@delta.local.test`, role, status: 'ACTIVE', isActive: true, passwordHash, departmentId: role === 'SUPER_ADMIN' ? null : itad.id } })

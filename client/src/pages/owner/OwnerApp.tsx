@@ -402,9 +402,10 @@ function CompanyPage() {
   const c = data.company
   async function patch(input: Parameters<typeof ownerApi.updateCompany>[1], ok: string) {
     setBusy(true)
-    try { const r = await ownerApi.updateCompany(c.id, input); setData({ ...data!, company: r.company }); addToast({ type: 'success', message: ok }) }
+    try { await ownerApi.updateCompany(c.id, input); setData(await ownerApi.company(c.id)); addToast({ type: 'success', message: ok }) }
     catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(false) }
   }
+  const u = data.usage
   return (
     <>
       <Title back="/owner/companies" sub={c.home ? 'Company 1: the team Metriq was built with. It always stays active and is never billed.' : `Joined ${fmt(c.createdAt)}`}>{c.name}</Title>
@@ -436,6 +437,38 @@ function CompanyPage() {
           )}
         </div>
       </Panel>
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <Panel>
+          <PanelHead title="Plan and what they use" />
+          <div className="space-y-4 px-5 pb-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <select className={inputCls + ' !w-auto'} value={c.plan} disabled={busy || c.home} onChange={(e) => patch({ plan: e.target.value }, 'Plan changed.')} aria-label="Plan">
+                {data.plans.filter((p) => p.sellable || p.key === c.plan).map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+              <span className="text-body-sm text-ink-muted">{c.home ? 'No limits, never billed.' : 'Billing changes this when they pay; you can set it by hand too.'}</span>
+            </div>
+            <Meter label="People" used={u.people.used} limit={u.people.limit} show={(n) => String(n)} />
+            <Meter label="Files" used={u.storage.usedBytes} limit={u.storage.limitBytes} show={bytes} />
+            <Meter label="AI meeting notes this month" used={u.aiHours.used} limit={u.aiHours.limit} show={(n) => `${n} h`} />
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHead title="Parts of Metriq" />
+          <p className="-mt-1 px-5 pb-3 text-body-sm text-ink-muted">What comes with their plan, and parts you switched on or off for them.</p>
+          <ul className="divide-y divide-line border-t border-line">
+            {data.modules.map((m) => (
+              <li key={m.key} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
+                <span className="min-w-0 flex-1 text-body-md text-ink">{m.label}{m.byPlan && <span className="ml-2 text-[12px] text-ink-faint">not in plan</span>}</span>
+                <Segmented disabled={busy} label={m.label}
+                  value={m.set === null ? 'plan' : m.set}
+                  options={[['plan', c.home ? 'On' : `Plan (${m.byPlan ? 'off' : 'on'})`], ['on', 'On'], ['off', 'Off']].filter(([v]) => !(c.home && v === 'on')) as [string, string][]}
+                  onChange={(v) => patch({ module: { key: m.key, on: v === 'plan' ? null : v === 'on' } }, `${m.label} ${v === 'plan' ? 'follows the plan' : v === 'on' ? 'switched on' : 'switched off'}.`)} />
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </div>
+      <HelpSignIn company={c} people={data.people} />
       <CompanySwitches companyId={c.id} />
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Panel>
@@ -458,6 +491,75 @@ function CompanyPage() {
         </Panel>
       </div>
     </>
+  )
+}
+
+const bytes = (n: number) => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`)
+
+function Meter({ label, used, limit, show }: { label: string; used: number; limit: number | null; show: (n: number) => string }) {
+  const pct = limit ? Math.min(100, (used / limit) * 100) : 0
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-body-sm"><span className="text-ink">{label}</span><span className="tabular-nums text-ink-muted">{show(used)}{limit === null ? ' · no limit' : ` of ${show(limit)}`}</span></div>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={cn('h-full rounded-full', pct >= 100 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : 'bg-primary')} style={{ width: `${limit === null ? 0 : Math.max(pct, used > 0 ? 2 : 0)}%` }} /></div>
+    </div>
+  )
+}
+
+/** Help sign-in: open their Metriq as one of their people, only while their Super Admin allows it. */
+function HelpSignIn({ company, people }: { company: OwnerCompany; people: { id: string; name: string; email: string; role: string }[] }) {
+  const { addToast } = useToast()
+  const [userId, setUserId] = useState(people[0]?.id ?? '')
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState('')
+  async function go() {
+    setBusy(true)
+    try { const r = await ownerApi.helpSignIn(company.id, userId); window.location.assign(r.go) }
+    catch (e) { addToast({ type: 'error', message: ownerErr(e) }); setBusy(false) }
+  }
+  async function remove() {
+    setBusy(true)
+    try { await ownerApi.removeCompany(company.id, confirm); addToast({ type: 'success', message: `${company.name} removed.` }); window.location.assign('/owner/companies') }
+    catch (e) { addToast({ type: 'error', message: ownerErr(e) }); setBusy(false) }
+  }
+  return (
+    <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <Panel>
+        <PanelHead title="Help sign-in" />
+        <div className="space-y-3 px-5 pb-5">
+          {company.supportAccessUntil ? (
+            <>
+              <p className="text-body-sm text-ink-muted">Allowed by their Super Admin until {fmt(company.supportAccessUntil)}. You see Metriq as that person, for at most an hour; they see a banner, and it is in their activity log. Finance stays closed.</p>
+              <div className="flex flex-wrap gap-2">
+                <select className={inputCls + ' !w-auto min-w-[220px]'} value={userId} onChange={(e) => setUserId(e.target.value)} aria-label="Person">
+                  {people.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.role.replace('_', ' ').toLowerCase()})</option>)}
+                </select>
+                <Button size="sm" disabled={busy || !userId} onClick={go}>Open their Metriq</Button>
+              </div>
+            </>
+          ) : <p className="text-body-sm text-ink-muted">Not allowed now. Their Super Admin can allow it for a day, three days or a week in Company settings, when they ask for help.</p>}
+        </div>
+      </Panel>
+      <Panel>
+        <PanelHead title="Their data" />
+        <div className="space-y-4 px-5 pb-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <a href={ownerApi.exportUrl(company.id)} download><Button size="sm" variant="secondary">Download all their data</Button></a>
+            <span className="text-body-sm text-ink-muted">One file with every record (no passwords). Logged.</span>
+          </div>
+          {!company.home && (
+            <div className="rounded-btn border border-danger/30 bg-danger/5 p-3">
+              <p className="text-body-sm font-semibold text-danger">Remove {company.name}</p>
+              <p className="mt-0.5 text-body-sm text-ink-muted">Everything they have in Metriq, files too, is gone for good. Download it first. Type the company name to remove it.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <input className={inputCls + ' !h-9 max-w-[240px]'} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={company.name} aria-label="Company name to confirm" />
+                <Button size="sm" variant="danger" disabled={busy || confirm.trim() !== company.name} onClick={remove}>Remove for good</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Panel>
+    </div>
   )
 }
 

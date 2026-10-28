@@ -7,6 +7,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { HOME_COMPANY_ID } from '../lib/company'
 import { forgetTimeZone } from '../lib/tenancy'
 import { AREAS, AREA_KEYS, BUILTIN_POWERS, POWERS, POWER_KEYS, loadPowers, type PowerKey } from '../lib/permissions'
+import { usageOf } from '../lib/plans'
 
 /**
  * Company settings (Phase 1, step 4), for the Super Admin or anyone with the Company settings
@@ -51,9 +52,10 @@ async function settingsUser(req: AuthedRequest) {
 /** GET /api/company — the company (everyone sees its name; the settings page needs canEdit). */
 export async function getCompany(req: AuthedRequest, res: Response): Promise<void> {
   const u = await me(req)
-  const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true } })
+  const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, supportAccessUntil: true } })
   res.json({
-    company: { ...c, home: c.id === HOME_COMPANY_ID },
+    company: { ...c, home: c.id === HOME_COMPANY_ID, supportAccessUntil: c.supportAccessUntil && c.supportAccessUntil > new Date() ? c.supportAccessUntil : null },
+    usage: u.powers.includes('company.settings') ? await usageOf(c.id) : null,
     canEdit: u.powers.includes('company.settings'),
     // 99 Technologies' time zone is set on the server (APP_TIMEZONE) when it is set there.
     timeZoneLocked: c.id === HOME_COMPANY_ID && !!process.env.APP_TIMEZONE,
@@ -252,5 +254,23 @@ export async function updatePerson(req: AuthedRequest, res: Response): Promise<v
     }
     await prisma.user.update({ where: { id: p.id }, data: { ...(body.customRoleId !== undefined ? { customRoleId: body.customRoleId } : {}), ...(body.permissions ? { permissions: [...new Set(body.permissions)] } : {}) } })
     res.json({ ok: true })
+  } catch (e) { send(res, e) }
+}
+
+// ------------------------------------------------------------------ help sign-in (step 6)
+
+/**
+ * POST /api/company/support-access { hours } — let Metriq support sign in as one of your people
+ * to help (0 = stop now). Every help sign-in shows in your activity log, and the person sees a
+ * banner the whole time.
+ */
+export const setSupportAccess = async (req: AuthedRequest, res: Response): Promise<void> => {
+  try {
+    const u = await settingsUser(req)
+    const { hours } = z.object({ hours: z.union([z.literal(0), z.literal(24), z.literal(72), z.literal(168)]) }).parse(req.body)
+    const until = hours ? new Date(Date.now() + hours * 3600_000) : null
+    await prisma.company.update({ where: { id: u.companyId }, data: { supportAccessUntil: until, supportAccessById: hours ? u.id : null } })
+    await prisma.auditLog.create({ data: { userId: u.id, action: hours ? 'SUPPORT_ACCESS_ON' : 'SUPPORT_ACCESS_OFF', entityType: 'Company', entityId: u.companyId, after: { until: until?.toISOString() ?? null } } })
+    res.json({ supportAccessUntil: until })
   } catch (e) { send(res, e) }
 }

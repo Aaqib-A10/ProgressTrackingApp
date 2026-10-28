@@ -94,7 +94,7 @@ export async function uploadAttachment(req: AuthedRequest, res: Response): Promi
   }
 
   const storedName = companyFileName(ext)
-  await ensureFolderFor(UPLOAD_DIR, storedName)
+  await ensureFolderFor(UPLOAD_DIR, storedName, buf.length)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
 
   const row = await prisma.entryAttachment.create({

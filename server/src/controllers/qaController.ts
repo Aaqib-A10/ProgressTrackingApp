@@ -917,7 +917,7 @@ export async function uploadRecording(req: AuthedRequest, res: Response): Promis
   const originalName = String(req.query.name || 'recording').slice(0, 200).replace(/[\r\n]/g, '').trim() || 'recording'
   const ext = path.extname(originalName).replace('.', '').toLowerCase()
   const storedName = companyFileName(ext)
-  await ensureFolderFor(UPLOAD_DIR, storedName)
+  await ensureFolderFor(UPLOAD_DIR, storedName, buf.length)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
   const row = await prisma.entryAttachment.create({
     data: { userId: me.id, kind: 'QA_RECORDING', date: dbDateFromString(companyToday()), storedName, originalName, mimeType: mime, size: buf.length },

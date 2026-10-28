@@ -548,7 +548,7 @@ export async function uploadAttachment(req: AuthedRequest, res: Response): Promi
   const ext = path.extname(originalName).replace('.', '').toLowerCase()
   if (BLOCKED_EXT.has(ext)) throw new HttpError(415, 'That file type is not allowed')
   const storedName = companyFileName(ext)
-  await ensureFolderFor(UPLOAD_DIR, storedName)
+  await ensureFolderFor(UPLOAD_DIR, storedName, buf.length)
   await fs.writeFile(path.join(UPLOAD_DIR, storedName), buf)
   const a = await prisma.pmAttachment.create({
     data: { taskId: task.id, uploadedById: ctx.me.id, storedName, originalName, mimeType: String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), size: buf.length },

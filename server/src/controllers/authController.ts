@@ -14,6 +14,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { getClientIp } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { powersOf } from '../lib/permissions'
+import { companyAreasOff } from '../lib/plans'
 
 /** Record a sign-in for the Activity Log. Best-effort — never blocks auth. */
 async function logSignIn(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP'): Promise<void> {
@@ -50,7 +51,7 @@ async function publicUser(userId: string) {
         include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
         orderBy: { createdAt: 'asc' },
       },
-      company: { select: { id: true, name: true, kind: true, plan: true, status: true, timeZone: true } },
+      company: { select: { id: true, name: true, kind: true, plan: true, status: true, timeZone: true, modulesOff: true, modulesOn: true } },
       customRole: { select: { id: true, name: true, areasOff: true, powers: true } },
     },
   })
@@ -72,10 +73,11 @@ async function publicUser(userId: string) {
     })),
     // Phase 1: the company (or personal workspace), the company's own role, extra powers and
     // the parts of Metriq switched off for the role.
-    company: user.company,
+    company: { id: user.company.id, name: user.company.name, kind: user.company.kind, plan: user.company.plan, status: user.company.status, timeZone: user.company.timeZone },
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,
     permissions: powersOf(user),
-    areasOff: user.customRole?.areasOff ?? [],
+    // Switched off for the company's plan (or by the owner) and for the person's company role.
+    areasOff: [...new Set([...companyAreasOff(user.company), ...(user.customRole?.areasOff ?? [])])],
   }
 }
 
@@ -204,7 +206,8 @@ export async function login(req: Request, res: Response): Promise<void> {
 }
 
 export async function me(req: AuthedRequest, res: Response): Promise<void> {
-  res.json({ user: await publicUser(req.user!.id) })
+  // A help sign-in is shown as such (a banner with "End") on every page.
+  res.json({ user: { ...(await publicUser(req.user!.id)), supportSession: !!req.user!.supportBy } })
 }
 
 const activeDeptSchema = z.object({ departmentId: z.string().min(1) })

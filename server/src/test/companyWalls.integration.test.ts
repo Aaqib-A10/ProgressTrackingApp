@@ -38,7 +38,7 @@ beforeAll(async () => {
   await prisma.featureFlag.deleteMany({ where: { key: 'company-walls' } })
   await refreshWalls(prisma)
   await prisma.company.deleteMany({ where: { id: B } })
-  await prisma.company.create({ data: { id: B, name: 'Bravo Test Co', slug: B, helpEnabled: true } })
+  await prisma.company.create({ data: { id: B, name: 'Bravo Test Co', slug: B, helpEnabled: true, plan: 'business' } })
   const depts = await Promise.all((['ITAD', 'LEAD_GEN', 'INVENTORY', 'MARKETING', 'ECOMMERCE', 'CSR'] as const).map((type) =>
     prisma.department.create({ data: { companyId: B, type, name: `Bravo ${type}` } })))
   const passwordHash = await hashPassword('Pass-for-tests-9')

@@ -3393,21 +3393,29 @@ enum CompanyStatus {
 }
 
 model Company {
-  id          String        @id @default(cuid())
-  name        String
-  slug        String        @unique
-  kind        CompanyKind   @default(TEAM)
-  timeZone    String        @default("Asia/Karachi")
-  status      CompanyStatus @default(ACTIVE)
-  plan        String        @default("internal")
+  id                 String        @id @default(cuid())
+  name               String
+  slug               String        @unique
+  kind               CompanyKind   @default(TEAM)
+  timeZone           String        @default("Asia/Karachi")
+  status             CompanyStatus @default(ACTIVE)
+  /// lib/plans: personal, starter, business, or internal (99 Technologies: no limits, never billed).
+  plan               String        @default("starter")
+  /// Parts of Metriq (lib/permissions AREAS) the owner switched off, or on beyond the plan, for this company.
+  modulesOff         String[]      @default([])
+  modulesOn          String[]      @default([])
+  /// The company's Super Admin lets Metriq support sign in to help until then (help sign-in, step 6).
+  supportAccessUntil DateTime?
+  supportAccessById  String?
   /// The Help button for this company's people. Off for 99 Technologies until the owner turns it on.
-  helpEnabled Boolean       @default(false)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  helpEnabled        Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   tickets       SupportTicket[]
   users         User[]
   flagOverrides FeatureFlagCompany[]
+  usage         CompanyUsage[]
 
   // Everything a company owns (Phase 1, step 2). Deleting a company deletes all of it;
   // company 1 (99 Technologies) can never be deleted (database trigger).
@@ -3742,4 +3750,15 @@ model ReportEntry {
   @@index([formId, date])
   @@index([companyId])
   @@index([userId, date])
+}
+
+/// What a company used each month (AI meeting notes), for its plan's limits (Phase 1, step 6).
+model CompanyUsage {
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  month     String // "YYYY-MM"
+  aiSeconds Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([companyId, month])
 }
