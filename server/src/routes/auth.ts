@@ -24,6 +24,7 @@ export const authRouter = Router()
 authRouter.post('/signup', sensitiveAuthLimiter, asyncHandler((req, res) => runAsCompany(HOME_COMPANY_ID, () => signup(req, res))))
 authRouter.post('/login', loginLimiter, asyncHandler(login))
 // Phase 1, step 7: companies and solo users sign up on their own.
+authRouter.get('/open', asyncHandler(S.signupOpen))
 authRouter.post('/start', sensitiveAuthLimiter, asyncHandler(S.start))
 authRouter.post('/verify-email', sensitiveAuthLimiter, asyncHandler(S.verifyEmail))
 authRouter.post('/verify-email/resend', requireAuth, sensitiveAuthLimiter, asyncHandler(S.resendVerify))

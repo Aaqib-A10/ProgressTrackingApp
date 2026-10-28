@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Users, User, Check } from 'lucide-react'
 import { AuthLayout } from './AuthLayout'
@@ -26,6 +26,8 @@ export default function Start() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState<boolean | null>(null)
+  useEffect(() => { api.get<{ newCompanies: boolean }>('/auth/open').then((r) => setOpen(r.newCompanies)).catch(() => setOpen(false)) }, [])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -37,6 +39,16 @@ export default function Start() {
       // A full load, so the app starts with the new session.
       window.location.assign(r.next)
     } catch (err) { setError(errText(err)); setBusy(false) }
+  }
+
+  if (open === false) {
+    return (
+      <AuthLayout headline="Daily reports, attendance and projects for your whole team, in one place.">
+        <h1 className="text-headline-lg text-ink">Not open yet</h1>
+        <p className="mt-1 text-body-md text-ink-muted">Metriq is not open for new companies yet. Already have an account?</p>
+        <Link to="/login" className="mt-5 inline-block font-semibold text-primary hover:underline">Sign in</Link>
+      </AuthLayout>
+    )
   }
 
   return (

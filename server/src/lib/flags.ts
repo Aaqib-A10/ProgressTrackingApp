@@ -55,6 +55,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  'new-companies': {
+    label: 'New companies can sign up',
+    description: 'Anyone can start a free trial for a company or for themselves (the Start a free trial page, and Google or Microsoft sign up). Off: the page says Metriq is not open yet, and the sign-in page shows the old Sign up link as before.',
+    default: false,
+    client: false,
+    scope: 'platform',
+  },
   'company-walls': {
     label: 'Company walls',
     description: 'Each company sees only its own records. Off is an emergency brake for while 99 Technologies is the only company: every company would then see every other company\'s records. Never turn it off once other companies use Metriq.',

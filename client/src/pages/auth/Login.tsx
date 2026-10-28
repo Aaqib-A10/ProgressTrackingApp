@@ -20,6 +20,9 @@ export default function Login() {
     if (!slug) return
     api.get<{ company: { name: string } }>(`/auth/company/${encodeURIComponent(slug)}`).then((r) => setCompanyName(r.company.name)).catch(() => setCompanyName(null))
   }, [slug])
+  // "Start a free trial" only once the owner opens sign-ups; until then the old Sign up link.
+  const [open, setOpen] = useState(false)
+  useEffect(() => { api.get<{ newCompanies: boolean }>('/auth/open').then((r) => setOpen(r.newCompanies)).catch(() => setOpen(false)) }, [])
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/app/dashboard'
@@ -124,10 +127,11 @@ export default function Login() {
       <OAuthButtons intent="signin" label="OR LOG IN WITH" />
 
       <p className="mt-6 text-center text-body-sm text-ink-muted">
-        New to Metriq?{' '}
-        <Link to="/start" className="font-semibold text-primary hover:underline">
-          Start a free trial
-        </Link>
+        {open ? (
+          <>New to Metriq?{' '}<Link to="/start" className="font-semibold text-primary hover:underline">Start a free trial</Link></>
+        ) : (
+          <>Don&apos;t have an account?{' '}<Link to="/signup" className="font-semibold text-primary hover:underline">Sign up</Link></>
+        )}
       </p>
     </AuthLayout>
   )

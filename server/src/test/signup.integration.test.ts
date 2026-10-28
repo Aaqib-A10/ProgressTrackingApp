@@ -3,6 +3,7 @@ import request from 'supertest'
 import { app, prisma, seedWorld } from './helpers'
 import { ensureHomeCompany, HOME_COMPANY_ID } from '../lib/company'
 import { slugify } from '../lib/signup'
+import { setFlag } from '../lib/flags'
 
 // Phase 1, step 7: companies and solo users sign up on their own, confirm their email, go
 // through the setup wizard, invite their people, and get a 14-day free trial.
@@ -21,6 +22,7 @@ beforeAll(async () => {
 })
 afterAll(async () => {
   await cleanup()
+  await prisma.featureFlag.deleteMany({ where: { key: 'new-companies' } })
   await prisma.$disconnect()
 })
 afterEach(() => { vi.unstubAllGlobals() })
@@ -28,6 +30,17 @@ afterEach(() => { vi.unstubAllGlobals() })
 describe('sign up', () => {
   let agent: ReturnType<typeof request.agent>
   let verifyToken = ''
+
+  it('closed until the owner opens it ("New companies can sign up" is off by default)', async () => {
+    await prisma.featureFlag.deleteMany({ where: { key: 'new-companies' } })
+    await setFlag('new-companies', false, 'test')
+    expect((await request(app).get('/api/auth/open').expect(200)).body).toEqual({ newCompanies: false })
+    const r = await request(app).post('/api/auth/start').send({ mode: 'team', name: 'Hana Hotel', email: 'founder@hotel.local.test', password: 'Hotel2026x', companyName: 'Hotel Bravo' }).expect(403)
+    expect(r.body.error).toMatch(/not open/)
+    expect(await prisma.user.count({ where: { email: 'founder@hotel.local.test' } })).toBe(0)
+    await setFlag('new-companies', true, 'test')
+    expect((await request(app).get('/api/auth/open').expect(200)).body).toEqual({ newCompanies: true })
+  })
 
   it('"For my team": a company on a 14-day trial, its own address, the founder as Super Admin', async () => {
     agent = request.agent(app)

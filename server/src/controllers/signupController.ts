@@ -8,6 +8,14 @@ import { createCompanyWithOwner } from '../lib/signup'
 import { sendVerifyEmail } from '../lib/mail'
 import { PROVIDERS, authorizeLink, exchangeCode, providerList, type ProviderKey } from '../lib/oauth'
 import { getClientIp } from '../lib/ip'
+import { isOn } from '../lib/flags'
+
+const NOT_OPEN = 'Metriq is not open for new companies yet.'
+
+/** GET /api/auth/open — can new companies sign up (the owner's "New companies can sign up" switch)? */
+export async function signupOpen(_req: Request, res: Response): Promise<void> {
+  res.json({ newCompanies: await isOn('new-companies') })
+}
 
 /**
  * Sign up (Phase 1, step 7): a company ("For my team") or one person ("Just me") starts a
@@ -33,6 +41,7 @@ const startSchema = z.object({
 
 /** POST /api/auth/start — sign up with an email and password. */
 export async function start(req: Request, res: Response): Promise<void> {
+  if (!(await isOn('new-companies'))) { res.status(403).json({ error: NOT_OPEN }); return }
   const p = startSchema.safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Invalid input' }); return }
   const v = p.data
@@ -129,6 +138,7 @@ export async function oauthCallback(req: Request, res: Response): Promise<void> 
     fail('This email already has a Metriq account. Sign in with your password.')
     return
   }
+  if (!(await isOn('new-companies'))) { fail(`There is no Metriq account for ${who.email}.`); return }
   if (st.intent !== 'signup') { fail(`There is no Metriq account for ${who.email} yet. Start a free trial instead.`); return }
   const { user } = await createCompanyWithOwner({
     mode: st.mode === 'solo' ? 'solo' : 'team', companyName: st.company || null, name: who.name, email: who.email, passwordHash: null,

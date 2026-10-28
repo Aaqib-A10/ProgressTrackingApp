@@ -32,6 +32,9 @@ async function main() {
       create: { ...TEST_OWNER, passwordHash },
     })
 
+    // On this computer only: open sign-ups, so the Start a free trial page can be tried.
+    await prisma.featureFlag.upsert({ where: { key: 'new-companies' }, update: { enabled: true }, create: { key: 'new-companies', enabled: true, updatedBy: 'test accounts' } })
+
     // Both start as a fresh free trial (14 days, setup wizard not done yet), so sign-up, the
     // wizard and billing (test payments) can be tried. Running this again starts them over.
     const trial = { status: 'TRIAL' as const, trialEndsAt: new Date(Date.now() + 14 * 86400_000), setupDoneAt: null }
