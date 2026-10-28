@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi, onTestFinished } from 'vitest'
 import request from 'supertest'
 import { DateTime } from 'luxon'
 import { app, auth, prisma, seedWorld, type SeededWorld } from './helpers'
@@ -73,10 +73,17 @@ describe('team lead edits breaks', () => {
     expect(await prisma.auditLog.count({ where: { entityType: 'BreakEntry', entityId: extra.id, action: 'DELETE' } })).toBe(1)
   })
 
-  it('ends a break that is still running, right now', async () => {
-    const today = DateTime.now().setZone('Asia/Karachi').toISODate()!
+  // Run at a fixed time of day, including just after midnight: the test used to file the day under
+  // the calendar date instead of the check-in day, so it failed when GitHub ran it after midnight.
+  it.each(['2026-10-22T15:00', '2026-10-23T00:30'])('ends a break that is still running, right now (at %s)', async (at) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(pk(at))
+    onTestFinished(() => { vi.useRealTimers() })
     const now = Date.now()
-    const d = await prisma.attendanceDay.create({ data: { userId: w.itadMember.id, date: new Date(`${today}T00:00:00Z`), checkInAt: new Date(now - 2 * 3600_000) } })
+    const checkIn = new Date(now - 2 * 3600_000)
+    // The attendance day is the day the person checked in (as the app files it).
+    const day = DateTime.fromJSDate(checkIn).setZone('Asia/Karachi').toISODate()!
+    const d = await prisma.attendanceDay.create({ data: { userId: w.itadMember.id, date: new Date(`${day}T00:00:00Z`), checkInAt: checkIn } })
     const b = await prisma.breakEntry.create({ data: { dayId: d.id, type: 'BREAK', startAt: new Date(now - 20 * 60_000) } })
     const team = await request(app).get('/api/attendance/team').set(...auth(w.itadLead)).expect(200)
     const rows = JSON.stringify(team.body)
