@@ -16,6 +16,7 @@ import { recoverNotes } from './lib/pm/notes'
 import { captureError, flushErrors } from './lib/health/errors'
 import { fillContactsFromRaw } from './lib/dialerRaw'
 import { startBreakCutoff } from './lib/breakCutoff'
+import { startBillingReminders } from './lib/billing/cron'
 import { setAuditBaseUrl, startHealthAudit } from './lib/health/audit'
 
 const PORT = Number(process.env.PORT) || 4000
@@ -46,6 +47,7 @@ app.listen(PORT, () => {
   // 99 Technologies' time zone stays the one the server was set up with (APP_TIMEZONE).
   if (process.env.APP_TIMEZONE) void prisma.company.updateMany({ where: { id: HOME_COMPANY_ID }, data: { timeZone: process.env.APP_TIMEZONE } }).catch(() => undefined)
   startAttendanceReminders()
+  startBillingReminders()
   startAttendanceViolations()
   startBreakCutoff()
   startAutoCheckout()

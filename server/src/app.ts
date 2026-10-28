@@ -42,6 +42,7 @@ import { flagsRouter } from './routes/flags'
 import { companyRouter } from './routes/company'
 import { dailyReportRouter } from './routes/dailyReport'
 import { setupRouter } from './routes/setup'
+import { billingRouter } from './routes/billing'
 
 /**
  * Every API router and where it lives. The hourly self check (System Health) walks this list
@@ -88,6 +89,7 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/company', companyRouter],
   ['/api/daily-report', dailyReportRouter],
   ['/api/setup', setupRouter],
+  ['/api/billing', billingRouter],
 ]
 
 /**
@@ -126,6 +128,8 @@ export function createApp(): Express {
   // Cap JSON bodies to blunt memory-pressure DoS from oversized payloads.
   // Lead Dialer imports carry a whole CRM export (a few thousand rows), so they get a bigger limit.
   app.use('/api/dialer/imports', express.json({ limit: '25mb' }))
+  // Payment providers sign the exact bytes they send: keep them as they are (Phase 1, step 8).
+  app.use('/api/billing/webhook', express.raw({ type: () => true, limit: '1mb' }))
   app.use(express.json({ limit: '1mb' }))
   app.use(cookieParser())
 

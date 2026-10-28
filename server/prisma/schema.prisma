@@ -3419,6 +3419,9 @@ model Company {
   setupDoneAt        DateTime?
   /// Rows the "sample data" button made, so they can be taken out again: { table: [ids] }.
   sampleIds          Json?
+  /// Billing reminders already sent (trial ending, trial ended), so each goes once.
+  trialEndingMailAt  DateTime?
+  trialEndedMailAt   DateTime?
   /// The Help button for this company's people. Off for 99 Technologies until the owner turns it on.
   helpEnabled        Boolean       @default(false)
   createdAt          DateTime      @default(now())
@@ -3540,6 +3543,8 @@ model Company {
   reportForms              ReportForm[]
   reportFields             ReportField[]
   reportEntries            ReportEntry[]
+  subscription             Subscription?
+  invoices                 Invoice[]
 }
 
 model PlatformOwner {
@@ -3773,4 +3778,83 @@ model CompanyUsage {
   updatedAt DateTime @updatedAt
 
   @@id([companyId, month])
+}
+
+// ---------------------------------------------------------------- Billing (Phase 1, step 8)
+// One subscription per company, with Stripe, Paddle or the built-in test provider (keys only on
+// the server). 99 Technologies (internal plan) is never billed.
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum InvoiceStatus {
+  OPEN
+  PAID
+  FAILED
+  VOID
+}
+
+model Subscription {
+  id                String             @id @default(cuid())
+  companyId         String             @unique @default("")
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// "test", "stripe" or "paddle"
+  provider          String
+  externalId        String?
+  customerId        String?
+  plan              String
+  /// "month" or "year"
+  interval          String
+  status            SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd  DateTime
+  cancelAtPeriodEnd Boolean            @default(false)
+  /// The first failed payment of a run of failures (7 days to fix it).
+  pastDueSince      DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([provider, externalId])
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  companyId   String        @default("")
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number      Int           @unique @default(autoincrement())
+  provider    String
+  externalId  String?
+  plan        String
+  interval    String
+  currency    String        @default("USD")
+  amountCents Int
+  taxCents    Int           @default(0)
+  status      InvoiceStatus
+  periodStart DateTime
+  periodEnd   DateTime
+  paidAt      DateTime?
+  /// The provider's own page for this invoice (with tax details), when it has one.
+  hostedUrl   String?
+  createdAt   DateTime      @default(now())
+
+  @@unique([provider, externalId])
+  @@index([companyId, createdAt(sort: Desc)])
+}
+
+/// Every message from a payment provider, kept once (a provider can send the same one twice).
+model BillingEvent {
+  id          String    @id @default(cuid())
+  provider    String
+  externalId  String
+  type        String
+  companyId   String?
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, externalId])
+  @@index([receivedAt])
 }

@@ -10,6 +10,7 @@ import { companyToday, dbDateFromString } from '../lib/time'
 import { OWNER_COOKIE, type OwnerRequest } from '../middleware/owner'
 import { FLAGS, FLAG_KEYS, allFlags, companyFlags, isOn, setCompanyFlag, setFlag, type FlagKey } from '../lib/flags'
 import { PLANS, PLAN_KEYS, companyAreasOff, planOf, usageOf } from '../lib/plans'
+import { billingState } from '../lib/billing/billing'
 import { AREAS, AREA_KEYS } from '../lib/permissions'
 import { signSupportToken } from '../lib/auth'
 import { walledTables } from '../scripts/companyWallsSql'
@@ -175,6 +176,16 @@ export async function getCompany(req: OwnerRequest, res: Response): Promise<void
   res.json({
     company: await companyView(c),
     usage: await usageOf(c.id),
+    billing: await (async () => {
+      const sub = await prisma.subscription.findUnique({ where: { companyId: c.id } })
+      const invoices = await prisma.invoice.findMany({ where: { companyId: c.id }, orderBy: { createdAt: 'desc' }, take: 6 })
+      return {
+        state: billingState(c, sub),
+        subscription: sub ? { plan: sub.plan, interval: sub.interval, status: sub.status, provider: sub.provider, currentPeriodEnd: sub.currentPeriodEnd.toISOString(), cancelAtPeriodEnd: sub.cancelAtPeriodEnd } : null,
+        trialEndsAt: c.status === 'TRIAL' ? c.trialEndsAt?.toISOString() ?? null : null,
+        invoices: invoices.map((i) => ({ id: i.id, number: i.number, amountCents: i.amountCents, currency: i.currency, status: i.status, createdAt: i.createdAt.toISOString() })),
+      }
+    })(),
     modules: modulesView(c),
     plans: PLAN_KEYS.map((k) => ({ key: k, label: PLANS[k].label, people: PLANS[k].people, storageGb: PLANS[k].storageGb, aiHours: PLANS[k].aiHours, sellable: PLANS[k].sellable })),
     people: (await prisma.user.findMany({ where: { companyId: c.id, isActive: true, status: 'ACTIVE' }, select: { id: true, name: true, email: true, role: true }, orderBy: [{ role: 'desc' }, { name: 'asc' }], take: 200 })),

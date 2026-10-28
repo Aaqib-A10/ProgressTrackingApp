@@ -70,6 +70,7 @@ export const ownerApi = {
   companies: () => call<{ companies: OwnerCompany[] }>('GET', '/companies'),
   company: (id: string) => call<{
     company: OwnerCompany; usage: CompanyUsage; modules: CompanyModule[]; plans: PlanOption[]; people: { id: string; name: string; email: string; role: string }[]
+    billing: { state: string; trialEndsAt: string | null; subscription: { plan: string; interval: string; status: string; provider: string; currentPeriodEnd: string; cancelAtPeriodEnd: boolean } | null; invoices: { id: string; number: number; amountCents: number; currency: string; status: string; createdAt: string }[] }
     tickets: TicketRow[]; activity: { at: string; action: string; by: string; detail: unknown }[]
   }>('GET', `/companies/${id}`),
   updateCompany: (id: string, input: { name?: string; status?: CompanyStatus; helpEnabled?: boolean; plan?: string; module?: { key: string; on: boolean | null } }) => call<{ company: OwnerCompany }>('PATCH', `/companies/${id}`, input),

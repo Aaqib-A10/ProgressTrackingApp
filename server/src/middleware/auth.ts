@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import { runAsCompany } from '../lib/tenancy'
 import { areaOf } from '../lib/permissions'
 import { companyAreasOff } from '../lib/plans'
+import { billingState, readOnlyReason } from '../lib/billing/billing'
 
 /** Open after a free trial ends: signing out, billing, and sending a complaint. */
 const TRIAL_OPEN = /^\/api\/(auth\/|billing|support)/
@@ -61,7 +62,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       where: { id: payload.sub },
       select: {
         id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true,
-        company: { select: { id: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true, trialEndsAt: true } },
+        company: { select: { id: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true, trialEndsAt: true, subscription: { select: { status: true, currentPeriodEnd: true, pastDueSince: true, cancelAtPeriodEnd: true } } } },
         customRole: { select: { areasOff: true } },
       },
     })
@@ -87,11 +88,16 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         return
       }
     }
-    // A free trial that has ended (Phase 1, step 7): everything can still be looked at, and
-    // Billing opens, but nothing new is saved until the company picks a plan.
-    if (user.company.status === 'TRIAL' && user.company.trialEndsAt && user.company.trialEndsAt < new Date() && req.method !== 'GET' && !TRIAL_OPEN.test(req.originalUrl)) {
-      res.status(402).json({ error: 'Your free trial has ended. Choose a plan in Billing to keep going; nothing has been lost.', trialEnded: true })
-      return
+    // A free trial that ended, a payment that has failed for a week, or a plan that ended
+    // (Phase 1, steps 7 and 8): everything can still be looked at, and Billing opens, but
+    // nothing new is saved until it is paid.
+    if (req.method !== 'GET' && !TRIAL_OPEN.test(req.originalUrl)) {
+      const state = billingState(user.company, user.company.subscription)
+      const why = readOnlyReason(state)
+      if (why) {
+        res.status(402).json({ error: why, trialEnded: state === 'trial_ended', billing: state })
+        return
+      }
     }
     // Parts of Metriq can be switched off for the company (its plan, or the owner; Phase 1,
     // step 6) or for a company role (step 4).

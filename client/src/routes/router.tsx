@@ -82,6 +82,9 @@ const AdminLeave = lazy(pageModule(() => import('../pages/app/admin/AdminLeave')
 const AdminNetworks = lazy(pageModule(() => import('../pages/app/admin/AdminNetworks')))
 const Start = lazy(pageModule(() => import('../pages/auth/Start')))
 const Setup = lazy(pageModule(() => import('../pages/app/Setup')))
+const Billing = lazy(pageModule(() => import('../pages/app/billing/Billing')))
+const TestCheckout = lazy(pageModule(() => import('../pages/app/billing/TestCheckout')))
+const InvoiceView = lazy(pageModule(() => import('../pages/app/billing/InvoiceView')))
 const VerifyEmail = lazy(pageModule(() => import('../pages/auth/VerifyEmail')))
 const CompanySettings = lazy(pageModule(() => import('../pages/app/admin/CompanySettings')))
 const MyDailyReport = lazy(pageModule(() => import('../pages/app/dailyReport/MyDailyReport')))
@@ -138,6 +141,9 @@ export const router = createBrowserRouter([
       { path: 'analytics', element: <MyPerformance /> },
       { path: 'todo', element: <MyTodo /> },
       { path: 'setup', element: <RequirePower power="company.settings"><Setup /></RequirePower> },
+      { path: 'billing', element: <RequirePower power="company.settings"><Billing /></RequirePower> },
+      { path: 'billing/test-checkout', element: <RequirePower power="company.settings"><TestCheckout /></RequirePower> },
+      { path: 'billing/invoices/:id', element: <RequirePower power="company.settings"><InvoiceView /></RequirePower> },
       { path: 'daily-report', element: <RequireFlag flag="daily-report"><MyDailyReport /></RequireFlag> },
       { path: 'daily-report/team', element: <RequireFlag flag="daily-report"><TeamDailyReport /></RequireFlag> },
       { path: 'daily-report/forms', element: <RequireFlag flag="daily-report"><ReportForms /></RequireFlag> },

@@ -41,6 +41,7 @@ import {
   Plug,
   ClipboardPen,
   SlidersHorizontal,
+  CreditCard,
   type LucideIcon,
 } from 'lucide-react'
 import type { CurrentUser, Role } from '../../lib/types'
@@ -65,6 +66,8 @@ export interface NavItem {
   power?: string
   /** Hidden while this owner switch (company-wise) is off. */
   flag?: string
+  /** Not for 99 Technologies (e.g. Billing: they are never billed). */
+  notHome?: boolean
   /** System Health: Super Admins and developers (User.isDeveloper) only. */
   healthOnly?: boolean
   badge?: { text: string; tone: BadgeTone }
@@ -259,6 +262,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Holidays & Leave', to: '/app/admin/leave', icon: CalendarOff },
       { label: 'Office Networks', to: '/app/admin/networks', icon: Wifi },
       { label: 'Company Settings', to: '/app/admin/company', icon: Building2, power: 'company.settings', flag: 'company-settings' },
+      { label: 'Billing', to: '/app/billing', icon: CreditCard, power: 'company.settings', notHome: true },
       { label: 'System Health', to: '/app/admin/health', icon: Activity, healthOnly: true },
     ],
   },
@@ -271,6 +275,7 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
   // System Health is Metriq's own engineering view: 99 Technologies only.
   if (item.healthOnly) return inHomeCompany(u) && (u.role === 'SUPER_ADMIN' || !!u.isDeveloper)
   if (item.flag && !flagOn(item.flag)) return false
+  if (item.notHome && inHomeCompany(u)) return false
   // The finance power wins over everything, including Super Admin.
   if (item.financeOnly) return canViewFinance(u)
   if (item.power) return !!u.permissions?.includes(item.power)
