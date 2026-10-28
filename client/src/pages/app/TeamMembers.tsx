@@ -22,6 +22,7 @@ import {
   type TeamMember,
   type TeamEvent,
   type TeamEventType,
+  type TeamDepartment,
 } from '../../lib/adminApi'
 
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
@@ -54,6 +55,9 @@ export default function TeamMembers() {
   const [removing, setRemoving] = useState(false)
   const [toReset, setToReset] = useState<TeamMember | null>(null)
   const [query, setQuery] = useState('')
+  // A Super Admin with no department of their own manages the whole company.
+  const [departments, setDepartments] = useState<TeamDepartment[] | null>(null)
+  const whole = departments !== null
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -79,6 +83,7 @@ export default function TeamMembers() {
       .then(([m, h]) => {
         if (!active) return
         setMembers(m.members)
+        setDepartments(m.scope === 'company' ? m.departments ?? [] : null)
         setEvents(h.events)
       })
       .catch(() => active && addToast({ type: 'error', message: 'Could not load your team.' }))
@@ -111,6 +116,7 @@ export default function TeamMembers() {
     { key: 'name', header: 'Name', render: (m) => <span className="font-medium text-ink">{m.name}</span> },
     { key: 'email', header: 'Email', render: (m) => <span className="text-ink-muted">{m.email}</span> },
     { key: 'role', header: 'Role', render: (m) => ROLE_LABEL[m.role] + (m.subDepartment ? ` · ${m.subDepartment}` : '') },
+    ...(whole ? [{ key: 'department', header: 'Department', render: (m: TeamMember) => <span className="text-ink-muted">{m.department ?? '—'}</span> }] : []),
     { key: 'status', header: 'Status', render: (m) => <Badge tone={STATUS_META[m.status].tone} dot>{STATUS_META[m.status].label}</Badge> },
     {
       key: 'password',
@@ -160,7 +166,7 @@ export default function TeamMembers() {
         <div>
           <h1 className="text-headline-lg text-ink">My Team</h1>
           <p className="mt-0.5 text-body-md text-ink-muted">
-            {user?.department ? `${user.department.replace('_', ' ')} · ` : ''}Invite and manage your department’s members.
+            {whole ? 'Invite and manage everyone in your company.' : <>{user?.department ? `${user.department.replace('_', ' ')} · ` : ''}Invite and manage your department’s members.</>}
           </p>
         </div>
         <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>Invite Member</Button>
@@ -214,6 +220,7 @@ export default function TeamMembers() {
       <InviteModal
         open={open}
         isMarketing={isMarketing}
+        departments={departments}
         onClose={() => setOpen(false)}
         onCreated={(m) => {
           setMembers((ms) => [m, ...ms])
@@ -327,12 +334,15 @@ function toneBg(tone: BadgeTone): string {
 
 function InviteModal({
   open,
-  isMarketing,
+  isMarketing: leadIsMarketing,
+  departments,
   onClose,
   onCreated,
 }: {
   open: boolean
   isMarketing: boolean
+  /** Set in the whole-company view: the departments to choose from. */
+  departments: TeamDepartment[] | null
   onClose: () => void
   onCreated: (m: TeamMember) => void
 }) {
@@ -340,17 +350,20 @@ function InviteModal({
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [subDept, setSubDept] = useState('')
+  const [deptId, setDeptId] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const chosen = departments?.find((d) => d.id === deptId) ?? (departments?.length === 1 ? departments[0] : undefined)
+  const isMarketing = departments ? chosen?.type === 'MARKETING' : leadIsMarketing
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!name.trim() || !email.trim() || submitting) return
     setSubmitting(true)
     try {
-      const res = await inviteTeamMember({ name, email, subDepartmentSlug: isMarketing ? subDept || null : null })
+      const res = await inviteTeamMember({ name, email, subDepartmentSlug: isMarketing ? subDept || null : null, departmentId: departments ? chosen?.id ?? null : undefined })
       onCreated(res.member)
       addToast({ type: 'success', message: `Invited ${res.member.name}. Temp password: ${res.tempPassword}`, duration: 9000 })
-      setName(''); setEmail(''); setSubDept('')
+      setName(''); setEmail(''); setSubDept(''); setDeptId('')
       onClose()
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Could not invite member.'
@@ -377,6 +390,19 @@ function InviteModal({
           <TextField label="Full name" value={name} onChange={(e) => setName(e.target.value)} />
           <TextField label="Work email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
+        {departments && (
+          departments.length === 0 ? (
+            <p className="rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">Your company has no departments yet, so they join one called “Team”. You can rename it or add more in Admin, Company Settings.</p>
+          ) : (
+            <div>
+              <label className="mb-1 block text-body-sm font-semibold text-ink">Department</label>
+              <select className={sel} value={chosen?.id ?? ''} onChange={(e) => { setDeptId(e.target.value); setSubDept('') }}>
+                {departments.length > 1 && <option value="">Choose…</option>}
+                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+          )
+        )}
         {isMarketing && (
           <div>
             <label className="mb-1 block text-body-sm font-semibold text-ink">Sub-department</label>
@@ -387,7 +413,7 @@ function InviteModal({
           </div>
         )}
         <p className="text-body-sm text-ink-muted">
-          The member joins your department immediately. A temporary password is generated and shown after you invite them.
+          {departments ? 'They join that department straight away.' : 'The member joins your department immediately.'} A temporary password is generated and shown after you invite them.
         </p>
       </form>
     </Modal>

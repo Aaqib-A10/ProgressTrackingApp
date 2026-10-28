@@ -364,29 +364,56 @@ export async function resetUserPassword(req: AuthedRequest, res: Response): Prom
 
 // =================== Team Members (Team Lead) ===================
 
-/** GET /api/admin/team-members — roster of the Team Lead's own department. */
-export async function listTeamMembers(req: AuthedRequest, res: Response): Promise<void> {
-  const me = await loadUser(req.user!.id)
+/**
+ * Whose team "My Team" shows. A lead (or a Super Admin) with a department: that department, as
+ * always. A Super Admin with no department (a new company's founder): the whole company, and they
+ * pick the department when they invite someone.
+ */
+type Me = Awaited<ReturnType<typeof loadUser>>
+type TeamScope = { whole: false; departmentId: string } | { whole: true }
+function teamScope(me: Me, res: Response): TeamScope | null {
   if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Forbidden' })
-    return
+    return null
   }
-  if (!me.departmentId) {
-    res.status(400).json({ error: 'You are not assigned to a department' })
-    return
-  }
+  if (me.departmentId) return { whole: false, departmentId: me.departmentId }
+  if (me.role === 'SUPER_ADMIN') return { whole: true }
+  res.status(400).json({ error: 'You are not assigned to a department' })
+  return null
+}
+const TEAM_ROLES: Role[] = ['MEMBER', 'SUB_DEPT_LEAD']
+/** Who a lead may manage: their own department's members. The whole-company view also takes Team Leads. */
+function inTeam(scope: TeamScope, me: Me, target: { id: string; role: Role; departmentId: string | null }): boolean {
+  if (target.id === me.id) return false
+  if (scope.whole) return [...TEAM_ROLES, 'TEAM_LEAD'].includes(target.role)
+  return target.departmentId === scope.departmentId && TEAM_ROLES.includes(target.role)
+}
+
+/** GET /api/admin/team-members — roster of the Team Lead's own department (or the whole company, above). */
+export async function listTeamMembers(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  const scope = teamScope(me, res)
+  if (!scope) return
   const members = await prisma.user.findMany({
-    where: { departmentId: me.departmentId, role: { in: ['MEMBER', 'SUB_DEPT_LEAD'] }, isActive: true },
-    include: { subDepartment: { select: { slug: true } } },
+    where: scope.whole
+      ? { role: { in: [...TEAM_ROLES, 'TEAM_LEAD'] }, isActive: true, id: { not: me.id } }
+      : { departmentId: scope.departmentId, role: { in: TEAM_ROLES }, isActive: true },
+    include: { subDepartment: { select: { slug: true } }, department: { select: { name: true } } },
     orderBy: { name: 'asc' },
   })
+  const departments = scope.whole
+    ? (await prisma.department.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, name: true, type: true } }))
+    : undefined
   res.json({
+    scope: scope.whole ? 'company' : 'department',
+    departments,
     members: members.map((u) => ({
       id: u.id,
       name: u.name,
       email: u.email,
       role: u.role,
       subDepartment: u.subDepartment?.slug ?? null,
+      department: scope.whole ? u.department?.name ?? null : undefined,
       status: u.status,
       isActive: u.isActive,
     })),
@@ -397,26 +424,38 @@ const inviteMemberSchema = z.object({
   name: z.string().min(1),
   email: z.string().email().transform((v) => v.trim().toLowerCase()),
   subDepartmentSlug: z.string().nullable().optional(),
+  /** Only for the whole-company view: which department they join. */
+  departmentId: z.string().nullable().optional(),
 })
 
 /** POST /api/admin/team-members — Team Lead invites an employee into their own department. */
 export async function inviteTeamMember(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
-    res.status(403).json({ error: 'Forbidden' })
-    return
-  }
-  if (!me.departmentId || !me.department) {
-    res.status(400).json({ error: 'You are not assigned to a department' })
-    return
-  }
-  await checkPeopleRoom()
+  const scope = teamScope(me, res)
+  if (!scope) return
   const parsed = inviteMemberSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
     return
   }
   const v = parsed.data
+  let department = me.department
+  if (scope.whole) {
+    const all = await prisma.department.findMany({ orderBy: { createdAt: 'asc' } })
+    // No department yet (setup skipped): one called "Team" is made, to rename in Company Settings.
+    if (all.length === 0 && !v.departmentId) all.push(await prisma.department.create({ data: { name: 'Team', type: 'GENERAL' } }))
+    department = v.departmentId ? all.find((d) => d.id === v.departmentId) ?? null : all.length === 1 ? all[0] : null
+    if (!department) {
+      res.status(400).json({ error: 'Choose the department they join.' })
+      return
+    }
+  }
+  if (!department) {
+    res.status(400).json({ error: 'You are not assigned to a department' })
+    return
+  }
+  const departmentId = department.id
+  await checkPeopleRoom()
   const existing = await prisma.user.findUnique({ where: { email: v.email } })
   // Only a genuinely active account blocks re-use; a previously removed
   // (soft-deleted) account is reactivated below so the TL can re-add them.
@@ -427,9 +466,9 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
 
   // Marketing members can belong to a sub-department (SEO / Social / Content).
   let subDepartmentId: string | null = null
-  if (me.department.type === 'MARKETING' && v.subDepartmentSlug) {
+  if (department.type === 'MARKETING' && v.subDepartmentSlug) {
     const sub = await prisma.subDepartment.findUnique({
-      where: { departmentId_slug: { departmentId: me.departmentId, slug: v.subDepartmentSlug } },
+      where: { departmentId_slug: { departmentId, slug: v.subDepartmentSlug } },
     })
     subDepartmentId = sub?.id ?? null
   }
@@ -439,22 +478,22 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
   const user = existing
     ? await prisma.user.update({
         where: { id: existing.id },
-        data: { name: v.name, role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash, departmentId: me.departmentId, subDepartmentId },
+        data: { name: v.name, role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash, departmentId, subDepartmentId },
         include: { subDepartment: { select: { slug: true } } },
       })
     : await prisma.user.create({
-        data: { name: v.name, email: v.email, role: 'MEMBER', status: 'ACTIVE', passwordHash, departmentId: me.departmentId, subDepartmentId },
+        data: { name: v.name, email: v.email, role: 'MEMBER', status: 'ACTIVE', passwordHash, departmentId, subDepartmentId },
         include: { subDepartment: { select: { slug: true } } },
       })
   // Record (or refresh) their membership of the lead's department.
   await prisma.userDepartment.upsert({
-    where: { userId_departmentId: { userId: user.id, departmentId: me.departmentId } },
+    where: { userId_departmentId: { userId: user.id, departmentId } },
     update: { role: 'MEMBER', subDepartmentId },
-    create: { userId: user.id, departmentId: me.departmentId, subDepartmentId, role: 'MEMBER' },
+    create: { userId: user.id, departmentId, subDepartmentId, role: 'MEMBER' },
   })
   await prisma.teamMemberEvent.create({
     data: {
-      departmentId: me.departmentId,
+      departmentId,
       actorId: me.id,
       actorName: me.name,
       memberId: user.id,
@@ -472,6 +511,7 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
       email: user.email,
       role: user.role,
       subDepartment: user.subDepartment?.slug ?? null,
+      department: scope.whole ? department.name : undefined,
       status: user.status,
       isActive: user.isActive,
     },
@@ -484,14 +524,8 @@ const resetPwSchema = z.object({ password: z.string().min(8, 'Password must be a
 /** POST /api/admin/team-members/:id/reset-password — TL sets/regenerates a member's password. */
 export async function resetTeamMemberPassword(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
-    res.status(403).json({ error: 'Forbidden' })
-    return
-  }
-  if (!me.departmentId) {
-    res.status(400).json({ error: 'You are not assigned to a department' })
-    return
-  }
+  const scope = teamScope(me, res)
+  if (!scope) return
   const parsed = resetPwSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
@@ -503,7 +537,7 @@ export async function resetTeamMemberPassword(req: AuthedRequest, res: Response)
     return
   }
   // A Team Lead may only reset members of their own department (not leads/self).
-  if (target.departmentId !== me.departmentId || target.id === me.id || (target.role !== 'MEMBER' && target.role !== 'SUB_DEPT_LEAD')) {
+  if (!inTeam(scope, me, target)) {
     res.status(403).json({ error: 'You can only manage members of your own team' })
     return
   }
@@ -523,14 +557,8 @@ export async function resetTeamMemberPassword(req: AuthedRequest, res: Response)
  */
 export async function removeTeamMember(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
-    res.status(403).json({ error: 'Forbidden' })
-    return
-  }
-  if (!me.departmentId) {
-    res.status(400).json({ error: 'You are not assigned to a department' })
-    return
-  }
+  const scope = teamScope(me, res)
+  if (!scope) return
   const target = await prisma.user.findUnique({ where: { id: req.params.id } })
   if (!target) {
     res.status(404).json({ error: 'Member not found' })
@@ -538,39 +566,36 @@ export async function removeTeamMember(req: AuthedRequest, res: Response): Promi
   }
   // A Team Lead may only remove members of their own department, and never
   // another lead or themselves.
-  if (target.departmentId !== me.departmentId || target.id === me.id || (target.role !== 'MEMBER' && target.role !== 'SUB_DEPT_LEAD')) {
+  if (!inTeam(scope, me, target)) {
     res.status(403).json({ error: 'You can only remove members of your own team' })
     return
   }
 
   await prisma.user.update({ where: { id: target.id }, data: { isActive: false } })
-  await prisma.teamMemberEvent.create({
-    data: {
-      departmentId: me.departmentId,
-      actorId: me.id,
-      actorName: me.name,
-      memberId: target.id,
-      memberName: target.name,
-      memberEmail: target.email,
-      type: 'REMOVED',
-    },
-  })
+  const departmentId = scope.whole ? target.departmentId : scope.departmentId
+  if (departmentId) {
+    await prisma.teamMemberEvent.create({
+      data: {
+        departmentId,
+        actorId: me.id,
+        actorName: me.name,
+        memberId: target.id,
+        memberName: target.name,
+        memberEmail: target.email,
+        type: 'REMOVED',
+      },
+    })
+  }
   res.status(204).end()
 }
 
-/** GET /api/admin/team-history — full roster-change log for the lead's department. */
+/** GET /api/admin/team-history — full roster-change log for the lead's department (or the whole company). */
 export async function listTeamHistory(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.role !== 'TEAM_LEAD' && me.role !== 'SUPER_ADMIN') {
-    res.status(403).json({ error: 'Forbidden' })
-    return
-  }
-  if (!me.departmentId) {
-    res.status(400).json({ error: 'You are not assigned to a department' })
-    return
-  }
+  const scope = teamScope(me, res)
+  if (!scope) return
   const events = await prisma.teamMemberEvent.findMany({
-    where: { departmentId: me.departmentId },
+    where: scope.whole ? {} : { departmentId: scope.departmentId },
     orderBy: { createdAt: 'desc' },
     take: 200,
   })

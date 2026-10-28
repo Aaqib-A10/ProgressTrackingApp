@@ -53,13 +53,17 @@ export interface TeamMember {
   email: string
   role: Role
   subDepartment: string | null
+  /** Only in the whole-company view. */
+  department?: string | null
   status: UserStatus
   isActive: boolean
   /** Last issued temp password — visible until the member sets their own (then null). */
   tempPassword: string | null
 }
-export const listTeamMembers = () => api.get<{ members: TeamMember[] }>('/admin/team-members')
-export const inviteTeamMember = (input: { name: string; email: string; subDepartmentSlug?: string | null }) =>
+/** A Super Admin with no department of their own sees the whole company ('company') and picks the department on invite. */
+export interface TeamDepartment { id: string; name: string; type: string }
+export const listTeamMembers = () => api.get<{ members: TeamMember[]; scope?: 'company' | 'department'; departments?: TeamDepartment[] }>('/admin/team-members')
+export const inviteTeamMember = (input: { name: string; email: string; subDepartmentSlug?: string | null; departmentId?: string | null }) =>
   api.post<{ member: TeamMember; tempPassword: string }>('/admin/team-members', input)
 export const removeTeamMember = (id: string) => api.del<void>(`/admin/team-members/${id}`)
 /** Reset (or set) a member's password; returns the new value to show the TL. */

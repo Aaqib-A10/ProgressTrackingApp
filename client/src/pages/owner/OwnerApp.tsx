@@ -191,6 +191,7 @@ function OwnerShell() {
     { path: 'support', element: <SupportPage /> },
     { path: 'support/:id', element: <TicketPage /> },
     { path: 'switches', element: <SwitchesPage /> },
+    { path: 'switches/:id', element: <CompanySwitchesPage /> },
     { path: 'activity', element: <ActivityPage /> },
     { path: '*', element: <Navigate to="/owner" replace /> },
   ])
@@ -786,50 +787,145 @@ function ActivityPage() {
 
 // ------------------------------------------------------------------ switches
 
+/**
+ * Switches, company by company: pick a company, then set each switch for that company alone.
+ * Below the list: the default (for companies not set by hand, and for new ones) and the
+ * whole-of-Metriq switches.
+ */
 function SwitchesPage() {
   const { addToast } = useToast()
   const { data, error, setData } = useLoad(() => ownerApi.flags())
+  const companies = useLoad(() => ownerApi.companies())
   const [busy, setBusy] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  const several = (companies.data?.companies.length ?? 0) > 1
   async function flip(f: OwnerFlag, enabled: boolean) {
-    if (f.key === 'company-walls' && !enabled && !window.confirm('Turn the company walls off? Every company would see every other company\'s records. Only do this in an emergency while 99 Technologies is the only company.')) return
     setBusy(f.key)
-    try { setData(await ownerApi.setFlag(f.key, enabled)); addToast({ type: 'success', message: `${f.label} ${enabled ? 'switched on' : 'switched off'}. It takes effect within a minute.` }) }
+    try { setData(await ownerApi.setFlag(f.key, enabled)); addToast({ type: 'success', message: `${f.label} ${enabled ? 'on' : 'off'} by default. Companies set by hand keep their own setting.` }) }
     catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(null) }
   }
+  if (!data || !companies.data) return <Loading error={error || companies.error} />
+  const companyFlags = data.flags.filter((f) => f.scope === 'company')
+  const platform = data.flags.filter((f) => f.scope === 'platform')
+  const setFor = (id: string) => companyFlags.filter((f) => f.overrides.some((o) => o.companyId === id)).length
+  const list = companies.data.companies.filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase()))
   return (
     <>
-      <Title sub="Turn a part of Metriq on or off in seconds, with no deploy. The switch here is for all companies; to show a part to some companies and not others, set it on the company's page.">Switches</Title>
-      {!data ? <Loading error={error} /> : (
-        <Panel className="divide-y divide-line">
+      <Title sub="Open a company to choose what it sees. A switch set inside a company applies to that company only.">Switches</Title>
+
+      <Panel>
+        <PanelHead title={`Companies (${companies.data.companies.length})`} action={
+          <div className="relative w-56"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a company" className={cn(inputCls, 'h-9 pl-8')} aria-label="Find a company" /></div>
+        } />
+        {list.length === 0 ? <Empty>No company matches.</Empty> : (
+          <ul className="divide-y divide-line">
+            {list.map((c) => {
+              const n = setFor(c.id)
+              return (
+                <li key={c.id}>
+                  <Link to={`/owner/switches/${c.id}`} className="flex items-center gap-3 px-5 py-4 hover:bg-slate-50">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Building2 size={16} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-body-md font-semibold text-ink">{c.name}{c.home && <span className="ml-2 text-[12px] font-normal text-ink-muted">company 1</span>}</p>
+                      <p className="text-body-sm text-ink-muted">{c.kind === 'PERSONAL' ? 'Individual' : 'Team'} · <span className="capitalize">{c.plan}</span> plan</p>
+                    </div>
+                    <span className="hidden text-body-sm text-ink-muted sm:block">{n === 0 ? 'Uses the defaults' : `${n} switch${n === 1 ? '' : 'es'} set for it`}</span>
+                    <ChevronDown size={16} className="-rotate-90 text-ink-faint" />
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel className="mt-6">
+        <PanelHead title="Default for every company" />
+        <p className="px-5 py-3 text-body-sm text-ink-muted">What a company gets when you have not set the switch inside it, and what new companies start with.</p>
+        <ul className="divide-y divide-line border-t border-line">
+          {companyFlags.map((f) => (
+            <li key={f.key} className="flex items-start gap-4 px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-body-md font-semibold text-ink">{f.label}</p>
+                <p className="mt-0.5 text-body-sm text-ink-muted">{f.description}</p>
+                {f.overrides.length > 0 && <p className="mt-1 text-[12px] text-ink-faint">Set by hand for {f.overrides.map((o) => `${o.companyName} (${o.enabled ? 'on' : 'off'})`).join(', ')}</p>}
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                <Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => flip(f, v)} label={`${f.label} by default`} />
+                <span className="text-[12px] text-ink-faint">{f.enabled ? 'On' : 'Off'} by default</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      {platform.length > 0 && (
+        <Panel className="mt-6">
+          <PanelHead title="Whole of Metriq" />
+          <ul className="divide-y divide-line">
+            {platform.map((f) => {
+              const locked = f.key === 'company-walls' && f.enabled && several
+              return (
+                <li key={f.key} className="flex items-start gap-4 px-5 py-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2"><p className="text-body-md font-semibold text-ink">{f.label}</p><Badge tone={f.enabled ? 'success' : 'danger'}>{f.enabled ? 'On' : 'Off'}</Badge>{locked && <Badge tone="neutral">Locked on</Badge>}</div>
+                    <p className="mt-0.5 text-body-sm text-ink-muted">{locked ? 'Each company sees only its own records. It stays on while other companies use Metriq; turning it off would let every company see every other company\'s records.' : f.description}</p>
+                  </div>
+                  <Toggle checked={f.enabled} disabled={locked || busy === f.key} onChange={(v) => {
+                    if (f.key === 'company-walls' && !v && !window.confirm('Turn the company walls off? Every company would see every other company\'s records. Only do this in an emergency while 99 Technologies is the only company.')) return
+                    void flip(f, v)
+                  }} label={f.label} />
+                </li>
+              )
+            })}
+          </ul>
+        </Panel>
+      )}
+    </>
+  )
+}
+
+/** One company's switches: each one on or off for this company alone, or back to the default. */
+function CompanySwitchesPage() {
+  const { id = '' } = useParams()
+  const { addToast } = useToast()
+  const company = useLoad(() => ownerApi.company(id), [id])
+  const { data, error, setData } = useLoad(() => ownerApi.companyFlags(id), [id])
+  const [busy, setBusy] = useState<string | null>(null)
+  async function set(f: CompanyFlag, enabled: boolean | null) {
+    setBusy(f.key)
+    try {
+      const r = await ownerApi.setCompanyFlag(id, f.key, enabled)
+      setData({ flags: r.flags })
+      const name = company.data?.company.name ?? 'this company'
+      addToast({ type: 'success', message: enabled === null ? `${f.label} back to the default for ${name}.` : `${f.label} ${enabled ? 'on' : 'off'} for ${name} only. It takes effect within a minute.` })
+    } catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(null) }
+  }
+  if (!data || !company.data) return <Loading error={error || company.error} />
+  const c = company.data.company
+  return (
+    <>
+      <Title back="/owner/switches" sub={<>Switches for <span className="font-medium text-ink">{c.name}</span> only. Other companies are not changed. <Link to={`/owner/companies/${c.id}`} className="text-primary hover:underline">Company page</Link></>}>{c.name}</Title>
+      <Panel>
+        <ul className="divide-y divide-line">
           {data.flags.map((f) => (
-            <div key={f.key} className="flex items-start gap-4 px-5 py-5">
+            <li key={f.key} className="flex items-start gap-4 px-5 py-5">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-body-md font-semibold text-ink">{f.label}</p>
                   <Badge tone={f.enabled ? 'success' : 'danger'}>{f.enabled ? 'On' : 'Off'}</Badge>
-                  {f.scope === 'platform' && <Badge tone="neutral">Whole of Metriq</Badge>}
                 </div>
                 <p className="mt-1 text-body-sm text-ink-muted">{f.description}</p>
-                <p className="mt-1.5 text-[12px] text-ink-faint">{f.isDefault ? `Never changed (${f.defaultValue ? 'on' : 'off'} by default)` : `Last changed ${fmt(f.updatedAt)}${f.updatedBy ? ` by ${f.updatedBy}` : ''}`}</p>
-                {f.overrides.length > 0 && (
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-body-sm">
-                    <span className="text-ink-muted">Set differently for</span>
-                    {f.overrides.map((o) => (
-                      <Link key={o.companyId} to={`/owner/companies/${o.companyId}`} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-slate-50 px-2.5 py-0.5 text-ink hover:border-primary/40">
-                        {o.companyName}<span className={o.enabled ? 'text-success' : 'text-danger'}>{o.enabled ? 'on' : 'off'}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
+                <p className="mt-1.5 text-[12px] text-ink-faint">
+                  {f.own === null ? `Uses the default (${f.allCompanies ? 'on' : 'off'})` : <>Set for this company{f.updatedAt ? ` ${fmt(f.updatedAt)}` : ''}{f.updatedBy ? ` by ${f.updatedBy}` : ''} · <button type="button" disabled={busy === f.key} onClick={() => set(f, null)} className="font-medium text-primary hover:underline">Use the default ({f.allCompanies ? 'on' : 'off'})</button></>}
+                </p>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-1 pt-1">
-                <Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => flip(f, v)} label={`${f.label} for all companies`} />
-                <span className="text-[12px] text-ink-faint">{f.scope === 'platform' ? 'Everywhere' : 'All companies'}</span>
-              </div>
-            </div>
+              <Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => set(f, v)} label={`${f.label} for ${c.name}`} />
+            </li>
           ))}
-        </Panel>
-      )}
+        </ul>
+      </Panel>
     </>
   )
 }
