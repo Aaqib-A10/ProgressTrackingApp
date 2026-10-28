@@ -1,0 +1,55 @@
+# Runs every test on each push to main or erp (Phase 1, step 1: safety net).
+# GitHub shows a green tick or a red cross next to the commit; deploy only on green.
+# It uses its own empty PostgreSQL inside GitHub, never the live database, and needs no secrets.
+name: Tests
+
+on:
+  push:
+    branches: [main, erp]
+  pull_request:
+    branches: [main, erp]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: metriq
+          POSTGRES_PASSWORD: metriq
+          POSTGRES_DB: pulsetrack
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U metriq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # A throwaway database that exists only while the tests run.
+      DATABASE_URL: postgresql://metriq:metriq@localhost:5432/pulsetrack?schema=public
+      NODE_ENV: test
+      APP_TIMEZONE: Asia/Karachi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Prepare the database layer
+        working-directory: server
+        run: npx prisma generate
+      - name: Server type check
+        working-directory: server
+        run: npx tsc --noEmit -p .
+      - name: Website type check and build
+        run: npm run build -w client
+      - name: Unit tests
+        working-directory: server
+        run: npx vitest run
+      - name: Integration tests (whole app against its own database)
+        working-directory: server
+        run: npx vitest run --config vitest.integration.config.ts
