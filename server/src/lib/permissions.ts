@@ -33,6 +33,7 @@ export const AREAS = [
   { key: 'inventory', label: 'Inventory', api: ['/api/inventory'], app: ['/app/inventory'] },
   { key: 'qa', label: 'Quality Assurance', api: ['/api/qa'], app: ['/app/qa'] },
   { key: 'reports', label: 'Reports and analytics', api: ['/api/reports'], app: ['/app/reports', '/app/analytics'] },
+  { key: 'daily-report', label: 'Daily Report', api: ['/api/daily-report'], app: ['/app/daily-report'] },
 ] as const
 
 /** Extra powers a company role or a person can be given. */

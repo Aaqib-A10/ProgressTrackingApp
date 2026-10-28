@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { Activity } from 'lucide-react'
 import type { Role } from '../lib/types'
 import { useAuth } from '../lib/auth'
 import { canViewFinance } from '../lib/finance'
+import { flagOn, refreshFlags } from '../lib/flags'
 import { inHomeCompany } from '../lib/types'
 import { canOpen } from '../lib/access'
 import { AppShell } from '../components/layout/AppShell'
@@ -49,6 +51,15 @@ export function RequireFinance({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
   if (!canViewFinance(user)) return <Navigate to="/app/dashboard" replace />
+  return <>{children}</>
+}
+
+/** A page behind an owner switch (company-wise): closed while the switch is off for the company. */
+export function RequireFlag({ flag, children }: { flag: string; children: ReactNode }) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => { void refreshFlags().finally(() => setReady(true)) }, [])
+  if (!ready) return null
+  if (!flagOn(flag)) return <Navigate to="/app/dashboard" replace />
   return <>{children}</>
 }
 

@@ -39,6 +39,8 @@ import {
   LayoutGrid,
   Activity,
   Plug,
+  ClipboardPen,
+  SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react'
 import type { CurrentUser, Role } from '../../lib/types'
@@ -116,6 +118,17 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Calendar', to: '/app/calendar', icon: CalendarDays },
       // Shown only to project admins (and Super Admins): the Sidebar checks that.
       { label: 'Projects Dashboard', to: '/app/projects/dashboard', icon: LayoutGrid, projectAdminOnly: true },
+    ],
+  },
+  {
+    // Phase 1, step 5: a company's own daily form (company-wise switch "daily-report").
+    title: 'Daily Report',
+    icon: ClipboardList,
+    color: '#14B8A6',
+    items: [
+      { label: 'My Daily Report', to: '/app/daily-report', icon: ClipboardPen, flag: 'daily-report' },
+      { label: 'Team Reports', to: '/app/daily-report/team', icon: BarChart3, flag: 'daily-report' },
+      { label: 'Report Forms', to: '/app/daily-report/forms', icon: SlidersHorizontal, flag: 'daily-report' },
     ],
   },
   {

@@ -125,6 +125,7 @@ model Department {
   marketingPlans  MarketingPlan[]
   salaryRecords   SalaryRecord[]
   inventoryItems  InventoryItem[]
+  reportForms     ReportForm[]
 
   @@index([companyId, type])
   @@index([companyId])
@@ -287,6 +288,8 @@ model User {
   blockedCheckIns     BlockedCheckIn[]
   workLogNotes        WorkLogNote[]        @relation("WorkLogNoteAuthor")
   claudeKeys          ClaudeKey[]
+  reportForms         ReportForm[]         @relation("ReportFormCreator")
+  reportEntries       ReportEntry[]        @relation("ReportEntries")
 
   @@index([companyId])
   @@index([departmentId])
@@ -3514,6 +3517,9 @@ model Company {
   claudeKeyRows            ClaudeKey[]
   supportMessageRows       SupportMessage[]
   companyRoles             CompanyRole[]
+  reportForms              ReportForm[]
+  reportFields             ReportField[]
+  reportEntries            ReportEntry[]
 }
 
 model PlatformOwner {
@@ -3653,4 +3659,87 @@ model CompanyRole {
 
   @@unique([companyId, name])
   @@index([companyId])
+}
+
+// ---------------------------------------------------------------- Daily Report builder
+// Phase 1, step 5: a company builds its own daily form instead of the six built-in daily logs.
+
+enum ReportFieldType {
+  NUMBER
+  TEXT
+  LONG_TEXT
+  CHOICE
+  MULTI_CHOICE
+  YES_NO
+  RATING
+  LINK
+}
+
+/// A daily form a company built (for one department, or for everyone).
+model ReportForm {
+  id           String      @id @default(cuid())
+  companyId    String      @default("")
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Who fills it in: the people of this department (empty = everyone in the company).
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  name         String
+  description  String?
+  active       Boolean     @default(true)
+  createdById  String?
+  createdBy    User?       @relation("ReportFormCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  fields  ReportField[]
+  entries ReportEntry[]
+
+  @@index([companyId])
+  @@index([departmentId])
+}
+
+/// One question on a daily form. Removing a question archives it, so old answers keep their meaning.
+model ReportField {
+  id        String          @id @default(cuid())
+  companyId String          @default("")
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  formId    String
+  form      ReportForm      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  label     String
+  help      String?
+  type      ReportFieldType
+  /// Choices (CHOICE, MULTI_CHOICE).
+  options   String[]        @default([])
+  required  Boolean         @default(false)
+  /// NUMBER: the daily target per person, and whether more (MIN) or less (MAX) is better.
+  target    Float?
+  targetDir String          @default("MIN")
+  unit      String?
+  position  Int             @default(0)
+  archived  Boolean         @default(false)
+  createdAt DateTime        @default(now())
+
+  @@index([formId, position])
+  @@index([companyId])
+}
+
+/// A person's answers for one day (one per person, form and day; sending again updates it).
+model ReportEntry {
+  id          String     @id @default(cuid())
+  companyId   String     @default("")
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  formId      String
+  form        ReportForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User       @relation("ReportEntries", fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime   @db.Date
+  /// { [fieldId]: number | string | string[] | boolean }
+  values      Json
+  submittedAt DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([formId, userId, date])
+  @@index([formId, date])
+  @@index([companyId])
+  @@index([userId, date])
 }

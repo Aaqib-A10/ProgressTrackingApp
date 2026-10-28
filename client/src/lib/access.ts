@@ -107,6 +107,10 @@ export const ACCESS: Record<string, AccessLine[]> = {
   '/app/marketing/ads': mkt('ads'),
   '/app/marketing/email': mkt('email'),
 
+  // ---- Daily Report (Phase 1, step 5): anyone fills it in; team leads see the team and build forms.
+  '/app/daily-report/team': [{ roles: LEAD }],
+  '/app/daily-report/forms': [{ roles: LEAD }],
+
   // ---- Admin
   '/app/admin/users': [],
   '/app/admin/networks': [],

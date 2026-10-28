@@ -40,6 +40,7 @@ import { supportRouter } from './routes/support'
 import { ownerRouter } from './routes/owner'
 import { flagsRouter } from './routes/flags'
 import { companyRouter } from './routes/company'
+import { dailyReportRouter } from './routes/dailyReport'
 
 /**
  * Every API router and where it lives. The hourly self check (System Health) walks this list
@@ -84,6 +85,7 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/owner', ownerRouter],
   ['/api/flags', flagsRouter],
   ['/api/company', companyRouter],
+  ['/api/daily-report', dailyReportRouter],
 ]
 
 /**

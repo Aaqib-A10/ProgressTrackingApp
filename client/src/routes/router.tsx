@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import Login from '../pages/auth/Login'
 import NotFound from '../pages/NotFound'
-import { RequireAuth, RequireRole, RequireFinance, AppShellRoute, RequireHealth, RequirePower } from './guards'
+import { RequireAuth, RequireRole, RequireFinance, AppShellRoute, RequireHealth, RequirePower, RequireFlag } from './guards'
 import { RouteError } from './RouteError'
 import { pageModule } from '../lib/staleChunks'
 
@@ -81,6 +81,9 @@ const AdminTags = lazy(pageModule(() => import('../pages/app/admin/AdminTags')))
 const AdminLeave = lazy(pageModule(() => import('../pages/app/admin/AdminLeave')))
 const AdminNetworks = lazy(pageModule(() => import('../pages/app/admin/AdminNetworks')))
 const CompanySettings = lazy(pageModule(() => import('../pages/app/admin/CompanySettings')))
+const MyDailyReport = lazy(pageModule(() => import('../pages/app/dailyReport/MyDailyReport')))
+const TeamDailyReport = lazy(pageModule(() => import('../pages/app/dailyReport/TeamDailyReport')))
+const ReportForms = lazy(pageModule(() => import('../pages/app/dailyReport/ReportForms')))
 const FinancialReports = lazy(pageModule(() => import('../pages/app/admin/FinancialReports')))
 const AdminActivity = lazy(pageModule(() => import('../pages/app/admin/AdminActivity')))
 const SystemHealth = lazy(pageModule(() => import('../pages/app/admin/SystemHealth')))
@@ -128,6 +131,9 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <MyReports /> },
       { path: 'analytics', element: <MyPerformance /> },
       { path: 'todo', element: <MyTodo /> },
+      { path: 'daily-report', element: <RequireFlag flag="daily-report"><MyDailyReport /></RequireFlag> },
+      { path: 'daily-report/team', element: <RequireFlag flag="daily-report"><TeamDailyReport /></RequireFlag> },
+      { path: 'daily-report/forms', element: <RequireFlag flag="daily-report"><ReportForms /></RequireFlag> },
       { path: 'tasks', element: <MyTasks /> },
       { path: 'settings', element: <Settings /> },
       { path: 'profile', element: <Settings /> },

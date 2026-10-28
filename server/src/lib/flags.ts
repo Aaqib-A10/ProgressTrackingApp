@@ -48,6 +48,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  'daily-report': {
+    label: 'Daily Report builder',
+    description: "Build your own daily form (numbers, text, choices, ratings…) with targets, a team view, charts and a monthly report. Off for 99 Technologies until it has run a week next to their six daily logs.",
+    default: true,
+    client: true,
+    scope: 'company',
+  },
   'company-walls': {
     label: 'Company walls',
     description: 'Each company sees only its own records. Off is an emergency brake for while 99 Technologies is the only company: every company would then see every other company\'s records. Never turn it off once other companies use Metriq.',
