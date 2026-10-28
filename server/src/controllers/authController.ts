@@ -120,7 +120,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
     return
   }
 
-  const DEPARTMENTS: DepartmentType[] = ['ITAD', 'LEAD_GEN', 'MARKETING', 'CSR', 'TALKLOOP']
+  const DEPARTMENTS: DepartmentType[] = ['ITAD', 'LEAD_GEN', 'MARKETING', 'CSR']
   if (!DEPARTMENTS.includes(department as DepartmentType)) {
     res.status(400).json({ error: 'Unknown department' })
     return

@@ -6,7 +6,7 @@ import { buildSeries, pctDelta, improvementLine } from './trends'
 
 /**
  * Team lead dashboards for the departments that are not ITAD or Lead Generation:
- * Talkloop, Ecommerce, Marketing, CSR and Inventory. Same shape as the ITAD one, so the
+ * Ecommerce, Marketing, CSR and Inventory. Same shape as the ITAD one, so the
  * same screen shows them. Each department sees only its own numbers.
  */
 
@@ -70,49 +70,6 @@ async function deptTarget(departmentId: string, metricKey: string, period: 'DAIL
 
 function base(c: DashCtx) {
   return { department: c.dept.type, range: { ...c.range, key: c.rangeKey } }
-}
-
-// ------------------------------------------------------------------ Talkloop
-
-export async function talkloopDashboard(c: DashCtx): Promise<TeamDashboardPayload> {
-  const ids = c.members.map((m) => m.id)
-  const [cur, prv, today, callsTarget, demosTarget] = await Promise.all([
-    prisma.talkloopDailyEntry.findMany({ where: { userId: { in: ids }, date: dateIn(c.range) }, include: { countryCounts: { include: { tag: true } } } }),
-    prisma.talkloopDailyEntry.findMany({ where: { userId: { in: ids }, date: dateIn(c.prev) } }),
-    prisma.talkloopDailyEntry.findMany({ where: { userId: { in: ids }, date: dbDateFromString(c.todayStr) } }),
-    deptTarget(c.dept.id, 'callsMade', 'DAILY'),
-    deptTarget(c.dept.id, 'demosConducted', 'DAILY'),
-  ])
-  const t = (rows: { status: string; callsMade: number; connects: number; demosScheduled: number; demosConducted: number }[]) => {
-    const s = submitted(rows)
-    return { calls: sum(s, (e) => e.callsMade), connects: sum(s, (e) => e.connects), scheduled: sum(s, (e) => e.demosScheduled), conducted: sum(s, (e) => e.demosConducted) }
-  }
-  const ct = t(cur), pt = t(prv)
-  const connectRate = ratio(ct.connects, ct.calls), connectPrev = ratio(pt.connects, pt.calls)
-  const byCountry = new Map<string, number>()
-  for (const e of submitted(cur)) for (const cc of e.countryCounts) byCountry.set(cc.tag.name, (byCountry.get(cc.tag.name) ?? 0) + cc.calls)
-  const todayMap = new Map(today.map((e) => [e.userId, e]))
-  return {
-    ...base(c),
-    kpis: [
-      { label: 'Calls Made', value: ct.calls, format: 'number', delta: pctDelta(ct.calls, pt.calls), caption: callsTarget ? `Target ${callsTarget}/day each` : 'vs prev period' },
-      { label: 'Connect Rate', value: connectRate, format: 'percent', delta: pctDelta(connectRate, connectPrev), caption: 'vs prev period' },
-      { label: 'Demos Scheduled', value: ct.scheduled, format: 'number', delta: pctDelta(ct.scheduled, pt.scheduled), caption: 'vs prev period' },
-      { label: 'Demos Conducted', value: ct.conducted, format: 'number', delta: pctDelta(ct.conducted, pt.conducted), caption: demosTarget ? `Target ${demosTarget}/day each` : 'vs prev period' },
-    ],
-    trend: { metricLabel: 'Calls', points: buildSeries(c.range, cur.map((e) => ({ date: dateStringFromDb(e.date), value: e.callsMade, status: e.status })), callsTarget * c.members.length) },
-    breakdown: [...byCountry.entries()].sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })),
-    breakdownTitle: 'Calls by Country',
-    improvement: improvementLine([
-      { label: 'Calls', delta: pctDelta(ct.calls, pt.calls) },
-      { label: 'Demos conducted', delta: pctDelta(ct.conducted, pt.conducted) },
-    ]),
-    todaySubmissions: c.members.map((m) => {
-      const e = todayMap.get(m.id)
-      return { id: m.id, name: m.name, status: statusFor(e), metricLabel: 'Calls', metricValue: e?.callsMade ?? 0 }
-    }),
-    counts: { submitted: submitted(today).length, total: c.members.length },
-  }
 }
 
 // ------------------------------------------------------------------ Ecommerce

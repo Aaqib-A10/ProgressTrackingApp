@@ -13,7 +13,6 @@ const ALL_DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'ITAD', label: 'ITAD' },
   { value: 'LEAD_GEN', label: 'Lead Generation' },
   { value: 'MARKETING', label: 'Marketing' },
-  { value: 'TALKLOOP', label: 'Talkloop' },
 ]
 const METRICS: Record<string, { key: string; label: string }[]> = {
   ITAD: [
@@ -24,10 +23,6 @@ const METRICS: Record<string, { key: string; label: string }[]> = {
   LEAD_GEN: [
     { key: 'leadsGenerated', label: 'Leads Generated' },
     { key: 'qualifiedMql', label: 'Qualified (MQL)' },
-  ],
-  TALKLOOP: [
-    { key: 'callsMade', label: 'Calls Made' },
-    { key: 'demosConducted', label: 'Demos Conducted' },
   ],
   MARKETING: [
     { key: 'social.followers', label: 'Followers (Social)' },

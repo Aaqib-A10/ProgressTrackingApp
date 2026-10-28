@@ -15,13 +15,12 @@ async function submittedToday(userId: string, dept?: string | null, sub?: string
   if (dept === 'MARKETING' && sub === 'seo') return !!(await prisma.seoDailyEntry.findUnique({ where: key }))
   if (dept === 'MARKETING' && sub === 'content') return !!(await prisma.contentDailyEntry.findUnique({ where: key }))
   if (dept === 'ECOMMERCE') return !!(await prisma.ecommerceDailyEntry.findUnique({ where: key }))
-  if (dept === 'TALKLOOP') return !!(await prisma.talkloopDailyEntry.findUnique({ where: key }))
   return true // no daily form for this user → nothing to remind
 }
 
 /** Does this member's dept/sub have a daily form to submit? Mirrors submittedToday's coverage. */
 function hasDailyForm(dept?: string | null, sub?: string | null): boolean {
-  return dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || dept === 'TALKLOOP' || (dept === 'MARKETING' && (sub === 'seo' || sub === 'content'))
+  return dept === 'ITAD' || dept === 'LEAD_GEN' || dept === 'ECOMMERCE' || (dept === 'MARKETING' && (sub === 'seo' || sub === 'content'))
 }
 
 /**
@@ -39,11 +38,8 @@ async function submittedTodayIds(ids: string[]): Promise<Set<string>> {
     prisma.seoDailyEntry.findMany({ where, select }),
     prisma.ecommerceDailyEntry.findMany({ where, select }),
   ])
-  const [talk, content] = await Promise.all([
-    prisma.talkloopDailyEntry.findMany({ where, select }),
-    prisma.contentDailyEntry.findMany({ where, select }),
-  ])
-  return new Set([...itad, ...leadgen, ...seo, ...ecom, ...talk, ...content].map((e) => e.userId))
+  const content = await prisma.contentDailyEntry.findMany({ where, select })
+  return new Set([...itad, ...leadgen, ...seo, ...ecom, ...content].map((e) => e.userId))
 }
 
 /** GET /api/notifications — contextual notifications derived from live state. */

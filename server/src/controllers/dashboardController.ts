@@ -6,7 +6,7 @@ import { companyToday, dbDateFromString, dateStringFromDb, periodRange, previous
 import { sumItad, itadKpis } from '../lib/itad'
 import { sumLeadGen, leadGenKpis } from '../lib/leadgen'
 import { buildSeries, pctDelta, improvementLine } from '../lib/trends'
-import { talkloopDashboard, ecommerceDashboard, marketingDashboard, csrDashboard, inventoryDashboard, type DashCtx, type TeamDashboardPayload } from '../lib/deptDashboards'
+import { ecommerceDashboard, marketingDashboard, csrDashboard, inventoryDashboard, type DashCtx, type TeamDashboardPayload } from '../lib/deptDashboards'
 import { topAchievers } from '../lib/topAchiever'
 
 type SubmissionStatus = 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
@@ -63,13 +63,14 @@ export async function teamDashboard(req: AuthedRequest, res: Response): Promise<
     const subSlugs = new Map(members.map((m) => [m.id, subs.find((s) => s.id === m.subDepartmentId)?.slug ?? '']))
     const ctx: DashCtx = { dept: me.department, members, subSlugs, rangeKey, range, prev, todayStr }
     const build: Record<string, (c: DashCtx) => Promise<TeamDashboardPayload>> = {
-      TALKLOOP: talkloopDashboard,
       ECOMMERCE: ecommerceDashboard,
       MARKETING: marketingDashboard,
       CSR: csrDashboard,
       INVENTORY: inventoryDashboard,
     }
-    res.json(await build[me.department.type](ctx))
+    const make = build[me.department.type]
+    if (!make) { res.status(404).json({ error: 'There is no team dashboard for this department.' }); return }
+    res.json(await make(ctx))
   }
 }
 
@@ -79,7 +80,7 @@ export async function topAchiever(req: AuthedRequest, res: Response): Promise<vo
   const me = await loadUser(req.user!.id)
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month)) ? String(req.query.month) : companyToday().slice(0, 7)
   const depts =
-    me.role === 'SUPER_ADMIN' ? (['ITAD', 'LEAD_GEN', 'TALKLOOP', 'ECOMMERCE', 'MARKETING', 'CSR', 'INVENTORY'] as const)
+    me.role === 'SUPER_ADMIN' ? (['ITAD', 'LEAD_GEN', 'ECOMMERCE', 'MARKETING', 'CSR', 'INVENTORY'] as const)
       : me.role === 'QA' || me.role === 'QA_LEAD' ? (['ITAD', 'CSR'] as const)
         : me.department ? [me.department.type] : []
   res.json({ month, winners: await topAchievers(month, [...depts]) })

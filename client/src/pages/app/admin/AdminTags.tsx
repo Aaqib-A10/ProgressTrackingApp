@@ -14,7 +14,6 @@ const TAG_DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'LEAD_GEN', label: 'Lead Generation' },
   { value: 'MARKETING', label: 'Marketing' },
   { value: 'ITAD', label: 'ITAD' },
-  { value: 'TALKLOOP', label: 'Talkloop' },
   { value: 'ECOMMERCE', label: 'Ecommerce' },
 ]
 /** Tag kinds each department uses. */
@@ -23,7 +22,6 @@ const TYPES_FOR: Record<string, { value: AdminTag['type']; label: string }[]> = 
   LEAD_GEN: CLASSIC,
   MARKETING: CLASSIC,
   ITAD: CLASSIC,
-  TALKLOOP: [{ value: 'COUNTRY', label: 'Country' }],
   ECOMMERCE: [{ value: 'MARKETPLACE', label: 'Marketplace' }, { value: 'TASK_TYPE', label: 'Task Type' }],
 }
 

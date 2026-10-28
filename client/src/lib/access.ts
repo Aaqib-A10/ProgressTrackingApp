@@ -45,7 +45,7 @@ export const ACCESS: Record<string, AccessLine[]> = {
 
   // ---- team lead tools
   '/app/team/members': [{ roles: LEAD }],
-  '/app/team/not-submitted': lead(['ITAD', 'LEAD_GEN', 'ECOMMERCE', 'MARKETING', 'TALKLOOP']),
+  '/app/team/not-submitted': lead(['ITAD', 'LEAD_GEN', 'ECOMMERCE', 'MARKETING']),
   '/app/members/:id': [{ roles: LEAD }],
   '/app/reports/monthly': lead(['ITAD', 'LEAD_GEN']),
   '/app/attendance/team': [{ roles: LEAD }],
@@ -73,9 +73,6 @@ export const ACCESS: Record<string, AccessLine[]> = {
   '/app/leadgen/breakdown': lead(['LEAD_GEN']),
   '/app/leadgen/analytics': lead(['LEAD_GEN']),
 
-  // ---- Talkloop
-  '/app/talkloop/log': dept(['TALKLOOP']),
-  '/app/talkloop/team': lead(['TALKLOOP']),
 
   // ---- Ecommerce
   '/app/ecommerce/log': dept(['ECOMMERCE']),
@@ -112,8 +109,8 @@ export const ACCESS: Record<string, AccessLine[]> = {
   // ---- Admin
   '/app/admin/users': [],
   '/app/admin/networks': [],
-  '/app/admin/targets': lead(['ITAD', 'LEAD_GEN', 'TALKLOOP', 'MARKETING']),
-  '/app/admin/tags': lead(['ITAD', 'LEAD_GEN', 'MARKETING', 'TALKLOOP', 'ECOMMERCE']),
+  '/app/admin/targets': lead(['ITAD', 'LEAD_GEN', 'MARKETING']),
+  '/app/admin/tags': lead(['ITAD', 'LEAD_GEN', 'MARKETING', 'ECOMMERCE']),
   '/app/admin/leave': [{ roles: LEAD }],
   '/app/admin/activity': [{ roles: LEAD }],
 }

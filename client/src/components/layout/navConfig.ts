@@ -156,15 +156,6 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: 'Talkloop',
-    icon: PhoneCall,
-    color: '#0EA5E9',
-    items: [
-      { label: 'Daily Log', to: '/app/talkloop/log', icon: PhoneCall, hideFor: HIDE_FROM_SA },
-      { label: 'Team View', to: '/app/talkloop/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
-    ],
-  },
-  {
     title: 'Ecommerce',
     icon: ShoppingCart,
     color: '#F59E0B',

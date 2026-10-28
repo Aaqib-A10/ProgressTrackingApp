@@ -27,7 +27,6 @@ import { pushRouter } from './routes/push'
 import { guestRouter } from './routes/guest'
 import { searchRouter } from './routes/search'
 import { docsRouter } from './routes/docs'
-import { talkloopRouter } from './routes/talkloop'
 import { inventoryRouter } from './routes/inventory'
 import { projectsRouter } from './routes/projects'
 import { chatRouter } from './routes/chat'
@@ -64,7 +63,6 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/worklog', worklogRouter],
   ['/api/tasks', tasksRouter],
   ['/api/financials', financialsRouter],
-  ['/api/talkloop', talkloopRouter],
   ['/api/inventory', inventoryRouter],
   ['/api/projects', projectsRouter],
   ['/api/chat', chatRouter],

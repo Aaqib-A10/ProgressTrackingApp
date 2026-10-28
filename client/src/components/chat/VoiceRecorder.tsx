@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronUp, Lock, Mic, Pause, Send, Trash2 } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { holdUpdates } from '../../lib/silentUpdate'
 
 /**
  * WhatsApp-style voice messages.
@@ -100,6 +101,9 @@ export function VoiceRecorder({ onSend, onError, onActive }: { onSend: (file: Fi
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [mode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // No silent update while recording.
+  useEffect(() => (mode ? holdUpdates() : undefined), [mode])
 
   // Leaving the chat mid-recording throws it away and frees the microphone.
   useEffect(() => () => { const r = rec.current; rec.current = null; if (r) stopAll(r) }, [])

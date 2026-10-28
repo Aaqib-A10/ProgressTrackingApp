@@ -45,8 +45,6 @@ const LeadGenDailyForm = lazy(pageModule(() => import('../pages/app/leadgen/Lead
 const LeadGenTeamView = lazy(pageModule(() => import('../pages/app/leadgen/LeadGenTeamView')))
 const LeadGenBreakdown = lazy(pageModule(() => import('../pages/app/leadgen/LeadGenBreakdown')))
 const LeadGenAnalytics = lazy(pageModule(() => import('../pages/app/leadgen/LeadGenAnalytics')))
-const TalkloopDailyLog = lazy(pageModule(() => import('../pages/app/talkloop/TalkloopDailyLog')))
-const TalkloopTeamView = lazy(pageModule(() => import('../pages/app/talkloop/TalkloopTeamView')))
 const EcommerceDailyLog = lazy(pageModule(() => import('../pages/app/ecommerce/EcommerceDailyLog')))
 const EcommerceTeamView = lazy(pageModule(() => import('../pages/app/ecommerce/EcommerceTeamView')))
 const EcommerceBoard = lazy(pageModule(() => import('../pages/app/ecommerce/EcommerceBoard')))
@@ -164,9 +162,6 @@ export const router = createBrowserRouter([
       { path: 'leadgen/breakdown', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenBreakdown /></RequireRole> },
       { path: 'leadgen/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><LeadGenAnalytics /></RequireRole> },
 
-      // Talkloop
-      { path: 'talkloop/log', element: <TalkloopDailyLog /> },
-      { path: 'talkloop/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><TalkloopTeamView /></RequireRole> },
 
       // Ecommerce
       { path: 'ecommerce/log', element: <EcommerceDailyLog /> },

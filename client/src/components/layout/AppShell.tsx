@@ -8,7 +8,7 @@ import { TopBar } from './TopBar'
 import type { RangeKey, CustomRange } from './RangeSelector'
 import { FloatingChat } from '../chat/FloatingChat'
 import { CallProvider } from '../calls/CallProvider'
-import { UpdateBanner } from './UpdateBanner'
+import { SilentUpdater } from './SilentUpdater'
 import { PushBanner } from './PushControls'
 import { CommandPalette } from './GlobalSearch'
 
@@ -130,7 +130,7 @@ export function AppShell({ user, children }: AppShellProps) {
         </div>
         <CommandPalette />
         <FloatingChat meId={user.id} />
-        <UpdateBanner />
+        <SilentUpdater />
       </CallProvider>
     </RangeContext.Provider>
   )

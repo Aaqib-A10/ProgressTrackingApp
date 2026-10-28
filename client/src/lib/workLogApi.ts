@@ -191,6 +191,5 @@ export const TAG_IDEAS: Record<string, string[]> = {
   MARKETING: ['Content', 'SEO', 'Social', 'Design', 'Video', 'Website'],
   CSR: ['Calls', 'Tickets', 'Follow-ups'],
   INVENTORY: ['Receiving', 'Testing', 'Grading', 'Stock count', 'Shipping'],
-  TALKLOOP: ['Calls', 'Sales', 'Follow-ups'],
   '': ['Meeting', 'Admin', 'Learning', 'Report'],
 }

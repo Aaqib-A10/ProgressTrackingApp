@@ -78,10 +78,6 @@ async function activityTotals(type: DepartmentType, deptId: string, memberIds: s
       for (const e of await prisma.leadGenDailyEntry.findMany({ where: mine, select: { userId: true, leadsGenerated: true } })) add(totals, e.userId, e.leadsGenerated)
       return { totals, unit: 'leads', one: 'lead' }
     }
-    case 'TALKLOOP': {
-      for (const e of await prisma.talkloopDailyEntry.findMany({ where: mine, select: { userId: true, demosConducted: true } })) add(totals, e.userId, e.demosConducted)
-      return { totals, unit: 'demos', one: 'demo' }
-    }
     case 'ECOMMERCE': {
       for (const e of await prisma.ecommerceDailyEntry.findMany({ where: mine, select: { userId: true, lines: { select: { listings: true } } } })) add(totals, e.userId, e.lines.reduce((s, l) => s + l.listings, 0))
       return { totals, unit: 'listings', one: 'listing' }
@@ -101,13 +97,13 @@ async function activityTotals(type: DepartmentType, deptId: string, memberIds: s
 
 const BASIS: Partial<Record<DepartmentType, string>> = {
   LEAD_GEN: 'by leads generated',
-  TALKLOOP: 'by demos conducted',
   ECOMMERCE: 'by listings',
   MARKETING: 'by tasks published',
   INVENTORY: 'by requests completed',
 }
 
-export async function topAchievers(month: string, types: DepartmentType[]): Promise<TopAchiever[]> {
+export async function topAchievers(month: string, all: DepartmentType[]): Promise<TopAchiever[]> {
+  const types = all.filter((t) => t !== 'TALKLOOP') // removed Oct 2026
   if (!types.length) return []
   const depts = await prisma.department.findMany({ where: { type: { in: types } } })
   const one = async (type: DepartmentType): Promise<TopAchiever | null> => {

@@ -7,7 +7,6 @@ export const DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'MARKETING', label: 'Marketing' },
   { value: 'CSR', label: 'CSR' },
   { value: 'ECOMMERCE', label: 'Ecommerce' },
-  { value: 'TALKLOOP', label: 'Talkloop' },
   { value: 'INVENTORY', label: 'Inventory' },
 ]
 

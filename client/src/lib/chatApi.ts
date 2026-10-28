@@ -1,4 +1,5 @@
 import { api, ApiError } from './api'
+import { holdUpdates } from './silentUpdate'
 
 export type Presence = 'online' | 'away' | 'offline' | 'busy'
 export type ConversationType = 'DIRECT' | 'GROUP' | 'PROJECT'
@@ -99,6 +100,7 @@ export const MAX_FILE_BYTES = 500 * 1024 * 1024
 export function uploadChatFile(conversationId: string, file: File, caption: string, onProgress: (p: number) => void): { done: Promise<ChatMessage>; cancel: () => void } {
   let cancelled = false
   let uploadId: string | null = null
+  const release = holdUpdates() // no silent update while a file is going up
   const done = (async () => {
     const start = await api.post<{ uploadId: string; pieceSize: number }>(`/chat/conversations/${conversationId}/uploads`, { name: file.name, mime: file.type, size: file.size })
     uploadId = start.uploadId
@@ -140,6 +142,7 @@ export function uploadChatFile(conversationId: string, file: File, caption: stri
     if (uploadId) void api.del(`/chat/uploads/${uploadId}`).catch(() => undefined)
     return smallPieces(conversationId, file, caption, onProgress, () => cancelled)
   })
+  void run.then(release, release)
   return {
     done: run,
     cancel: () => { cancelled = true; if (uploadId) void api.del(`/chat/uploads/${uploadId}`).catch(() => undefined) },

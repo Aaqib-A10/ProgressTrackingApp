@@ -7,7 +7,7 @@ import { getTopAchievers, type TopAchiever } from '../lib/dashboardApi'
 /**
  * Top Achiever of the month for YOUR department only (the Super Admin sees every department).
  * Each department is judged on its own work: QA score for ITAD and CSR, leads for Lead
- * Generation, demos for Talkloop, listings for Ecommerce, tasks published for Marketing,
+ * Generation, listings for Ecommerce, tasks published for Marketing,
  * requests completed for Inventory.
  */
 export function EmployeeOfMonthCard() {

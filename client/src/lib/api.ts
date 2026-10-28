@@ -1,6 +1,7 @@
 // Thin typed fetch wrapper around the Metriq API.
 // Base URL comes from VITE_API_URL; in dev, Vite also proxies /api to the server.
 import { isMobileOrTablet } from './device'
+import { holdUpdates } from './silentUpdate'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -60,6 +61,11 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
 // Raw (non-JSON) POST — e.g. a file/CSV body the server reads with express.raw().
 // Sends the body verbatim with the given content-type (default octet-stream).
 async function requestRaw<T>(path: string, body: BodyInit, contentType = 'application/octet-stream'): Promise<T> {
+  const release = holdUpdates() // an upload: no silent update until it is done
+  try { return await sendRaw<T>(path, body, contentType) } finally { release() }
+}
+
+async function sendRaw<T>(path: string, body: BodyInit, contentType: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': contentType },

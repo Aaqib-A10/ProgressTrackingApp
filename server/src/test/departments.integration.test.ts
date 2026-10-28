@@ -51,8 +51,6 @@ describe('the department wall', () => {
       ['/api/itad/team', u.mktLead],
       ['/api/itad/bids', u.talkMember],
       ['/api/leadgen/entries', w.itadMember],
-      ['/api/talkloop/entries', u.ecomMember],
-      ['/api/talkloop/team', u.ecomLead],
       ['/api/marketing/board', u.talkMember],
       ['/api/marketing/brands', w.itadLead],
       ['/api/ecommerce/board', w.inventoryMember],
@@ -68,10 +66,8 @@ describe('the department wall', () => {
 
   it('people still open their own department, and the Super Admin opens everything', async () => {
     await get('/api/itad/entries', w.itadMember).expect(200)
-    await get('/api/talkloop/entries', u.talkMember).expect(200)
     await get('/api/marketing/board', u.mktSeo).expect(200)
     await get('/api/itad/team', w.superAdmin).expect(200)
-    await get('/api/talkloop/team', w.superAdmin).expect(200)
   })
 
   it('shared tools stay open to everyone', async () => {
@@ -118,19 +114,15 @@ describe('closed cross-department leaks', () => {
 describe('team lead dashboards for every department', () => {
   const today = dbDateFromString(companyToday())
 
-  it('Talkloop: calls, connect rate, demos, by country, today', async () => {
-    const pk = await prisma.tag.create({ data: { name: 'Pakistan', type: 'COUNTRY', departmentId: talk } })
-    await prisma.talkloopDailyEntry.create({ data: { userId: u.talkMember.id, date: today, callsMade: 50, connects: 10, demosScheduled: 3, demosConducted: 2, countryCounts: { create: [{ tagId: pk.id, calls: 50, demos: 2 }] } } })
-    await prisma.talkloopDailyEntry.create({ data: { userId: u.talkMember2.id, date: today, callsMade: 30, connects: 5, demosConducted: 4 } })
-    const d = (await get('/api/dashboard/team', u.talkLead).expect(200)).body
-    expect(d.department).toBe('TALKLOOP')
-    const k = Object.fromEntries(d.kpis.map((x: { label: string; value: number }) => [x.label, x.value]))
-    expect(k['Calls Made']).toBe(80)
-    expect(k['Connect Rate']).toBeCloseTo(15 / 80)
-    expect(k['Demos Conducted']).toBe(6)
-    expect(d.breakdown).toEqual([{ name: 'Pakistan', value: 50 }])
-    expect(d.counts).toEqual({ submitted: 2, total: 2 })
-    expect(d.improvement).not.toMatch(/Phase 3/)
+  it('Talkloop is gone (Oct 2026): no pages, no team dashboard, its people keep the shared tools', async () => {
+    await prisma.talkloopDailyEntry.create({ data: { userId: u.talkMember.id, date: today, callsMade: 50, demosConducted: 2 } })
+    await get('/api/talkloop/entries', u.talkMember).expect(404)
+    await get('/api/talkloop/team', w.superAdmin).expect(404)
+    expect((await get('/api/dashboard/team', u.talkLead).expect(404)).body.error).toMatch(/no team dashboard/i)
+    await get('/api/todos', u.talkMember).expect(200)
+    await get('/api/attendance/me', u.talkMember).expect(200)
+    // Its data is still in the database until the tables are dropped (it was exported first).
+    expect(await prisma.talkloopDailyEntry.count()).toBe(1)
   })
 
   it('Ecommerce: listings by marketplace and tasks', async () => {
@@ -181,33 +173,30 @@ describe('team lead dashboards for every department', () => {
   })
 
   it('Top Achiever: your own department only, judged on its own work', async () => {
-    const t = (await get('/api/dashboard/top-achiever', u.talkMember).expect(200)).body
-    expect(t.winners).toHaveLength(1)
-    expect(t.winners[0]).toMatchObject({ department: 'TALKLOOP', basis: 'by demos conducted', winner: { name: 'talkMember2', value: 4, display: '4 demos' } })
+    expect((await get('/api/dashboard/top-achiever', u.talkMember).expect(200)).body.winners).toEqual([])
     const c = (await get('/api/dashboard/top-achiever', u.csrLead).expect(200)).body
     expect(c.winners[0]).toMatchObject({ department: 'CSR', winner: { name: 'csrAgent', display: '81.7%' } })
     const m = (await get('/api/dashboard/top-achiever', u.mktSeo).expect(200)).body
     expect(m.winners[0]).toMatchObject({ department: 'MARKETING', winner: { name: 'mktSdl' } })
     expect((await get('/api/dashboard/top-achiever', u.qa).expect(200)).body.winners.map((x: { department: string }) => x.department)).toEqual(['ITAD', 'CSR'])
-    expect((await get('/api/dashboard/top-achiever', w.superAdmin).expect(200)).body.winners).toHaveLength(7)
+    expect((await get('/api/dashboard/top-achiever', w.superAdmin).expect(200)).body.winners.map((x: { department: string }) => x.department)).not.toContain('TALKLOOP')
     expect((await get('/api/dashboard/top-achiever', u.lostLead).expect(200)).body.winners).toEqual([])
     await get('/api/dashboard/top-achiever?month=2026-13', u.talkMember).expect(200)
   })
 
-  it('the executive view now includes Talkloop and Inventory, and CSR percentages read right', async () => {
+  it('the executive view shows Inventory but no longer Talkloop, and CSR percentages read right', async () => {
     const d = (await get('/api/dashboard/executive', w.superAdmin).expect(200)).body
     const types = d.departments.map((x: { type: string }) => x.type)
-    expect(types).toEqual(expect.arrayContaining(['TALKLOOP', 'INVENTORY']))
-    const tl = d.departments.find((x: { type: string }) => x.type === 'TALKLOOP')
-    expect(tl.headline[0]).toMatchObject({ label: 'Calls', value: 80 })
+    expect(types).toContain('INVENTORY')
+    expect(types).not.toContain('TALKLOOP')
     const c = d.departments.find((x: { type: string }) => x.type === 'CSR')
     expect(c.headline[0].value).toBeLessThanOrEqual(1)
-    expect(d.benchmark.map((x: { department: string }) => x.department)).toEqual(expect.arrayContaining(['Talkloop', 'Inventory']))
+    expect(d.benchmark.map((x: { department: string }) => x.department)).toContain('Inventory')
+    expect(d.benchmark.map((x: { department: string }) => x.department)).not.toContain('Talkloop')
   })
 
-  it('Talkloop and Content now count in "not submitted"', async () => {
-    await prisma.talkloopDailyEntry.deleteMany({ where: { userId: u.talkMember2.id } })
+  it('Talkloop people are no longer counted in "not submitted" (there is no daily log to fill)', async () => {
     const r = (await get('/api/notifications/not-submitted', u.talkLead).expect(200)).body
-    expect(r.groups).toEqual([{ department: 'TALKLOOP', label: 'Talkloop', members: [expect.objectContaining({ name: 'talkMember2' })] }])
+    expect(r.groups ?? []).toEqual([])
   })
 })
