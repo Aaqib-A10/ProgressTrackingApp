@@ -130,6 +130,7 @@ export type StockAction = 'STOCK_IN' | 'STOCK_OUT'
 export interface StockRequest {
   id: string
   itemName: string
+  quantity: number | null
   requestedByName: string
   note: string
   requestedAt: string
@@ -138,20 +139,38 @@ export interface StockRequest {
   assignee: { id: string; name: string } | null
   assignedAt: string | null
   resolvedAt: string | null
+  createdBy: { id: string; name: string } | null
+  editedAt: string | null
 }
 export interface StockListResponse {
   requests: StockRequest[]
   members: { id: string; name: string }[]
   canAssign: boolean
+  me?: string
+}
+export interface StockEditInput {
+  itemName?: string
+  quantity?: number | null
+  action?: StockAction
+  requestedByName?: string
+  note?: string | null
+  /** Team lead only. */
+  assignedToId?: string | null
+  status?: StockStatus
 }
 
 export const getEcommerceStock = () => api.get<StockListResponse>('/ecommerce/stock')
-export const createStockRequest = (input: { itemName: string; action: StockAction; requestedByName: string; note?: string }) =>
+export const createStockRequest = (input: { itemName: string; quantity?: number | null; action: StockAction; requestedByName: string; note?: string }) =>
   api.post<{ request: StockRequest }>('/ecommerce/stock', input)
 export const assignStockRequest = (id: string, input: { action: StockAction; assignedToId: string }) =>
   api.patch<{ request: StockRequest }>(`/ecommerce/stock/${id}/assign`, input)
 export const resolveStockRequest = (id: string) =>
   api.patch<{ request: StockRequest }>(`/ecommerce/stock/${id}/resolve`, {})
+export const editStockRequest = (id: string, input: StockEditInput) =>
+  api.patch<{ request: StockRequest }>(`/ecommerce/stock/${id}`, input)
+export const deleteStockRequest = (id: string) => api.del<void>(`/ecommerce/stock/${id}`)
+export const getStockHistory = (id: string) =>
+  api.get<{ history: { at: string; by: string; what: string }[] }>(`/ecommerce/stock/${id}/history`)
 
 // ---- Ecommerce meeting notes (shared across the department) ----
 export interface MeetingNote {

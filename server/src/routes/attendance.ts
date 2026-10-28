@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMe, checkIn, checkOut, startOvertime, startBreak, endBreak, history, teamView, exportTeamAttendanceCsv, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, setRemote, removeLeave, ipCheck, register } from '../controllers/attendanceController'
+import { getMe, checkIn, checkOut, startOvertime, startBreak, endBreak, history, teamView, exportTeamAttendanceCsv, getShift, putShift, getUserShift, putUserShift, deleteUserShift, correctDay, markLeave, setRemote, removeLeave, ipCheck, register, getDayBreaks, addDayBreak, updateBreak, deleteBreak } from '../controllers/attendanceController'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import { createWfhRequest, myWfhRequests, cancelWfhRequest, teamWfhRequests, decideWfhRequest } from '../controllers/wfhRequestController'
@@ -41,4 +41,9 @@ attendanceRouter.delete('/shift/user/:userId', requireRole('TEAM_LEAD', 'SUPER_A
 attendanceRouter.put('/:userId/leave/:date', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(markLeave))
 attendanceRouter.put('/:userId/remote', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(setRemote))
 attendanceRouter.delete('/:userId/leave/:date', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(removeLeave))
+// Breaks fixed by team leads (literal /breaks before the /:userId/:date patterns).
+attendanceRouter.patch('/breaks/:id', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(updateBreak))
+attendanceRouter.delete('/breaks/:id', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(deleteBreak))
+attendanceRouter.get('/:userId/:date/breaks', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(getDayBreaks))
+attendanceRouter.post('/:userId/:date/breaks', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(addDayBreak))
 attendanceRouter.patch('/:userId/:date', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(correctDay))

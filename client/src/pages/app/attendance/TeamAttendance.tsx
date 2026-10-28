@@ -27,6 +27,12 @@ import {
   removeLeave,
   setAttendanceRemote,
   formatMinutes,
+  getDayBreaks,
+  addDayBreak,
+  updateBreak,
+  deleteBreak,
+  type DayBreaksResponse,
+  type BreakType,
   type LeaveMarkType,
   type ClockState,
   type Shift,
@@ -88,6 +94,11 @@ export default function TeamAttendance() {
   const [params] = useSearchParams()
   const wfhFocus = params.get('wfh') === '1'
   const [tab, setTab] = useState<'overview' | 'register'>(() => (params.get('view') === 'register' ? 'register' : 'overview'))
+
+  async function endBreakNow(id: string, name: string) {
+    try { await updateBreak(id, { end: 'now' }); addToast({ type: 'success', message: `${name.split(' ')[0]}'s break ended.` }); reload() }
+    catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not end the break.') }) }
+  }
 
   function reload() {
     setLoading(true)
@@ -264,6 +275,14 @@ export default function TeamAttendance() {
                     <span className="text-body-sm font-medium text-ink">{b.name.split(' ')[0]}</span>
                     {b.workMode && <span title="Working from home"><House size={13} className="text-accent" /></span>}
                     <span className={'h-2 w-2 rounded-full ' + dotColor(b.state)} title={STATE_META[b.state].label} />
+                    {b.openBreak && (
+                      <>
+                        <span className={'text-[11px] font-semibold ' + (b.openBreak.minutes > (b.openBreak.type === 'BRB' ? 20 : 65) ? 'text-danger' : 'text-warning')} title={`On ${b.openBreak.type === 'BRB' ? 'BRB' : 'break'} since ${b.openBreak.since}`}>
+                          {b.openBreak.type === 'BRB' ? 'BRB' : 'Break'} {b.openBreak.minutes}m
+                        </span>
+                        <button type="button" onClick={() => endBreakNow(b.openBreak!.id, b.name)} className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink-muted hover:border-primary hover:text-primary" title="End this break now">End</button>
+                      </>
+                    )}
                   </div>
                 ))}
             </div>
@@ -413,6 +432,15 @@ function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) =
           <input type="number" min={0} max={600} value={value.breakAllowanceMin} onChange={(e) => set({ breakAllowanceMin: Number(e.target.value) })} className={inputCls} />
         </Field>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="End a forgotten BRB after (minutes)">
+          <input type="number" min={0} max={240} value={value.brbCutoffMin ?? 30} onChange={(e) => set({ brbCutoffMin: Number(e.target.value) })} className={inputCls} />
+        </Field>
+        <Field label="End a forgotten break after (minutes)">
+          <input type="number" min={0} max={600} value={value.breakCutoffMin ?? 90} onChange={(e) => set({ breakCutoffMin: Number(e.target.value) })} className={inputCls} />
+        </Field>
+        <p className="col-span-2 -mt-1 text-[11px] text-ink-muted">A single BRB or break still running after this is ended at that point and the person and their team lead are told. 0 = never.</p>
+      </div>
       <Field label="Working days">
         <div className="flex flex-wrap gap-1.5">
           {WEEKDAYS.map((d) => {
@@ -533,7 +561,7 @@ function WorkingHoursCard({ userId, onChanged }: { userId: string; onChanged: ()
             <Badge tone={info.override ? 'primary' : 'neutral'}>{info.override ? 'Personal' : 'Department/company'}</Badge>
           </div>
           <p className="mt-0.5 text-body-sm text-ink-muted">
-            {eff.startTime}–{eff.endTime}{eff.dayTimes && Object.keys(eff.dayTimes).length > 0 ? ' (varies by day)' : ''} · required {formatMinutes(eff.requiredMinutes)} · {eff.graceMin}m grace · BRB {eff.brbAllowanceMin}m · break {eff.breakAllowanceMin}m
+            {eff.startTime}–{eff.endTime}{eff.dayTimes && Object.keys(eff.dayTimes).length > 0 ? ' (varies by day)' : ''} · required {formatMinutes(eff.requiredMinutes)} · {eff.graceMin}m grace · BRB {eff.brbAllowanceMin}m · break {eff.breakAllowanceMin}m · cut-off BRB {eff.brbCutoffMin ?? 30}m, break {eff.breakCutoffMin ?? 90}m
           </p>
         </div>
         {!editing && (
@@ -651,6 +679,8 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
   const [editDate, setEditDate] = useState<string | null>(null)
   const [checkIn, setCheckIn] = useState('')
   const [checkOut, setCheckOut] = useState('')
+  const [overtime, setOvertime] = useState('')
+  const [overtimeLoaded, setOvertimeLoaded] = useState('')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -665,6 +695,8 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
     setEditDate(r.date)
     setCheckIn(r.checkIn ?? '')
     setCheckOut(r.checkOut ?? '')
+    setOvertime('')
+    setOvertimeLoaded('')
     setNote(r.note ?? '')
   }
 
@@ -672,7 +704,7 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
     if (!editDate) return
     setSaving(true)
     try {
-      await correctAttendanceDay(member.userId, editDate, { checkIn: checkIn || null, checkOut: checkOut || null, note: note.trim() || null })
+      await correctAttendanceDay(member.userId, editDate, { checkIn: checkIn || null, checkOut: checkOut || null, ...(overtime !== overtimeLoaded ? { overtime: overtime || null } : {}), note: note.trim() || null })
       addToast({ type: 'success', message: 'Day updated.' })
       const r = await getAttendanceHistory(range, custom, member.userId)
       setRows(r.rows)
@@ -740,6 +772,8 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
                 <div className="flex flex-wrap items-end gap-3 border-t border-line bg-bg px-3 py-3">
                   <Field label="Check in"><input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className={inputCls} /></Field>
                   <Field label="Check out"><input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className={inputCls} /></Field>
+                  <Field label="Overtime started"><input type="time" value={overtime} onChange={(e) => setOvertime(e.target.value)} className={inputCls} /></Field>
+                  <DayBreaks userId={member.userId} date={r.date} onOvertime={(v) => { setOvertime(v); setOvertimeLoaded(v) }} onChanged={() => { loadRows(); onCorrected() }} />
                   <div className="w-full">
                     <Field label="Comment / feedback">
                       <textarea
@@ -755,7 +789,7 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
                     <Button size="sm" onClick={save} disabled={saving}>Save</Button>
                     <Button size="sm" variant="secondary" onClick={() => setEditDate(null)}>Cancel</Button>
                   </div>
-                  <p className="w-full text-[11px] text-ink-muted">Leave a time empty to clear it. Times are in company time. The comment is visible to the member.</p>
+                  <p className="w-full text-[11px] text-ink-muted">Leave a time empty to clear it (an empty Overtime started means no overtime that day). Times are in company time. The comment is visible to the member. Break changes save on their own.</p>
                 </div>
               )}
             </div>
@@ -763,6 +797,87 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
         </div>
       )}
     </Modal>
+  )
+}
+
+/**
+ * A day's breaks for a team lead (E-commerce, Oct 2026): end one still running, fix its times or
+ * kind, delete a wrong one, add a missed one. Each change saves at once, is logged, and the person
+ * is told.
+ */
+function DayBreaks({ userId, date, onOvertime, onChanged }: { userId: string; date: string; onOvertime: (v: string) => void; onChanged: () => void }) {
+  const { addToast } = useToast()
+  const [d, setD] = useState<DayBreaksResponse | null>(null)
+  const [edit, setEdit] = useState<Record<string, { type: BreakType; start: string; end: string }>>({})
+  const [adding, setAdding] = useState<{ type: BreakType; start: string; end: string } | null>(null)
+  const [confirmDel, setConfirmDel] = useState<string | null>(null)
+  const load = () => getDayBreaks(userId, date).then((r) => { setD(r); setEdit({}) }).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not load the breaks.') }))
+  useEffect(() => { getDayBreaks(userId, date).then((r) => { setD(r); onOvertime(r.overtime ?? '') }).catch(() => setD(null)) }, [userId, date]) // eslint-disable-line react-hooks/exhaustive-deps
+  async function run(p: Promise<unknown>, ok: string): Promise<boolean> {
+    try { await p } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save.') }); return false }
+    addToast({ type: 'success', message: ok }); await load(); onChanged(); return true
+  }
+  if (!d) return <div className="w-full text-body-sm text-ink-muted">Loading breaks…</div>
+  const used = (t: BreakType) => d.breaks.filter((b) => b.type === t).reduce((n, b) => n + b.minutes, 0)
+  const small = 'h-8 rounded-btn border border-line bg-card px-2 text-body-sm text-ink focus:border-primary focus:outline-none'
+  return (
+    <div className="w-full rounded-btn border border-line bg-card p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-body-sm font-semibold text-ink">Breaks</span>
+        <span className="text-[12px] text-ink-muted">
+          Break <b className={used('BREAK') > d.allowance.breakMin ? 'text-danger' : 'text-ink'}>{used('BREAK')}</b>/{d.allowance.breakMin}m · BRB <b className={used('BRB') > d.allowance.brbMin ? 'text-danger' : 'text-ink'}>{used('BRB')}</b>/{d.allowance.brbMin}m
+        </span>
+      </div>
+      {d.breaks.length === 0 && !adding && <p className="text-body-sm text-ink-muted">No breaks on this day.</p>}
+      <ul className="space-y-1.5">
+        {d.breaks.map((b) => {
+          const e = edit[b.id]
+          return (
+            <li key={b.id} className="flex flex-wrap items-center gap-2 text-body-sm">
+              {e ? (
+                <>
+                  <select value={e.type} onChange={(x) => setEdit({ ...edit, [b.id]: { ...e, type: x.target.value as BreakType } })} className={small}><option value="BREAK">Break</option><option value="BRB">BRB</option></select>
+                  <input type="time" value={e.start} onChange={(x) => setEdit({ ...edit, [b.id]: { ...e, start: x.target.value } })} className={small} aria-label="Break start" />
+                  <span className="text-ink-muted">to</span>
+                  <input type="time" value={e.end} onChange={(x) => setEdit({ ...edit, [b.id]: { ...e, end: x.target.value } })} className={small} aria-label="Break end" />
+                  <Button size="sm" onClick={() => run(updateBreak(b.id, { type: e.type, start: e.start, ...(e.end ? { end: e.end } : {}) }), 'Break updated.')}>Save</Button>
+                  <button type="button" onClick={() => { const n = { ...edit }; delete n[b.id]; setEdit(n) }} className="text-ink-muted hover:text-ink">Cancel</button>
+                </>
+              ) : (
+                <>
+                  <Badge tone={b.type === 'BRB' ? 'neutral' : 'primary'}>{b.type === 'BRB' ? 'BRB' : 'Break'}</Badge>
+                  <span className="tabular-nums text-ink">{b.start} to {b.end ?? 'still running'}</span>
+                  <span className="text-ink-muted">· {b.minutes}m</span>
+                  {b.autoEnded && <span className="rounded bg-warning/10 px-1.5 text-[11px] font-semibold text-warning" title="Ended by the break cut-off: the person forgot to end it">cut off</span>}
+                  {b.edited && <span className="text-[11px] text-ink-muted">edited</span>}
+                  <span className="ml-auto flex items-center gap-1">
+                    {b.running && <Button size="sm" variant="secondary" onClick={() => run(updateBreak(b.id, { end: 'now' }), 'Break ended.')}>End now</Button>}
+                    <button type="button" onClick={() => setEdit({ ...edit, [b.id]: { type: b.type, start: b.start, end: b.end ?? '' } })} className="flex h-7 w-7 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Change the times"><Pencil size={13} /></button>
+                    {confirmDel === b.id ? (
+                      <button type="button" onClick={() => { setConfirmDel(null); run(deleteBreak(b.id), 'Break removed.') }} onBlur={() => setConfirmDel(null)} autoFocus className="h-7 rounded-btn bg-danger/10 px-2 text-body-sm font-semibold text-danger">Remove?</button>
+                    ) : (
+                      <button type="button" onClick={() => setConfirmDel(b.id)} className="flex h-7 w-7 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove this break"><Trash2 size={13} /></button>
+                    )}
+                  </span>
+                </>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {adding ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-body-sm">
+          <select value={adding.type} onChange={(x) => setAdding({ ...adding, type: x.target.value as BreakType })} className={small}><option value="BREAK">Break</option><option value="BRB">BRB</option></select>
+          <input type="time" value={adding.start} onChange={(x) => setAdding({ ...adding, start: x.target.value })} className={small} aria-label="New break start" />
+          <span className="text-ink-muted">to</span>
+          <input type="time" value={adding.end} onChange={(x) => setAdding({ ...adding, end: x.target.value })} className={small} aria-label="New break end" />
+          <Button size="sm" disabled={!adding.start || !adding.end} onClick={() => run(addDayBreak(userId, date, adding), 'Break added.').then((ok) => { if (ok) setAdding(null) })}>Add</Button>
+          <button type="button" onClick={() => setAdding(null)} className="text-ink-muted hover:text-ink">Cancel</button>
+        </div>
+      ) : d.checkIn && (
+        <button type="button" onClick={() => setAdding({ type: 'BREAK', start: '', end: '' })} className="mt-2 text-body-sm font-semibold text-primary">+ Add a missed break</button>
+      )}
+    </div>
   )
 }
 

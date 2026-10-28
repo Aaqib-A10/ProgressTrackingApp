@@ -205,7 +205,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       include: { lines: { include: { marketplace: true, taskType: true } } },
     }),
     prisma.stockRequest.count({ where: { departmentId: dept.id, status: { not: 'RESOLVED' } } }),
-    prisma.ecommerceTask.findMany({ include: { assignedTo: { select: { id: true, name: true } } }, orderBy: [{ status: 'asc' }, { order: 'asc' }], take: 500 }),
+    prisma.ecommerceTask.findMany({ include: stockInclude, orderBy: [{ status: 'asc' }, { order: 'asc' }], take: 500 }),
   ])
 
   const byUser = new Map<string, typeof entries>()
@@ -335,7 +335,7 @@ export async function createTask(req: AuthedRequest, res: Response): Promise<voi
       assignedToId: v.assignedToId || null, dueDate: v.dueDate ? dbDateFromString(v.dueDate) : null,
       createdById: me.id, status: 'TODO', order: (max._max.order ?? 0) + 1,
     },
-    include: { assignedTo: { select: { id: true, name: true } } },
+    include: stockInclude,
   })
   res.status(201).json({ task: serializeTask(task) })
 }
@@ -380,7 +380,7 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
     if (v.assignedToId !== undefined) data.assignedTo = v.assignedToId ? { connect: { id: v.assignedToId } } : { disconnect: true }
     if (v.dueDate !== undefined) data.dueDate = v.dueDate ? dbDateFromString(v.dueDate) : null
   }
-  const updated = await prisma.ecommerceTask.update({ where: { id: task.id }, data, include: { assignedTo: { select: { id: true, name: true } } } })
+  const updated = await prisma.ecommerceTask.update({ where: { id: task.id }, data, include: stockInclude })
   res.json({ task: serializeTask(updated) })
 }
 
@@ -444,13 +444,18 @@ export async function addComment(req: AuthedRequest, res: Response): Promise<voi
 
 // ============================ Stock tracking ============================
 
-function serializeStock(s: Prisma.StockRequestGetPayload<{ include: { assignedTo: { select: { id: true; name: true } } } }>) {
+type StockRow = Prisma.StockRequestGetPayload<{ include: { assignedTo: { select: { id: true; name: true } }; createdBy: { select: { id: true; name: true } } } }>
+const stockInclude = { assignedTo: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true } } } as const
+
+function serializeStock(s: StockRow) {
   return {
-    id: s.id, itemName: s.itemName, requestedByName: s.requestedByName, note: s.note ?? '',
+    id: s.id, itemName: s.itemName, quantity: s.quantity, requestedByName: s.requestedByName, note: s.note ?? '',
     requestedAt: s.requestedAt.toISOString(), status: s.status, action: s.action,
     assignee: s.assignedTo ? { id: s.assignedTo.id, name: s.assignedTo.name } : null,
     assignedAt: s.assignedAt ? s.assignedAt.toISOString() : null,
     resolvedAt: s.resolvedAt ? s.resolvedAt.toISOString() : null,
+    createdBy: s.createdBy ? { id: s.createdBy.id, name: s.createdBy.name } : null,
+    editedAt: s.editedAt ? s.editedAt.toISOString() : null,
   }
 }
 
@@ -461,14 +466,15 @@ export async function listStock(req: AuthedRequest, res: Response): Promise<void
   const dept = await ecommerceDept(me)
   if (!dept) { res.status(500).json({ error: 'Ecommerce department missing' }); return }
   const [requests, members] = await Promise.all([
-    prisma.stockRequest.findMany({ where: { departmentId: dept.id }, include: { assignedTo: { select: { id: true, name: true } } }, orderBy: [{ status: 'asc' }, { requestedAt: 'desc' }] }),
+    prisma.stockRequest.findMany({ where: { departmentId: dept.id }, include: stockInclude, orderBy: [{ status: 'asc' }, { requestedAt: 'desc' }] }),
     ecommerceMembers(dept.id),
   ])
-  res.json({ requests: requests.map(serializeStock), members, canAssign: isHod(me) })
+  res.json({ requests: requests.map(serializeStock), members, canAssign: isHod(me), me: me.id })
 }
 
 const stockCreateSchema = z.object({
   itemName: z.string().trim().min(1).max(200),
+  quantity: z.number().int().min(1).max(1_000_000).nullable().optional(),
   action: z.enum(['STOCK_IN', 'STOCK_OUT']),
   requestedByName: z.string().trim().min(1).max(120),
   note: z.string().max(1000).optional(),
@@ -483,8 +489,8 @@ export async function createStock(req: AuthedRequest, res: Response): Promise<vo
   const parsed = stockCreateSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' }); return }
   const s = await prisma.stockRequest.create({
-    data: { departmentId: dept.id, itemName: parsed.data.itemName, action: parsed.data.action, requestedByName: parsed.data.requestedByName, note: parsed.data.note ?? null },
-    include: { assignedTo: { select: { id: true, name: true } } },
+    data: { departmentId: dept.id, itemName: parsed.data.itemName, quantity: parsed.data.quantity ?? null, action: parsed.data.action, requestedByName: parsed.data.requestedByName, note: parsed.data.note ?? null, createdById: me.id },
+    include: stockInclude,
   })
   await prisma.auditLog.create({ data: { userId: me.id, entityType: 'StockRequest', entityId: s.id, action: 'CREATE', after: { itemName: s.itemName, requestedByName: s.requestedByName } } })
   res.status(201).json({ request: serializeStock(s) })
@@ -503,7 +509,7 @@ export async function assignStock(req: AuthedRequest, res: Response): Promise<vo
   const s = await prisma.stockRequest.update({
     where: { id: existing.id },
     data: { action: parsed.data.action, assignedToId: parsed.data.assignedToId, assignedById: me.id, assignedAt: new Date(), status: 'ASSIGNED' },
-    include: { assignedTo: { select: { id: true, name: true } } },
+    include: stockInclude,
   })
   await prisma.auditLog.create({ data: { userId: me.id, entityType: 'StockRequest', entityId: s.id, action: 'UPDATE', after: { status: 'ASSIGNED', action: s.action, assignedToId: s.assignedToId } } })
   res.json({ request: serializeStock(s) })
@@ -519,8 +525,107 @@ export async function resolveStock(req: AuthedRequest, res: Response): Promise<v
   const s = await prisma.stockRequest.update({
     where: { id: existing.id },
     data: { status: 'RESOLVED', resolvedAt: new Date() },
-    include: { assignedTo: { select: { id: true, name: true } } },
+    include: stockInclude,
   })
   await prisma.auditLog.create({ data: { userId: me.id, entityType: 'StockRequest', entityId: s.id, action: 'UPDATE', after: { status: 'RESOLVED' } } })
   res.json({ request: serializeStock(s) })
+}
+
+// ------------------------------------------------------------------ stock: edit, delete, history
+// E-commerce, Oct 2026: "no changes allowed in stock tracking, add an edit option". Members can
+// fix a log that is not done yet; the team lead (HOD) can change anything, reopen a done one or
+// delete a wrong one. Every change is in the activity log and shown as the log's history.
+
+const stockEditSchema = z.object({
+  itemName: z.string().trim().min(1).max(200).optional(),
+  quantity: z.number().int().min(1).max(1_000_000).nullable().optional(),
+  action: z.enum(['STOCK_IN', 'STOCK_OUT']).optional(),
+  requestedByName: z.string().trim().min(1).max(120).optional(),
+  note: z.string().max(1000).nullable().optional(),
+  /** Team lead only. */
+  assignedToId: z.string().nullable().optional(),
+  status: z.enum(['REQUESTED', 'ASSIGNED', 'RESOLVED']).optional(),
+})
+
+const STOCK_FIELDS = ['itemName', 'quantity', 'action', 'requestedByName', 'note', 'assignedToId', 'status'] as const
+const STOCK_LABEL: Record<string, string> = { itemName: 'item', quantity: 'quantity', action: 'type', requestedByName: 'requested by', note: 'note', assignedToId: 'assignee', status: 'status' }
+
+/** PATCH /api/ecommerce/stock/:id — edit a stock log. */
+export async function editStock(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (!isEcommerce(me)) { res.status(403).json({ error: 'Not an Ecommerce member' }); return }
+  const dept = await ecommerceDept(me)
+  const existing = await prisma.stockRequest.findUnique({ where: { id: req.params.id } })
+  if (!existing || (dept && existing.departmentId !== dept.id)) { res.status(404).json({ error: 'Stock log not found' }); return }
+  const p = stockEditSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Invalid input' }); return }
+  const hod = isHod(me)
+  if (!hod) {
+    if (existing.status === 'RESOLVED') { res.status(403).json({ error: 'This log is done. Ask your team lead to change it.' }); return }
+    if (p.data.assignedToId !== undefined || p.data.status !== undefined) { res.status(403).json({ error: 'Only the team lead can change the assignee or the status.' }); return }
+  }
+  const data: Prisma.StockRequestUncheckedUpdateInput = {}
+  const before: Record<string, unknown> = {}
+  const after: Record<string, unknown> = {}
+  for (const f of STOCK_FIELDS) {
+    const v = p.data[f]
+    if (v === undefined) continue
+    const old = (existing as Record<string, unknown>)[f] ?? null
+    const nv = f === 'note' ? (typeof v === 'string' && v.trim() ? v.trim() : null) : v
+    if (old === nv) continue
+    ;(data as Record<string, unknown>)[f] = nv
+    before[f] = old
+    after[f] = nv
+  }
+  if (data.assignedToId) {
+    const ok = await prisma.user.count({ where: { id: String(data.assignedToId), isActive: true } })
+    if (!ok) { res.status(400).json({ error: 'Pick someone from the team.' }); return }
+    if (existing.status === 'REQUESTED' && data.status === undefined) { data.status = 'ASSIGNED'; after.status = 'ASSIGNED'; before.status = existing.status }
+    data.assignedById = me.id
+    data.assignedAt = new Date()
+  }
+  if (data.assignedToId === null && existing.status === 'ASSIGNED' && data.status === undefined) { data.status = 'REQUESTED'; after.status = 'REQUESTED'; before.status = existing.status }
+  if (data.status === 'RESOLVED' && existing.status !== 'RESOLVED') data.resolvedAt = new Date()
+  if (data.status && data.status !== 'RESOLVED') data.resolvedAt = null
+  if (!Object.keys(after).length) { const same = await prisma.stockRequest.findUniqueOrThrow({ where: { id: existing.id }, include: stockInclude }); res.json({ request: serializeStock(same) }); return }
+  data.editedAt = new Date()
+  data.editedById = me.id
+  const s = await prisma.stockRequest.update({ where: { id: existing.id }, data, include: stockInclude })
+  await prisma.auditLog.create({ data: { userId: me.id, entityType: 'StockRequest', entityId: s.id, action: 'UPDATE', before: before as Prisma.InputJsonValue, after: after as Prisma.InputJsonValue } })
+  res.json({ request: serializeStock(s) })
+}
+
+/** DELETE /api/ecommerce/stock/:id — the team lead removes a log made by mistake (kept in the activity log). */
+export async function deleteStock(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (!isHod(me)) { res.status(403).json({ error: 'Only the team lead can delete a stock log.' }); return }
+  const dept = await ecommerceDept(me)
+  const existing = await prisma.stockRequest.findUnique({ where: { id: req.params.id } })
+  if (!existing || (dept && existing.departmentId !== dept.id)) { res.status(404).json({ error: 'Stock log not found' }); return }
+  await prisma.stockRequest.delete({ where: { id: existing.id } })
+  await prisma.auditLog.create({ data: { userId: me.id, entityType: 'StockRequest', entityId: existing.id, action: 'DELETE', before: { itemName: existing.itemName, quantity: existing.quantity, action: existing.action, requestedByName: existing.requestedByName, status: existing.status } } })
+  res.status(204).end()
+}
+
+/** GET /api/ecommerce/stock/:id/history — who logged, assigned, edited and finished it, and what changed. */
+export async function stockHistory(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await loadUser(req.user!.id)
+  if (!isEcommerce(me)) { res.status(403).json({ error: 'Not an Ecommerce member' }); return }
+  const dept = await ecommerceDept(me)
+  const existing = await prisma.stockRequest.findUnique({ where: { id: req.params.id }, select: { id: true, departmentId: true } })
+  if (!existing || (dept && existing.departmentId !== dept.id)) { res.status(404).json({ error: 'Stock log not found' }); return }
+  const rows = await prisma.auditLog.findMany({ where: { entityType: 'StockRequest', entityId: existing.id }, orderBy: { createdAt: 'asc' }, select: { action: true, before: true, after: true, createdAt: true, user: { select: { name: true } } } })
+  const userIds = new Set<string>()
+  for (const r of rows) for (const o of [r.before, r.after]) { const a = (o ?? {}) as Record<string, unknown>; if (typeof a.assignedToId === 'string') userIds.add(a.assignedToId) }
+  const names = new Map((await prisma.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
+  const show = (f: string, v: unknown) => (v == null || v === '' ? 'none' : f === 'assignedToId' ? names.get(String(v)) ?? 'someone' : f === 'action' ? (v === 'STOCK_IN' ? 'Stock In' : 'Stock Out') : f === 'status' ? ({ REQUESTED: 'Open', ASSIGNED: 'Assigned', RESOLVED: 'Done' } as Record<string, string>)[String(v)] ?? String(v) : String(v))
+  res.json({
+    history: rows.map((r) => {
+      const b = (r.before ?? {}) as Record<string, unknown>
+      const a = (r.after ?? {}) as Record<string, unknown>
+      const what = r.action === 'CREATE' ? 'Logged it'
+        : STOCK_FIELDS.filter((k) => k in a).map((k) => (k in b ? `${STOCK_LABEL[k]}: ${show(k, b[k])} → ${show(k, a[k])}` : `${STOCK_LABEL[k]}: ${show(k, a[k])}`)).join('; ') || 'Updated'
+      return { at: r.createdAt.toISOString(), by: r.user?.name ?? 'someone', what }
+    }),
+  })
 }

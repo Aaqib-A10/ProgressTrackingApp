@@ -1,4 +1,5 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { pageModule } from '../../lib/staleChunks'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { callsApi, leaveOnUnload, type ActiveCall } from '../../lib/callsApi'
 import { CallEngine, type CallSnapshot, type Reaction } from '../../lib/callEngine'
@@ -12,7 +13,7 @@ import * as desktop from '../../lib/desktopAlerts'
 import { useToast } from '../ui/Toast'
 // The call screen is only needed during a call: it downloads on its own, shortly after the
 // app opens (so joining is still instant), instead of slowing the first load.
-const loadCallWindow = () => import('./CallWindow')
+const loadCallWindow = pageModule(() => import('./CallWindow'))
 const CallWindow = lazy(() => loadCallWindow().then((m) => ({ default: m.CallWindow })))
 import { IncomingCalls } from './IncomingCalls'
 

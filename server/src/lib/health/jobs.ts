@@ -14,6 +14,7 @@ export const JOBS: { name: string; label: string; everyMs: number | null }[] = [
   { name: 'meeting-reminders', label: 'Meeting reminders', everyMs: MIN },
   { name: 'attendance-reminders', label: 'Check-in and check-out reminders', everyMs: 5 * MIN },
   { name: 'attendance-violations', label: 'Late and break alerts', everyMs: 5 * MIN },
+  { name: 'break-cutoff', label: 'Break cut-off (forgotten breaks)', everyMs: MIN },
   { name: 'task-reminders', label: 'Urgent task reminders', everyMs: 5 * MIN },
   { name: 'pm-deadlines', label: 'Project due and overdue alerts', everyMs: 5 * MIN },
   { name: 'cleanup', label: 'Daily cleanup', everyMs: 24 * 60 * MIN },

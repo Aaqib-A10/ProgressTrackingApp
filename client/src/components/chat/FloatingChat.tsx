@@ -1,9 +1,10 @@
 import { Suspense, lazy, useState } from 'react'
+import { pageModule } from '../../lib/staleChunks'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Maximize2, MessagesSquare, X } from 'lucide-react'
 // The chat pop-up's contents download the first time it is opened.
-const ChatThread = lazy(() => import('./ChatThread').then((m) => ({ default: m.ChatThread })))
-const ConversationList = lazy(() => import('./ConversationList').then((m) => ({ default: m.ConversationList })))
+const ChatThread = lazy(() => pageModule(() => import('./ChatThread'))().then((m) => ({ default: m.ChatThread })))
+const ConversationList = lazy(() => pageModule(() => import('./ConversationList'))().then((m) => ({ default: m.ConversationList })))
 import { useChatUnread } from './useChatUnread'
 import { cn } from '../../lib/cn'
 

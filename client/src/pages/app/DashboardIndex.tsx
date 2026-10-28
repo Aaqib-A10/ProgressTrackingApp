@@ -1,12 +1,13 @@
 import { lazy } from 'react'
+import { pageModule } from '../../lib/staleChunks'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 
 // Each person downloads only their own dashboard (the charts library comes only with the ones that chart).
-const DashboardHome = lazy(() => import('./DashboardHome'))
-const TeamLeadDashboard = lazy(() => import('./TeamLeadDashboard'))
-const ExecutiveDashboard = lazy(() => import('./ExecutiveDashboard'))
-const QaTeam = lazy(() => import('./qa/QaTeam'))
+const DashboardHome = lazy(pageModule(() => import('./DashboardHome')))
+const TeamLeadDashboard = lazy(pageModule(() => import('./TeamLeadDashboard')))
+const ExecutiveDashboard = lazy(pageModule(() => import('./ExecutiveDashboard')))
+const QaTeam = lazy(pageModule(() => import('./qa/QaTeam')))
 
 /** Routes /app/dashboard to the right view per role. */
 export default function DashboardIndex() {

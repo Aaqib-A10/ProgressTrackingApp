@@ -207,6 +207,7 @@ model User {
   notificationsActed    Notification[]         @relation("NotificationActor")
   stockAssignedTo       StockRequest[]         @relation("StockAssignee")
   stockAssignedBy       StockRequest[]         @relation("StockAssigner")
+  stockCreated        StockRequest[]       @relation("StockCreator")
   inventoryItemsCreated InventoryItem[]        @relation("InvItemCreator")
   inventoryRequested    InventoryMovement[]    @relation("InvReqBy")
   inventoryAssignedTo   InventoryMovement[]    @relation("InvAssignee")
@@ -644,6 +645,11 @@ model BreakEntry {
   startMobile Boolean?
   endUa       String?
   endMobile   Boolean?
+  /// Ended by the break cut-off (the person forgot to end it).
+  autoEnded   Boolean       @default(false)
+  /// Added or changed by a team lead (who and when; details in the activity log).
+  editedById  String?
+  editedAt    DateTime?
   createdAt   DateTime      @default(now())
 
   @@index([dayId])
@@ -668,6 +674,10 @@ model AttendanceShift {
   requiredMinutes   Int         @default(480) // full-shift target; worked >= this = shift completed
   brbAllowanceMin   Int         @default(20) // total BRB minutes allowed per day
   breakAllowanceMin Int         @default(65) // total regular break minutes allowed per day (1h05m)
+  /// A single break still running after this many minutes is ended at that point (someone forgot
+  /// to end it); 0 = never. Team leads get an alert and can fix the time.
+  breakCutoffMin    Int         @default(90)
+  brbCutoffMin      Int         @default(30)
   workingDays       Int[]       @default([1, 2, 3, 4, 5]) // 0=Sun … 6=Sat; which weekdays are worked
   timeZone          String? // IANA tz (e.g. "America/New_York"); null = company timezone
   updatedAt         DateTime    @updatedAt
@@ -983,6 +993,8 @@ enum NotificationType {
   WORKLOG_REVIEW
   NETWORK_BLOCKED
   SYSTEM_HEALTH
+  BREAK_CUTOFF
+  ATTENDANCE_EDITED
 }
 
 enum BreakType {
@@ -1686,8 +1698,16 @@ model StockRequest {
   departmentId    String
   department      Department  @relation(fields: [departmentId], references: [id])
   itemName        String
+  /// How many units (optional; E-commerce, Oct 2026).
+  quantity        Int?
   requestedByName String // free text — operations person (outside the app)
   note            String?
+  /// Who logged it in Metriq (null for logs made before Oct 2026).
+  createdById     String?
+  createdBy       User?       @relation("StockCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  /// Last edit (the full history is in the activity log).
+  editedAt        DateTime?
+  editedById      String?
   requestedAt     DateTime    @default(now())
   status          StockStatus @default(REQUESTED)
 

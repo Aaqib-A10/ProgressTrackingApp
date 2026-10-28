@@ -14,6 +14,9 @@ export interface Shift {
   requiredMinutes: number
   brbAllowanceMin: number
   breakAllowanceMin: number
+  /** A single break still running after this many minutes is ended (0 = never). */
+  breakCutoffMin?: number
+  brbCutoffMin?: number
   workingDays: number[] // 0=Sun … 6=Sat
   timeZone: string | null // IANA zone; null = company timezone
 }
@@ -145,6 +148,8 @@ export interface TeamBoardEntry {
   state: ClockState
   checkIn: string | null
   workMode: WorkMode | null
+  /** The break running now, if any (a team lead can end it). */
+  openBreak?: { id: string; type: BreakType; since: string; minutes: number } | null
 }
 
 export interface TeamAttendanceResponse {
@@ -189,8 +194,20 @@ export const markLeave = (userId: string, date: string, input: { type: LeaveMark
 export const setAttendanceRemote = (userId: string, remote: boolean) =>
   api.put<{ userId: string; remote: boolean }>(`/attendance/${userId}/remote`, { remote })
 export const removeLeave = (userId: string, date: string) => api.del<void>(`/attendance/${userId}/leave/${date}`)
-export const correctAttendanceDay = (userId: string, date: string, input: { checkIn?: string | null; checkOut?: string | null; note?: string | null }) =>
-  api.patch<{ day: { date: string; checkIn: string | null; checkOut: string | null } }>(`/attendance/${userId}/${date}`, input)
+export const correctAttendanceDay = (userId: string, date: string, input: { checkIn?: string | null; checkOut?: string | null; overtime?: string | null; note?: string | null }) =>
+  api.patch<{ day: { date: string; checkIn: string | null; checkOut: string | null; overtime: string | null } }>(`/attendance/${userId}/${date}`, input)
+
+// Breaks fixed by team leads (own department) and Super Admins.
+export interface DayBreak { id: string; type: BreakType; start: string; end: string | null; minutes: number; running: boolean; autoEnded: boolean; edited: boolean }
+export interface DayBreaksResponse {
+  date: string; checkIn: string | null; checkOut: string | null; overtime: string | null
+  breaks: DayBreak[]
+  allowance: { breakMin: number; brbMin: number; breakCutoffMin: number; brbCutoffMin: number }
+}
+export const getDayBreaks = (userId: string, date: string) => api.get<DayBreaksResponse>(`/attendance/${userId}/${date}/breaks`)
+export const addDayBreak = (userId: string, date: string, input: { type: BreakType; start: string; end: string }) => api.post<{ break: DayBreak }>(`/attendance/${userId}/${date}/breaks`, input)
+export const updateBreak = (id: string, input: { type?: BreakType; start?: string; end?: string }) => api.patch<{ break: DayBreak }>(`/attendance/breaks/${id}`, input)
+export const deleteBreak = (id: string) => api.del<void>(`/attendance/breaks/${id}`)
 
 export const getAttendanceMe = () => api.get<MeResponse>('/attendance/me')
 export const clockCheckIn = () => api.post<MeResponse>('/attendance/check-in')

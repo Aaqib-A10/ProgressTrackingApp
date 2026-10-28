@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMyEntry, upsertMyEntry, teamView, getBoard, createTask, updateTask, deleteTask, getTask, addComment, listStock, createStock, assignStock, resolveStock } from '../controllers/ecommerceController'
+import { getMyEntry, upsertMyEntry, teamView, getBoard, createTask, updateTask, deleteTask, getTask, addComment, listStock, createStock, assignStock, resolveStock, editStock, deleteStock, stockHistory } from '../controllers/ecommerceController'
 import { listMeetingNotes, createMeetingNote, updateMeetingNote, deleteMeetingNote } from '../controllers/meetingNotesController'
 import { requireDepartment } from '../middleware/department'
 import { requireAuth } from '../middleware/auth'
@@ -25,3 +25,6 @@ ecommerceRouter.get('/stock', asyncHandler(listStock))
 ecommerceRouter.post('/stock', asyncHandler(createStock))
 ecommerceRouter.patch('/stock/:id/assign', asyncHandler(assignStock))
 ecommerceRouter.patch('/stock/:id/resolve', asyncHandler(resolveStock))
+ecommerceRouter.patch('/stock/:id', asyncHandler(editStock))
+ecommerceRouter.delete('/stock/:id', asyncHandler(deleteStock))
+ecommerceRouter.get('/stock/:id/history', asyncHandler(stockHistory))

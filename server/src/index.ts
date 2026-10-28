@@ -13,6 +13,7 @@ import { scheduleNotes } from './controllers/chatController'
 import { recoverNotes } from './lib/pm/notes'
 import { captureError, flushErrors } from './lib/health/errors'
 import { fillContactsFromRaw } from './lib/dialerRaw'
+import { startBreakCutoff } from './lib/breakCutoff'
 import { setAuditBaseUrl, startHealthAudit } from './lib/health/audit'
 
 const PORT = Number(process.env.PORT) || 4000
@@ -42,6 +43,7 @@ app.listen(PORT, () => {
   console.log(`[server] Metriq API listening on http://localhost:${PORT}`)
   startAttendanceReminders()
   startAttendanceViolations()
+  startBreakCutoff()
   startAutoCheckout()
   startMonthlyReports()
   startTaskReminders()

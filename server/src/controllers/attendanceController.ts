@@ -21,6 +21,9 @@ type Shift = {
   requiredMinutes: number
   brbAllowanceMin: number
   breakAllowanceMin: number
+  /** A single break still running after this many minutes is ended (0 = never). */
+  breakCutoffMin: number
+  brbCutoffMin: number
   workingDays: number[] // 0=Sun … 6=Sat
   timeZone: string | null // IANA zone; null = company timezone
 }
@@ -34,11 +37,13 @@ type ShiftRow = {
   requiredMinutes: number
   brbAllowanceMin: number
   breakAllowanceMin: number
+  breakCutoffMin: number
+  brbCutoffMin: number
   workingDays: number[]
   timeZone: string | null
 }
 
-const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', dayTimes: null, graceMin: 10, requiredMinutes: 480, brbAllowanceMin: 20, breakAllowanceMin: 65, workingDays: [1, 2, 3, 4, 5], timeZone: null }
+const DEFAULT_SHIFT: Shift = { startTime: '09:00', endTime: '18:00', dayTimes: null, graceMin: 10, requiredMinutes: 480, brbAllowanceMin: 20, breakAllowanceMin: 65, breakCutoffMin: 90, brbCutoffMin: 30, workingDays: [1, 2, 3, 4, 5], timeZone: null }
 
 /** Coerce a Prisma Json value into the DayTimes map (or null). */
 function asDayTimes(v: unknown): DayTimes {
@@ -61,7 +66,7 @@ function loadUser(id: string) {
 
 const toShift = (s: ShiftRow | undefined): Shift =>
   s
-    ? { startTime: s.startTime, endTime: s.endTime, dayTimes: asDayTimes(s.dayTimes), graceMin: s.graceMin, requiredMinutes: s.requiredMinutes, brbAllowanceMin: s.brbAllowanceMin, breakAllowanceMin: s.breakAllowanceMin, workingDays: s.workingDays, timeZone: s.timeZone }
+    ? { startTime: s.startTime, endTime: s.endTime, dayTimes: asDayTimes(s.dayTimes), graceMin: s.graceMin, requiredMinutes: s.requiredMinutes, brbAllowanceMin: s.brbAllowanceMin, breakAllowanceMin: s.breakAllowanceMin, breakCutoffMin: s.breakCutoffMin, brbCutoffMin: s.brbCutoffMin, workingDays: s.workingDays, timeZone: s.timeZone }
     : DEFAULT_SHIFT
 
 /** Pick the effective shift for an employee: user override → department → company. */
@@ -1132,6 +1137,8 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
       hasOverride: shifts.some((s) => s.userId === m.id),
       todayState: liveState(today),
       todayCheckIn: today?.checkInAt ? clockLabel(today.checkInAt, shift) : null,
+      // The break running now (for the team lead's "End break").
+      openBreak: (() => { const b = today?.breaks.find((x) => !x.endAt); return b ? { id: b.id, type: b.type, since: clockLabel(b.startAt, shift), minutes: Math.max(0, Math.round((Date.now() - b.startAt.getTime()) / 60000)) } : null })(),
       brbMinToday,
       regBreakToday,
       brbAllowanceMin: shift.brbAllowanceMin,
@@ -1147,7 +1154,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     }
   })
 
-  const board = rows.map((r) => ({ userId: r.userId, name: r.name, department: r.department, state: r.todayState, checkIn: r.todayCheckIn, workMode: r.workModeToday }))
+  const board = rows.map((r) => ({ userId: r.userId, name: r.name, department: r.department, state: r.todayState, checkIn: r.todayCheckIn, workMode: r.workModeToday, openBreak: r.openBreak }))
   const count = (s: LiveState) => board.filter((b) => b.state === s).length
 
   res.json({
@@ -1202,6 +1209,9 @@ const shiftSchema = z.object({
   requiredMinutes: z.number().int().min(0).max(1440),
   brbAllowanceMin: z.number().int().min(0).max(120),
   breakAllowanceMin: z.number().int().min(0).max(600),
+  // Break cut-off in minutes (0 = never). Optional: older screens do not send them.
+  breakCutoffMin: z.number().int().min(0).max(600).optional(),
+  brbCutoffMin: z.number().int().min(0).max(240).optional(),
   workingDays: z.array(z.number().int().min(0).max(6)).min(1, 'Pick at least one working day').max(7),
   timeZone: z
     .string()
@@ -1224,6 +1234,8 @@ const outShift = (s: ShiftRow): Shift => ({
   requiredMinutes: s.requiredMinutes,
   brbAllowanceMin: s.brbAllowanceMin,
   breakAllowanceMin: s.breakAllowanceMin,
+  breakCutoffMin: s.breakCutoffMin,
+  brbCutoffMin: s.brbCutoffMin,
   workingDays: s.workingDays,
   timeZone: s.timeZone,
 })
@@ -1332,7 +1344,7 @@ export async function deleteUserShift(req: AuthedRequest, res: Response): Promis
 }
 
 const timeOrNull = z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.literal(''), z.null()]).optional()
-const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull, note: z.string().max(1000).nullable().optional() })
+const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull, overtime: timeOrNull, note: z.string().max(1000).nullable().optional() })
 
 /**
  * Combine a "YYYY-MM-DD" (the attendance day) + "HH:mm" into a UTC instant,
@@ -1382,9 +1394,11 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     include: { breaks: true },
   })
 
-  const data: { checkInAt?: Date | null; checkOutAt?: Date | null; note?: string | null } = {}
+  const data: { checkInAt?: Date | null; checkOutAt?: Date | null; overtimeAt?: Date | null; note?: string | null } = {}
   if (parsed.data.checkIn !== undefined) data.checkInAt = parsed.data.checkIn ? instantFrom(date, parsed.data.checkIn, shift) : null
   if (parsed.data.checkOut !== undefined) data.checkOutAt = parsed.data.checkOut ? instantFrom(date, parsed.data.checkOut, shift) : null
+  // When overtime started ("" clears it: no overtime that day).
+  if (parsed.data.overtime !== undefined) data.overtimeAt = parsed.data.overtime ? instantFrom(date, parsed.data.overtime, shift) : null
   if (parsed.data.note !== undefined) data.note = parsed.data.note?.trim() || null
 
   const finalIn = data.checkInAt !== undefined ? data.checkInAt : existing?.checkInAt ?? null
@@ -1393,12 +1407,21 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     res.status(400).json({ error: 'Check-out must be after check-in.' })
     return
   }
+  const finalOt = data.overtimeAt !== undefined ? data.overtimeAt : existing?.overtimeAt ?? null
+  if (finalOt && ((finalIn && finalOt <= finalIn) || (finalOut && finalOt >= finalOut))) {
+    res.status(400).json({ error: 'Overtime must start after check-in and before check-out.' })
+    return
+  }
 
   const day = await prisma.attendanceDay.upsert({
     where: { userId_date: { userId, date: dateValue } },
     update: data,
-    create: { userId, date: dateValue, checkInAt: data.checkInAt ?? null, checkOutAt: data.checkOutAt ?? null, note: data.note ?? null },
+    create: { userId, date: dateValue, checkInAt: data.checkInAt ?? null, checkOutAt: data.checkOutAt ?? null, overtimeAt: data.overtimeAt ?? null, note: data.note ?? null },
   })
+  // A break still running when the day is closed ends at the check-out (like the automatic check-out).
+  if (finalOut && existing) {
+    await prisma.breakEntry.updateMany({ where: { dayId: day.id, endAt: null, startAt: { lt: finalOut } }, data: { endAt: finalOut, editedById: me.id, editedAt: new Date() } })
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -1406,8 +1429,8 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
       entityType: 'AttendanceDay',
       entityId: day.id,
       action: existing ? 'UPDATE' : 'CREATE',
-      before: existing ? { checkInAt: existing.checkInAt?.toISOString() ?? null, checkOutAt: existing.checkOutAt?.toISOString() ?? null } : undefined,
-      after: { checkInAt: day.checkInAt?.toISOString() ?? null, checkOutAt: day.checkOutAt?.toISOString() ?? null },
+      before: existing ? { checkInAt: existing.checkInAt?.toISOString() ?? null, checkOutAt: existing.checkOutAt?.toISOString() ?? null, overtimeAt: existing.overtimeAt?.toISOString() ?? null } : undefined,
+      after: { checkInAt: day.checkInAt?.toISOString() ?? null, checkOutAt: day.checkOutAt?.toISOString() ?? null, overtimeAt: day.overtimeAt?.toISOString() ?? null },
     },
   })
 
@@ -1416,6 +1439,7 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
       date,
       checkIn: day.checkInAt ? hhmm(day.checkInAt, shift) : null,
       checkOut: day.checkOutAt ? hhmm(day.checkOutAt, shift) : null,
+      overtime: day.overtimeAt ? hhmm(day.overtimeAt, shift) : null,
       note: day.note ?? null,
     },
   })
@@ -1535,5 +1559,139 @@ export async function removeLeave(req: AuthedRequest, res: Response): Promise<vo
   const target = await requireManageableTarget(me, userId, res)
   if (!target) return
   await prisma.leaveDay.deleteMany({ where: { userId, date: dbDateFromString(date) } })
+  res.status(204).end()
+}
+
+// ------------------------------------------------------------------ breaks, edited by team leads
+// E-commerce, Oct 2026: "access of breaks of our employees, and any other issue like overtime or a
+// break someone forgot to end". A team lead (own department) or a Super Admin can see a day's
+// breaks, end one still running, change its times or kind, add a missed one, or delete a wrong
+// one. Every change is in the activity log and the person is told.
+
+const breakView = (b: { id: string; type: string; startAt: Date; endAt: Date | null; autoEnded: boolean; editedAt: Date | null }, shift: Shift, now: Date) => ({
+  id: b.id,
+  type: b.type,
+  start: hhmm(b.startAt, shift),
+  end: b.endAt ? hhmm(b.endAt, shift) : null,
+  minutes: Math.max(0, Math.round(((b.endAt ?? now).getTime() - b.startAt.getTime()) / 60000)),
+  running: !b.endAt,
+  autoEnded: b.autoEnded,
+  edited: !!b.editedAt,
+})
+
+async function dayForEdit(req: AuthedRequest, res: Response, userId: string, date: string) {
+  const me = await loadUser(req.user!.id)
+  const target = await requireManageableTarget(me, userId, res)
+  if (!target) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ error: 'Bad date' }); return null }
+  const shift = await resolveShift(userId, target.departmentId)
+  const day = await prisma.attendanceDay.findUnique({ where: { userId_date: { userId, date: dbDateFromString(date) } }, include: { breaks: { orderBy: { startAt: 'asc' } } } })
+  return { me, shift, day }
+}
+
+/** GET /api/attendance/:userId/:date/breaks — the day's breaks and times, for a team lead to fix. */
+export async function getDayBreaks(req: AuthedRequest, res: Response): Promise<void> {
+  const { userId, date } = req.params
+  const got = await dayForEdit(req, res, userId, date)
+  if (!got) return
+  const { shift, day } = got
+  const now = new Date()
+  res.json({
+    date,
+    checkIn: day?.checkInAt ? hhmm(day.checkInAt, shift) : null,
+    checkOut: day?.checkOutAt ? hhmm(day.checkOutAt, shift) : null,
+    overtime: day?.overtimeAt ? hhmm(day.overtimeAt, shift) : null,
+    breaks: (day?.breaks ?? []).map((b) => breakView(b, shift, now)),
+    allowance: { breakMin: shift.breakAllowanceMin, brbMin: shift.brbAllowanceMin, breakCutoffMin: shift.breakCutoffMin, brbCutoffMin: shift.brbCutoffMin },
+  })
+}
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+const breakInput = z.object({
+  type: z.enum(['BREAK', 'BRB']).optional(),
+  start: z.string().regex(HHMM_RE, 'Use HH:mm').optional(),
+  /** "HH:mm", or "now" to end a break that is still running. */
+  end: z.union([z.string().regex(HHMM_RE, 'Use HH:mm'), z.literal('now')]).optional(),
+})
+
+/** The break's new times must sit inside the working day and not run into another break. */
+function checkBreakTimes(start: Date, end: Date | null, day: { checkInAt: Date | null; checkOutAt: Date | null; breaks: { id: string; startAt: Date; endAt: Date | null }[] }, selfId: string | null, now: Date): string | null {
+  if (end && end <= start) return 'The break must end after it starts.'
+  if (day.checkInAt && start < day.checkInAt) return 'The break cannot start before check-in.'
+  if (day.checkOutAt && (end ?? start) > day.checkOutAt) return 'The break cannot end after check-out.'
+  if ((end ?? start) > new Date(now.getTime() + 60_000)) return 'The break cannot end in the future.'
+  const until = end ?? now
+  const clash = day.breaks.find((b) => b.id !== selfId && b.startAt < until && (b.endAt ?? now) > start)
+  return clash ? 'This overlaps another break on that day.' : null
+}
+
+async function tellPerson(userId: string, editorName: string, date: string, what: string) {
+  await prisma.notification.create({
+    data: { userId, type: 'ATTENDANCE_EDITED', title: `${editorName} changed your attendance for ${date}`, body: what, link: '/app/attendance/me' },
+  }).catch(() => undefined)
+}
+
+/** POST /api/attendance/:userId/:date/breaks { type, start, end } — add a break the person did not log. */
+export async function addDayBreak(req: AuthedRequest, res: Response): Promise<void> {
+  const { userId, date } = req.params
+  const got = await dayForEdit(req, res, userId, date)
+  if (!got) return
+  const { me, shift, day } = got
+  if (!day?.checkInAt) { res.status(400).json({ error: 'There is no check-in on that day.' }); return }
+  const p = breakInput.safeParse(req.body)
+  if (!p.success || !p.data.start || !p.data.end || p.data.end === 'now') { res.status(400).json({ error: 'Give the start and end times (HH:mm).' }); return }
+  const now = new Date()
+  const start = instantFrom(date, p.data.start, shift)
+  const end = instantFrom(date, p.data.end, shift)
+  const bad = checkBreakTimes(start, end, day, null, now)
+  if (bad) { res.status(400).json({ error: bad }); return }
+  const type = p.data.type ?? 'BREAK'
+  const b = await prisma.breakEntry.create({ data: { dayId: day.id, type, startAt: start, endAt: end, editedById: me.id, editedAt: now } })
+  await prisma.auditLog.create({ data: { userId: me.id, entityType: 'BreakEntry', entityId: b.id, action: 'CREATE', after: { userId, date, type, start: p.data.start, end: p.data.end } } })
+  await tellPerson(userId, me.name, date, `A ${type === 'BRB' ? 'BRB' : 'break'} was added: ${p.data.start} to ${p.data.end}.`)
+  res.status(201).json({ break: breakView(b, shift, now) })
+}
+
+async function breakForEdit(req: AuthedRequest, res: Response) {
+  const b = await prisma.breakEntry.findUnique({ where: { id: req.params.id }, include: { day: { include: { breaks: true } } } })
+  if (!b) { res.status(404).json({ error: 'Break not found' }); return null }
+  const me = await loadUser(req.user!.id)
+  const target = await requireManageableTarget(me, b.day.userId, res)
+  if (!target) return null
+  const shift = await resolveShift(b.day.userId, target.departmentId)
+  return { me, b, shift, date: dateStringFromDb(b.day.date) }
+}
+
+/** PATCH /api/attendance/breaks/:id { type?, start?, end? ("now" ends a running break) } */
+export async function updateBreak(req: AuthedRequest, res: Response): Promise<void> {
+  const got = await breakForEdit(req, res)
+  if (!got) return
+  const { me, b, shift, date } = got
+  const p = breakInput.safeParse(req.body)
+  if (!p.success || (!p.data.type && !p.data.start && !p.data.end)) { res.status(400).json({ error: 'Nothing to change.' }); return }
+  const now = new Date()
+  const start = p.data.start ? instantFrom(date, p.data.start, shift) : b.startAt
+  const end = p.data.end === 'now' ? now : p.data.end ? instantFrom(date, p.data.end, shift) : b.endAt
+  const bad = checkBreakTimes(start, end, b.day, b.id, now)
+  if (bad) { res.status(400).json({ error: bad }); return }
+  const type = p.data.type ?? b.type
+  const next = await prisma.breakEntry.update({ where: { id: b.id }, data: { type, startAt: start, endAt: end, editedById: me.id, editedAt: now } })
+  const was = `${hhmm(b.startAt, shift)} to ${b.endAt ? hhmm(b.endAt, shift) : 'still running'}`
+  const is = `${hhmm(start, shift)} to ${end ? hhmm(end, shift) : 'still running'}`
+  await prisma.auditLog.create({
+    data: { userId: me.id, entityType: 'BreakEntry', entityId: b.id, action: 'UPDATE', before: { type: b.type, startAt: b.startAt.toISOString(), endAt: b.endAt?.toISOString() ?? null }, after: { type, startAt: start.toISOString(), endAt: end?.toISOString() ?? null } },
+  })
+  await tellPerson(b.day.userId, me.name, date, `${type === 'BRB' ? 'BRB' : 'Break'} ${was} is now ${is}${type !== b.type ? ` (now a ${type === 'BRB' ? 'BRB' : 'break'})` : ''}.`)
+  res.json({ break: breakView(next, shift, now) })
+}
+
+/** DELETE /api/attendance/breaks/:id — remove a break logged by mistake. */
+export async function deleteBreak(req: AuthedRequest, res: Response): Promise<void> {
+  const got = await breakForEdit(req, res)
+  if (!got) return
+  const { me, b, shift, date } = got
+  await prisma.breakEntry.delete({ where: { id: b.id } })
+  await prisma.auditLog.create({ data: { userId: me.id, entityType: 'BreakEntry', entityId: b.id, action: 'DELETE', before: { userId: b.day.userId, date, type: b.type, startAt: b.startAt.toISOString(), endAt: b.endAt?.toISOString() ?? null } } })
+  await tellPerson(b.day.userId, me.name, date, `A ${b.type === 'BRB' ? 'BRB' : 'break'} (${hhmm(b.startAt, shift)} to ${b.endAt ? hhmm(b.endAt, shift) : 'still running'}) was removed.`)
   res.status(204).end()
 }
