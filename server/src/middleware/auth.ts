@@ -45,9 +45,10 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   try {
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, isActive: true, status: true, sessionsValidFrom: true },
+      select: { id: true, role: true, isActive: true, status: true, sessionsValidFrom: true, company: { select: { status: true } } },
     })
-    if (!user || !user.isActive || user.status !== 'ACTIVE') {
+    // A suspended company (owner console) signs all its people out.
+    if (!user || !user.isActive || user.status !== 'ACTIVE' || user.company?.status === 'SUSPENDED') {
       res.status(401).json({ error: 'Session is no longer valid' })
       return
     }

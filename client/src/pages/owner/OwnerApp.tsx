@@ -332,7 +332,7 @@ function OwnerHomePage() {
                 {companies.data.companies.map((co) => (
                   <li key={co.id}><Link to={`/owner/companies/${co.id}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-primary/10 text-body-sm font-semibold text-primary">{co.name.slice(0, 2).toUpperCase()}</span>
-                    <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{co.name}</span><span className="block text-body-sm text-ink-muted">{co.people} people{co.openTickets ? ` · ${co.openTickets} open` : ''}</span></span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{co.name}</span><span className="block text-body-sm text-ink-muted">{co.kind === 'PERSONAL' ? 'Individual' : `${co.people} people`}{co.openTickets ? ` · ${co.openTickets} open` : ''}</span></span>
                     <Badge tone={COMPANY_TONE[co.status]}>{co.status === 'TRIAL' ? 'Trial' : co.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge>
                   </Link></li>
                 ))}
@@ -366,17 +366,18 @@ function CompaniesPage() {
   if (!data) return <Loading error={error} />
   return (
     <>
-      <Title sub="Every company using Metriq. New companies appear here once sign up is switched on.">Companies</Title>
+      <Title sub="Every company and every individual using Metriq. New ones appear here once sign up is switched on.">Companies</Title>
       <Panel className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-body-md">
           <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted">
-            <th className="px-5 py-3">Company</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Plan</th>
+            <th className="px-5 py-3">Company</th><th className="px-3 py-2.5">Type</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Plan</th>
             <th className="px-3 py-2.5 text-right">People</th><th className="px-3 py-2.5 text-right">In today</th><th className="px-3 py-2.5">Last active</th><th className="px-5 py-3 text-right">Open complaints</th>
           </tr></thead>
           <tbody className="divide-y divide-line">
             {data.companies.map((c) => (
               <tr key={c.id} className="hover:bg-slate-50">
                 <td className="px-5 py-4"><Link to={`/owner/companies/${c.id}`} className="font-medium text-ink hover:text-primary">{c.name}</Link>{c.home && <span className="ml-2 text-[12px] text-ink-muted">company 1</span>}</td>
+                <td className="px-3 py-4 text-ink-muted">{c.kind === 'PERSONAL' ? 'Individual' : 'Team'}</td>
                 <td className="px-3 py-4"><Badge tone={COMPANY_TONE[c.status]}>{c.status === 'TRIAL' ? 'Trial' : c.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge></td>
                 <td className="px-3 py-4 capitalize text-ink-muted">{c.plan}</td>
                 <td className="px-3 py-4 text-right tabular-nums">{c.people}</td>

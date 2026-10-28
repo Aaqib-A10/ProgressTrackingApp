@@ -139,8 +139,8 @@ export async function ownerHome(_req: OwnerRequest, res: Response): Promise<void
 
 // ------------------------------------------------------------------ companies
 
-const companyView = async (c: { id: string; name: string; slug: string; timeZone: string; status: string; plan: string; helpEnabled: boolean; createdAt: Date }) => ({
-  id: c.id, name: c.name, slug: c.slug, timeZone: c.timeZone, status: c.status, plan: c.plan, helpEnabled: c.helpEnabled,
+const companyView = async (c: { id: string; name: string; slug: string; kind: string; timeZone: string; status: string; plan: string; helpEnabled: boolean; createdAt: Date }) => ({
+  id: c.id, name: c.name, slug: c.slug, kind: c.kind, timeZone: c.timeZone, status: c.status, plan: c.plan, helpEnabled: c.helpEnabled,
   createdAt: c.createdAt.toISOString(), home: c.id === HOME_COMPANY_ID, ...(await companyStats(c.id)),
 })
 

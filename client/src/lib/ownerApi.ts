@@ -26,7 +26,7 @@ export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_COMPANY' | 'RESO
 export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
 
 export interface OwnerCompany {
-  id: string; name: string; slug: string; timeZone: string; status: CompanyStatus; plan: string; helpEnabled: boolean
+  id: string; name: string; slug: string; kind: 'TEAM' | 'PERSONAL'; timeZone: string; status: CompanyStatus; plan: string; helpEnabled: boolean
   createdAt: string; home: boolean; people: number; peopleTotal: number; inToday: number; lastActiveAt: string | null; openTickets: number
 }
 export interface TicketRow {

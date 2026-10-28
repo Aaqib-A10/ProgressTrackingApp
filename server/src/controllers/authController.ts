@@ -85,8 +85,9 @@ const signupSchema = z.object({
   department: z.string().min(1),
 })
 
+// Email, or a username (short sign in names, e.g. the local test accounts).
 const loginSchema = z.object({
-  email: emailField(),
+  email: z.string().trim().toLowerCase().min(1).max(200),
   password: z.string().min(1),
 })
 
@@ -160,12 +161,14 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
   const { email, password } = parsed.data
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  const found = await prisma.user.findFirst({ where: { OR: [{ email }, { username: email }] } })
+  // Test accounts made on a PC (src/scripts/devOwner.ts) never sign in on the live server.
+  const user = found && process.env.NODE_ENV === 'production' && found.email.endsWith('@local.test') ? null : found
   // Always run a bcrypt compare — against a dummy hash when the account/hash is
   // absent — so login response time doesn't reveal whether the email exists.
   const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH)
   if (!user || !user.passwordHash || !passwordOk) {
-    res.status(401).json({ error: 'Invalid email or password' })
+    res.status(401).json({ error: 'Invalid email, username or password' })
     return
   }
   if (user.status === 'PENDING') {
@@ -178,6 +181,10 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
   if (!user.isActive) {
     res.status(403).json({ error: 'This account is disabled' })
+    return
+  }
+  if (user.companyId && (await prisma.company.findUnique({ where: { id: user.companyId }, select: { status: true } }))?.status === 'SUSPENDED') {
+    res.status(403).json({ error: 'Your company\'s Metriq account is paused. Contact Metriq support.' })
     return
   }
 

@@ -36,8 +36,9 @@ export default function Login() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setFormError(undefined)
-    if (!EMAIL_RE.test(email)) {
-      setEmailError('Please enter a valid work email')
+    // An email, or a username (short sign in names such as the test accounts).
+    if (email.includes('@') ? !EMAIL_RE.test(email) : !/^[a-z0-9._-]{3,}$/i.test(email.trim())) {
+      setEmailError('Enter your work email or username')
       return
     }
     setEmailError(undefined)
@@ -74,13 +75,15 @@ export default function Login() {
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
         <TextField
-          label="Work email"
-          type="email"
+          label="Work email or username"
+          type="text"
+          autoCapitalize="none"
+          spellCheck={false}
           placeholder="you@company.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           error={emailError}
-          autoComplete="email"
+          autoComplete="username"
         />
         <div>
           <PasswordField

@@ -142,6 +142,12 @@ model SubDepartment {
 model User {
   id                String     @id @default(cuid())
   email             String     @unique
+  /// Optional short sign in name (used by local test accounts); sign in takes email or username.
+  username          String?    @unique
+  /// The company (or personal workspace) this person belongs to. Empty = 99 Technologies
+  /// (company 1) until phase 1 step 2 fills it on every row.
+  companyId         String?
+  company           Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
   passwordHash      String? // null for SSO-only accounts
   googleId          String?    @unique
   name              String
@@ -265,6 +271,7 @@ model User {
   workLogNotes        WorkLogNote[]        @relation("WorkLogNoteAuthor")
   claudeKeys          ClaudeKey[]
 
+  @@index([companyId])
   @@index([departmentId])
   @@index([subDepartmentId])
 }
@@ -2933,6 +2940,12 @@ model UptimeEvent {
 // complaints companies send from their Help button. 99 Technologies is company 1.
 // The owner is NOT a user of any company: own table, own sign in, own cookie.
 
+/// TEAM = a company with people; PERSONAL = one person using Metriq on their own (solo).
+enum CompanyKind {
+  TEAM
+  PERSONAL
+}
+
 enum CompanyStatus {
   TRIAL
   ACTIVE
@@ -2943,6 +2956,7 @@ model Company {
   id          String        @id @default(cuid())
   name        String
   slug        String        @unique
+  kind        CompanyKind   @default(TEAM)
   timeZone    String        @default("Asia/Karachi")
   status      CompanyStatus @default(ACTIVE)
   plan        String        @default("internal")
@@ -2952,6 +2966,7 @@ model Company {
   updatedAt   DateTime      @updatedAt
 
   tickets SupportTicket[]
+  users   User[]
 }
 
 model PlatformOwner {
