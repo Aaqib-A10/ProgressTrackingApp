@@ -6,19 +6,18 @@ import { newTotpSecret, totpCode } from '../lib/totp'
 import { ensureHomeCompany, HOME_COMPANY_ID } from '../lib/company'
 import { passwordProblem } from '../scripts/owner'
 
-// erp, step 0: the owner console. Only the owner (Anees) opens it, with password + authenticator
-// code; companies send complaints from a Help button; every owner action is logged.
+// erp, step 0: the owner console. Only the owner (Anees) opens it: password, plus a 6 digit code
+// from a phone app once that is switched on; companies send complaints from a Help button; every
+// owner action is logged.
 
 const EMAIL = 'owner@test.local'
-const PASSWORD = 'Long-and-unusual-42'
+const PASSWORD = 'Owner2026x'
 let w: SeededWorld
-let secret: string
 
 const agent = () => request.agent(app)
-async function signIn(a = agent(), code?: string) {
+async function signIn(a = agent()) {
   const r = await a.post('/api/owner/login').send({ email: EMAIL, password: PASSWORD }).expect(200)
-  expect(r.body.needCode).toBe(true)
-  await a.post('/api/owner/login/code').send({ ticket: r.body.ticket, code: code ?? totpCode(secret) }).expect(200)
+  expect(r.body.needCode).toBe(false)
   return a
 }
 
@@ -29,26 +28,35 @@ beforeAll(async () => {
   await prisma.supportTicket.deleteMany()
   await ensureHomeCompany()
   await prisma.company.update({ where: { id: HOME_COMPANY_ID }, data: { helpEnabled: false, status: 'ACTIVE', name: '99 Technologies' } })
-  secret = newTotpSecret()
-  await prisma.platformOwner.create({ data: { name: 'Anees', email: EMAIL, passwordHash: await hashPassword(PASSWORD), totpSecret: secret } })
+  // Password only (Anees, Oct 2026: no phone code for now).
+  await prisma.platformOwner.create({ data: { name: 'Anees', email: EMAIL, passwordHash: await hashPassword(PASSWORD) } })
 })
 afterAll(async () => { await prisma.$disconnect() })
 
 describe('owner sign in', () => {
-  it('needs the password and then the code; a company Super Admin cannot get in', async () => {
+  it('signs in with the password; a company Super Admin cannot get in', async () => {
     await request(app).get('/api/owner/home').expect(401)
     await request(app).get('/api/owner/home').set(...auth(w.superAdmin)).expect(401)
     await request(app).post('/api/owner/login').send({ email: EMAIL, password: 'wrong-password-123' }).expect(401)
-    // Password alone gives only a short ticket, not a session.
-    const a = agent()
-    const r = await a.post('/api/owner/login').send({ email: EMAIL, password: PASSWORD }).expect(200)
-    await a.get('/api/owner/home').expect(401)
-    await a.post('/api/owner/login/code').send({ ticket: r.body.ticket, code: '000000' }).expect(401)
-    await a.post('/api/owner/login/code').send({ ticket: r.body.ticket, code: totpCode(secret) }).expect(200)
+    const a = await signIn()
     const me = await a.get('/api/owner/me').expect(200)
     expect(me.body.owner).toMatchObject({ name: 'Anees', email: EMAIL })
     // The owner's session is not a company session.
     await a.get('/api/todos').expect(401)
+  })
+
+  it('with the phone code switched on, the password alone is not enough', async () => {
+    const secret = newTotpSecret()
+    await prisma.platformOwner.update({ where: { email: EMAIL }, data: { totpSecret: secret } })
+    const a = agent()
+    const r = await a.post('/api/owner/login').send({ email: EMAIL, password: PASSWORD }).expect(200)
+    expect(r.body.needCode).toBe(true)
+    await a.get('/api/owner/home').expect(401)
+    await a.post('/api/owner/login/code').send({ ticket: r.body.ticket, code: '000000' }).expect(401)
+    await a.post('/api/owner/login/code').send({ ticket: r.body.ticket, code: totpCode(secret) }).expect(200)
+    await a.get('/api/owner/home').expect(200)
+    // Back to password only for the rest.
+    await prisma.platformOwner.update({ where: { email: EMAIL }, data: { totpSecret: null, failedLogins: 0 } })
   })
 
   it('locks for 15 minutes after 5 wrong tries, and logs it', async () => {
@@ -65,11 +73,11 @@ describe('owner sign in', () => {
     expect(r.body.error).toBe('Wrong email or password.')
   })
 
-  it('refuses weak passwords when the owner is set up', () => {
-    expect(passwordProblem('anees123')).toMatch(/12 characters/)
-    expect(passwordProblem('anees1234567890')).toMatch(/too easy/)
-    expect(passwordProblem('aaaaaaaaaaaaaaaa')).toMatch(/different characters/)
-    expect(passwordProblem('Long-and-unusual-42', 'owner@x.com')).toBeNull()
+  it('the password needs 8+ characters with letters and numbers', () => {
+    expect(passwordProblem('Owner26')).toMatch(/8 characters/)
+    expect(passwordProblem('abcdefghij')).toMatch(/letters and numbers/)
+    expect(passwordProblem('12345678')).toMatch(/letters and numbers/)
+    expect(passwordProblem('Owner2026x')).toBeNull()
   })
 })
 

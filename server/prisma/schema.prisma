@@ -2959,8 +2959,9 @@ model PlatformOwner {
   name         String
   email        String    @unique
   passwordHash String
-  /// Authenticator app key (base32). Sign in needs a 6 digit code from it.
-  totpSecret   String
+  /// Authenticator app key (base32). When set, sign in also needs a 6 digit code from it.
+  /// Empty = password only (turn the code on with: owner.ts code-on).
+  totpSecret   String?
   failedLogins Int       @default(0)
   lockedUntil  DateTime?
   lastLoginAt  DateTime?

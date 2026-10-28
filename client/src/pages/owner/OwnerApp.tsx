@@ -44,6 +44,8 @@ function OwnerLogin() {
     try {
       if (!ticket) {
         const r = await ownerApi.login(email, password)
+        // Password only, unless the phone code was switched on (then a second step asks for it).
+        if (!r.needCode || !r.ticket) { navigate('/owner', { replace: true }); return }
         setTicket(r.ticket); setPassword('')
       } else {
         await ownerApi.code(ticket, code)
@@ -62,7 +64,7 @@ function OwnerLogin() {
           <ShieldCheck className="text-primary" size={22} />
           <div>
             <h1 className="text-headline-md text-ink">Metriq owner console</h1>
-            <p className="text-body-sm text-ink-muted">{ticket ? 'Enter the 6 digit code from your authenticator app.' : 'For the Metriq owner only.'}</p>
+            <p className="text-body-sm text-ink-muted">{ticket ? 'Enter the 6 digit code from your phone app.' : 'For the Metriq owner only.'}</p>
           </div>
         </div>
         {!ticket ? (
@@ -79,7 +81,7 @@ function OwnerLogin() {
         )}
         {error && <p className="mt-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger" role="alert">{error}</p>}
         <Button type="submit" className="mt-4 w-full" disabled={busy || (!ticket ? !email || !password : code.length !== 6)}>
-          {busy ? 'Checking…' : ticket ? 'Sign in' : 'Continue'}
+          {busy ? 'Checking…' : 'Sign in'}
         </Button>
         <p className="mt-4 text-center text-body-sm text-ink-muted"><Link to="/login" className="hover:text-ink">Company sign in</Link></p>
       </form>

@@ -11,8 +11,9 @@ import { OWNER_COOKIE, type OwnerRequest } from '../middleware/owner'
 
 /**
  * The owner console (erp, step 0): where Metriq is run as a business. One owner account (Anees),
- * created on the server with a command, never in code. Sign in = password + a 6 digit code from
- * an authenticator app; 5 wrong tries lock it for 15 minutes. Every action is logged.
+ * created with a command, never in code. Sign in = password, plus a 6 digit code from an
+ * authenticator app once that is switched on (code-on); 5 wrong tries lock it for 15 minutes.
+ * Every action is logged.
  */
 
 export const MAX_TRIES = 5
@@ -56,7 +57,16 @@ export async function ownerLogin(req: Request, res: Response): Promise<void> {
     res.status(401).json({ error: 'Wrong email or password.' })
     return
   }
-  res.json({ needCode: true, ticket: signOwnerToken(owner.id, 'owner-2fa', 300) })
+  // Phone code switched on: a short ticket now, the session after the code.
+  if (owner.totpSecret) { res.json({ needCode: true, ticket: signOwnerToken(owner.id, 'owner-2fa', 300) }); return }
+  await startSession(req, res, owner)
+}
+
+async function startSession(req: Request, res: Response, owner: { id: string; name: string; email: string }) {
+  await prisma.platformOwner.update({ where: { id: owner.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } })
+  await audit(req, owner.id, 'LOGIN', { detail: { userAgent: String(req.headers['user-agent'] ?? '').slice(0, 200) } })
+  setOwnerCookie(res, signOwnerToken(owner.id, 'owner', SESSION_MS / 1000))
+  res.json({ needCode: false, owner: { name: owner.name, email: owner.email } })
 }
 
 /** POST /api/owner/login/code { ticket, code } → sets the owner session (step 2 of 2). */
@@ -68,15 +78,12 @@ export async function ownerLoginCode(req: Request, res: Response): Promise<void>
   const owner = await prisma.platformOwner.findUnique({ where: { id: sub } })
   if (!owner) { res.status(401).json({ error: 'Sign in again.' }); return }
   if (owner.lockedUntil && owner.lockedUntil > new Date()) { res.status(423).json({ error: lockedMessage(owner.lockedUntil) }); return }
-  if (!checkTotp(owner.totpSecret, code)) {
+  if (!owner.totpSecret || !checkTotp(owner.totpSecret, code)) {
     await failed(req, owner, 'code')
     res.status(401).json({ error: 'That code is not right. Use the newest code in your authenticator app.' })
     return
   }
-  await prisma.platformOwner.update({ where: { id: owner.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } })
-  await audit(req, owner.id, 'LOGIN', { detail: { userAgent: String(req.headers['user-agent'] ?? '').slice(0, 200) } })
-  setOwnerCookie(res, signOwnerToken(owner.id, 'owner', SESSION_MS / 1000))
-  res.json({ owner: { name: owner.name, email: owner.email } })
+  await startSession(req, res, owner)
 }
 
 export async function ownerLogout(req: OwnerRequest, res: Response): Promise<void> {

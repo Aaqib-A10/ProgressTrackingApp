@@ -46,7 +46,7 @@ export interface OwnerHome {
 export interface ActivityRow { id: string; at: string; action: string; by: string; company: string | null; target: string | null; detail: unknown; ip: string | null }
 
 export const ownerApi = {
-  login: (email: string, password: string) => call<{ needCode: boolean; ticket: string }>('POST', '/login', { email, password }),
+  login: (email: string, password: string) => call<{ needCode: boolean; ticket?: string; owner?: { name: string; email: string } }>('POST', '/login', { email, password }),
   code: (ticket: string, code: string) => call<{ owner: { name: string; email: string } }>('POST', '/login/code', { ticket, code }),
   logout: () => call<void>('POST', '/logout'),
   me: () => call<{ owner: { id: string; name: string; email: string } }>('GET', '/me'),
