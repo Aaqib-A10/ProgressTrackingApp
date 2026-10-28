@@ -76,6 +76,8 @@ async function publicUser(userId: string) {
     company: {
       id: user.company.id, name: user.company.name, slug: user.company.slug, kind: user.company.kind, plan: user.company.plan, status: user.company.status, timeZone: user.company.timeZone,
       trialEndsAt: user.company.status === 'TRIAL' ? user.company.trialEndsAt : null, setupDone: !!user.company.setupDoneAt,
+      // The kinds of department the company has: the menu leaves out sections for kinds it has none of.
+      departmentKinds: [...new Set((await prisma.department.findMany({ where: { companyId: user.companyId }, select: { type: true } })).map((d) => d.type))],
     },
     emailCheckPending: user.emailCheckPending,
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,

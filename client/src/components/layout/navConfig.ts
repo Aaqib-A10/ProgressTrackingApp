@@ -297,7 +297,27 @@ export function filterNav(u: NavUser): NavGroup[] {
   return filterTeamNav(u)
 }
 
+/** Sections that belong to one kind of department: shown only when the company has one (Phase 1). */
+const GROUP_KINDS: Record<string, string[]> = {
+  'Quality Assurance': ['ITAD', 'CSR'], ITAD: ['ITAD'], 'Lead Generation': ['LEAD_GEN'], Ecommerce: ['ECOMMERCE'], Inventory: ['INVENTORY'], Marketing: ['MARKETING'],
+}
+const hasKindFor = (u: NavUser, title: string | undefined) => !title || !u.company?.departmentKinds || !GROUP_KINDS[title] || GROUP_KINDS[title].some((k) => u.company!.departmentKinds!.includes(k))
+
+/** Screens that belong to some kinds of department (reports of the built-in daily logs, targets, tags). */
+const ITEM_KINDS: Record<string, string[]> = {
+  '/app/reports': ['ITAD', 'LEAD_GEN'], '/app/analytics': ['ITAD', 'LEAD_GEN'], '/app/reports/monthly': ['ITAD', 'LEAD_GEN'],
+  '/app/qa/my': ['ITAD', 'CSR'], '/app/admin/targets': ['ITAD', 'LEAD_GEN', 'MARKETING'], '/app/admin/tags': ['ITAD', 'LEAD_GEN', 'MARKETING', 'ECOMMERCE'],
+}
+const itemHasKind = (u: NavUser, to: string) => !u.company?.departmentKinds || !ITEM_KINDS[to] || ITEM_KINDS[to].some((k) => u.company!.departmentKinds!.includes(k))
+
 function filterTeamNav(u: NavUser): NavGroup[] {
+  return filterKinds(u)
+    .filter((g) => hasKindFor(u, g.title))
+    .map((g) => ({ ...g, items: g.items.filter((i) => itemHasKind(u, i.to)) }))
+    .filter((g) => g.items.length || g.subgroups?.length)
+}
+
+function filterKinds(u: NavUser): NavGroup[] {
   // Inventory staff see only Inventory and the shared Projects tools (their lead also gets the dashboard).
   if (u.department === 'INVENTORY' && u.role !== 'SUPER_ADMIN') {
     return NAV_GROUPS

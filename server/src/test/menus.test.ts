@@ -99,3 +99,21 @@ describe('the Daily Report', () => {
     expect(menu(filterNav({ ...l, permissions: [] })).some((p) => p.startsWith('/app/daily-report'))).toBe(false)
   })
 })
+
+describe("another company's menu", () => {
+  it('leaves out sections for kinds of department the company does not have, and team screens for a personal workspace', () => {
+    setFlags({ 'daily-report': true, 'company-settings': true })
+    const sa = { role: 'SUPER_ADMIN', department: null, subDepartment: null, email: 'h@x.example', isDeveloper: false, permissions: ['company.settings'], company: { id: 'co-x', kind: 'TEAM', departmentKinds: ['GENERAL'] } }
+    const titles = filterNav(sa as unknown as U).map((g) => (g as { title?: string }).title)
+    expect(titles).not.toContain('ITAD')
+    expect(titles).not.toContain('Marketing')
+    expect(titles).toContain('Daily Report')
+    const withSales = filterNav({ ...sa, company: { ...sa.company, departmentKinds: ['GENERAL', 'ITAD'] } } as unknown as U).map((g) => (g as { title?: string }).title)
+    expect(withSales).toEqual(expect.arrayContaining(['ITAD', 'Quality Assurance']))
+    const solo = menu(filterNav({ ...sa, company: { id: 'co-y', kind: 'PERSONAL', departmentKinds: [] } } as unknown as U))
+    expect(solo).not.toContain('/app/admin/users')
+    expect(solo).not.toContain('/app/daily-report/team')
+    expect(solo).toContain('/app/daily-report')
+    expect(solo).toContain('/app/billing')
+  })
+})

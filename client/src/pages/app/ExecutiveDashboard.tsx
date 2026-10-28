@@ -1,3 +1,5 @@
+import { useAuth } from '../../lib/auth'
+import { inHomeCompany } from '../../lib/types'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TrendingUp, TrendingDown, Sparkles, ArrowRight, Users, Building2, ClipboardCheck, Percent, AlertTriangle, Boxes, CheckCircle2, UserCheck, GraduationCap, Trophy, Activity } from 'lucide-react'
@@ -64,6 +66,10 @@ function ActionCenter({ summary }: { summary: ExecSummary }) {
 }
 
 export default function ExecutiveDashboard() {
+  const { user } = useAuth()
+  // Another company sees only the sections for the kinds of department it has (Phase 1).
+  const kinds = inHomeCompany(user) ? null : new Set(user?.company?.departmentKinds ?? [])
+  const has = (...k: string[]) => !kinds || k.some((x) => kinds.has(x))
   const { range, custom } = useRange()
   const { addToast } = useToast()
   const [data, setData] = useState<ExecutiveDashboardData | null>(null)
@@ -109,7 +115,9 @@ export default function ExecutiveDashboard() {
 
       {data && <ActionCenter summary={data.summary} />}
 
-      {data && (
+      {kinds && <GettingStarted />}
+
+      {data && has('ITAD', 'CSR') && (
         <Card title="QA health" subtitle="Call quality across ITAD + CSR this period" action={<Link to="/app/qa/analytics" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary">Open QA <ArrowRight size={14} /></Link>}>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <MiniStat label="Avg QA score" value={formatPercent(data.qa.avgScore / 100)} />
@@ -128,7 +136,7 @@ export default function ExecutiveDashboard() {
         <>
           {/* Department summary cards — click through to each department's data */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {data.departments.map((d) => {
+            {data.departments.filter((d) => has(d.type)).map((d) => {
               const to = d.route
               const body = (
                 <>
@@ -236,10 +244,32 @@ export default function ExecutiveDashboard() {
 
           {/* Departmental benchmark */}
           <Card title="Departmental Benchmark" flush>
-            <DataTable columns={benchCols} rows={data.benchmark} getRowId={(r) => r.department} />
+            <DataTable columns={benchCols} rows={kinds ? data.benchmark.filter((r) => data.departments.some((d) => d.name === r.department && has(d.type))) : data.benchmark} getRowId={(r) => r.department} />
           </Card>
         </>
       )}
     </div>
+  )
+}
+
+/** For a company that is starting out: the next things to do (Phase 1, step 7). */
+function GettingStarted() {
+  const items: [string, string, string][] = [
+    ['/app/daily-report', 'Send your daily report', 'The form your people fill in each day.'],
+    ['/app/daily-report/team', 'See the team\'s reports', 'Who sent theirs, numbers against targets, charts.'],
+    ['/app/admin/users', 'Add people', 'Or invite many at once from the setup wizard.'],
+    ['/app/projects', 'Start a project', 'Boards, tasks and due dates.'],
+  ]
+  return (
+    <Card title="Getting started" subtitle="A few places to begin.">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map(([to, title, hint]) => (
+          <Link key={to} to={to} className="rounded-btn border border-line p-3.5 transition-colors hover:border-primary/40 hover:bg-primary/5">
+            <span className="block text-body-md font-semibold text-ink">{title}</span>
+            <span className="block text-body-sm text-ink-muted">{hint}</span>
+          </Link>
+        ))}
+      </div>
+    </Card>
   )
 }

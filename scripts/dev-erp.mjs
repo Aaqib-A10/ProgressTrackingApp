@@ -4,7 +4,7 @@
 //   npm run dev:erp            start it (the first time it copies your local database to pulsetrack_erp)
 //   npm run dev:erp -- --fresh copy your local database again (throws away erp test data)
 //   npm run dev:erp -- --demo  also add the two demo companies and the test owner (testuser / test123)
-//   npm run dev:erp -- --testuser  the test accounts: testuser (owner), testcompanyuser, solouser (all test123)
+//   npm run dev:erp -- --testuser  the test accounts: testuser (owner), testcompanyadmin, testcompanyuser, solouser (all test123)
 //   npm run dev:erp -- owner create   set up the owner account in pulsetrack_erp (also: password, new-code, unlock)
 // Then open http://localhost:5173 (the app) and http://localhost:5173/owner (the owner console).
 import { execSync, spawn } from 'node:child_process'

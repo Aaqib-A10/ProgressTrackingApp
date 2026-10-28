@@ -48,11 +48,11 @@ function manages(me: Me, form: { departmentId: string | null }): boolean {
 function seesTeam(me: Me, form: { departmentId: string | null }): boolean {
   return manages(me, form) || (!form.departmentId && (me.role === 'TEAM_LEAD' || me.memberships.some((m) => m.role === 'TEAM_LEAD')))
 }
-/** Fills it in: the department's people, or for an everyone-form everyone but the Super Admin (who does too in a personal workspace). */
+/** Fills it in: the department's people, or for an everyone-form everyone (the Super Admin too). */
 function fills(me: Me, form: { departmentId: string | null; active: boolean }): boolean {
   if (!form.active) return false
   if (form.departmentId) return inDept(me, form.departmentId)
-  return me.role !== 'SUPER_ADMIN' || me.company.kind === 'PERSONAL'
+  return true
 }
 
 /** The people who fill this form in (for a team lead looking at an everyone-form: their department). */
@@ -65,8 +65,7 @@ async function fillers(form: FormRow, me: Me) {
     select: { id: true, name: true, role: true, departmentId: true, memberships: { select: { departmentId: true } } },
     orderBy: { name: 'asc' },
   })
-  const company = await prisma.company.findFirst({ select: { kind: true } })
-  let list = form.departmentId ? people : people.filter((p) => p.role !== 'SUPER_ADMIN' || company?.kind === 'PERSONAL')
+  let list = people
   if (!form.departmentId && !manages(me, form)) {
     const mine = new Set([me.departmentId, ...me.memberships.filter((m) => m.role === 'TEAM_LEAD').map((m) => m.departmentId)].filter(Boolean) as string[])
     list = list.filter((p) => (p.departmentId && mine.has(p.departmentId)) || p.memberships.some((m) => mine.has(m.departmentId)))
@@ -271,7 +270,7 @@ export const teamDay = wrap(async (req, res) => {
     counts: { people: rows.length, sent: entries.length, missing: rows.filter((r) => r.status === 'MISSING').length, onLeave: rows.filter((r) => r.status === 'ON_LEAVE').length },
     totals: defs.filter((f) => f.type === 'NUMBER' || f.type === 'RATING').map((f) => {
       const s = sums[f.id]
-      const teamTarget = f.target ? f.target * working : null
+      const teamTarget = f.target && working ? f.target * working : null
       return { fieldId: f.id, total: s.total, average: s.average, answers: s.count, target: teamTarget, tone: f.type === 'NUMBER' ? targetTone(s.total, teamTarget, f.targetDir) : 'neutral' }
     }),
     rows,

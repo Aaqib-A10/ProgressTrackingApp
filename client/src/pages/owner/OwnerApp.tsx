@@ -451,8 +451,8 @@ function CompanyPage() {
               <p className="text-body-sm text-ink">
                 <span className="font-semibold">Billing:</span>{' '}
                 {({ trial: 'Free trial', trial_ended: 'Trial ended (read-only)', active: 'Paying', canceling: 'Cancelled, runs to the end of the period', past_due: 'Payment failed (7 days to fix)', locked: 'Payment failed for over 7 days (read-only)', ended: 'Plan ended (read-only)', free: 'No plan', internal: 'Never billed' } as Record<string, string>)[data.billing.state] ?? data.billing.state}
-                {data.billing.subscription && ` · ${data.billing.subscription.plan} ${data.billing.subscription.interval === 'year' ? 'yearly' : 'monthly'} · ${data.billing.subscription.cancelAtPeriodEnd ? 'ends' : 'renews'} ${fmt(data.billing.subscription.currentPeriodEnd)}${data.billing.subscription.provider === 'test' ? ' (test)' : ''}`}
-                {data.billing.trialEndsAt && ` · trial ends ${fmt(data.billing.trialEndsAt)}`}
+                {data.billing.subscription && ` · ${data.billing.subscription.plan} ${data.billing.subscription.interval === 'year' ? 'yearly' : 'monthly'} · ${data.billing.subscription.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(data.billing.subscription.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${data.billing.subscription.provider === 'test' ? ' (test)' : ''}`}
+                {data.billing.trialEndsAt && ` · trial ends ${new Date(data.billing.trialEndsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                 {data.billing.invoices.length > 0 && <span className="block text-ink-muted">Last invoices: {data.billing.invoices.slice(0, 3).map((i) => `#${i.number} ${(i.amountCents / 100).toFixed(2)} ${i.currency} ${i.status.toLowerCase()}`).join(' · ')}</span>}
               </p>
             )}
