@@ -7,8 +7,13 @@
 //   npm run dev:erp -- --testuser  the test accounts: testuser (owner), testcompanyadmin, testcompanyuser, solouser (all test123)
 //   npm run dev:erp -- owner create   set up the owner account in pulsetrack_erp (also: password, new-code, unlock)
 // Then open http://localhost:5173 (the app) and http://localhost:5173/owner (the owner console).
+//
+// Leave it running while you apply patches (git am ...): code changes reload by themselves, and
+// when a patch brings database changes (a new migration) or new packages, this updates the
+// database / installs them and restarts on its own. Then just refresh the page.
 import { execSync, spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, watch } from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -58,5 +63,68 @@ if (argv[0] === 'owner') {
 }
 
 say('Starting. App: http://localhost:5173   Owner console: http://localhost:5173/owner   (Ctrl+C to stop)')
-const child = spawn('npm', ['run', 'dev'], { cwd: root, stdio: 'inherit', shell: true, env: { ...process.env, DATABASE_URL: erpUrl } })
-child.on('exit', (code) => process.exit(code ?? 0))
+say('Leave this running while you apply patches: when one brings database changes or new packages, this updates and restarts by itself. Then refresh the page.')
+
+const win = process.platform === 'win32'
+const devEnv = { ...process.env, DATABASE_URL: erpUrl }
+let child = null
+let restarting = false
+let stopping = false
+function start() {
+  // Its own process group (Mac/Linux), so a restart stops the server and the website together.
+  child = spawn('npm', ['run', 'dev'], { cwd: root, stdio: 'inherit', shell: true, env: devEnv, detached: !win })
+  child.on('exit', (code) => { if (!restarting && !stopping) process.exit(code ?? 0) })
+}
+function stopChild() {
+  if (!child || child.exitCode !== null) return Promise.resolve()
+  return new Promise((resolve) => {
+    child.once('exit', () => resolve())
+    try {
+      if (win) execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' })
+      else process.kill(-child.pid, 'SIGTERM')
+    } catch { resolve() }
+    setTimeout(resolve, 8000)
+  })
+}
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, async () => { stopping = true; await stopChild(); process.exit(0) })
+
+// What needs more than a reload: the database (schema, migrations) and the packages.
+const migrationsDir = path.join(server, 'prisma', 'migrations')
+const lockFile = path.join(root, 'package-lock.json')
+const hashOf = (f) => (existsSync(f) ? createHash('sha1').update(readFileSync(f)).digest('hex') : '')
+const stamp = () => ({
+  db: readdirSync(migrationsDir).filter((d) => !d.startsWith('.')).sort().join(',') + '|' + hashOf(path.join(server, 'prisma', 'schema.prisma')),
+  lock: hashOf(lockFile),
+})
+let last = stamp()
+let timer = null
+let busy = false
+async function check() {
+  if (busy) return
+  const now = stamp()
+  const dbChanged = now.db !== last.db
+  const pkgChanged = now.lock !== last.lock
+  if (!dbChanged && !pkgChanged) return
+  busy = true
+  restarting = true
+  say(`New ${[dbChanged && 'database changes', pkgChanged && 'packages'].filter(Boolean).join(' and ')} arrived. Updating; this takes a moment...`)
+  await stopChild()
+  try {
+    if (pkgChanged) execSync('npm install --no-audit --no-fund', { cwd: root, stdio: 'inherit' })
+    run('npx prisma migrate deploy')
+    run('npx prisma generate')
+    say('Updated. Starting again; refresh the page in a few seconds.')
+  } catch {
+    say('The update did not finish (see above). Fix it, or press Ctrl+C and run this again.')
+  }
+  last = stamp()
+  restarting = false
+  busy = false
+  start()
+}
+const later = () => { clearTimeout(timer); timer = setTimeout(() => void check(), 3000) }
+for (const target of [migrationsDir, path.join(server, 'prisma'), root]) {
+  try { watch(target, { recursive: target === migrationsDir }, later) } catch { /* watching is a convenience */ }
+}
+setInterval(() => void check(), 15000)
+start()

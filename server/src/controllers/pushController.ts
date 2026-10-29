@@ -5,6 +5,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { parse, viewer } from '../lib/pm/http'
 import { HttpError } from '../lib/pm/access'
 import { sendPush, vapidKeys } from '../lib/push'
+import { runAsSystem } from '../lib/tenancy'
 
 /** GET /api/push/key — the public key browsers need to subscribe. */
 export async function pushKey(_req: AuthedRequest, res: Response): Promise<void> {
@@ -21,7 +22,11 @@ export async function subscribe(req: AuthedRequest, res: Response): Promise<void
   const me = viewer(req)
   const b = parse(subSchema, req.body)
   const ua = String(req.headers['user-agent'] ?? '').slice(0, 300) || null
-  // The same browser signed in as someone else now: the pop-ups follow the new person.
+  // The same browser signed in as someone else now: the pop-ups follow the new person. That
+  // person can be in another company (one browser, two accounts): the company walls hide the
+  // old row, so the upsert below would not find it and would trip on the unique endpoint.
+  // Clear this browser from everyone else first, in every company.
+  await runAsSystem(() => prisma.pushSubscription.deleteMany({ where: { endpoint: b.endpoint, NOT: { userId: me.id } } }))
   await prisma.pushSubscription.upsert({
     where: { endpoint: b.endpoint },
     create: { userId: me.id, endpoint: b.endpoint, p256dh: b.keys.p256dh, auth: b.keys.auth, userAgent: ua },

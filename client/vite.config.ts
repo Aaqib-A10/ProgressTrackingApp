@@ -46,6 +46,12 @@ export default defineConfig({
       },
     },
   },
+  // Dev only: find every library the app uses when the dev server starts. Otherwise Vite finds
+  // some later, bundles them again while a tab is open, and that tab ends up with two copies of
+  // React ("Cannot read properties of null (reading 'useState')") until it is reloaded.
+  optimizeDeps: {
+    entries: ['index.html', 'src/**/*.{ts,tsx}'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
