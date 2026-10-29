@@ -14,6 +14,7 @@ import { billingState } from '../lib/billing/billing'
 import { AREAS, AREA_KEYS } from '../lib/permissions'
 import { signSupportToken } from '../lib/auth'
 import { walledTables } from '../scripts/companyWallsSql'
+import { errorBrief } from '../lib/health/report'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -455,4 +456,81 @@ export async function helpSignIn(req: OwnerRequest, res: Response): Promise<void
   await prisma.auditLog.create({ data: { companyId: c.id, userId: u.id, action: 'SUPPORT_SIGN_IN', entityType: 'User', entityId: u.id, after: { by: 'Metriq support', minutes: Math.round(seconds / 60) } } }).catch(() => undefined)
   res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: seconds * 1000, path: '/' })
   res.json({ ok: true, until: new Date(Date.now() + seconds * 1000).toISOString(), go: '/app/dashboard' })
+}
+
+// ------------------------------------------------------------------ errors (System Health for the owner)
+
+const errIso = (d: Date | null | undefined) => (d ? d.toISOString() : null)
+
+/** Which companies the people an error hit belong to (by id), for every error at once. */
+async function companiesOf(userIds: string[]): Promise<Map<string, { id: string; name: string }>> {
+  if (!userIds.length) return new Map()
+  const users = await prisma.user.findMany({ where: { id: { in: [...new Set(userIds)] } }, select: { id: true, company: { select: { id: true, name: true } } } })
+  return new Map(users.map((u) => [u.id, u.company]))
+}
+
+const errorsQuery = z.object({
+  state: z.enum(['OPEN', 'RESOLVED', 'IGNORED', 'ALL']).default('OPEN'),
+  since: z.enum(['24h', '7d', '30d', 'all']).default('all'),
+  q: z.string().trim().max(100).optional(),
+})
+
+/** GET /api/owner/errors?state=&since=&q= — what broke, newest first, with the companies it hit. */
+export async function ownerErrors(req: OwnerRequest, res: Response): Promise<void> {
+  const p = errorsQuery.safeParse(req.query)
+  if (!p.success) { res.status(400).json({ error: 'Bad filter' }); return }
+  const { state, since, q } = p.data
+  const from = since === 'all' ? null : new Date(Date.now() - ({ '24h': 1, '7d': 7, '30d': 30 }[since]) * 86400_000)
+  const where: Prisma.ErrorGroupWhereInput = {
+    ...(state !== 'ALL' ? { state } : {}),
+    ...(from ? { lastSeenAt: { gte: from } } : {}),
+    ...(q ? { OR: [{ message: { contains: q, mode: 'insensitive' } }, { route: { contains: q, mode: 'insensitive' } }] } : {}),
+  }
+  const rows = await prisma.errorGroup.findMany({ where, orderBy: { lastSeenAt: 'desc' }, take: 200 })
+  const byUser = await companiesOf(rows.flatMap((g) => g.userIds))
+  res.json({
+    errors: rows.map((g) => ({
+      id: g.id, source: g.source, message: g.message, route: g.route, status: g.status, count: g.count, people: g.userIds.length, state: g.state,
+      firstSeenAt: errIso(g.firstSeenAt), lastSeenAt: errIso(g.lastSeenAt), reopenedAt: errIso(g.reopenedAt),
+      companies: [...new Map(g.userIds.map((u) => byUser.get(u)).filter((c): c is { id: string; name: string } => !!c).map((c) => [c.id, c.name])).values()],
+    })),
+  })
+}
+
+/** GET /api/owner/errors/:id — one error in full: where, the stack, who and when, and the text for Claude. */
+export async function ownerError(req: OwnerRequest, res: Response): Promise<void> {
+  const g = await prisma.errorGroup.findUnique({ where: { id: String(req.params.id) } })
+  if (!g) { res.status(404).json({ error: 'Error not found' }); return }
+  const events = await prisma.errorEvent.findMany({ where: { groupId: g.id }, orderBy: { at: 'desc' }, take: 30 })
+  const recent = await prisma.errorEvent.findMany({ where: { groupId: g.id, at: { gte: new Date(Date.now() - 2 * 86400_000) } }, select: { at: true } })
+  const ids = [...new Set([...g.userIds, ...events.map((e) => e.userId).filter((x): x is string => !!x)])]
+  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: { select: { id: true, name: true } } } })
+  const who = new Map(users.map((u) => [u.id, u]))
+  const hours = Array.from({ length: 48 }, () => 0)
+  const nowH = Math.floor(Date.now() / 3600_000)
+  for (const e of recent) { const i = 47 - (nowH - Math.floor(e.at.getTime() / 3600_000)); if (i >= 0 && i < 48) hours[i]++ }
+  const person = (id: string) => { const u = who.get(id); return { id, name: u?.name ?? 'Someone', company: u?.company.name ?? null } }
+  res.json({
+    error: {
+      id: g.id, source: g.source, message: g.message, stack: g.stack, route: g.route, status: g.status, count: g.count, state: g.state,
+      firstSeenAt: errIso(g.firstSeenAt), lastSeenAt: errIso(g.lastSeenAt), reopenedAt: errIso(g.reopenedAt), resolvedAt: errIso(g.resolvedAt),
+      people: g.userIds.map(person),
+      companies: [...new Map(users.filter((u) => g.userIds.includes(u.id)).map((u) => [u.company.id, u.company.name])).values()],
+      hours,
+      events: events.map((e) => ({ id: e.id, at: e.at.toISOString(), user: e.userId ? person(e.userId) : null, url: e.url, status: e.status, durationMs: e.durationMs, meta: e.meta })),
+    },
+    brief: await errorBrief(g.id),
+  })
+}
+
+/** PATCH /api/owner/errors/:id { state } — mark fixed, ignore, or open again. */
+export async function ownerErrorState(req: OwnerRequest, res: Response): Promise<void> {
+  const p = z.object({ state: z.enum(['OPEN', 'RESOLVED', 'IGNORED']) }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: 'State must be OPEN, RESOLVED or IGNORED' }); return }
+  const g = await prisma.errorGroup.findUnique({ where: { id: String(req.params.id) }, select: { id: true, message: true } })
+  if (!g) { res.status(404).json({ error: 'Error not found' }); return }
+  const resolved = p.data.state === 'RESOLVED'
+  await prisma.errorGroup.update({ where: { id: g.id }, data: { state: p.data.state, resolvedAt: resolved ? new Date() : null, resolvedById: null } })
+  await audit(req, req.owner!.id, 'ERROR_STATE', { target: g.message.slice(0, 120), detail: { id: g.id, state: p.data.state } })
+  res.json({ ok: true })
 }

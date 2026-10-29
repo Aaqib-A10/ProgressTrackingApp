@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, useLocation, useNavigate, useParams, useRoutes } from 'react-router-dom'
-import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug, ToggleRight } from 'lucide-react'
+import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug, ToggleRight, Copy, Check, RotateCcw, EyeOff } from 'lucide-react'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { useToast } from '../../components/ui/Toast'
@@ -12,7 +12,7 @@ import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 import {
   ownerApi, ownerErr, OwnerApiError, STATUS_LABEL, PRIORITY_LABEL,
-  type OwnerCompany, type OwnerHome, type OwnerFlag, type CompanyFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
+  type OwnerCompany, type OwnerHome, type OwnerErrorRow, type OwnerErrorDetail, type ErrorState, type ErrorSource, type OwnerFlag, type CompanyFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
 } from '../../lib/ownerApi'
 
 /**
@@ -168,6 +168,7 @@ const NAV = [
   { to: '/owner', label: 'Home', icon: LayoutDashboard, end: true },
   { to: '/owner/companies', label: 'Companies', icon: Building2 },
   { to: '/owner/support', label: 'Support', icon: LifeBuoy },
+  { to: '/owner/errors', label: 'Errors', icon: Bug },
   { to: '/owner/switches', label: 'Switches', icon: ToggleRight },
   { to: '/owner/activity', label: 'Activity log', icon: ScrollText },
 ]
@@ -190,6 +191,8 @@ function OwnerShell() {
     { path: 'companies/:id', element: <CompanyPage /> },
     { path: 'support', element: <SupportPage /> },
     { path: 'support/:id', element: <TicketPage /> },
+    { path: 'errors', element: <ErrorsPage /> },
+    { path: 'errors/:id', element: <ErrorPage /> },
     { path: 'switches', element: <SwitchesPage /> },
     { path: 'switches/:id', element: <CompanySwitchesPage /> },
     { path: 'activity', element: <ActivityPage /> },
@@ -301,7 +304,7 @@ function OwnerHomePage() {
         <StatCard to="/owner/companies" label="Checked in today" value={c.inToday} caption="Across all companies" icon={<UserCheck size={16} />} />
         <StatCard to="/owner/support" label="Open complaints" value={c.openTickets} caption={c.urgentTickets ? `${c.urgentTickets} high or urgent` : 'Nothing urgent'}
           icon={<LifeBuoy size={16} />} valueClassName={cn('text-metric-lg', c.urgentTickets > 0 && 'text-warning')} />
-        <StatCard label="Errors in 24 hours" value={c.errors24h} caption={c.errors24h ? 'See System Health' : 'All clear'} icon={<Bug size={16} />}
+        <StatCard to="/owner/errors?since=24h" label="Errors in 24 hours" value={c.errors24h} caption={c.errors24h ? 'Open to see each one' : 'All clear'} icon={<Bug size={16} />}
           valueClassName={cn('text-metric-lg', c.errors24h > 0 && 'text-danger')} />
       </div>
 
@@ -926,6 +929,174 @@ function CompanySwitchesPage() {
           ))}
         </ul>
       </Panel>
+    </>
+  )
+}
+
+// ------------------------------------------------------------------ errors
+
+const SOURCE_LABEL: Record<ErrorSource, string> = { SERVER: 'Server', BROWSER: 'Page', JOB: 'Background job', SLOW: 'Slow' }
+const SOURCE_HINT: Record<ErrorSource, string> = { SERVER: 'An API call failed on the server', BROWSER: 'A page broke in someone\'s browser', JOB: 'A background job failed', SLOW: 'A request took too long' }
+const ERR_STATE: Record<ErrorState, { label: string; tone: BadgeTone }> = { OPEN: { label: 'Open', tone: 'danger' }, RESOLVED: { label: 'Fixed', tone: 'success' }, IGNORED: { label: 'Ignored', tone: 'neutral' } }
+const ago = (iso: string) => {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
+}
+
+function CopyButton({ text, label = 'Copy for Claude', size = 'sm' }: { text: string; label?: string; size?: 'sm' | 'md' }) {
+  const { addToast } = useToast()
+  const [done, setDone] = useState(false)
+  async function copy() {
+    try { await navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 2000); addToast({ type: 'success', message: 'Copied. Paste it to Claude to fix it.' }) }
+    catch { addToast({ type: 'error', message: 'Could not copy. Select the text below and copy it.' }) }
+  }
+  return <Button size={size} leadingIcon={done ? <Check size={15} /> : <Copy size={15} />} onClick={copy}>{done ? 'Copied' : label}</Button>
+}
+
+/** Every error Metriq has logged: what broke, where, how often, which companies. */
+function ErrorsPage() {
+  const { search } = useLocation()
+  const navigate = useNavigate()
+  const start = new URLSearchParams(search)
+  const [state, setState] = useState(start.get('state') ?? 'OPEN')
+  const [since, setSince] = useState(start.get('since') ?? 'all')
+  const [q, setQ] = useState('')
+  const [query, setQuery] = useState('')
+  useEffect(() => { const t = setTimeout(() => setQuery(q.trim()), 300); return () => clearTimeout(t) }, [q])
+  const { data, error } = useLoad(() => ownerApi.errors({ state, since, q: query }), [state, since, query])
+  const chip = (on: boolean) => cn('rounded-full border px-3 py-1 text-body-sm font-medium transition-colors', on ? 'border-primary/30 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:text-ink')
+  return (
+    <>
+      <Title sub="Everything that broke in Metriq, grouped: the same error 50 times is one row. Open one to see where it happened and copy it for Claude.">Errors</Title>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {([['OPEN', 'Open'], ['RESOLVED', 'Fixed'], ['IGNORED', 'Ignored'], ['ALL', 'All']] as const).map(([v, l]) => <button key={v} type="button" className={chip(state === v)} onClick={() => setState(v)}>{l}</button>)}
+        <span className="mx-1 h-5 w-px bg-line" />
+        {([['24h', 'Last 24 hours'], ['7d', '7 days'], ['30d', '30 days'], ['all', 'Any time']] as const).map(([v, l]) => <button key={v} type="button" className={chip(since === v)} onClick={() => setSince(v)}>{l}</button>)}
+        <div className="relative ml-auto w-full sm:w-72"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the message or the page" className={cn(inputCls, 'h-9 pl-8')} aria-label="Search errors" /></div>
+      </div>
+      {!data ? <Loading error={error} /> : (
+        <Panel className="overflow-x-auto">
+          {data.errors.length === 0 ? <Empty>{state === 'OPEN' ? 'No open errors here. All clear.' : 'No errors for this filter.'}</Empty> : (
+            <table className="w-full min-w-[860px] text-body-md">
+              <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted">
+                <th className="px-5 py-3">What broke</th><th className="px-3 py-3">Where</th><th className="px-3 py-3">Companies</th>
+                <th className="px-3 py-3 text-right">Times</th><th className="px-3 py-3">Last seen</th><th className="px-5 py-3">State</th>
+              </tr></thead>
+              <tbody className="divide-y divide-line">
+                {data.errors.map((e: OwnerErrorRow) => (
+                  <tr key={e.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/owner/errors/${e.id}`)}>
+                    <td className="max-w-[460px] px-5 py-3.5">
+                      <Link to={`/owner/errors/${e.id}`} onClick={(ev) => ev.stopPropagation()} className="line-clamp-2 font-medium text-ink hover:text-primary">{e.message}</Link>
+                      <span className="mt-0.5 block text-body-sm text-ink-muted">{SOURCE_LABEL[e.source]}{e.status ? ` · status ${e.status}` : ''}{e.reopenedAt ? ' · came back' : ''}</span>
+                    </td>
+                    <td className="px-3 py-3.5"><code className="break-all rounded bg-slate-100 px-1.5 py-0.5 text-[12.5px] text-ink">{e.route ?? '—'}</code></td>
+                    <td className="px-3 py-3.5 text-body-sm text-ink-muted">{e.companies.length ? e.companies.join(', ') : '—'}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums">{e.count}<span className="block text-[12px] text-ink-faint">{e.people} {e.people === 1 ? 'person' : 'people'}</span></td>
+                    <td className="whitespace-nowrap px-3 py-3.5 text-body-sm text-ink-muted">{ago(e.lastSeenAt)}</td>
+                    <td className="px-5 py-3.5"><Badge tone={ERR_STATE[e.state].tone}>{ERR_STATE[e.state].label}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      )}
+    </>
+  )
+}
+
+/** One error in full: what, where, the stack trace, who and when, and the brief to give Claude. */
+function ErrorPage() {
+  const { id = '' } = useParams()
+  const { addToast } = useToast()
+  const { data, error, reload } = useLoad(() => ownerApi.error(id), [id])
+  const [busy, setBusy] = useState(false)
+  async function setTo(state: ErrorState, ok: string) {
+    setBusy(true)
+    try { await ownerApi.setErrorState(id, state); addToast({ type: 'success', message: ok }); await reload() } catch (e) { addToast({ type: 'error', message: ownerErr(e) }) } finally { setBusy(false) }
+  }
+  if (!data) return <Loading error={error} />
+  const e: OwnerErrorDetail = data.error
+  const max = Math.max(1, ...e.hours)
+  const fact = (label: string, value: ReactNode) => (
+    <div className="min-w-0"><p className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">{label}</p><div className="mt-0.5 break-words text-body-md text-ink">{value}</div></div>
+  )
+  return (
+    <>
+      <Link to="/owner/errors" className="mb-2 inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><ArrowLeft size={14} />All errors</Link>
+      <div className="mb-5 flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <Badge tone={ERR_STATE[e.state].tone}>{ERR_STATE[e.state].label}</Badge>
+            <Badge tone="neutral">{SOURCE_LABEL[e.source]}</Badge>
+            {e.status && <Badge tone="neutral">Status {e.status}</Badge>}
+            {e.reopenedAt && <Badge tone="warning">Came back {fmt(e.reopenedAt)}</Badge>}
+          </div>
+          <h1 className="break-words text-headline-md text-ink">{e.message}</h1>
+          <p className="mt-0.5 text-body-sm text-ink-muted">{e.route === 'process' ? 'The server itself stopped with this error' : SOURCE_HINT[e.source]}.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {data.brief && <CopyButton text={data.brief} />}
+          {e.state === 'OPEN' ? (
+            <>
+              <Button size="sm" variant="secondary" leadingIcon={<Check size={15} />} disabled={busy} onClick={() => setTo('RESOLVED', 'Marked fixed. If it happens again it opens by itself.')}>Mark fixed</Button>
+              <Button size="sm" variant="ghost" leadingIcon={<EyeOff size={15} />} disabled={busy} onClick={() => setTo('IGNORED', 'Ignored.')}>Ignore</Button>
+            </>
+          ) : <Button size="sm" variant="secondary" leadingIcon={<RotateCcw size={15} />} disabled={busy} onClick={() => setTo('OPEN', 'Open again.')}>Open again</Button>}
+        </div>
+      </div>
+
+      <Panel className="mb-6">
+        <div className="grid gap-5 px-5 py-4 sm:grid-cols-2 xl:grid-cols-4">
+          {fact('Where', <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[13px]">{e.route ?? 'Unknown'}</code>)}
+          {fact('How often', `${e.count} time${e.count === 1 ? '' : 's'}, ${e.people.length} ${e.people.length === 1 ? 'person' : 'people'}`)}
+          {fact('Companies', e.companies.length ? e.companies.join(', ') : 'No one signed in')}
+          {fact('First / last seen', <>{fmt(e.firstSeenAt)} <span className="text-ink-faint">→</span> {fmt(e.lastSeenAt)}</>)}
+        </div>
+        <div className="border-t border-line px-5 py-4">
+          <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-ink-faint">Last 48 hours</p>
+          <div className="flex h-12 items-end gap-[3px]" aria-label="Times per hour, last 48 hours">
+            {e.hours.map((n, i) => <div key={i} title={`${n} in hour ${i - 47 === 0 ? 'now' : `${47 - i} h ago`}`} className={cn('flex-1 rounded-sm', n ? 'bg-danger/70' : 'bg-slate-100')} style={{ height: `${n ? Math.max(12, (n / max) * 100) : 8}%` }} />)}
+          </div>
+          <div className="mt-1 flex justify-between text-[11.5px] text-ink-faint"><span>48 h ago</span><span>now</span></div>
+        </div>
+      </Panel>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Panel>
+          <PanelHead title="Stack trace" action={e.stack ? <CopyButton text={e.stack} label="Copy" /> : undefined} />
+          {e.stack
+            ? <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words px-5 py-4 font-mono text-[12.5px] leading-5 text-ink">{e.stack}</pre>
+            : <Empty>No stack trace for this one.</Empty>}
+        </Panel>
+        <Panel>
+          <PanelHead title="Latest times" action={<span className="text-body-sm text-ink-muted">Newest first</span>} />
+          {e.events.length === 0 ? <Empty>No recent times kept.</Empty> : (
+            <ul className="max-h-[420px] divide-y divide-line overflow-auto">
+              {e.events.map((ev) => (
+                <li key={ev.id} className="px-5 py-3 text-body-sm">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="font-medium text-ink">{fmt(ev.at)}</span>
+                    {ev.user && <span className="text-ink-muted">· {ev.user.name}{ev.user.company ? ` (${ev.user.company})` : ''}</span>}
+                    {ev.status && <span className="text-ink-muted">· status {ev.status}</span>}
+                    {ev.durationMs && <span className="text-ink-muted">· {ev.durationMs} ms</span>}
+                  </div>
+                  {ev.url && <code className="mt-1 block break-all text-[12px] text-ink-muted">{ev.url}</code>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      {data.brief && (
+        <Panel className="mt-6">
+          <PanelHead title="What Claude gets" action={<CopyButton text={data.brief} />} />
+          <p className="px-5 pt-3 text-body-sm text-ink-muted">Press Copy for Claude and paste it into a chat with Claude. It has everything needed to find and fix the cause.</p>
+          <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-words px-5 py-4 font-mono text-[12.5px] leading-5 text-ink">{data.brief}</pre>
+        </Panel>
+      )}
     </>
   )
 }

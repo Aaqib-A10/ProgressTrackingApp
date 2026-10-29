@@ -12,11 +12,14 @@ export async function errorBrief(id: string): Promise<string | null> {
   const g = await prisma.errorGroup.findUnique({ where: { id } })
   if (!g) return null
   const events = await prisma.errorEvent.findMany({ where: { groupId: id }, orderBy: { at: 'desc' }, take: 5 })
-  const names = new Map((await prisma.user.findMany({ where: { id: { in: [...g.userIds, ...events.map((e) => e.userId ?? '')] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
+  const users = await prisma.user.findMany({ where: { id: { in: [...g.userIds, ...events.map((e) => e.userId ?? '')] } }, select: { id: true, name: true, company: { select: { name: true } } } })
+  const names = new Map(users.map((u) => [u.id, u.name]))
+  const companies = [...new Set(users.filter((u) => g.userIds.includes(u.id)).map((u) => u.company.name))]
   const out: string[] = []
   out.push(`Metriq error ${g.id}: ${g.message}`, '')
   out.push(`Where: ${SOURCE[g.source] ?? g.source}${g.route ? `, ${g.route}` : ''}${g.status ? ` (status ${g.status})` : ''}`)
   out.push(`Seen ${g.count} time${g.count === 1 ? '' : 's'}, by ${g.userIds.length} ${g.userIds.length === 1 ? 'person' : 'people'}${g.userIds.length ? ` (${g.userIds.slice(0, 5).map((u) => names.get(u) ?? 'someone').join(', ')})` : ''}`)
+  if (companies.length) out.push(`Companies: ${companies.join(', ')}`)
   out.push(`First seen: ${when(g.firstSeenAt)}  |  Last seen: ${when(g.lastSeenAt)}  |  State: ${g.state.toLowerCase()}${g.reopenedAt ? ` (came back ${when(g.reopenedAt)})` : ''}`)
   out.push('Code: the PulseTrack repo (server in server/src, web app in client/src)')
   if (g.stack) out.push('', 'Stack trace:', g.stack)

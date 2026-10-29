@@ -61,6 +61,18 @@ export interface CompanyModule { key: string; label: string; on: boolean; byPlan
 export interface PlanOption { key: string; label: string; people: number | null; storageGb: number | null; aiHours: number | null; sellable: boolean }
 export interface ActivityRow { id: string; at: string; action: string; by: string; company: string | null; target: string | null; detail: unknown; ip: string | null }
 
+export type ErrorState = 'OPEN' | 'RESOLVED' | 'IGNORED'
+export type ErrorSource = 'SERVER' | 'BROWSER' | 'JOB' | 'SLOW'
+export interface OwnerErrorRow {
+  id: string; source: ErrorSource; message: string; route: string | null; status: number | null; count: number; people: number; state: ErrorState
+  firstSeenAt: string; lastSeenAt: string; reopenedAt: string | null; companies: string[]
+}
+export interface OwnerErrorPerson { id: string; name: string; company: string | null }
+export interface OwnerErrorDetail extends Omit<OwnerErrorRow, 'people'> {
+  stack: string | null; resolvedAt: string | null; people: OwnerErrorPerson[]; hours: number[]
+  events: { id: string; at: string; user: OwnerErrorPerson | null; url: string | null; status: number | null; durationMs: number | null; meta: unknown }[]
+}
+
 export const ownerApi = {
   login: (email: string, password: string) => call<{ needCode: boolean; ticket?: string; owner?: { name: string; email: string } }>('POST', '/login', { email, password }),
   code: (ticket: string, code: string) => call<{ owner: { name: string; email: string } }>('POST', '/login/code', { ticket, code }),
@@ -86,6 +98,9 @@ export const ownerApi = {
   companyFlags: (id: string) => call<{ flags: CompanyFlag[] }>('GET', `/companies/${id}/flags`),
   setCompanyFlag: (id: string, key: string, enabled: boolean | null) => call<{ flags: CompanyFlag[]; all: OwnerFlag[] }>('PATCH', `/companies/${id}/flags/${key}`, { enabled }),
   activity: (q = '') => call<{ activity: ActivityRow[] }>('GET', `/activity?q=${encodeURIComponent(q)}`),
+  errors: (f: { state: string; since: string; q: string }) => call<{ errors: OwnerErrorRow[] }>('GET', `/errors?${new URLSearchParams(f)}`),
+  error: (id: string) => call<{ error: OwnerErrorDetail; brief: string | null }>('GET', `/errors/${id}`),
+  setErrorState: (id: string, state: ErrorState) => call<{ ok: true }>('PATCH', `/errors/${id}`, { state }),
 }
 
 export const STATUS_LABEL: Record<TicketStatus, string> = { OPEN: 'New', IN_PROGRESS: 'Working on it', WAITING_ON_COMPANY: 'Waiting for them', RESOLVED: 'Solved' }
