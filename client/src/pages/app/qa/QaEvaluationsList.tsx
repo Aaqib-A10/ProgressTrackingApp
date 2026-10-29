@@ -31,7 +31,7 @@ export default function QaEvaluationsList() {
   const agentName = agentId && evals && evals.length ? evals[0].agentName : null
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">{agentName ? `Evaluations — ${agentName}` : 'QA Evaluations'}</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Every evaluation — who was scored, by whom, and the result.</p>

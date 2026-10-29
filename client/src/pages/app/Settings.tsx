@@ -81,7 +81,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <h1 className="text-headline-lg text-ink">Settings</h1>
 
       {/* Profile */}

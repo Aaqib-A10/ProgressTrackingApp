@@ -88,7 +88,7 @@ export default function AdminNetworks() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div>
         <h1 className="text-headline-lg text-ink">Office Networks</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">

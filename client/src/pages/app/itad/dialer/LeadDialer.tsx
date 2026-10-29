@@ -92,7 +92,7 @@ export default function LeadDialer() {
   const sel = (active: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', active ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-4">
+    <div className="mx-auto w-full max-w-[1800px] space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">

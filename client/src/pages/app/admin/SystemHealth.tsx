@@ -101,7 +101,7 @@ export default function SystemHealth() {
     } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setStarting(false) }
   }
 
-  if (failed && !summary) return <div className="mx-auto max-w-6xl"><EmptyState icon={<AlertTriangle />} title="System Health did not load" hint="Check your connection and reload the page." /></div>
+  if (failed && !summary) return <div className="mx-auto w-full max-w-[1800px]"><EmptyState icon={<AlertTriangle />} title="System Health did not load" hint="Check your connection and reload the page." /></div>
 
   const s = summary
   const apiTotal = s ? s.api.read.total + s.api.write.total : 0
@@ -117,7 +117,7 @@ export default function SystemHealth() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-semibold tracking-[-0.02em] text-ink">System health</h1>

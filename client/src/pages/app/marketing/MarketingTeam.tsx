@@ -36,7 +36,7 @@ export default function MarketingTeam() {
   const totalMembers = (groups ?? []).reduce((n, g) => n + g.members.length, 0)
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-card bg-primary/10 text-primary"><Users size={22} /></span>

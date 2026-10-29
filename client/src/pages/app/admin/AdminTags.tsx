@@ -80,7 +80,7 @@ export default function AdminTags() {
   ]
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <h1 className="text-headline-lg text-ink">Tag Management</h1>
       <Card title="Add Tag" subtitle="The lists your team picks from in its daily log">
         <form onSubmit={add} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-4">

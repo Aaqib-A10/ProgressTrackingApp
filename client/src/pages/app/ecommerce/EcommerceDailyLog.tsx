@@ -69,7 +69,7 @@ export default function EcommerceDailyLog() {
   const marketplaces = data.marketplaces
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-[1800px]">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-ink">Daily Report</h1>

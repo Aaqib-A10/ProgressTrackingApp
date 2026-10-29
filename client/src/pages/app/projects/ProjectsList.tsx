@@ -52,7 +52,7 @@ export default function ProjectsList() {
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">Projects</h1>

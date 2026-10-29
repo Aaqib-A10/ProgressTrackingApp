@@ -48,7 +48,7 @@ export default function MyTasks() {
   const { pending, stats } = data
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">My Tasks</h1>
         <p className="mt-1 text-body-md text-ink-muted">Tasks assigned to you across every board and project. Only you see this list.</p>

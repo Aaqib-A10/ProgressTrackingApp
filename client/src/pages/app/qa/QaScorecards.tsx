@@ -83,7 +83,7 @@ export default function QaScorecards() {
 
   if (editor) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5">
+      <div className="mx-auto w-full max-w-[1800px] space-y-5">
         <button onClick={() => setEditor(null)} className="text-body-md font-medium text-ink-muted hover:text-ink">← Back to scorecards</button>
         <Card title={editor.id ? 'Edit scorecard' : 'New scorecard'}>
           <div className="space-y-3">
@@ -144,7 +144,7 @@ export default function QaScorecards() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-headline-lg text-ink">QA Scorecards</h1>

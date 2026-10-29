@@ -35,7 +35,7 @@ type Tab = (typeof TABS)[number]['key']
 export default function CompanySettings() {
   const [tab, setTab] = useState<Tab>('general')
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div>
         <h1 className="text-headline-lg text-ink">Company Settings</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Your company's name and time zone, its departments, and roles of your own on top of the built-in ones.</p>

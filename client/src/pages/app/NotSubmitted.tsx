@@ -28,7 +28,7 @@ export default function NotSubmitted() {
   const total = groups?.reduce((n, g) => n + g.members.length, 0) ?? 0
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-danger/10 text-danger">
           <AlertTriangle size={20} />

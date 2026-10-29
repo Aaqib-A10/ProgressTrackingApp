@@ -41,14 +41,14 @@ export default function QaEvaluationDetail() {
     }
   }
 
-  if (denied) return <div className="mx-auto max-w-3xl space-y-4"><Back /><Card><p className="py-10 text-center text-body-md text-ink-muted">You don’t have access to this evaluation.</p></Card></div>
-  if (!data) return <div className="mx-auto max-w-3xl space-y-4"><Back /><div className="text-body-md text-ink-muted">Loading…</div></div>
+  if (denied) return <div className="mx-auto w-full max-w-[1800px] space-y-4"><Back /><Card><p className="py-10 text-center text-body-md text-ink-muted">You don’t have access to this evaluation.</p></Card></div>
+  if (!data) return <div className="mx-auto w-full max-w-[1800px] space-y-4"><Back /><div className="text-body-md text-ink-muted">Loading…</div></div>
 
   const isAgent = user?.id === data.agent.id
   const acknowledged = !!data.agentAcknowledgedAt
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex items-center justify-between">
         <Back />
         {data.canEdit && (

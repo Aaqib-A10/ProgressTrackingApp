@@ -44,7 +44,7 @@ export default function DashboardHome() {
   const log = logPath(user)
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <p className="text-body-sm font-medium text-ink-faint">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
         <div className="mt-1 flex items-center gap-3">

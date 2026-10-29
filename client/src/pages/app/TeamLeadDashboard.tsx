@@ -64,7 +64,7 @@ export default function TeamLeadDashboard() {
   const breakdownTotal = data?.breakdown.reduce((a, b) => a + b.value, 0) ?? 0
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">Team Performance Overview</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">

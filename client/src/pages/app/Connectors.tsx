@@ -49,7 +49,7 @@ function ConnectorList() {
   const { keys } = useKeys()
   const on = (c: Connector) => (keys ?? []).filter((k) => k.client === c.id).length
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-headline-lg text-ink"><Plug size={22} className="text-ink-muted" /> Connectors</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Connect your AI assistant to Metriq. It can then read your tickets, comment, move them and give work, as you.</p>
@@ -112,7 +112,7 @@ function ConnectorDetail({ c }: { c: Connector }) {
   const shown = link ?? 'https://…/api/mcp/your-key (make a key first)'
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <Link to="/app/connectors" className="inline-flex items-center gap-1 text-body-sm font-semibold text-ink-muted hover:text-ink"><ArrowLeft size={15} /> All connectors</Link>
       <div className="flex items-center gap-4">
         <Mark c={c} size="lg" />

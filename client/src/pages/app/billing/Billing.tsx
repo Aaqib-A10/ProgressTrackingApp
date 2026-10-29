@@ -35,8 +35,8 @@ export default function Billing() {
   useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (params.get('paid')) addToast({ type: 'success', message: 'Thank you. Your plan is being switched on; it takes a few seconds.' }) }, [params, addToast])
 
-  if (!data) return <div className="mx-auto max-w-4xl"><Card><p className="text-body-md text-ink-muted">Loading…</p></Card></div>
-  if (data.state === 'internal') return <div className="mx-auto max-w-4xl"><Card title="Billing"><p className="text-body-md text-ink-muted">{data.company.name} is on the internal plan: everything on, no limits, never billed.</p></Card></div>
+  if (!data) return <div className="mx-auto w-full max-w-[1800px]"><Card><p className="text-body-md text-ink-muted">Loading…</p></Card></div>
+  if (data.state === 'internal') return <div className="mx-auto w-full max-w-[1800px]"><Card title="Billing"><p className="text-body-md text-ink-muted">{data.company.name} is on the internal plan: everything on, no limits, never billed.</p></Card></div>
   const sub = data.subscription
   const current = sub && sub.status !== 'CANCELED' ? sub : null
 
@@ -58,7 +58,7 @@ export default function Billing() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div>
         <h1 className="text-headline-lg text-ink">Billing</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Your plan, what it costs, and your invoices.</p>

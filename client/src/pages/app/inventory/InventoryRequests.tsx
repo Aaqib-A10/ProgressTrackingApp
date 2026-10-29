@@ -58,7 +58,7 @@ export default function InventoryRequests() {
   const canManage = data.canManage
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div>
         <h1 className="text-headline-lg text-ink">Stock Requests</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">All stock-in / stock-out requests — who requested, assigned agent, and when out of stock.</p>

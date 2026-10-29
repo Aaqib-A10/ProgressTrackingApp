@@ -91,7 +91,7 @@ export default function SocialMonthly() {
   if (loading) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">Social Reports</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Enter each brand's monthly numbers per platform. Saved figures compare month-over-month in Social Analytics.</p>

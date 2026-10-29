@@ -28,7 +28,7 @@ export default function HelpPage() {
 
   if (!tickets) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto w-full max-w-[1800px] space-y-4">
       <div>
         <h1 className="text-headline-lg text-ink">My requests to support</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">What you sent with the Help button and the answers. New answers also arrive in your bell.</p>

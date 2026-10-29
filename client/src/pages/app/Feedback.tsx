@@ -47,7 +47,7 @@ export default function Feedback() {
   }, [addToast])
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">Feedback</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Reviews and conversations between you and your team lead.</p>

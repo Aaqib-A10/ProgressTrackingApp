@@ -182,7 +182,7 @@ export default function AdminUsers() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-headline-lg text-ink">User Management</h1>
         <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setOpen(true)}>Invite User</Button>

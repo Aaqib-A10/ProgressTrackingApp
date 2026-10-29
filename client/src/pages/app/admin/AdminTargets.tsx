@@ -119,7 +119,7 @@ export default function AdminTargets() {
   ]
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <h1 className="text-headline-lg text-ink">Target Setting</h1>
 
       <Card title="Set / Update Target">

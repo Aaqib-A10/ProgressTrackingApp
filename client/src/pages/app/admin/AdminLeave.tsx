@@ -79,7 +79,7 @@ export default function AdminLeave() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <h1 className="text-headline-lg text-ink">Holidays & Leave</h1>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Holidays */}

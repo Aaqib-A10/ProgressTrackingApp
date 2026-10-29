@@ -50,7 +50,7 @@ export default function FeedbackThread() {
 
   if (denied) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4">
+      <div className="mx-auto w-full max-w-[1800px] space-y-4">
         <BackLink />
         <Card><p className="py-10 text-center text-body-md text-ink-muted">You don’t have access to this feedback.</p></Card>
       </div>
@@ -58,7 +58,7 @@ export default function FeedbackThread() {
   }
   if (!data) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4">
+      <div className="mx-auto w-full max-w-[1800px] space-y-4">
         <BackLink />
         <div className="text-body-md text-ink-muted">Loading…</div>
       </div>
@@ -68,7 +68,7 @@ export default function FeedbackThread() {
   const meId = user?.id
   // Author label: the lead who wrote the original feedback.
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <BackLink />
 
       {/* Original feedback */}

@@ -33,7 +33,7 @@ export default function ReportForms() {
 
   if (editing) return <FormEditor form={editing === 'new' ? null : editing} onDone={() => { setEditing(null); void load() }} />
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">Report Forms</h1>
@@ -106,7 +106,7 @@ function FormEditor({ form, onDone }: { form: ReportForm | null; onDone: () => v
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <button type="button" onClick={onDone} className="text-body-sm text-ink-muted hover:text-ink">← Report Forms</button>

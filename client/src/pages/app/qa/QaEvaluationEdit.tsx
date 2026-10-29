@@ -109,11 +109,11 @@ export default function QaEvaluationEdit() {
     }
   }
 
-  if (denied) return <div className="mx-auto max-w-3xl space-y-4"><Back id={id} /><Card><p className="py-10 text-center text-body-md text-ink-muted">You can’t edit this evaluation.</p></Card></div>
-  if (!data) return <div className="mx-auto max-w-3xl space-y-4"><Back id={id} /><div className="text-body-md text-ink-muted">Loading…</div></div>
+  if (denied) return <div className="mx-auto w-full max-w-[1800px] space-y-4"><Back id={id} /><Card><p className="py-10 text-center text-body-md text-ink-muted">You can’t edit this evaluation.</p></Card></div>
+  if (!data) return <div className="mx-auto w-full max-w-[1800px] space-y-4"><Back id={id} /><div className="text-body-md text-ink-muted">Loading…</div></div>
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <Back id={id} />
 
       <Card>

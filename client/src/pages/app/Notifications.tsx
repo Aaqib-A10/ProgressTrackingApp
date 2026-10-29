@@ -34,7 +34,7 @@ export default function Notifications() {
 
   const shown = (rows ?? []).filter((n) => filter === 'all' || !n.readAt)
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto w-full max-w-[1800px] space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">Notifications</h1>

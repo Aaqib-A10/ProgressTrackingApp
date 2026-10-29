@@ -68,7 +68,7 @@ export default function MeetingPage() {
   const going = m.attendees.filter((a) => a.response === 'ACCEPTED').length
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <button type="button" onClick={() => navigate('/app/calendar')} className="inline-flex items-center gap-1 text-body-sm font-semibold text-ink-muted hover:text-ink"><ArrowLeft size={15} /> Calendar</button>
 
       {m.cancelled && <div className="rounded-card bg-danger/10 px-4 py-3 text-body-md font-semibold text-danger">This meeting was cancelled.</div>}

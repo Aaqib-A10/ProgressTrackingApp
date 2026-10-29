@@ -59,7 +59,7 @@ export default function InventoryList() {
   const canManage = data.canManage
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">Inventory Management</h1>

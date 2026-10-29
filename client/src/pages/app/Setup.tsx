@@ -55,12 +55,12 @@ export default function Setup() {
     try { await api.post('/setup/done'); await refresh?.(); navigate('/app/dashboard', { replace: true }) }
     catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not finish.') }); setBusy(false) }
   }
-  if (!s) return <div className="mx-auto max-w-3xl"><Card><p className="text-body-md text-ink-muted">Loading…</p></Card></div>
+  if (!s) return <div className="mx-auto w-full max-w-[1800px]"><Card><p className="text-body-md text-ink-muted">Loading…</p></Card></div>
   const current = steps[step]
   const next = () => (step < steps.length - 1 ? setStep(step + 1) : finish())
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">{solo ? `Welcome, ${user?.name.split(' ')[0] ?? ''}` : `Set up ${s.company.name}`}</h1>

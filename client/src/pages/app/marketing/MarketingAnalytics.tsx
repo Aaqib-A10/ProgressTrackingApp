@@ -38,7 +38,7 @@ export default function MarketingAnalytics() {
   }, [range, custom, addToast])
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">Marketing Analytics</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Work published by the team, the content pipeline and velocity. Social numbers per brand are in Social Reports.</p>

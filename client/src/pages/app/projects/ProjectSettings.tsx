@@ -36,7 +36,7 @@ export default function ProjectSettings() {
   if (!data) return <p className="text-body-md text-ink-muted">Loading…</p>
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex items-center gap-3">
         <Link to={`/app/projects/${data.project.key}`} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Back to the board"><ArrowLeft size={18} /></Link>
         <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: data.project.color }} />

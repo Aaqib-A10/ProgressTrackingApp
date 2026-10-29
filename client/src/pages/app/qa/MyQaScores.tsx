@@ -25,7 +25,7 @@ export default function MyQaScores() {
   const trend = (evals ?? []).slice().reverse().map((e) => ({ label: new Date(e.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: e.totalScore }))
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">My QA Scores</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Your call-quality evaluations and feedback.</p>

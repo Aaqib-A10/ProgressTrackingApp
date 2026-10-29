@@ -89,7 +89,7 @@ export default function ContentActivity() {
   ]
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-headline-lg text-ink">Content Pipeline</h1>
         <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setModalOpen(true)}>New Content</Button>

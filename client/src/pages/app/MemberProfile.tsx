@@ -45,7 +45,7 @@ export default function MemberProfile() {
 
   if (denied) {
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto w-full max-w-[1800px]">
         <BackLink />
         <Card>
           <p className="py-10 text-center text-body-md text-ink-muted">You don’t have access to this member’s profile.</p>
@@ -56,7 +56,7 @@ export default function MemberProfile() {
 
   if (loading || !data) {
     return (
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto w-full max-w-[1800px] space-y-6">
         <BackLink />
         <div className="text-body-md text-ink-muted">Loading…</div>
       </div>
@@ -66,7 +66,7 @@ export default function MemberProfile() {
   const { user, summary } = data
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <BackLink />
 
       {/* Profile header */}

@@ -131,7 +131,7 @@ export default function MyTodo() {
   const toolBtn = 'inline-flex h-8 items-center gap-1.5 rounded-btn border border-line bg-card px-2.5 text-body-sm text-ink hover:bg-slate-50'
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">{mode === 'team' ? 'Team To-Do' : whoName ? `${whoName}'s To-Do` : 'My To-Do'}</h1>

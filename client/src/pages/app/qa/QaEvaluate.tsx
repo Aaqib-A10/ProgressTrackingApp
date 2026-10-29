@@ -35,7 +35,7 @@ export default function QaEvaluate() {
   if (agent) return <AgentEvaluation dept={dept} agent={agent} onBack={() => setAgent(null)} />
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="text-headline-lg text-ink">QA — Evaluate Agents</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Pick a department, choose an agent, and score a call.</p>
@@ -172,7 +172,7 @@ function AgentEvaluation({ dept, agent, onBack }: { dept: Dept; agent: QaAgentRo
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <button onClick={onBack} className="text-body-md font-medium text-ink-muted hover:text-ink">← Back to {dept} agents</button>
 
       <Card>

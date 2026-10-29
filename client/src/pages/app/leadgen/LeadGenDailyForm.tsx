@@ -146,7 +146,7 @@ export default function LeadGenDailyForm() {
   if (loading) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto w-full max-w-[1800px]">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-headline-lg text-ink">Lead Gen Daily Log</h1>

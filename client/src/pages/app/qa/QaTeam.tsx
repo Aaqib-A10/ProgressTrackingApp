@@ -61,7 +61,7 @@ export default function QaTeam() {
   const selected = data?.agents.find((a) => a.id === openAgent) ?? null
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
