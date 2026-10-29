@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowRight, ArrowUp, Copy, Zap } from 'lucide-react'
 import type { DialerData, DialerLead, DialerSettings, RegionCode } from '../../../../lib/dialerApi'
-import { REGIONS, REGION_META, STATUS_COLUMNS, fmtSpan, followUpTabs, latestActedToday, funnelOf, isDialable, leadRegion, leadState, num, pct, regionWindow, segments, stateTable, usDaylight, type Filters, type StatusColumn, columnOf, type FollowUpDays } from '../../../../lib/dialer'
+import { REGIONS, REGION_META, STATUS_COLUMNS, fmtSpan, followUpTabs, latestActedToday, funnelOf, isDialable, leadRegion, leadState, multiLabel, num, pct, regionWindow, segments, stateTable, usDaylight, type Filters, type StatusColumn, columnOf, type FollowUpDays } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { InfoTip, Panel, RegionBadge } from './ui'
 
@@ -120,7 +120,7 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
         )}
       </Panel>
 
-      <IndustryPanel leads={live} settings={settings} state={filters.state} onPickState={(s) => setFilter('state', s)} onPickIndustry={(i) => setFilter('industry', i)} go={go} />
+      <IndustryPanel leads={live} settings={settings} state={multiLabel(filters.state)} onPickState={(s) => setFilter('state', s)} onPickIndustry={(i) => setFilter('industry', i)} go={go} />
     </div>
   )
 }

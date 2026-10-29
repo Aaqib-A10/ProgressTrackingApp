@@ -4,7 +4,7 @@ import { AlertTriangle, FileUp, PhoneCall, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead } from '../../../../lib/dialerApi'
-import { NO_FILTERS, PKT, REGIONS, applyFilters, clock, followUpTabs, latestActedToday, leadState, type Filters } from '../../../../lib/dialer'
+import { NO_FILTERS, PKT, REGIONS, applyFilters, clock, followUpTabs, latestActedToday, leadState, multiLabel, toggleMulti, type Filters } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { DashboardView } from './DashboardView'
 import { FollowUpsView } from './FollowUpsView'
@@ -14,7 +14,7 @@ import { DuplicatesView, HistoryView, SettingsView } from './AdminViews'
 import { ImportModal } from './ImportModal'
 import { LeadsView } from './LeadsView'
 import { LeadPanel } from './LeadPanel'
-import { DownloadLeads, InfoTip, LeadsListModal, errMsg } from './ui'
+import { DownloadLeads, InfoTip, LeadsListModal, MultiFilter, errMsg } from './ui'
 
 /**
  * Lead Dialer (ITAD). Reps dial US leads from Pakistan at night; this page does the checking
@@ -143,16 +143,16 @@ export default function LeadDialer() {
         <>
           {(view === 'dashboard' || view === 'funnel' || view === 'industries') && (
             <div className="flex flex-wrap items-center gap-2">
-              <select value={filters.state} onChange={(e) => setFilters({ ...filters, state: e.target.value })} className={sel(!!filters.state)} aria-label="State"><option value="">State: All</option>{opts((l) => leadState(l), '(no state)').map((v) => <option key={v}>{v}</option>)}</select>
-              <select value={filters.region} onChange={(e) => setFilters({ ...filters, region: e.target.value })} className={sel(!!filters.region)} aria-label="Region"><option value="">Region: All</option>{REGIONS.map((r) => <option key={r}>{r}</option>)}</select>
-              <select value={filters.industry} onChange={(e) => setFilters({ ...filters, industry: e.target.value })} className={sel(!!filters.industry)} aria-label="Industry"><option value="">Industry: All</option>{opts((l) => l.industry, '(no industry)').map((v) => <option key={v}>{v}</option>)}</select>
-              <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className={sel(!!filters.status)} aria-label="Status"><option value="">Status: Any</option>{opts((l) => l.status, 'Unknown').map((v) => <option key={v}>{v}</option>)}</select>
-              {lists.length > 1 && <select value={filters.list} onChange={(e) => setFilters({ ...filters, list: e.target.value })} className={sel(!!filters.list)} aria-label="List"><option value="">List: All</option>{lists.map((v) => <option key={v} value={v}>{v === 'CRM' ? 'CRM (SMB)' : v}</option>)}</select>}
-              {showOwner && <select value={filters.rep} onChange={(e) => setFilters({ ...filters, rep: e.target.value })} className={sel(!!filters.rep)} aria-label="Rep"><option value="">Rep: All</option>{[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>}
+              <MultiFilter label="State" value={filters.state} onChange={(v) => setFilters({ ...filters, state: v })} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} />
+              <MultiFilter label="Region" value={filters.region} onChange={(v) => setFilters({ ...filters, region: v })} options={REGIONS.map((r) => ({ value: r }))} />
+              <MultiFilter label="Industry" value={filters.industry} onChange={(v) => setFilters({ ...filters, industry: v })} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} />
+              <MultiFilter label="Status" allLabel="Any" value={filters.status} onChange={(v) => setFilters({ ...filters, status: v })} options={opts((l) => l.status, 'Unknown').map((v) => ({ value: v }))} />
+              {lists.length > 1 && <MultiFilter label="List" value={filters.list} onChange={(v) => setFilters({ ...filters, list: v })} options={lists.map((v) => ({ value: v, label: v === 'CRM' ? 'CRM (SMB)' : v }))} />}
+              {showOwner && <MultiFilter label="Rep" value={filters.rep} onChange={(v) => setFilters({ ...filters, rep: v })} options={[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => ({ value: id, label: n || 'Unknown' }))} />}
               <select value={filters.date} onChange={(e) => setFilters({ ...filters, date: e.target.value })} className={sel(!!filters.date)} aria-label="Lead date"><option value="">Date: All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
               {filtersOn && <button type="button" onClick={() => setFilters(NO_FILTERS)} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
               {filtersOn && <span className="ml-auto text-body-sm text-ink-muted">{filtered.filter((l) => !l.duplicate).length.toLocaleString()} of {data.counts.counted.toLocaleString()} leads</span>}
-              {filtersOn && <DownloadLeads title={['leads', filters.state, filters.region, filters.industry, filters.status, filters.list, filters.date && `last ${filters.date} days`].filter(Boolean).join(' ')} leads={filtered.filter((l) => !l.duplicate)} now={now} showOwner={showOwner} label="Download filtered" />}
+              {filtersOn && <DownloadLeads title={['leads', multiLabel(filters.state), multiLabel(filters.region), multiLabel(filters.industry), multiLabel(filters.status), multiLabel(filters.list), filters.date && `last ${filters.date} days`].filter(Boolean).join(' ')} leads={filtered.filter((l) => !l.duplicate)} now={now} showOwner={showOwner} label="Download filtered" />}
             </div>
           )}
 
@@ -160,7 +160,7 @@ export default function LeadDialer() {
           {view === 'leads' && <LeadsView data={data} now={now} showOwner={showOwner} onOpenLead={openLead} onChanged={load} />}
           {view === 'followups' && <FollowUpsView data={data} leads={leads} settings={data.settings} now={now} onOpenLead={openLead} onChanged={load} showOwner={showOwner} followUpDays={fuDays} />}
           {view === 'funnel' && <FunnelView leads={filtered} settings={data.settings} now={now} showReps={showOwner} onPick={(by, key) => { if (by === 'state' || by === 'industry' || by === 'status') { setFilters((f) => ({ ...f, [by]: key })); go('dashboard') } }} />}
-          {view === 'industries' && <IndustriesView leads={filtered} settings={data.settings} now={now} showReps={showOwner} picked={filters.industry} onPickIndustry={(k) => setFilters((f) => ({ ...f, industry: f.industry === k ? '' : k }))} />}
+          {view === 'industries' && <IndustriesView leads={filtered} settings={data.settings} now={now} showReps={showOwner} picked={filters.industry} onPickIndustry={(k) => setFilters((f) => ({ ...f, industry: toggleMulti(f.industry, k) }))} />}
           {view === 'fix' && <FixDataView leads={leads} onOpenLead={openLead} onChanged={load} showOwner={showOwner} />}
           {view === 'history' && <HistoryView rep={rep} refreshKey={`${data.lastImport?.id ?? ''}-${refreshKey}`} onOpenLeads={(title, ids, fallback) => {
             const found = ids.map((id) => byId.get(id)).filter((l): l is DialerLead => !!l)

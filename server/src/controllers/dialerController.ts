@@ -722,7 +722,7 @@ export async function followUpBulk(req: AuthedRequest, res: Response): Promise<v
 
 // ---------------------------------------------------------------------------- my settings (saved views, follow-up days)
 
-const viewSchema = z.object({ id: z.string().min(1).max(40), name: z.string().trim().min(1).max(40), filters: z.record(z.string().max(40), z.string().max(200)) })
+const viewSchema = z.object({ id: z.string().min(1).max(40), name: z.string().trim().min(1).max(40), filters: z.record(z.string().max(40), z.string().max(4000)) })
 const prefsSchema = z.object({
   views: z.array(viewSchema).max(20).optional(),
   followUp: z.record(z.string().min(1).max(60), z.number().int().min(FOLLOW_UP_MIN, `Follow-up days must be ${FOLLOW_UP_MIN} to ${FOLLOW_UP_MAX}.`).max(FOLLOW_UP_MAX, `Follow-up days must be ${FOLLOW_UP_MIN} to ${FOLLOW_UP_MAX}.`)).optional(),

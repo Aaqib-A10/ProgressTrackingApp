@@ -245,18 +245,31 @@ export function funnelOf(leads: DialerLead[], ever = false): FunnelNumbers {
 export const pct = (v: number | null | undefined, digits = 1) => (v == null ? 'n/a' : `${(v * 100).toFixed(digits)}%`)
 export const num = (n: number) => n.toLocaleString('en-US')
 
+/**
+ * A filter can hold several values (any of them matches): "Real Estate" or "Real Estate" and
+ * "Healthcare". They are kept as one string, so saved views and single values keep working.
+ */
+export const MULTI_SEP = '\u001f'
+export const multiOf = (v?: string | null): string[] => (v ? v.split(MULTI_SEP).filter(Boolean) : [])
+export const joinMulti = (vs: string[]): string => [...new Set(vs)].join(MULTI_SEP)
+export const multiLabel = (v?: string | null): string => multiOf(v).join(', ')
+/** No filter, or the value is one of the picked ones. */
+export const anyOf = (v: string | undefined | null, x: string): boolean => !v || multiOf(v).includes(x)
+/** Add or take away one value. */
+export const toggleMulti = (v: string | undefined | null, x: string): string => { const vs = multiOf(v); return joinMulti(vs.includes(x) ? vs.filter((y) => y !== x) : [...vs, x]) }
+
 export interface Filters { state: string; region: string; industry: string; status: string; rep: string; list: string; date: string }
 export const NO_FILTERS: Filters = { state: '', region: '', industry: '', status: '', rep: '', list: '', date: '' }
 
 export function applyFilters(leads: DialerLead[], f: Filters, now: Date): DialerLead[] {
   const cutoff = f.date ? now.getTime() - Number(f.date) * 86400000 : null
   return leads.filter((l) => {
-    if (f.state && (leadState(l) ?? '(no state)') !== f.state) return false
-    if (f.region && (leadRegion(l, now) ?? '') !== f.region) return false
-    if (f.industry && (l.industry ?? '(no industry)') !== f.industry) return false
-    if (f.status && l.status !== f.status) return false
-    if (f.rep && l.ownerId !== f.rep) return false
-    if (f.list && l.listName !== f.list) return false
+    if (!anyOf(f.state, leadState(l) ?? '(no state)')) return false
+    if (!anyOf(f.region, leadRegion(l, now) ?? '')) return false
+    if (!anyOf(f.industry, l.industry ?? '(no industry)')) return false
+    if (!anyOf(f.status, l.status)) return false
+    if (!anyOf(f.rep, l.ownerId)) return false
+    if (!anyOf(f.list, l.listName)) return false
     if (cutoff != null && new Date(l.leadDate ?? l.createdAt).getTime() < cutoff) return false
     return true
   })
@@ -403,18 +416,18 @@ export function filterLeads(leads: DialerLead[], f: LeadFilters, now: Date, last
     if (l.duplicate) return false
     if (!presetMatch(l, f.preset, now, lastImport)) return false
     if (f.q && !matchesSearch(l, f.q)) return false
-    if (f.state && (leadState(l) ?? '(no state)') !== f.state) return false
-    if (f.region && (leadRegion(l, now) ?? '') !== f.region) return false
-    if (f.industry && (l.industry ?? '(no industry)') !== f.industry) return false
-    if (f.status && l.status !== f.status) return false
-    if (f.stage && String(l.stage) !== f.stage) return false
+    if (!anyOf(f.state, leadState(l) ?? '(no state)')) return false
+    if (!anyOf(f.region, leadRegion(l, now) ?? '')) return false
+    if (!anyOf(f.industry, l.industry ?? '(no industry)')) return false
+    if (!anyOf(f.status, l.status)) return false
+    if (!anyOf(f.stage, String(l.stage))) return false
     if (f.inStatus && daysInStatus(l, now) < Number(f.inStatus)) return false
     if (f.updated && daysSince(lastActivity(l), now) > Number(f.updated)) return false
     if (f.notes === 'yes' && !l.noteCount) return false
     if (f.notes === 'no' && l.noteCount) return false
-    if (f.list && l.listName !== f.list) return false
-    if (f.tag && !l.tags.includes(f.tag)) return false
-    if (f.rep && l.ownerId !== f.rep) return false
+    if (!anyOf(f.list, l.listName)) return false
+    if (f.tag && !multiOf(f.tag).some((t) => l.tags.includes(t))) return false
+    if (!anyOf(f.rep, l.ownerId)) return false
     return true
   })
 }

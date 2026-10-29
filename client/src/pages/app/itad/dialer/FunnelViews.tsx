@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { DialerLead, DialerSettings } from '../../../../lib/dialerApi'
-import { funnelOf, leadRegion, leadState, num, pct, segments, type Segment } from '../../../../lib/dialer'
+import { funnelOf, leadRegion, leadState, multiLabel, multiOf, num, pct, segments, type Segment } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { InfoTip, Pager, Panel, usePaged } from './ui'
 
@@ -180,7 +180,9 @@ export function IndustriesView({ leads, settings, now, showReps, picked, onPickI
   const small = all.filter((s) => s.leads.length < min)
   const otherLeads = small.flatMap((s) => s.leads)
   const rows = small.length ? [...big, { key: `All other industries (${small.length})`, leads: otherLeads, funnel: funnelOf(otherLeads), stuckShare: otherLeads.length ? otherLeads.filter((l) => l.status === 'Contact Attempted' || l.status === 'Voicemail Sent').length / otherLeads.length : 0 }] : big
-  const pickedLeads = picked ? live.filter((l) => (l.industry ?? '(no industry)') === picked) : []
+  const pickedSet = new Set(multiOf(picked))
+  const pickedLeads = pickedSet.size ? live.filter((l) => pickedSet.has(l.industry ?? '(no industry)')) : []
+  const pickedName = pickedSet.size > 2 ? `${pickedSet.size} industries` : multiLabel(picked)
 
   return (
     <div className="space-y-4">
@@ -196,11 +198,11 @@ export function IndustriesView({ leads, settings, now, showReps, picked, onPickI
       </Panel>
       {picked && pickedLeads.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-3">
-          <TopList title={`${picked} · states`} segs={segments(pickedLeads.filter((l) => leadState(l)), (l) => leadState(l)!).slice(0, 10)} onPick={() => {}} />
-          <TopList title={`${picked} · statuses`} segs={segments(pickedLeads, (l) => l.status).slice(0, 10)} onPick={() => {}} />
+          <TopList title={`${pickedName} · states`} segs={segments(pickedLeads.filter((l) => leadState(l)), (l) => leadState(l)!).slice(0, 10)} onPick={() => {}} />
+          <TopList title={`${pickedName} · statuses`} segs={segments(pickedLeads, (l) => l.status).slice(0, 10)} onPick={() => {}} />
           {showReps
-            ? <TopList title={`${picked} · reps`} segs={segments(pickedLeads, (l) => l.ownerName || 'Unknown').slice(0, 10)} onPick={() => {}} />
-            : <TopList title={`${picked} · regions`} segs={segments(pickedLeads, (l) => leadRegion(l, now) ?? 'No region')} onPick={() => {}} />}
+            ? <TopList title={`${pickedName} · reps`} segs={segments(pickedLeads, (l) => l.ownerName || 'Unknown').slice(0, 10)} onPick={() => {}} />
+            : <TopList title={`${pickedName} · regions`} segs={segments(pickedLeads, (l) => leadRegion(l, now) ?? 'No region')} onPick={() => {}} />}
         </div>
       )}
     </div>

@@ -6,7 +6,7 @@ import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerData, type SavedView } from '../../../../lib/dialerApi'
 import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, type LeadFilters } from '../../../../lib/dialer'
-import { DownloadLeads, InfoTip, LeadTable, Pager, errMsg, usePaged } from './ui'
+import { DownloadLeads, InfoTip, LeadTable, MultiFilter, Pager, errMsg, usePaged } from './ui'
 import { BulkFillModal } from './BulkFillModal'
 import { downloadNotes } from './exports'
 
@@ -66,11 +66,11 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
           <input value={f.q ?? ''} onChange={(e) => setF((x) => ({ ...x, q: e.target.value || undefined }))} placeholder="Name, company, phone, email or city" className="h-9 w-72 rounded-btn border border-line bg-card pl-8 pr-2 text-body-sm text-ink focus:border-primary focus:outline-none" />
         </label>
-        <select value={f.state ?? ''} onChange={(e) => set('state', e.target.value)} className={sel(!!f.state)} aria-label="State"><option value="">State</option>{opts((l) => leadState(l), '(no state)').map((v) => <option key={v}>{v}</option>)}</select>
-        <select value={f.region ?? ''} onChange={(e) => set('region', e.target.value)} className={sel(!!f.region)} aria-label="Region"><option value="">Region</option>{REGIONS.map((r) => <option key={r}>{r}</option>)}</select>
-        <select value={f.industry ?? ''} onChange={(e) => set('industry', e.target.value)} className={sel(!!f.industry)} aria-label="Industry"><option value="">Industry</option>{opts((l) => l.industry, '(no industry)').map((v) => <option key={v}>{v}</option>)}</select>
-        <select value={f.status ?? ''} onChange={(e) => set('status', e.target.value)} className={sel(!!f.status)} aria-label="Status"><option value="">Status</option>{opts((l) => l.status, 'Unknown').map((v) => <option key={v}>{v}</option>)}</select>
-        <select value={f.stage ?? ''} onChange={(e) => set('stage', e.target.value)} className={sel(!!f.stage)} aria-label="Stage"><option value="">Stage</option><option value="1">1 New / assigned</option><option value="2">2 Attempted</option><option value="3">3 Connected</option><option value="4">4 Positive</option></select>
+        <MultiFilter label="State" value={f.state} onChange={(v) => set('state', v)} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} />
+        <MultiFilter label="Region" value={f.region} onChange={(v) => set('region', v)} options={REGIONS.map((r) => ({ value: r }))} />
+        <MultiFilter label="Industry" value={f.industry} onChange={(v) => set('industry', v)} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} />
+        <MultiFilter label="Status" allLabel="Any" value={f.status} onChange={(v) => set('status', v)} options={opts((l) => l.status, 'Unknown').map((v) => ({ value: v }))} />
+        <MultiFilter label="Stage" value={f.stage} onChange={(v) => set('stage', v)} options={[{ value: '1', label: '1 New / assigned' }, { value: '2', label: '2 Attempted' }, { value: '3', label: '3 Connected' }, { value: '4', label: '4 Positive' }]} />
         <select value={f.inStatus ?? ''} onChange={(e) => set('inStatus', e.target.value)} className={sel(!!f.inStatus)} aria-label="Days in status"><option value="">Days in status</option>{[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d}+ days</option>)}</select>
         <select value={f.updated ?? ''} onChange={(e) => set('updated', e.target.value)} className={sel(!!f.updated)} aria-label="Last updated"><option value="">Last updated</option>{[1, 7, 30, 90].map((d) => <option key={d} value={d}>In the last {d === 1 ? 'day' : `${d} days`}</option>)}</select>
         <select value={f.callAt ? (/^\d/.test(f.callAt) ? 'time' : f.callAt) : ''} onChange={(e) => set('callAt', e.target.value === 'time' ? nextHour(now) : e.target.value)} className={sel(!!f.callAt)} aria-label="Call time">
@@ -87,9 +87,9 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
           </label>
         )}
         <select value={f.notes ?? ''} onChange={(e) => set('notes', e.target.value)} className={sel(!!f.notes)} aria-label="Notes"><option value="">Notes</option><option value="yes">Has notes</option><option value="no">No notes</option></select>
-        {tags.length > 0 && <select value={f.tag ?? ''} onChange={(e) => set('tag', e.target.value)} className={sel(!!f.tag)} aria-label="Tag"><option value="">Tag</option>{tags.map((t) => <option key={t}>{t}</option>)}</select>}
-        {lists.length > 1 && <select value={f.list ?? ''} onChange={(e) => set('list', e.target.value)} className={sel(!!f.list)} aria-label="List"><option value="">List</option>{lists.map((t) => <option key={t} value={t}>{t === 'CRM' ? 'CRM (SMB)' : t}</option>)}</select>}
-        {showOwner && <select value={f.rep ?? ''} onChange={(e) => set('rep', e.target.value)} className={sel(!!f.rep)} aria-label="Rep"><option value="">Rep</option>{[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>}
+        {tags.length > 0 && <MultiFilter label="Tag" value={f.tag} onChange={(v) => set('tag', v)} options={tags.map((t) => ({ value: t }))} />}
+        {lists.length > 1 && <MultiFilter label="List" value={f.list} onChange={(v) => set('list', v)} options={lists.map((t) => ({ value: t, label: t === 'CRM' ? 'CRM (SMB)' : t }))} />}
+        {showOwner && <MultiFilter label="Rep" value={f.rep} onChange={(v) => set('rep', v)} options={[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => ({ value: id, label: n || 'Unknown' }))} />}
         {(extra > 0 || f.q) && <button type="button" onClick={() => { setF({ preset: 'all' }); setActiveView('all') }} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
         {extra > 0 && !activeView && <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Save size={14} /> Save view</button>}
       </div>

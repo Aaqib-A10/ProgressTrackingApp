@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { BellOff, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FileSpreadsheet, FileText, Info, MessageSquarePlus, Phone, Pin } from 'lucide-react'
+import { BellOff, Check, ChevronDown, Search, X, ChevronLeft, ChevronRight, Clock3, Download, FileSpreadsheet, FileText, Info, MessageSquarePlus, Phone, Pin } from 'lucide-react'
 import { Modal } from '../../../../components/ui/Modal'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerLead, type RegionCode } from '../../../../lib/dialerApi'
-import { REGION_META, leadRegion, leadState, lastActivity, shortDate, daysSince } from '../../../../lib/dialer'
+import { REGION_META, leadRegion, leadState, lastActivity, shortDate, daysSince, joinMulti, multiOf } from '../../../../lib/dialer'
 import { downloadLeads } from './exports'
 
 /**
@@ -300,6 +300,80 @@ export function LeadTable({ leads, now, showOwner, onOpen, extra }: { leads: Dia
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/**
+ * A filter that takes several values: "Industry: Real Estate", "Industry: 3 picked". Opens a
+ * list with ticks (and a search box for long lists); any of the ticked values matches.
+ */
+export function MultiFilter({ label, allLabel = 'All', value, onChange, options }: {
+  label: string
+  allLabel?: string
+  value: string | undefined
+  onChange: (v: string) => void
+  options: { value: string; label?: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const box = useRef<HTMLDivElement>(null)
+  const picked = multiOf(value)
+  const set = new Set(picked)
+  const name = (v: string) => options.find((o) => o.value === v)?.label ?? v
+  useEffect(() => {
+    if (!open) return
+    const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
+  }, [open])
+  useEffect(() => { if (!open) setQ('') }, [open])
+  const shown = q.trim() ? options.filter((o) => (o.label ?? o.value).toLowerCase().includes(q.trim().toLowerCase())) : options
+  const toggle = (v: string) => onChange(joinMulti(set.has(v) ? picked.filter((x) => x !== v) : [...picked, v]))
+  const text = picked.length === 0 ? allLabel : picked.length === 1 ? name(picked[0]) : `${picked.length} picked`
+  return (
+    <div ref={box} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label={label}
+        title={picked.length > 1 ? picked.map(name).join(', ') : undefined}
+        className={cn('inline-flex h-8 max-w-[260px] items-center gap-1.5 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', picked.length ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')}>
+        <span className="truncate">{label}: {text}</span>
+        <ChevronDown size={14} className={cn('shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-1.5 w-72 overflow-hidden rounded-card border border-line bg-card shadow-overlay" role="listbox" aria-multiselectable="true" aria-label={label}>
+          {options.length > 8 && (
+            <div className="border-b border-line p-2">
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
+                <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Find ${label.toLowerCase()}`} className="h-8 w-full rounded-btn border border-line bg-card pl-8 pr-2 text-body-sm text-ink focus:border-primary focus:outline-none" />
+              </div>
+            </div>
+          )}
+          <ul className="max-h-72 overflow-y-auto py-1">
+            {shown.length === 0 && <li className="px-3 py-2 text-body-sm text-ink-muted">Nothing matches.</li>}
+            {shown.map((o) => {
+              const on = set.has(o.value)
+              return (
+                <li key={o.value}>
+                  <button type="button" role="option" aria-selected={on} onClick={() => toggle(o.value)} className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-body-sm text-ink hover:bg-slate-100">
+                    <span className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-white' : 'border-line bg-card')}>{on && <Check size={12} strokeWidth={3} />}</span>
+                    <span className="truncate">{o.label ?? o.value}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2">
+            <div className="flex gap-3 text-body-sm">
+              {shown.length > 1 && <button type="button" onClick={() => onChange(joinMulti([...picked, ...shown.map((o) => o.value)]))} className="font-medium text-primary hover:underline">Pick all{q.trim() ? ' shown' : ''}</button>}
+              {picked.length > 0 && <button type="button" onClick={() => onChange('')} className="inline-flex items-center gap-1 text-ink-muted hover:text-ink"><X size={13} />Clear</button>}
+            </div>
+            <button type="button" onClick={() => setOpen(false)} className="rounded-btn bg-primary px-3 py-1 text-body-sm font-semibold text-white hover:bg-primary/90">Done</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
