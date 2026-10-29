@@ -16,7 +16,7 @@ const COLUMNS: { status: WorkStatus; label: string; dot: string; empty: string }
   { status: 'DONE', label: 'Done', dot: 'bg-success', empty: 'Drag finished work here.' },
 ]
 
-export function TodoBoard({ entries, readOnly, actions }: { entries: WorkEntry[]; readOnly: boolean; actions: EntryActions }) {
+export function TodoBoard({ entries, readOnly, actions, flash }: { entries: WorkEntry[]; readOnly: boolean; actions: EntryActions; flash?: string | null }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }))
   const [dragging, setDragging] = useState<WorkEntry | null>(null)
 
@@ -41,7 +41,7 @@ export function TodoBoard({ entries, readOnly, actions }: { entries: WorkEntry[]
                 <span className="rounded-full bg-slate-200/70 px-1.5 text-[11px] font-bold text-ink-muted">{rows.length}</span>
               </div>
               <div className="space-y-2">
-                {rows.map((e) => <Card key={e.id} e={e} readOnly={readOnly} actions={actions} hidden={dragging?.id === e.id} />)}
+                {rows.map((e) => <Card key={e.id} e={e} readOnly={readOnly} actions={actions} hidden={dragging?.id === e.id} flash={flash === e.id} />)}
                 {rows.length === 0 && <p className="rounded-btn border border-dashed border-line px-3 py-6 text-center text-body-sm text-ink-muted">{c.empty}</p>}
               </div>
             </Column>
@@ -58,10 +58,10 @@ function Column({ id, disabled, children }: { id: string; disabled: boolean; chi
   return <div ref={setNodeRef} className={cn('min-h-[180px] rounded-card border bg-slate-50/80 p-2.5 transition-colors', isOver ? 'border-primary/50 bg-primary/5' : 'border-line')}>{children}</div>
 }
 
-function Card({ e, readOnly, actions, hidden }: { e: WorkEntry; readOnly: boolean; actions: EntryActions; hidden: boolean }) {
+function Card({ e, readOnly, actions, hidden, flash }: { e: WorkEntry; readOnly: boolean; actions: EntryActions; hidden: boolean; flash?: boolean }) {
   const { setNodeRef, listeners, attributes } = useDraggable({ id: e.id, disabled: readOnly })
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={cn('touch-manipulation outline-none', !readOnly && 'cursor-grab active:cursor-grabbing', hidden && 'opacity-30')}>
+    <div ref={setNodeRef} {...listeners} {...attributes} data-entry-id={e.id} className={cn('touch-manipulation rounded-btn outline-none transition-shadow duration-700', !readOnly && 'cursor-grab active:cursor-grabbing', hidden && 'opacity-30', flash && 'ring-2 ring-yellow-400 ring-offset-2')}>
       <CardBody e={e} readOnly={readOnly} actions={actions} />
     </div>
   )

@@ -366,3 +366,78 @@ export async function deleteWorkLogNote(req: AuthedRequest, res: Response): Prom
   if (r.count === 0) { res.status(404).json({ error: 'Note not found' }); return }
   res.status(204).end()
 }
+
+// ------------------------------------------------------------------ search
+
+/** Words to look for: each word on its own, or "an exact phrase" in quotes. At most 6. */
+export function searchTerms(q: string): string[] {
+  const out: string[] = []
+  for (const m of q.matchAll(/"([^"]+)"|(\S+)/g)) {
+    const t = (m[1] ?? m[2] ?? '').trim()
+    if (t && !out.some((x) => x.toLowerCase() === t.toLowerCase())) out.push(t)
+  }
+  return out.slice(0, 6)
+}
+
+const SEARCH_LIMIT = 500
+
+/**
+ * GET /api/worklog/search?q=&userId=&scope=team — find something in My To-Do on any date:
+ * every day, week, month and year entry whose text, details, tag or notes (body, where it came
+ * from, who sent it) have all the words. Newest first, up to 500. Your own entries (private ones
+ * too); with `userId`, that person's (not private), for their Team Lead or a Super Admin; with
+ * `scope=team`, everyone the caller can read (Team Lead: their department; Super Admin: the whole
+ * company). Also the matching items of your own quick checklist.
+ */
+export async function searchWorkLog(req: AuthedRequest, res: Response): Promise<void> {
+  const q = String(req.query.q ?? '').trim().slice(0, 100)
+  const terms = searchTerms(q)
+  if (q.length < 2 || !terms.length) { res.status(400).json({ error: 'Type at least 2 letters to search.' }); return }
+  const viewer = await me(req)
+  const team = req.query.scope === 'team'
+  const ownerId = (req.query.userId as string) || viewer.id
+
+  let who: object
+  if (team) {
+    if (viewer.role !== 'SUPER_ADMIN' && viewer.role !== 'TEAM_LEAD') { res.status(403).json({ error: 'Only Team Leads can search the whole team.' }); return }
+    const others = await prisma.user.findMany({
+      where: { id: { not: viewer.id }, ...(viewer.role === 'TEAM_LEAD' ? { departmentId: viewer.departmentId ?? '__none__' } : {}) },
+      select: { id: true },
+    })
+    who = { OR: [{ userId: viewer.id }, { userId: { in: others.map((o) => o.id) }, private: false }] }
+  } else {
+    if (!(await canRead(viewer, ownerId))) { res.status(403).json({ error: 'You can only search your own to-dos.' }); return }
+    who = ownerId === viewer.id ? { userId: ownerId } : { userId: ownerId, private: false }
+  }
+
+  const like = (t: string) => ({ contains: t, mode: 'insensitive' as const })
+  const match = terms.map((t) => ({
+    OR: [
+      { title: like(t) }, { details: like(t) }, { tag: like(t) },
+      { notes: { some: { OR: [{ body: like(t) }, { source: like(t) }, { sender: like(t) }] } } },
+    ],
+  }))
+  const rows = await prisma.workLogEntry.findMany({
+    where: { AND: [who, ...match] },
+    orderBy: [{ periodStart: 'desc' }, { order: 'asc' }, { createdAt: 'desc' }],
+    include: { ...WITH_NOTES, user: { select: { name: true } } },
+    take: SEARCH_LIMIT + 1,
+  })
+  const more = rows.length > SEARCH_LIMIT
+  const entries = rows.slice(0, SEARCH_LIMIT)
+
+  const checklist = !team && ownerId === viewer.id
+    ? await prisma.todoItem.findMany({
+      where: { userId: viewer.id, AND: terms.map((t) => ({ title: like(t) })) },
+      orderBy: [{ done: 'asc' }, { createdAt: 'desc' }],
+      select: { id: true, title: true, done: true, dueDate: true, createdAt: true },
+      take: 50,
+    })
+    : []
+
+  res.json({
+    q, terms, more, scope: team ? 'team' : 'person',
+    results: entries.map((e) => ({ ...view(e), userName: e.user.name })),
+    checklist: checklist.map((c) => ({ id: c.id, title: c.title, done: c.done, dueDate: c.dueDate ? dateStringFromDb(c.dueDate) : null, createdAt: c.createdAt.toISOString() })),
+  })
+}

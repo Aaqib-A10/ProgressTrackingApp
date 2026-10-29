@@ -84,7 +84,22 @@ export interface TeamWorkLog {
   members: TeamMember[]
 }
 
+/** One search hit: the entry, and whose it is (the team search shows other people's). */
+export interface WorkSearchHit extends WorkEntry { userName: string }
+export interface WorkSearch {
+  q: string
+  /** The words searched for (a phrase in quotes is one). */
+  terms: string[]
+  /** More than 500 matched: only the newest 500 are here. */
+  more: boolean
+  scope: 'person' | 'team'
+  results: WorkSearchHit[]
+  /** Matching items of your own quick checklist. */
+  checklist: { id: string; title: string; done: boolean; dueDate: string | null; createdAt: string }[]
+}
+
 export const workLogApi = {
+  search: (q: string, opts: { userId?: string; team?: boolean } = {}) => api.get<WorkSearch>(`/worklog/search?q=${encodeURIComponent(q)}${opts.team ? '&scope=team' : opts.userId ? `&userId=${encodeURIComponent(opts.userId)}` : ''}`),
   list: (from: string, to: string, userId?: string) => api.get<{ entries: WorkEntry[]; reviews: WorkReview[]; readOnly: boolean; canReview: boolean }>(`/worklog?from=${from}&to=${to}${userId ? `&userId=${encodeURIComponent(userId)}` : ''}`),
   people: () => api.get<{ people: { id: string; name: string; department: string | null }[] }>('/worklog/people'),
   create: (body: WorkEntryInput & { period: WorkPeriod; date: string; title: string }) => api.post<{ entry: WorkEntry }>('/worklog', body),

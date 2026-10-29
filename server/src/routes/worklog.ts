@@ -3,13 +3,14 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import {
   listWorkLog, createWorkLog, updateWorkLog, carryWorkLog, deleteWorkLog, workLogPeople, teamWorkLog, reviewWorkLog,
-  workLogNoteSources, addWorkLogNote, updateWorkLogNote, deleteWorkLogNote,
+  workLogNoteSources, addWorkLogNote, searchWorkLog, updateWorkLogNote, deleteWorkLogNote,
 } from '../controllers/workLogController'
 
 /** My To-Do: Day / Week / Month / Year entries (every department). */
 export const worklogRouter = Router()
 worklogRouter.use(requireAuth)
 worklogRouter.get('/', asyncHandler(listWorkLog))
+worklogRouter.get('/search', asyncHandler(searchWorkLog))
 worklogRouter.get('/people', asyncHandler(workLogPeople))
 worklogRouter.get('/team', asyncHandler(teamWorkLog))
 worklogRouter.put('/review', asyncHandler(reviewWorkLog))

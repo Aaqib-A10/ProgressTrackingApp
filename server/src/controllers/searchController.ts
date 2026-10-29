@@ -1,7 +1,9 @@
 import type { Response } from 'express'
+import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { visibleProjectIds } from '../lib/pm/access'
+import { dateStringFromDb } from '../lib/time'
 
 /**
  * GET /api/search?q= — one search box for the whole app: people, projects, tasks, chats,
@@ -58,7 +60,7 @@ export async function search(req: AuthedRequest, res: Response): Promise<void> {
   ])
   const convIds = myConvs.map((c) => c.conversationId)
 
-  const [people, projects, pmTasks, mktTasks, ecomTasks, todos, convs, messages, chatFiles, pmFiles, meetings] = await Promise.all([
+  const [people, projects, pmTasks, mktTasks, ecomTasks, todos, workLog, convs, messages, chatFiles, pmFiles, meetings] = await Promise.all([
     prisma.user.findMany({
       where: { isActive: true, status: 'ACTIVE', id: { not: me.id }, OR: [{ name: like }, { email: like }] },
       select: { id: true, name: true, role: true, department: { select: { type: true } } },
@@ -79,6 +81,13 @@ export async function search(req: AuthedRequest, res: Response): Promise<void> {
       ? prisma.ecommerceTask.findMany({ where: { title: like }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: 'desc' }, take: LIMIT })
       : Promise.resolve([]),
     prisma.todoItem.findMany({ where: { userId: me.id, title: like }, select: { id: true, title: true, done: true }, take: LIMIT }),
+    // My To-Do entries (own only), with the day, week, month or year they belong to.
+    prisma.workLogEntry.findMany({
+      where: { userId: me.id, OR: [{ title: like }, { details: like }, { tag: like }, { notes: { some: { body: like } } }] },
+      select: { id: true, title: true, period: true, periodStart: true, status: true },
+      orderBy: { periodStart: 'desc' },
+      take: LIMIT,
+    }),
     prisma.chatConversation.findMany({ where: { id: { in: convIds }, name: like }, select: { id: true, name: true, type: true }, take: LIMIT }),
     prisma.chatMessage.findMany({
       where: { conversationId: { in: convIds }, deletedAt: null, body: like },
@@ -121,6 +130,11 @@ export async function search(req: AuthedRequest, res: Response): Promise<void> {
     return c.name ?? c.project?.key ?? 'Group'
   }
 
+  /** "Day · Wed 12 Aug 2026", "Week of 10 Aug 2026", "Month · August 2026", "Year · 2026". */
+  const wlWhen = (period: string, day: string) => {
+    const d = DateTime.fromISO(day)
+    return period === 'DAY' ? `Day · ${d.toFormat('ccc d LLL yyyy')}` : period === 'WEEK' ? `Week of ${d.toFormat('d LLL yyyy')}` : period === 'MONTH' ? `Month · ${d.toFormat('LLLL yyyy')}` : `Year · ${d.toFormat('yyyy')}`
+  }
   const MKT_HOME: Record<string, string> = { SOCIAL: 'Social', CONTENT: 'Content', SEO: 'SEO' }
   const out: SearchResponse = {
     q,
@@ -136,8 +150,16 @@ export async function search(req: AuthedRequest, res: Response): Promise<void> {
       ...pmTasks.map((t) => ({ id: t.code, title: t.title, sub: `${t.code} · ${t.project.name} · ${t.column.name}`, link: `/app/projects/${encodeURIComponent(t.project.key)}?task=${encodeURIComponent(t.code)}` })),
       ...mktTasks.map((t) => ({ id: t.id, title: t.title, sub: `Marketing · ${MKT_HOME[t.discipline] ?? t.discipline}`, link: `/app/marketing/board?task=${encodeURIComponent(t.id)}` })),
       ...ecomTasks.map((t) => ({ id: t.id, title: t.title, sub: 'Ecommerce task board', link: `/app/ecommerce/board?task=${encodeURIComponent(t.id)}` })),
-      ...todos.map((t) => ({ id: t.id, title: t.title, sub: t.done ? 'My to-do · done' : 'My to-do', link: '/app/todo' })),
-    ].slice(0, LIMIT + 2),
+      ...workLog.map((e) => {
+        const day = dateStringFromDb(e.periodStart)
+        return {
+          id: e.id, title: snippet(e.title, q),
+          sub: `My To-Do · ${wlWhen(e.period, day)}${e.status === 'DONE' ? ' · done' : e.status === 'IN_PROGRESS' ? ' · in progress' : ''}`,
+          link: `/app/todo?period=${e.period}&date=${day}&entry=${encodeURIComponent(e.id)}`,
+        }
+      }),
+      ...todos.map((t) => ({ id: t.id, title: t.title, sub: t.done ? 'Quick checklist · done' : 'Quick checklist', link: '/app/todo' })),
+    ].slice(0, LIMIT + 4),
     chats: [
       ...convs.map((c) => ({ id: c.id, title: c.name ?? 'Group', sub: c.type === 'PROJECT' ? 'Project channel' : 'Group chat', link: `/app/chat?c=${encodeURIComponent(c.id)}` })),
       ...messages.map((m) => ({ id: m.id, title: snippet(m.body, q), sub: `${m.user.name} in ${chatName(m.conversationId)} · ${m.createdAt.toISOString().slice(0, 10)}`, link: `/app/chat?c=${encodeURIComponent(m.conversationId)}` })),

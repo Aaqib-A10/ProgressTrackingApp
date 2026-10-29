@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CalendarDays, ChevronLeft, ChevronRight, Columns3, Copy, Download, List, MoreHorizontal, StickyNote, Users } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Columns3, Copy, Download, List, MoreHorizontal, Search, StickyNote, Users, X } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
@@ -10,18 +10,20 @@ import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/cn'
 import {
   TAG_IDEAS, addDays, copyText, endOf, entriesToText, iso, parse, periodLabel, shift, splitLines, startOf, todayIso, workLogApi,
-  type WorkEntry, type WorkEntryInput, type WorkPeriod, type WorkReview, type WorkStatus,
+  type WorkEntry, type WorkEntryInput, type WorkPeriod, type WorkReview, type WorkSearch, type WorkSearchHit, type WorkStatus,
 } from '../../lib/workLogApi'
 import { Chips, DoneCheck, EntryText, NOUN, ReviewBox, ReviewNote, RowActions, errMsg, type EntryActions } from './todo/parts'
 import { TodoBoard } from './todo/TodoBoard'
 import { TeamTodo } from './todo/TeamTodo'
 import { NoteList, NotesModal } from './todo/notes'
+import { TodoSearch } from './todo/TodoSearch'
 
 /**
  * My To-Do (/app/todo). Plan ahead or log what was already done, for any day, week, month or
  * year, past or future. List or board (To do / In progress / Done). Copy everything at once to
  * paste into a report. Team Leads also get a Team view: who logged, who needs help, and a review
- * with a rating and comment for each person.
+ * with a rating and comment for each person. The search box finds a word (an SKU, an order, a
+ * client) on every date it was ever written, and jumps to it.
  */
 
 const TABS: { key: WorkPeriod; label: string }[] = [
@@ -52,6 +54,57 @@ export default function MyTodo() {
   const [editing, setEditing] = useState<WorkEntry | null>(null)
   const [notesFor, setNotesFor] = useState<string | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
+  // Search: what is typed, what was searched, and the entry to light up after jumping to it.
+  const [q, setQ] = useState(() => params.get('q') ?? '')
+  const [found, setFound] = useState<WorkSearch | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchTeam, setSearchTeam] = useState(false)
+  const [flash, setFlash] = useState<string | null>(() => params.get('entry'))
+  const searchRef = useRef<HTMLInputElement>(null)
+  const query = q.trim()
+  const inSearch = query.length >= 2
+
+  // A link into this page while it is open (the app-wide search, a notification) moves it there.
+  const paramKey = params.toString()
+  useEffect(() => {
+    const p = params.get('period') as WorkPeriod
+    if (PERIOD_KEYS.includes(p)) setPeriod(p)
+    const d = params.get('date') ?? ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) setAnchor(d)
+    if (params.get('entry')) { setFlash(params.get('entry')); setQ(''); setMode('mine') }
+    if (params.get('q')) setQ(params.get('q')!)
+  }, [paramKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!inSearch) { setFound(null); return }
+    let live = true
+    setSearching(true)
+    const t = setTimeout(() => {
+      workLogApi.search(query, searchTeam ? { team: true } : { userId: who || undefined })
+        .then((r) => { if (live) setFound(r) })
+        .catch((e) => { if (live) { setFound(null); addToast({ type: 'error', message: errMsg(e, 'Could not search') }) } })
+        .finally(() => { if (live) setSearching(false) })
+    }, 250)
+    return () => { live = false; clearTimeout(t) }
+  }, [query, inSearch, searchTeam, who, addToast])
+
+  // "/" puts the cursor in the search box, like most apps; Escape clears it.
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+      if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey) { e.preventDefault(); searchRef.current?.focus() }
+    }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [])
+
+  /** From a search result to its day, week, month or year, with the item lit up. */
+  function openHit(e: WorkSearchHit) {
+    if (e.userId !== user?.id && e.userId !== who) setWho(e.userId)
+    else if (e.userId === user?.id) setWho('')
+    setMode('mine'); setPeriod(e.period); setAnchor(e.periodStart); setFlash(e.id); setQ('')
+  }
 
   function setLayout(l: 'list' | 'board') { setLayoutState(l); try { localStorage.setItem('todo.layout', l) } catch { /* ignore */ } }
 
@@ -100,6 +153,16 @@ export default function MyTodo() {
   }
   const notesEntry = notesFor ? all.find((e) => e.id === notesFor) ?? null : null
 
+  // Scroll to the item that was opened from search and light it up for a moment.
+  const flashHere = !!flash && here.some((e) => e.id === flash)
+  useEffect(() => {
+    if (!flash || !flashHere || inSearch) return
+    const el = document.querySelector(`[data-entry-id="${CSS.escape(flash)}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const t = setTimeout(() => setFlash(null), 3500)
+    return () => clearTimeout(t)
+  }, [flash, flashHere, inSearch, layout])
+
   async function copyAll() {
     await copyText(entriesToText(`Report, ${periodLabel(period, start)}`, here))
     addToast({ type: 'success', message: `Copied ${here.length} item${here.length === 1 ? '' : 's'}. Paste it anywhere.` })
@@ -141,7 +204,27 @@ export default function MyTodo() {
                 : 'Plan ahead, or log what you already did, for any day, week, month or year. Your Team Lead can see entries that are not private.'}
           </p>
         </div>
-        {isLead && (
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="relative w-full sm:w-[340px] lg:w-[420px]">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+            <input ref={searchRef} type="search" value={q} onChange={(e) => setQ(e.target.value)} maxLength={100}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); e.currentTarget.blur() } }}
+              placeholder={searchTeam ? 'Search the whole team’s to-dos…' : who ? `Search ${whoName ?? 'their'} to-dos…` : 'Search all your to-dos, notes and tags…'}
+              aria-label="Search to-dos on every date" title="Finds it on every day, week, month and year. Press / to search."
+              className="h-9 w-full rounded-btn border border-line bg-card pl-9 pr-16 text-body-sm text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10 [&::-webkit-search-cancel-button]:hidden" />
+            {q ? (
+              <button type="button" onClick={() => { setQ(''); searchRef.current?.focus() }} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Clear search"><X size={15} /></button>
+            ) : (
+              <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-line bg-slate-50 px-1.5 text-[11px] font-semibold text-ink-muted sm:block">/</kbd>
+            )}
+          </div>
+          {isLead && inSearch && (
+            <label className="inline-flex h-9 items-center gap-2 rounded-btn border border-line bg-card px-2.5 text-body-sm font-semibold text-ink">
+              <input type="checkbox" checked={searchTeam} onChange={(e) => setSearchTeam(e.target.checked)} className="h-4 w-4 accent-primary" /> Whole team
+            </label>
+          )}
+        </div>
+        {isLead && !inSearch && (
           <div className="flex flex-wrap items-center gap-2">
             {mode === 'mine' && people.length > 0 && (
               <select value={who} onChange={(e) => setWho(e.target.value)} className="h-9 rounded-btn border border-line bg-card px-2 text-body-sm font-semibold text-ink" aria-label="Whose to-dos">
@@ -158,6 +241,9 @@ export default function MyTodo() {
       </div>
 
       {/* Period tabs and navigator */}
+      {inSearch ? (
+        <TodoSearch data={found} busy={searching} team={searchTeam} onOpen={openHit} onOpenDay={(d) => { setWho(''); setMode('mine'); setPeriod('DAY'); setAnchor(d); setQ('') }} />
+      ) : (<>
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist">
           {TABS.map((t) => (
@@ -209,8 +295,8 @@ export default function MyTodo() {
               )}
               {!readOnly && <AddEntry key={`${period}-${start}`} period={period} date={start} pastPeriod={isPast} tagIdeas={tagIdeas} onAdded={load} />}
               {entries === null ? <p className="py-6 text-center text-body-md text-ink-muted">Loading…</p>
-                : layout === 'board' ? <TodoBoard entries={here} readOnly={readOnly} actions={actions} />
-                  : <EntryList entries={here} readOnly={readOnly} actions={actions}
+                : layout === 'board' ? <TodoBoard entries={here} readOnly={readOnly} actions={actions} flash={flash} />
+                  : <EntryList entries={here} readOnly={readOnly} actions={actions} flash={flash}
                     empty={readOnly ? 'Nothing here.' : isPast ? `Nothing logged for this ${NOUN[period]} yet. Add what was done above.` : `Nothing planned for this ${NOUN[period]} yet.`} />}
             </Card>
 
@@ -235,6 +321,8 @@ export default function MyTodo() {
           )}
         </div>
       )}
+
+      </>)}
 
       {notesEntry && <NotesModal entry={notesEntry} readOnly={readOnly} onClose={() => setNotesFor(null)} onChanged={load} />}
       {editing && <EditEntry entry={editing} tagIdeas={tagIdeas} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
@@ -383,7 +471,7 @@ function EditEntry({ entry, tagIdeas, onClose, onSaved }: { entry: WorkEntry; ta
 
 // ------------------------------------------------------------------ list
 
-function EntryList({ entries, readOnly, empty, actions }: { entries: WorkEntry[]; readOnly: boolean; empty: string; actions: EntryActions }) {
+function EntryList({ entries, readOnly, empty, actions, flash }: { entries: WorkEntry[]; readOnly: boolean; empty: string; actions: EntryActions; flash?: string | null }) {
   if (entries.length === 0) return <p className="py-6 text-center text-body-md text-ink-muted">{empty}</p>
   const groups: { label: string; status: WorkStatus }[] = [{ label: 'In progress', status: 'IN_PROGRESS' }, { label: 'To do', status: 'PLANNED' }, { label: 'Done', status: 'DONE' }]
   return (
@@ -393,7 +481,7 @@ function EntryList({ entries, readOnly, empty, actions }: { entries: WorkEntry[]
           <p className="mb-1 text-label-md uppercase text-ink-muted">{g.label} · {g.rows.length}</p>
           <ul className="divide-y divide-line rounded-btn border border-line">
             {g.rows.map((e) => (
-              <li key={e.id} className={cn('group flex items-start gap-3 px-3 py-2.5', e.blocked && e.status !== 'DONE' && 'bg-danger/5')}>
+              <li key={e.id} data-entry-id={e.id} className={cn('group flex items-start gap-3 px-3 py-2.5 transition-colors duration-700', e.blocked && e.status !== 'DONE' && 'bg-danger/5', flash === e.id && 'bg-yellow-100/80 ring-2 ring-inset ring-yellow-400 dark:bg-yellow-400/10')}>
                 <DoneCheck e={e} readOnly={readOnly} onToggle={() => actions.onStatus(e, e.status === 'DONE' ? 'PLANNED' : 'DONE')} />
                 <div className="min-w-0 flex-1 text-body-md">
                   <EntryText text={e.title} done={e.status === 'DONE'} />
