@@ -130,7 +130,17 @@ describe('Google and Microsoft', () => {
     process.env.MICROSOFT_CLIENT_ID = 'test-ms-id'
     process.env.MICROSOFT_CLIENT_SECRET = 'test-ms-value'
   })
-  afterAll(() => { process.env = env })
+  afterAll(async () => { process.env = env; await prisma.featureFlag.deleteMany({ where: { key: 'social-sign-in' } }) })
+
+  it('coming soon until the owner opens it (even with the keys on the server)', async () => {
+    await prisma.featureFlag.deleteMany({ where: { key: 'social-sign-in' } })
+    await setFlag('social-sign-in', false, 'test')
+    expect((await request(app).get('/api/auth/oauth/providers').expect(200)).body).toEqual({ open: false, providers: [] })
+    await request(app).get('/api/auth/oauth/google/start?intent=signin').expect(404)
+    const back = await request(app).get('/api/auth/oauth/microsoft/callback?code=c&state=x').expect(302)
+    expect(decodeURIComponent(back.headers.location)).toContain('coming soon')
+    await setFlag('social-sign-in', true, 'test')
+  })
 
   async function through(provider: 'google' | 'microsoft', query: string, profile: Record<string, unknown>) {
     const a = request.agent(app)

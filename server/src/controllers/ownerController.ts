@@ -15,6 +15,9 @@ import { AREAS, AREA_KEYS } from '../lib/permissions'
 import { signSupportToken } from '../lib/auth'
 import { walledTables } from '../scripts/companyWallsSql'
 import { errorBrief } from '../lib/health/report'
+import { sellerDetails, sellerSchema, saveSeller } from '../lib/platform/settings'
+import { PROVIDERS, activeProvider } from '../lib/billing/providers'
+import { PROVIDERS as OAUTH_PROVIDERS } from '../lib/oauth'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -533,4 +536,25 @@ export async function ownerErrorState(req: OwnerRequest, res: Response): Promise
   await prisma.errorGroup.update({ where: { id: g.id }, data: { state: p.data.state, resolvedAt: resolved ? new Date() : null, resolvedById: null } })
   await audit(req, req.owner!.id, 'ERROR_STATE', { target: g.message.slice(0, 120), detail: { id: g.id, state: p.data.state } })
   res.json({ ok: true })
+}
+
+// ------------------------------------------------------------------ settings (seller, payments, sign-in)
+
+/** GET /api/owner/settings — seller details for invoices, and whether payments and Google/Microsoft are ready. */
+export async function ownerSettings(_req: OwnerRequest, res: Response): Promise<void> {
+  const provider = activeProvider()
+  res.json({
+    seller: await sellerDetails(),
+    payments: { provider: provider?.key ?? null, label: provider?.label ?? null, test: provider?.key === 'test', configured: { stripe: PROVIDERS.stripe.configured(), paddle: PROVIDERS.paddle.configured() } },
+    signIn: { open: await isOn('social-sign-in'), google: OAUTH_PROVIDERS.google.configured(), microsoft: OAUTH_PROVIDERS.microsoft.configured() },
+  })
+}
+
+/** PUT /api/owner/settings/seller { name, address, taxId, email } — printed on every invoice. */
+export async function ownerSaveSeller(req: OwnerRequest, res: Response): Promise<void> {
+  const p = sellerSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Check the details' }); return }
+  await saveSeller(p.data, req.owner!.name)
+  await audit(req, req.owner!.id, 'SELLER_DETAILS', { target: p.data.name })
+  res.json({ seller: await sellerDetails() })
 }

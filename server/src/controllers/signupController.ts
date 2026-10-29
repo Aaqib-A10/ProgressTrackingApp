@@ -87,9 +87,12 @@ export async function companyBySlug(req: Request, res: Response): Promise<void> 
 
 // ------------------------------------------------------------------ Google / Microsoft
 
-/** GET /api/auth/oauth/providers — which buttons to show. */
+const OAUTH_SOON = 'Google and Microsoft sign-in is coming soon. Sign in with your email and password.'
+
+/** GET /api/auth/oauth/providers — which buttons work. Until the owner opens them, both show "coming soon". */
 export async function oauthProviders(_req: Request, res: Response): Promise<void> {
-  res.json({ providers: providerList() })
+  const open = await isOn('social-sign-in')
+  res.json({ open, providers: open ? providerList() : [] })
 }
 
 const isProvider = (p: string): p is ProviderKey => p === 'google' || p === 'microsoft'
@@ -97,7 +100,7 @@ const isProvider = (p: string): p is ProviderKey => p === 'google' || p === 'mic
 /** GET /api/auth/oauth/:provider/start?intent=signin|signup&mode=team|solo&company=… — off to Google / Microsoft. */
 export async function oauthStart(req: Request, res: Response): Promise<void> {
   const provider = String(req.params.provider)
-  if (!isProvider(provider) || !PROVIDERS[provider].configured()) { res.status(404).json({ error: 'Not available' }); return }
+  if (!isProvider(provider) || !PROVIDERS[provider].configured() || !(await isOn('social-sign-in'))) { res.status(404).json({ error: 'Not available' }); return }
   const intent = req.query.intent === 'signup' ? 'signup' : 'signin'
   const mode = req.query.mode === 'solo' ? 'solo' : 'team'
   const company = String(req.query.company ?? '').trim().slice(0, 80)
@@ -113,6 +116,7 @@ export async function oauthCallback(req: Request, res: Response): Promise<void> 
   const provider = String(req.params.provider)
   const fail = (why: string) => res.redirect(`/login?error=${encodeURIComponent(why)}`)
   if (!isProvider(provider) || !PROVIDERS[provider].configured()) { fail('That sign-in is not available.'); return }
+  if (!(await isOn('social-sign-in'))) { fail(OAUTH_SOON); return }
   let st: Record<string, string>
   try { st = verifyOAuthState(String(req.query.state ?? '')) } catch { fail('The sign-in took too long. Try again.'); return }
   const cookieNonce = (req as Request & { cookies?: Record<string, string> }).cookies?.[STATE_COOKIE]

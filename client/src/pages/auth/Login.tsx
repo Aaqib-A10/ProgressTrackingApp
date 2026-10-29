@@ -67,11 +67,6 @@ export default function Login() {
   return (
     <AuthLayout
       headline="The single source of truth for every team."
-      testimonial={{
-        quote: 'Metriq has completely eliminated our manual reporting friction.',
-        name: 'Head of Lead Gen',
-        role: 'Verlex Inc.',
-      }}
     >
       <h1 className="text-headline-lg text-ink">{companyName ? `Sign in to ${companyName}` : 'Welcome back'}</h1>
       <p className="mt-1 text-body-md text-ink-muted">

@@ -241,6 +241,11 @@ export async function applyToLead(callId: string, leadId: string, outcome: Outco
     if (target.always || stage > lead.stage || sameStageForward) {
       data.status = target.status
       data.stage = stage
+      // Like a change made in Metriq: an import that still brings the old CRM status keeps this one.
+      const crmStatus = lead.statusHere ? lead.statusHereFrom : lead.status
+      Object.assign(data, target.status === crmStatus
+        ? { statusHere: null, statusHereFrom: null, statusHereAt: null }
+        : { statusHere: target.status, statusHereFrom: crmStatus, statusHereAt: now })
       data.maxStage = Math.max(lead.maxStage, stage)
       data.statusChangedAt = now
       // A new status means the lead moved on: an old snooze or drop no longer applies.

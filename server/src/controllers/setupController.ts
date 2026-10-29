@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { DateTime } from 'luxon'
 import { Prisma, type DepartmentType, type Role } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { kindFromName } from '../lib/sections'
+import { forgetSections } from '../lib/sectionsOff'
 import type { AuthedRequest } from '../middleware/auth'
 import { hashPassword, signInviteToken } from '../lib/auth'
 import { loadPowers } from '../lib/permissions'
@@ -79,7 +81,7 @@ export const status = wrap(async (req, res) => {
   })
 })
 
-const deptSchema = z.object({ departments: z.array(z.object({ name: z.string().trim().min(2).max(60), type: z.enum(['GENERAL', 'ITAD', 'LEAD_GEN', 'MARKETING', 'ECOMMERCE', 'INVENTORY', 'CSR']).default('GENERAL') })).max(20) })
+const deptSchema = z.object({ departments: z.array(z.object({ name: z.string().trim().min(2).max(60), type: z.enum(['GENERAL', 'ITAD', 'LEAD_GEN', 'MARKETING', 'ECOMMERCE', 'INVENTORY', 'CSR']).optional() })).max(20) })
 
 /** POST /api/setup/departments { departments: [{ name, type }] } — adds the ones that are not there yet; the founder joins the first. */
 export const departments = wrap(async (req, res) => {
@@ -88,9 +90,12 @@ export const departments = wrap(async (req, res) => {
   const have = await prisma.department.findMany({ select: { id: true, name: true, type: true } })
   for (const d of body.departments) {
     if (have.some((h) => h.name.toLowerCase() === d.name.toLowerCase())) continue
-    if (d.type !== 'GENERAL' && have.some((h) => h.type === d.type)) continue
-    have.push(await prisma.department.create({ data: { name: d.name, type: d.type as DepartmentType }, select: { id: true, name: true, type: true } }))
+    // The kind picked (or guessed from the name). Each built-in kind once per company: a second one is General.
+    let type: DepartmentType = (d.type as DepartmentType | undefined) ?? kindFromName(d.name)
+    if (type !== 'GENERAL' && have.some((h) => h.type === type)) type = 'GENERAL'
+    have.push(await prisma.department.create({ data: { name: d.name, type }, select: { id: true, name: true, type: true } }))
   }
+  forgetSections()
   res.json({ departments: have, me: u.id })
 })
 

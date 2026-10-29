@@ -120,7 +120,7 @@ export const ACCESS: Record<string, AccessLine[]> = {
   '/app/admin/activity': [{ roles: LEAD }],
 }
 
-type Who = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'areasOff'>
+type Who = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'areasOff'> & { company?: CurrentUser['company'] }
 
 function lineAllows(line: AccessLine, u: Who): boolean {
   if (line.roles && !line.roles.includes(u.role)) return false

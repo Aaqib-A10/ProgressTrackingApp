@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { IANAZone } from 'luxon'
 import type { DepartmentType, Role } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { KIND_INFO, SECTION_KEYS, sectionsOfKind } from '../lib/sections'
+import { forgetSections } from '../lib/sectionsOff'
 import type { AuthedRequest } from '../middleware/auth'
 import { HOME_COMPANY_ID } from '../lib/company'
 import { forgetTimeZone } from '../lib/tenancy'
@@ -84,21 +86,39 @@ export async function updateCompany(req: AuthedRequest, res: Response): Promise<
 async function departmentList() {
   const rows = await prisma.department.findMany({
     orderBy: { createdAt: 'asc' },
-    select: { id: true, name: true, type: true, createdAt: true, _count: { select: { users: true, userMemberships: true } } },
+    select: { id: true, name: true, type: true, sectionsOff: true, createdAt: true, _count: { select: { users: true, userMemberships: true } } },
   })
-  return rows.map((d) => ({ id: d.id, name: d.name, type: d.type, kind: DEPARTMENT_KINDS.find((k) => k.type === d.type)?.label ?? d.type, people: Math.max(d._count.users, d._count.userMemberships), createdAt: d.createdAt }))
+  return rows.map((d) => ({
+    id: d.id, name: d.name, type: d.type, kind: DEPARTMENT_KINDS.find((k) => k.type === d.type)?.label ?? d.type, people: Math.max(d._count.users, d._count.userMemberships), createdAt: d.createdAt,
+    sectionsOff: d.sectionsOff.filter((k) => SECTION_KEYS.includes(k)),
+  }))
+}
+
+/** Each kind with what it is for and its sections (for the add form and the sections panel). */
+function kindsWithSections() {
+  return DEPARTMENT_KINDS.map((k) => ({ ...k, sections: sectionsOfKind(k.type).map((s) => ({ key: s.key, label: s.label, description: s.description })) }))
 }
 
 /** GET /api/company/departments */
 export async function listDepartments(req: AuthedRequest, res: Response): Promise<void> {
   await me(req)
-  res.json({ departments: await departmentList(), kinds: DEPARTMENT_KINDS })
+  res.json({ departments: await departmentList(), kinds: kindsWithSections() })
 }
 
 const deptSchema = z.object({
   name: z.string().trim().min(2, 'Give the department a name').max(60),
   type: z.enum(DEPARTMENT_KINDS.map((k) => k.type) as [DepartmentType, ...DepartmentType[]]).default('GENERAL'),
+  /** Sections of the kind to leave off from the start (all on when left out). */
+  sectionsOff: z.array(z.string().max(40)).max(40).optional(),
 })
+
+/** Only sections of the department's own kind can be turned off. */
+function checkSections(kind: DepartmentType, off: string[]): string[] {
+  const mine = sectionsOfKind(kind).map((s) => s.key)
+  const bad = off.find((k) => !mine.includes(k))
+  if (bad) throw new Refused(400, `"${bad}" is not a section of a ${KIND_INFO[kind].label} department.`)
+  return [...new Set(off)]
+}
 
 async function nameTaken(name: string, exceptId?: string) {
   return !!(await prisma.department.findFirst({ where: { name: { equals: name, mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) }, select: { id: true } }))
@@ -113,7 +133,8 @@ export async function createDepartment(req: AuthedRequest, res: Response): Promi
     if (body.type !== 'GENERAL' && (await prisma.department.findFirst({ where: { type: body.type }, select: { id: true } }))) {
       throw new Refused(409, `You already have a ${DEPARTMENT_KINDS.find((k) => k.type === body.type)!.label} department. Make a General one, or rename the one you have.`)
     }
-    await prisma.department.create({ data: { name: body.name, type: body.type } })
+    await prisma.department.create({ data: { name: body.name, type: body.type, sectionsOff: checkSections(body.type, body.sectionsOff ?? []) } })
+    forgetSections()
     res.status(201).json({ departments: await departmentList() })
   } catch (e) { send(res, e) }
 }
@@ -127,6 +148,22 @@ export async function renameDepartment(req: AuthedRequest, res: Response): Promi
     if (!d) throw new Refused(404, 'Department not found')
     if (await nameTaken(name, d.id)) throw new Refused(409, 'There is already a department with that name.')
     await prisma.department.update({ where: { id: d.id }, data: { name } })
+    res.json({ departments: await departmentList() })
+  } catch (e) { send(res, e) }
+}
+
+/**
+ * PATCH /api/company/departments/:id/sections { sectionsOff } — turn screens of the department's
+ * kind on or off. Off: hidden, and nothing new is saved there; everything already there is kept.
+ */
+export async function setDepartmentSections(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    await settingsUser(req)
+    const { sectionsOff } = z.object({ sectionsOff: z.array(z.string().max(40)).max(40) }).parse(req.body)
+    const d = await prisma.department.findUnique({ where: { id: req.params.id }, select: { id: true, type: true } })
+    if (!d) throw new Refused(404, 'Department not found')
+    await prisma.department.update({ where: { id: d.id }, data: { sectionsOff: checkSections(d.type, sectionsOff) } })
+    forgetSections()
     res.json({ departments: await departmentList() })
   } catch (e) { send(res, e) }
 }

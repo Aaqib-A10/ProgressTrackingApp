@@ -55,11 +55,6 @@ export default function Signup() {
     return (
       <AuthLayout
         headline="One platform for every team's progress."
-        testimonial={{
-          quote: 'Metriq transformed how we manage our outbound teams. High visibility, zero friction.',
-          name: 'Alex Rivera',
-          role: 'TechGen',
-        }}
       >
         <div className="flex flex-col items-center text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/10 text-success">
@@ -81,11 +76,6 @@ export default function Signup() {
   return (
     <AuthLayout
       headline="One platform for every team's progress."
-      testimonial={{
-        quote: 'Metriq transformed how we manage our outbound teams. High visibility, zero friction.',
-        name: 'Alex Rivera',
-        role: 'TechGen',
-      }}
     >
       <h1 className="text-headline-lg text-ink">Register as a Team Lead</h1>
       <p className="mt-1 text-body-md text-ink-muted">

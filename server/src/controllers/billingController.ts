@@ -7,6 +7,7 @@ import { loadPowers } from '../lib/permissions'
 import { PLANS, planOf, type PlanKey } from '../lib/plans'
 import { appUrl } from '../lib/mail'
 import { activeProvider, PROVIDERS, type Interval, type ProviderKey } from '../lib/billing/providers'
+import { sellerDetails } from '../lib/platform/settings'
 import { SELLABLE, applyMessage, billingState, cannotFit, priceCents, testPayment } from '../lib/billing/billing'
 
 /**
@@ -65,7 +66,7 @@ export const checkout = wrap(async (req, res) => {
   const fit = await cannotFit(company.id, body.plan)
   if (fit) throw new Refused(409, fit)
   const provider = activeProvider()
-  if (!provider) throw new Refused(409, 'Payments are being set up. Write to us from the Help button and we will set your plan.')
+  if (!provider) throw new Refused(409, 'Online payment is coming soon. Until then your trial keeps everything on; write to us from the Help button if you want a plan set by hand.')
   const sub = company.subscription
   if (sub && sub.status !== 'CANCELED') { await change(company.id, sub, body.plan, body.interval); res.json({ changed: true }); return }
   const r = await provider.checkout({ companyId: company.id, companyName: company.name, email: u.email, plan: body.plan, interval: body.interval, returnUrl: `${appUrl()}/app/billing`, customerId: sub?.customerId ?? null })
@@ -76,7 +77,7 @@ async function change(companyId: string, sub: { id: string; provider: string; ex
   if (sub.plan === plan && sub.interval === interval) return
   const p = PROVIDERS[sub.provider as ProviderKey]
   if (sub.provider !== 'test') {
-    if (!p?.configured() || !sub.externalId) throw new Refused(409, 'Payments are being set up. Write to us from the Help button.')
+    if (!p?.configured() || !sub.externalId) throw new Refused(409, 'Online payment is coming soon. Write to us from the Help button.')
     await p.changePlan(sub.externalId, plan, interval)
   } else {
     await testPayment(companyId, plan, interval)
@@ -103,7 +104,7 @@ export const cancel = wrap(async (req, res) => {
   const { company } = await payer(req)
   const sub = company.subscription
   if (!sub || sub.status === 'CANCELED') throw new Refused(409, 'There is no plan to cancel.')
-  if (sub.provider !== 'test') { const p = PROVIDERS[sub.provider as ProviderKey]; if (!p?.configured() || !sub.externalId) throw new Refused(409, 'Payments are being set up.'); await p.cancel(sub.externalId, true) }
+  if (sub.provider !== 'test') { const p = PROVIDERS[sub.provider as ProviderKey]; if (!p?.configured() || !sub.externalId) throw new Refused(409, 'Online payment is coming soon.'); await p.cancel(sub.externalId, true) }
   await prisma.subscription.update({ where: { id: sub.id }, data: { cancelAtPeriodEnd: true } })
   res.json({ ok: true, endsAt: sub.currentPeriodEnd })
 })
@@ -147,7 +148,7 @@ export const invoice = wrap(async (req, res) => {
   res.json({
     invoice: { ...i, planLabel: planOf(i.plan).label, subtotalCents: i.amountCents - i.taxCents },
     billedTo: { company: company.name, name: admin?.name ?? null, email: admin?.email ?? null },
-    seller: { name: process.env.BILLING_SELLER_NAME || 'Metriq', address: process.env.BILLING_SELLER_ADDRESS || null, taxId: process.env.BILLING_SELLER_TAX_ID || null },
+    seller: await sellerDetails().then(({ fromConsole: _f, ...s }) => s),
     priceNow: priceCents(i.plan, i.interval as Interval),
   })
 })

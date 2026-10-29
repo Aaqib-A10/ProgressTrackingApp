@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers, SlidersHorizontal } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
@@ -12,6 +12,7 @@ import { ROLE_LABEL, type Department, type Role } from '../../../lib/types'
 import {
   companyApi, type CompanyInfo, type CompanyUsage, type CompanyDepartment, type DepartmentKind, type RolesData, type CompanyRoleRow, type CompanyPerson,
 } from '../../../lib/companyApi'
+import { kindFromName } from '../../../lib/sections'
 
 /**
  * Company settings (Phase 1, step 4): the company's name and time zone, its departments, its
@@ -150,64 +151,141 @@ function Use({ label, used, limit, pct }: { label: string; used: string; limit: 
 
 function DepartmentsTab() {
   const { addToast } = useToast()
+  const { refresh } = useAuth()
   const [list, setList] = useState<CompanyDepartment[] | null>(null)
   const [kinds, setKinds] = useState<DepartmentKind[]>([])
   const [name, setName] = useState('')
   const [type, setType] = useState<Department>('GENERAL')
+  const [typePicked, setTypePicked] = useState(false)
+  const [startOff, setStartOff] = useState<string[]>([])
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => { companyApi.departments().then((r) => { setList(r.departments); setKinds(r.kinds) }).catch(() => addToast({ type: 'error', message: 'Could not load departments.' })) }, [addToast])
 
   async function run(p: Promise<{ departments: CompanyDepartment[] }>, ok: string) {
     setBusy(true)
-    try { setList((await p).departments); addToast({ type: 'success', message: ok }); return true }
+    try { setList((await p).departments); addToast({ type: 'success', message: ok }); void refresh?.(); return true }
     catch (err) { addToast({ type: 'error', message: errMsg(err, 'Something went wrong.') }); return false }
     finally { setBusy(false) }
   }
   const taken = new Set((list ?? []).filter((d) => d.type !== 'GENERAL').map((d) => d.type))
-  const kind = kinds.find((k) => k.type === type)
+  const kindOf = (t: Department) => kinds.find((k) => k.type === t)
+  // While someone types the name, guess the kind ("Lead generation" → Lead Generation) until they pick one.
+  const onName = (v: string) => {
+    setName(v)
+    if (!typePicked) { const g = kindFromName(v); setType(taken.has(g) ? 'GENERAL' : g); setStartOff([]) }
+  }
+  const pickType = (t: Department) => { setType(t); setTypePicked(true); setStartOff([]) }
+  const kind = kindOf(type)
+  const choosable = kinds.filter((k) => k.type !== 'TALKLOOP')
 
   return (
     <div className="space-y-5">
-      <Card title="Departments" subtitle="People belong to a department; built-in kinds come with their own screens." flush>
+      <Card title="Departments" subtitle="People belong to a department. Each kind comes with its own screens; turn the ones a team does not use off." flush>
         {!list ? <p className="px-5 py-4 text-body-md text-ink-muted">Loading…</p> : list.length === 0 ? <p className="px-5 py-4 text-body-md text-ink-muted">No departments yet. Add your first one below.</p> : (
           <ul className="divide-y divide-line">
-            {list.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-                {editing?.id === d.id ? (
-                  <form className="flex min-w-0 flex-1 items-center gap-2" onSubmit={async (e) => { e.preventDefault(); if (await run(companyApi.renameDepartment(d.id, editing.name.trim()), 'Renamed.')) setEditing(null) }}>
-                    <input autoFocus className={inputCls + ' !h-9'} value={editing.name} onChange={(e) => setEditing({ id: d.id, name: e.target.value })} maxLength={60} />
-                    <Button size="sm" type="submit" disabled={busy || editing.name.trim().length < 2} aria-label="Save name"><Check size={15} /></Button>
-                    <Button size="sm" variant="ghost" type="button" onClick={() => setEditing(null)} aria-label="Cancel"><X size={15} /></Button>
-                  </form>
-                ) : (
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-body-md font-semibold text-ink">{d.name}</p>
-                    <p className="text-body-sm text-ink-muted">{d.kind} · {d.people === 1 ? '1 person' : `${d.people} people`}</p>
+            {list.map((d) => {
+              const k = kindOf(d.type)
+              const sections = k?.sections ?? []
+              const on = sections.filter((x) => !d.sectionsOff.includes(x.key)).length
+              return (
+                <li key={d.id} className="px-5 py-3.5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {editing?.id === d.id ? (
+                      <form className="flex min-w-0 flex-1 items-center gap-2" onSubmit={async (e) => { e.preventDefault(); if (await run(companyApi.renameDepartment(d.id, editing.name.trim()), 'Renamed.')) setEditing(null) }}>
+                        <input autoFocus className={inputCls + ' !h-9'} value={editing.name} onChange={(e) => setEditing({ id: d.id, name: e.target.value })} maxLength={60} />
+                        <Button size="sm" type="submit" disabled={busy || editing.name.trim().length < 2} aria-label="Save name"><Check size={15} /></Button>
+                        <Button size="sm" variant="ghost" type="button" onClick={() => setEditing(null)} aria-label="Cancel"><X size={15} /></Button>
+                      </form>
+                    ) : (
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-body-md font-semibold text-ink">{d.name}</p>
+                        <p className="text-body-sm text-ink-muted">{d.kind} · {d.people === 1 ? '1 person' : `${d.people} people`}{sections.length ? ` · ${on} of ${sections.length} sections on` : ''}</p>
+                      </div>
+                    )}
+                    {editing?.id !== d.id && (
+                      <div className="flex items-center gap-1">
+                        {sections.length > 0 && <Button size="sm" variant={open === d.id ? 'secondary' : 'ghost'} leadingIcon={<SlidersHorizontal size={15} />} onClick={() => setOpen(open === d.id ? null : d.id)}>Sections</Button>}
+                        <Button size="sm" variant="ghost" onClick={() => setEditing({ id: d.id, name: d.name })} aria-label={`Rename ${d.name}`}><Pencil size={15} /></Button>
+                        <Button size="sm" variant="ghost" disabled={busy || d.people > 0} title={d.people > 0 ? 'Move its people to another department first' : 'Remove'} onClick={() => run(companyApi.removeDepartment(d.id), `${d.name} removed.`)} aria-label={`Remove ${d.name}`}><Trash2 size={15} /></Button>
+                      </div>
+                    )}
                   </div>
-                )}
-                {editing?.id !== d.id && (
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing({ id: d.id, name: d.name })} aria-label={`Rename ${d.name}`}><Pencil size={15} /></Button>
-                    <Button size="sm" variant="ghost" disabled={busy || d.people > 0} title={d.people > 0 ? 'Move its people to another department first' : 'Remove'} onClick={() => run(companyApi.removeDepartment(d.id), `${d.name} removed.`)} aria-label={`Remove ${d.name}`}><Trash2 size={15} /></Button>
-                  </div>
-                )}
-              </li>
-            ))}
+                  {open === d.id && k && (
+                    <div className="mt-3 rounded-card border border-line bg-slate-50/60 p-4">
+                      <p className="mb-3 text-body-sm text-ink-muted">What {d.name} uses. A section that is off is hidden and takes no new entries; what is already there is kept and comes back when you turn it on.</p>
+                      <ul className="grid gap-2 md:grid-cols-2">
+                        {sections.map((x) => {
+                          const isOn = !d.sectionsOff.includes(x.key)
+                          return (
+                            <li key={x.key} className="flex items-start gap-3 rounded-btn border border-line bg-card px-3 py-2.5">
+                              <div className="min-w-0 flex-1"><p className="text-body-md font-medium text-ink">{x.label}</p><p className="text-body-sm text-ink-muted">{x.description}</p></div>
+                              <Toggle checked={isOn} disabled={busy} label={`${x.label} for ${d.name}`}
+                                onChange={(v) => run(companyApi.setSections(d.id, v ? d.sectionsOff.filter((y) => y !== x.key) : [...d.sectionsOff, x.key]), `${x.label} ${v ? 'on' : 'off'} for ${d.name}.`)} />
+                            </li>
+                          )
+                        })}
+                      </ul>
+                      <p className="mt-3 text-[12.5px] text-ink-faint">Always there: team view and analytics, and the shared tools (attendance, projects, chat, to-dos). Which daily form this team fills in is set in Daily Report, Report Forms.</p>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </Card>
-      <Card title="Add a department">
-        <form className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end" onSubmit={async (e) => { e.preventDefault(); if (await run(companyApi.addDepartment({ name: name.trim(), type }), `${name.trim()} added.`)) { setName(''); setType('GENERAL') } }}>
-          <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Name</span><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Operations" maxLength={60} /></label>
-          <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Kind</span>
-            <select className={inputCls} value={type} onChange={(e) => setType(e.target.value as Department)}>
-              {kinds.map((k) => <option key={k.type} value={k.type} disabled={taken.has(k.type)}>{k.label}{taken.has(k.type) ? ' (you have one)' : ''}</option>)}
-            </select>
-          </label>
-          <Button type="submit" leadingIcon={<Plus size={16} />} disabled={busy || name.trim().length < 2}>Add</Button>
-          {kind && <p className="text-body-sm text-ink-muted sm:col-span-3">{kind.description}</p>}
+
+      <Card title="Add a department" subtitle="Name it, then pick what kind of work it does. The kind gives it its screens.">
+        <form className="space-y-4" onSubmit={async (e) => { e.preventDefault(); if (await run(companyApi.addDepartment({ name: name.trim(), type, sectionsOff: startOff }), `${name.trim()} added.`)) { setName(''); setType('GENERAL'); setTypePicked(false); setStartOff([]) } }}>
+          <label className="block max-w-md"><span className="mb-1 block text-body-sm font-semibold text-ink">Name</span><input className={inputCls} value={name} onChange={(e) => onName(e.target.value)} placeholder="e.g. Lead generation" maxLength={60} /></label>
+          <div>
+            <span className="mb-1.5 block text-body-sm font-semibold text-ink">Kind of work</span>
+            <div role="radiogroup" aria-label="Kind of work" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {choosable.map((k) => {
+                const used = taken.has(k.type)
+                return (
+                  <button key={k.type} type="button" role="radio" aria-checked={type === k.type} disabled={used} onClick={() => pickType(k.type)}
+                    className={cn('relative rounded-card border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50', type === k.type ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'border-line bg-card hover:border-primary/40')}>
+                    {type === k.type && <Check size={14} className="absolute right-2.5 top-2.5 text-primary" />}
+                    <span className="block pr-5 text-body-md font-semibold text-ink">{k.label}</span>
+                    <span className="mt-0.5 block text-body-sm text-ink-muted">{used ? 'You have one already. Make a General department, or rename the one you have.' : k.description}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          {kind && kind.sections.length > 0 && (
+            <div>
+              <span className="mb-1.5 block text-body-sm font-semibold text-ink">Sections to start with</span>
+              <div className="flex flex-wrap gap-2">
+                {kind.sections.map((x) => {
+                  const isOn = !startOff.includes(x.key)
+                  return (
+                    <button key={x.key} type="button" aria-pressed={isOn} title={x.description} onClick={() => setStartOff(isOn ? [...startOff, x.key] : startOff.filter((y) => y !== x.key))}
+                      className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm', isOn ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
+                      {isOn && <Check size={13} />}{x.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-1.5 text-body-sm text-ink-muted">You can change these any time with Sections.</p>
+            </div>
+          )}
+          <Button type="submit" leadingIcon={<Plus size={16} />} disabled={busy || name.trim().length < 2}>Add department</Button>
         </form>
+      </Card>
+
+      <Card title="How departments work">
+        <ul className="grid gap-x-8 gap-y-2 text-body-sm text-ink-muted md:grid-cols-2">
+          <li>• The kind is chosen when a department is made and does not change. A team that works differently gets a new department; move its people across in People.</li>
+          <li>• Make as many General departments as you need; each other kind once, since its screens are shared by that one team.</li>
+          <li>• Turning a section off hides it and stops new entries. Nothing is deleted, and turning it back on brings everything back.</li>
+          <li>• A department can be removed only when nobody is in it and it holds no records.</li>
+          <li>• Team views, analytics and the shared tools are always there.</li>
+          <li>• Only people with the Company settings power change departments and sections.</li>
+        </ul>
       </Card>
     </div>
   )

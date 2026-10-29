@@ -5,7 +5,7 @@ import express from 'express'
 import { asyncHandler } from '../lib/asyncHandler'
 import { createIntegration, dialerHook, getIntegration, linkCall, revokeIntegration, searchLeads, testIntegration, updateIntegration } from '../controllers/dialerIntegrationController'
 import { dialerHookLimiter } from '../middleware/rateLimit'
-import { importLeads, dialerData, importHistory, leadDetail, leadAction, fixLead, getSettings, putSettings, listDuplicates, resolveDuplicate, addNote, updateNote, listNotes, followUpBulk, getPrefs, putPrefs, importChanges, bulkFill } from '../controllers/dialerController'
+import { importLeads, dialerData, importHistory, leadDetail, leadAction, fixLead, changeStatus, getSettings, putSettings, listDuplicates, resolveDuplicate, addNote, updateNote, listNotes, followUpBulk, getPrefs, putPrefs, importChanges, bulkFill } from '../controllers/dialerController'
 
 /** Lead Dialer (ITAD only; Super Admins too). Each rep sees only their own leads. */
 export const dialerRouter = Router()
@@ -17,6 +17,7 @@ dialerRouter.get('/imports', asyncHandler(importHistory))
 dialerRouter.get('/leads/:id', asyncHandler(leadDetail))
 dialerRouter.post('/leads/:id/actions', asyncHandler(leadAction))
 dialerRouter.patch('/leads/:id', asyncHandler(fixLead))
+dialerRouter.post('/leads/:id/status', asyncHandler(changeStatus))
 dialerRouter.get('/settings', asyncHandler(getSettings))
 dialerRouter.put('/settings', asyncHandler(putSettings))
 dialerRouter.get('/duplicates', asyncHandler(listDuplicates))

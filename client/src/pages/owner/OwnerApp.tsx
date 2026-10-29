@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, useLocation, useNavigate, useParams, useRoutes } from 'react-router-dom'
-import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug, ToggleRight, Copy, Check, RotateCcw, EyeOff } from 'lucide-react'
+import { Building2, LayoutDashboard, LifeBuoy, ScrollText, LogOut, AlertTriangle, ArrowLeft, Search, ExternalLink, Activity, Menu, ChevronDown, Users, UserCheck, Bug, ToggleRight, Copy, Check, RotateCcw, EyeOff, Settings as SettingsIcon, CreditCard, KeyRound, Receipt } from 'lucide-react'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { useToast } from '../../components/ui/Toast'
@@ -12,7 +12,7 @@ import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 import {
   ownerApi, ownerErr, OwnerApiError, STATUS_LABEL, PRIORITY_LABEL,
-  type OwnerCompany, type OwnerHome, type OwnerErrorRow, type OwnerErrorDetail, type ErrorState, type ErrorSource, type OwnerFlag, type CompanyFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
+  type OwnerCompany, type OwnerHome, type OwnerSettings, type OwnerErrorRow, type OwnerErrorDetail, type ErrorState, type ErrorSource, type OwnerFlag, type CompanyFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
 } from '../../lib/ownerApi'
 
 /**
@@ -171,6 +171,7 @@ const NAV = [
   { to: '/owner/errors', label: 'Errors', icon: Bug },
   { to: '/owner/switches', label: 'Switches', icon: ToggleRight },
   { to: '/owner/activity', label: 'Activity log', icon: ScrollText },
+  { to: '/owner/settings', label: 'Settings', icon: SettingsIcon },
 ]
 
 function OwnerShell() {
@@ -196,6 +197,7 @@ function OwnerShell() {
     { path: 'switches', element: <SwitchesPage /> },
     { path: 'switches/:id', element: <CompanySwitchesPage /> },
     { path: 'activity', element: <ActivityPage /> },
+    { path: 'settings', element: <SettingsPage /> },
     { path: '*', element: <Navigate to="/owner" replace /> },
   ])
   if (!checked) return <div className="flex h-screen items-center justify-center bg-bg"><Activity size={26} className="animate-pulse text-primary" /></div>
@@ -1097,6 +1099,70 @@ function ErrorPage() {
           <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap break-words px-5 py-4 font-mono text-[12.5px] leading-5 text-ink">{data.brief}</pre>
         </Panel>
       )}
+    </>
+  )
+}
+
+// ------------------------------------------------------------------ settings
+
+/** Seller details on invoices, and where payments and Google / Microsoft sign-in stand. */
+function SettingsPage() {
+  const { addToast } = useToast()
+  const { data, error, setData } = useLoad<OwnerSettings>(() => ownerApi.settings())
+  const [f, setF] = useState({ name: '', address: '', taxId: '', email: '' })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (data) setF({ name: data.seller.fromConsole ? data.seller.name : '', address: data.seller.address ?? '', taxId: data.seller.taxId ?? '', email: data.seller.email ?? '' })
+  }, [data])
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    try { const r = await ownerApi.saveSeller(f); if (data) setData({ ...data, seller: r.seller }); addToast({ type: 'success', message: 'Saved. New and old invoices now show these details.' }) }
+    catch (err) { addToast({ type: 'error', message: ownerErr(err) }) } finally { setBusy(false) }
+  }
+  if (!data) return <Loading error={error} />
+  const pay = data.payments
+  const row = (icon: ReactNode, title: string, state: ReactNode, text: ReactNode) => (
+    <li className="flex items-start gap-3 px-5 py-4">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">{icon}</span>
+      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-body-md font-semibold text-ink">{title}</p>{state}</div><p className="mt-0.5 text-body-sm text-ink-muted">{text}</p></div>
+    </li>
+  )
+  return (
+    <>
+      <Title sub="What every company sees on its invoices, and where payments and sign-in stand.">Settings</Title>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Panel>
+          <PanelHead title="Seller details on invoices" />
+          <form onSubmit={save} className="space-y-3.5 px-5 py-4">
+            <p className="text-body-sm text-ink-muted">The business that sells Metriq. Printed at the top of every invoice. {data.seller.fromConsole ? '' : <>Not set yet: invoices show <b>{data.seller.name}</b>.</>}</p>
+            <TextField label="Business name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. 99 Technologies (Private) Limited" />
+            <div>
+              <label className="mb-1 block text-body-sm font-semibold text-ink" htmlFor="seller-address">Address</label>
+              <textarea id="seller-address" value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} rows={3} maxLength={400} className={cn(inputCls, 'h-auto py-2')} placeholder={'Street\nCity, Country'} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField label="Tax ID (NTN / VAT / EIN)" value={f.taxId} onChange={(e) => setF({ ...f, taxId: e.target.value })} />
+              <TextField label="Billing email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="billing@…" />
+            </div>
+            <Button type="submit" disabled={busy || f.name.trim().length < 2}>{busy ? 'Saving…' : 'Save'}</Button>
+          </form>
+        </Panel>
+        <Panel>
+          <PanelHead title="Payments and sign-in" />
+          <ul className="divide-y divide-line">
+            {row(<CreditCard size={16} />, 'Online payments',
+              pay.provider && !pay.test ? <Badge tone="success">Live: {pay.label}</Badge> : pay.test ? <Badge tone="warning">Test payments</Badge> : <Badge tone="neutral">Coming soon</Badge>,
+              pay.provider && !pay.test ? 'Companies choose a plan and pay in Billing.' : pay.test ? 'Test payments (this computer only): "Pay (test)" goes through without a card, to try billing. The live server shows "Online payment coming soon" until Stripe or Paddle keys are added.' : <>Companies see "Online payment coming soon" in Billing, and a trial that ends does not stop anyone until payments are live. To go live, add the Stripe or Paddle keys to the server's .env (never in the code) and restart.</>)}
+            {row(<KeyRound size={16} />, 'Google and Microsoft sign-in',
+              data.signIn.open ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Coming soon</Badge>,
+              <>Keys on the server: Google {data.signIn.google ? 'yes' : 'no'}, Microsoft {data.signIn.microsoft ? 'yes' : 'no'}. The buttons show "coming soon" until you turn on "Sign in with Google and Microsoft" in <Link to="/owner/switches" className="font-semibold text-primary hover:underline">Switches</Link>.</>)}
+            {row(<Receipt size={16} />, 'Invoices',
+              <Badge tone={data.seller.fromConsole ? 'success' : 'warning'}>{data.seller.fromConsole ? 'Seller set' : 'Seller not set'}</Badge>,
+              'Invoices are numbered and kept for every payment. Companies open and print them from Billing.')}
+          </ul>
+        </Panel>
+      </div>
     </>
   )
 }

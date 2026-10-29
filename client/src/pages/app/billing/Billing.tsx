@@ -114,14 +114,19 @@ export default function Billing() {
                     <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />Daily reports, attendance, projects, chat and calls</li>
                     {p.partsLeftOut.length > 0 && <li className="text-body-sm text-ink-muted">Not included: {p.partsLeftOut.map((k) => PART_LABEL[k] ?? k).join(', ')}</li>}
                   </ul>
-                  <Button className="mt-5 w-full" variant={isCurrent ? 'secondary' : 'primary'} disabled={isCurrent || !!busy || !data.provider} onClick={() => choose(p.key)}>
-                    {isCurrent ? 'Your plan' : busy === p.key ? 'One moment…' : current ? `Switch to ${p.label}` : `Choose ${p.label}`}
+                  <Button className="mt-5 w-full" variant={isCurrent || !data.provider ? 'secondary' : 'primary'} disabled={isCurrent || !!busy || !data.provider} onClick={() => choose(p.key)}>
+                    {isCurrent ? 'Your plan' : !data.provider ? 'Online payment coming soon' : busy === p.key ? 'One moment…' : current ? `Switch to ${p.label}` : `Choose ${p.label}`}
                   </Button>
                 </Card>
               )
             })}
           </div>
-          {!data.provider && <p className="text-body-sm text-ink-muted">Payments are being set up. Write to us from the Help button and we will set your plan by hand.</p>}
+          {!data.provider && (
+            <div className="flex flex-wrap items-center gap-3 rounded-card border border-primary/20 bg-primary/5 px-4 py-3 text-body-md text-ink">
+              <Sparkles size={18} className="shrink-0 text-primary" />
+              <span className="flex-1"><b>Online payment is coming soon.</b> Until then your trial keeps everything on, even after its last day. Want a plan set up now? Write to us from the Help button.</span>
+            </div>
+          )}
           <p className="text-body-sm text-ink-muted">Prices are in US dollars; tax is added at checkout where it applies. Changing plan in the middle of a period is worked out to the day.</p>
         </>
       )}
@@ -150,13 +155,15 @@ export default function Billing() {
 
 function StateBanner({ data, onPortal }: { data: BillingOverview; onPortal: () => void }) {
   const s = data.state
+  const soon = !data.provider
   const days = data.company.trialEndsAt ? Math.ceil((new Date(data.company.trialEndsAt).getTime() - Date.now()) / 86400_000) : null
   const box = (tone: string, text: string, action?: ReactNode) => (
     <div className={cn('flex flex-wrap items-center gap-3 rounded-card border px-4 py-3 text-body-md', tone)}>
       <AlertTriangle size={18} className="shrink-0" /><span className="flex-1">{text}</span>{action}
     </div>
   )
-  if (s === 'trial') return box('border-primary/20 bg-primary/5 text-ink', `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on. Choose a plan any time; nothing stops when you do.`)
+  if (s === 'trial') return box('border-primary/20 bg-primary/5 text-ink', soon ? `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on.` : `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on. Choose a plan any time; nothing stops when you do.`)
+  if (s === 'trial_ended' && soon) return box('border-primary/20 bg-primary/5 text-ink', 'Your free trial has ended. Online payment is coming soon; until then everything keeps working as it is.')
   if (s === 'trial_ended') return box('border-danger/30 bg-danger/5 text-danger', 'Your free trial has ended. Everything is still there and can be looked at; choose a plan to keep adding to it.')
   if (s === 'past_due') return box('border-warning/40 bg-warning/10 text-ink', 'Your last payment did not go through. Please update your card within 7 days; after that Metriq becomes read-only until it is paid.', data.subscription?.hasPortal ? <Button size="sm" onClick={onPortal}>Update card</Button> : undefined)
   if (s === 'locked') return box('border-danger/30 bg-danger/5 text-danger', 'Your payment has not gone through for 7 days, so Metriq is read-only. Pay to open it again; nothing has been lost.', data.subscription?.hasPortal ? <Button size="sm" onClick={onPortal}>Update card</Button> : undefined)

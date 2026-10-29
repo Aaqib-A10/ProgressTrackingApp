@@ -15,8 +15,9 @@ import { downloadNotes } from './exports'
  * (Call now, Call later, Snooze, Log note) and arrows to the next lead.
  *
  * Fields from Earthzone (the CRM) are read-only: the next import refreshes them. Fields added
- * here are kept by the dialer and never touched by an import; the state is the one CRM field a
- * rep can correct here.
+ * here are kept by the dialer and never touched by an import. A rep can correct the state, and
+ * change the status: an import that still brings the old status keeps the one set here until
+ * Earthzone shows it.
  */
 
 const KIND_LABEL: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups' }
@@ -148,6 +149,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
 
               <Group name="status" title="Status">
                 <div className="flex flex-wrap items-center gap-2 py-1"><StatusPill lead={l} /><span className="text-ink-muted">{daysInStatus(l, now)} days in this status</span></div>
+                <StatusChanger lead={l} statusHere={d.lead.statusHere ?? null} statusHereFrom={d.lead.statusHereFrom ?? null} settings={settings} onDone={changed} />
                 {(l.snoozeUntil && new Date(l.snoozeUntil) > now) && <p className="py-0.5 text-ink">Snoozed until {new Date(l.snoozeUntil).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
                 {l.callLaterAt && <p className="py-0.5 text-ink">Call back {new Date(l.callLaterAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
                 {l.followUpDropped && <p className="py-0.5 text-ink-muted">Dropped from follow-ups until the status changes. <button type="button" className="font-semibold text-primary" onClick={() => dialerApi.followUpBulk([l.id], 'UNDROP').then(changed)}>Undo</button></p>}
@@ -158,7 +160,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
                     <li key={c.id} className="flex items-center gap-1.5">
                       {i > 0 && <span className="text-ink-muted">→</span>}
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-ink">{c.toStatus}</span>
-                      <span className="text-[11px] text-ink-muted">{shortDate(c.createdAt)}</span>
+                      <span className="text-[11px] text-ink-muted">{shortDate(c.createdAt)}{!c.importId && c.fromStatus ? ` · ${c.byName ?? 'dialer'}` : ''}</span>
                     </li>
                   ))}
                 </ol>
@@ -350,7 +352,7 @@ function NotesGroup({ lead, notes, meId, settings, focusKey, onChanged }: { lead
 function Timeline({ d, createdAt }: { d: LeadDetail; createdAt: string }) {
   type Item = { at: string; what: string; detail?: string | null; who?: string }
   const items: Item[] = [
-    ...d.changes.map((c) => ({ at: c.createdAt, what: c.fromStatus ? `Status ${c.fromStatus} → ${c.toStatus}` : `First imported as ${c.toStatus}`, who: 'Import' })),
+    ...d.changes.map((c) => ({ at: c.createdAt, what: c.fromStatus ? `Status ${c.fromStatus} → ${c.toStatus}` : `First imported as ${c.toStatus}`, who: c.importId ? 'Import' : c.byName ? `${c.byName}, in Metriq` : 'Predictive dialer' })),
     ...d.actions.map((a) => ({ at: a.createdAt, what: KIND_LABEL[a.kind] ?? a.kind, detail: [a.at ? `for ${fmt(a.at)}` : null, a.note].filter(Boolean).join(' · ') || null, who: a.user.name })),
     ...d.notes.map((n) => ({ at: n.createdAt, what: 'Note', detail: n.text.length > 140 ? `${n.text.slice(0, 139)}…` : n.text, who: n.author })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1))
@@ -367,5 +369,55 @@ function Timeline({ d, createdAt }: { d: LeadDetail; createdAt: string }) {
         </li>
       ))}
     </ol>
+  )
+}
+
+/**
+ * Change the status here. The stage follows. Until Earthzone shows the new status, imports that
+ * still bring the old one keep this one; the lead is marked "Update Earthzone".
+ */
+function StatusChanger({ lead, statusHere, statusHereFrom, settings, onDone }: { lead: DialerLead; statusHere: string | null; statusHereFrom: string | null; settings: DialerSettings; onDone: () => void }) {
+  const { addToast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [status, setStatus] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const STAGE = ['', '1 · New / assigned', '2 · Attempted', '3 · Connected', '4 · Positive']
+  const byStage = [1, 2, 3, 4].map((st) => ({ st, list: Object.entries(settings.stageMap).filter(([, v]) => v === st).map(([k]) => k).sort((a, b) => a.localeCompare(b)) }))
+  async function save() {
+    if (!status || status === lead.status) return
+    setBusy(true)
+    try {
+      await dialerApi.setStatus(lead.id, status, note.trim() || undefined)
+      addToast({ type: 'success', message: `Status changed to ${status}.${settings.earthzoneTick && status !== (statusHereFrom ?? lead.status) ? ' Update it in Earthzone too.' : ''}` })
+      setOpen(false); setStatus(''); setNote('')
+      onDone()
+    } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not change the status') }) } finally { setBusy(false) }
+  }
+  return (
+    <div className="py-1">
+      {statusHere && statusHereFrom && statusHere === lead.status && (
+        <p className="mb-1.5 rounded-btn bg-primary/5 px-2.5 py-1.5 text-[12px] text-ink">Changed in Metriq. Earthzone still shows <b>{statusHereFrom}</b>; imports keep <b>{statusHere}</b> until Earthzone shows it.</p>
+      )}
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Pencil size={13} /> Change status</button>
+      ) : (
+        <div className="space-y-2 rounded-btn border border-line p-2.5">
+          <select autoFocus value={status} onChange={(e) => setStatus(e.target.value)} className="h-8 w-full rounded-btn border border-line bg-card px-2 text-body-sm text-ink" aria-label="New status">
+            <option value="">New status…</option>
+            {byStage.map((g) => g.list.length > 0 && (
+              <optgroup key={g.st} label={STAGE[g.st]}>
+                {g.list.map((k) => <option key={k} value={k} disabled={k === lead.status}>{k}{k === lead.status ? ' (now)' : ''}</option>)}
+              </optgroup>
+            ))}
+          </select>
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} placeholder="Why (optional, saved as a note)" className="h-8 w-full rounded-btn border border-line bg-card px-2 text-body-sm text-ink" />
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => { setOpen(false); setStatus(''); setNote('') }}>Cancel</Button>
+            <Button size="sm" disabled={!status || busy} onClick={save}>{busy ? 'Saving…' : 'Save status'}</Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

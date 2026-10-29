@@ -88,6 +88,8 @@ export interface ImportSummary {
   listName?: string
   rows: number; leads: number; added: number; changed: number; unchanged: number; skipped: number; repeatedInFile: number
   notInFile: number; duplicates: number; duplicateExamples: { company: string; heldBy: string }[]
+  /** Statuses changed in Metriq that Earthzone does not show yet (kept as set in Metriq). Older imports: missing. */
+  keptChangedHere?: number
   newIndustries: { name: string; count: number }[]
   movedForward: number; movedBack: number
   topChanges: { from: string; to: string; count: number }[]
@@ -124,10 +126,12 @@ export interface ImportRecord { id: string; createdAt: string; fileName: string;
 
 export interface DialerNote { id: string; leadId: string; text: string; pinned: boolean; nextActionAt: string | null; editedAt: string | null; createdAt: string; author: string; authorId: string }
 export interface LeadDetail {
-  lead: Omit<DialerLead, 'ownerName' | 'actionCount' | 'noteCount' | 'pinnedNote'> & { ownerName?: string }
+  lead: Omit<DialerLead, 'ownerName' | 'actionCount' | 'noteCount' | 'pinnedNote'> & { ownerName?: string
+    /** Changed in Metriq and not yet in Earthzone: Metriq keeps statusHere while imports still bring statusHereFrom. */
+    statusHere?: string | null; statusHereFrom?: string | null; statusHereAt?: string | null }
   raw: Record<string, string | number | null> | null
   actions: { id: string; kind: string; note: string | null; at: string | null; createdAt: string; user: { name: string } }[]
-  changes: { id: string; fromStatus: string | null; toStatus: string; createdAt: string; importId: string | null }[]
+  changes: { id: string; fromStatus: string | null; toStatus: string; createdAt: string; importId: string | null; byName?: string | null }[]
   notes: DialerNote[]
   /** Calls the predictive dialer reported for this lead, newest first. */
   calls?: DialerCallRow[]
@@ -171,6 +175,7 @@ export const dialerApi = {
   lead: (id: string) => api.get<LeadDetail>(`/dialer/leads/${id}`),
   action: (id: string, body: { kind: 'CALL_NOW' | 'CALL_LATER' | 'SNOOZE' | 'NOTE' | 'CLEAR'; at?: string; note?: string }) => api.post<{ ok: true }>(`/dialer/leads/${id}/actions`, body),
   fix: (id: string, body: LeadEdit) => api.patch<{ ok: true }>(`/dialer/leads/${id}`, body),
+  setStatus: (id: string, status: string, note?: string) => api.post<{ ok: true; unchanged?: boolean }>(`/dialer/leads/${id}/status`, { status, note }),
   addNote: (id: string, body: { text: string; pinned?: boolean; nextActionAt?: string | null; needsCrm?: boolean }) => api.post<{ note: DialerNote }>(`/dialer/leads/${id}/notes`, body),
   updateNote: (id: string, body: { text?: string; pinned?: boolean }) => api.patch<{ note: DialerNote }>(`/dialer/notes/${id}`, body),
   notes: (q: { rep?: string; leadId?: string; from?: string; to?: string }) => api.get<{ notes: NoteExportRow[] }>(`/dialer/notes?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()}`),

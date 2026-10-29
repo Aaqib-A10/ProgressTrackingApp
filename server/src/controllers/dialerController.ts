@@ -204,7 +204,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     data: { userId: meId, fileName, headerSignature: headers.join('|'), mapping, rowCount: rows.length, summary: {}, funnel: {} },
   })
 
-  let added = 0, changed = 0, unchanged = 0, forward = 0, back = 0, duplicates = 0
+  let added = 0, changed = 0, unchanged = 0, forward = 0, back = 0, duplicates = 0, keptHere = 0
   const moves = new Map<string, number>()
   const newIndustries = new Map<string, number>()
   const creates: Prisma.DialerLeadCreateManyInput[] = []
@@ -213,9 +213,15 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
   const unchangedIds: string[] = []
   const dupList: { company: string; heldBy: string }[] = []
 
-  for (const r of recs.values()) {
-    if (r.industry && !knownIndustries.has(r.industry.toLowerCase())) newIndustries.set(r.industry, (newIndustries.get(r.industry) ?? 0) + 1)
-    const old = mineByKey.get(r.key)
+  for (const fromFile of recs.values()) {
+    if (fromFile.industry && !knownIndustries.has(fromFile.industry.toLowerCase())) newIndustries.set(fromFile.industry, (newIndustries.get(fromFile.industry) ?? 0) + 1)
+    const old = mineByKey.get(fromFile.key)
+    // A status changed in Metriq waits for Earthzone: while the CRM still brings the status the
+    // lead had then, Metriq keeps its own. Once the CRM shows it, or anything else, the CRM leads again.
+    const keepHere = !!old?.statusHere && old.status === old.statusHere && fromFile.status === old.statusHereFrom
+    const clearHere = !!old?.statusHere && !keepHere
+    if (keepHere) keptHere++
+    const r = keepHere && old ? { ...fromFile, status: old.status, stage: old.stage } : fromFile
     if (!old) {
       added++
       const dupOf = heldBy.get(r.key)
@@ -235,7 +241,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     const crmSame = CRM_FIELDS.every((f) => (old as Record<string, unknown>)[f] === (r as unknown as Record<string, unknown>)[f === 'externalId' ? 'externalId' : f])
       && (old.lastActivityAt?.getTime() ?? null) === (r.lastActivityAt?.getTime() ?? null)
       && (old.leadDate?.getTime() ?? null) === (r.leadDate?.getTime() ?? null)
-    if (crmSame && old.inLatestImport) { unchanged++; unchangedIds.push(old.id); continue }
+    if (crmSame && old.inLatestImport && !clearHere) { unchanged++; unchangedIds.push(old.id); continue }
     if (crmSame) { unchanged++ } else { changed++ }
     if (statusChanged) {
       if (r.stage > old.stage) forward++
@@ -259,6 +265,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
         // A new number from the CRM may work: "wrong number" from the dialer is cleared.
         ...(old.wrongNumber && r.phone !== old.phone ? { wrongNumber: false } : {}),
         inLatestImport: true, raw: r.raw as Prisma.InputJsonValue, lastImportId: imp.id,
+        ...(clearHere ? { statusHere: null, statusHereFrom: null, statusHereAt: null } : {}),
         // Added-here fields (second phone, notes...) are never touched. A status change means the lead
         // moved on: a pending call-later, snooze or follow-up drop from before no longer applies.
         ...(statusChanged ? { snoozeUntil: null, callLaterAt: null, followUpDropped: false, backlogKeptAt: null } : {}),
@@ -287,6 +294,8 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     listName,
     rows: rows.length, leads: recs.size, added, changed, unchanged, skipped, repeatedInFile: repeated,
     notInFile: dropped.length, duplicates, duplicateExamples: dupList,
+    /** Statuses changed in Metriq that Earthzone does not show yet: kept as set in Metriq. */
+    keptChangedHere: keptHere,
     newIndustries: [...newIndustries.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     movedForward: forward, movedBack: back,
     topChanges: [...moves.entries()].map(([k, count]) => { const [from, to] = k.split('\u0000'); return { from, to, count } }).sort((a, b) => b.count - a.count).slice(0, 8),
@@ -409,7 +418,7 @@ export async function leadDetail(req: AuthedRequest, res: Response): Promise<voi
   if (!got) return
   const [actions, changes, notes, calls] = await Promise.all([
     prisma.dialerAction.findMany({ where: { leadId: got.lead.id }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, kind: true, note: true, at: true, createdAt: true, user: { select: { name: true } } } }),
-    prisma.dialerStatusChange.findMany({ where: { leadId: got.lead.id }, orderBy: { createdAt: 'asc' }, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, importId: true } }),
+    prisma.dialerStatusChange.findMany({ where: { leadId: got.lead.id }, orderBy: { createdAt: 'asc' }, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, importId: true, byName: true } }),
     prisma.dialerNote.findMany({ where: { leadId: got.lead.id }, orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }], select: noteSelect }),
     // Calls the predictive dialer reported for this lead.
     prisma.dialerCall.findMany({ where: { leadId: got.lead.id }, orderBy: { calledAt: 'desc' }, take: 200, select: { id: true, calledAt: true, disposition: true, outcome: true, notes: true, durationSec: true, agentRaw: true, effect: true, agent: { select: { name: true } } } }),
@@ -460,6 +469,52 @@ export async function leadAction(req: AuthedRequest, res: Response): Promise<voi
       : prisma.dialerAction.create({ data: { leadId: got.lead.id, userId: got.me.id, kind, note: note ?? null, at } }),
   ])
   res.status(201).json({ ok: true })
+}
+
+const statusSchema = z.object({ status: z.string().trim().min(1).max(60), note: z.string().trim().max(2000).optional() })
+
+/**
+ * POST /api/dialer/leads/:id/status { status, note? } — change the lead's status in Metriq.
+ * The stage follows the status. Until Earthzone shows it, an import that still brings the old
+ * status keeps this one (statusHere); the lead is marked "update Earthzone" when that tick is on.
+ */
+export async function changeStatus(req: AuthedRequest, res: Response): Promise<void> {
+  const got = await loadOwnLead(req, res)
+  if (!got) return
+  const parsed = statusSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Pick a status.' }); return }
+  const settings = await loadSettings()
+  const status = normalizeStatus(parsed.data.status)
+  if (settings.stageMap[status] == null) { res.status(400).json({ error: 'Pick one of the statuses in the list.' }); return }
+  const { lead, me } = got
+  if (status === lead.status) { res.json({ ok: true, unchanged: true }); return }
+  const stage = stageOf(status, settings)
+  const now = new Date()
+  const note = parsed.data.note || null
+  // The CRM's status at the first change here: that is what an import keeps bringing until Earthzone is updated.
+  const crmStatus = lead.statusHere ? lead.statusHereFrom : lead.status
+  const backToCrm = status === crmStatus
+  const data: Prisma.DialerLeadUpdateInput = {
+    status, stage, maxStage: Math.max(lead.maxStage, stage), statusChangedAt: now, lastActionAt: now,
+    statusHere: backToCrm ? null : status, statusHereFrom: backToCrm ? null : crmStatus, statusHereAt: backToCrm ? null : now,
+    // A new status means the lead moved on: an old snooze, call back or drop no longer applies.
+    snoozeUntil: null, callLaterAt: null, followUpDropped: false, backlogKeptAt: null,
+  }
+  if (settings.earthzoneTick && !backToCrm) {
+    const what = (lead.crmUpdateWhat?.split(', ').filter((w) => w && !w.startsWith('status ')) ?? [])
+    data.needsCrmUpdate = true
+    data.crmUpdateWhat = [...what, `status ${status}`].join(', ')
+  } else if (backToCrm && lead.crmUpdateWhat?.includes('status ')) {
+    const what = lead.crmUpdateWhat.split(', ').filter((w) => w && !w.startsWith('status '))
+    data.crmUpdateWhat = what.length ? what.join(', ') : null
+    if (!what.length) data.needsCrmUpdate = false
+  }
+  await prisma.$transaction([
+    prisma.dialerLead.update({ where: { id: lead.id }, data }),
+    prisma.dialerStatusChange.create({ data: { leadId: lead.id, fromStatus: lead.status, toStatus: status, fromStage: lead.stage, toStage: stage, byName: me.name } }),
+    ...(note ? [prisma.dialerNote.create({ data: { leadId: lead.id, userId: me.id, text: `Status ${lead.status} → ${status}: ${note}` } })] : []),
+  ])
+  res.json({ ok: true, status, stage })
 }
 
 const opt = (max: number) => z.string().trim().max(max).nullable().optional()

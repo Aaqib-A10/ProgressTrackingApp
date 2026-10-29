@@ -10,6 +10,8 @@ import { api } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { companyApi } from '../../lib/companyApi'
 import { parsePeople } from '../../lib/parsePeople'
+import { KIND_INFO, kindFromName } from '../../lib/sections'
+import type { Department } from '../../lib/types'
 
 /**
  * The setup wizard (Phase 1, step 7): a new company is ready in about five minutes. A person on
@@ -109,27 +111,57 @@ function CompanyStep({ s, solo, onNext }: { s: SetupStatus; solo: boolean; onNex
 
 function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatus['departments']) => void }) {
   const { addToast } = useToast()
-  const [picked, setPicked] = useState<string[]>(s.departments.length ? s.departments.map((d) => d.name) : ['Sales', 'Operations'])
+  type Pick = { name: string; type: Department; made?: boolean }
+  // Departments already made keep their kind; new ones get a guess from the name, which can be changed.
+  const [picked, setPicked] = useState<Pick[]>(s.departments.length
+    ? s.departments.map((d) => ({ name: d.name, type: d.type as Department, made: true }))
+    : [{ name: 'Sales', type: 'GENERAL' }, { name: 'Operations', type: 'GENERAL' }])
   const [own, setOwn] = useState('')
-  const flip = (n: string) => setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n]))
+  const has = (n: string) => picked.some((p) => p.name.toLowerCase() === n.toLowerCase())
+  const usedBy = (t: Department, except: string) => t !== 'GENERAL' && picked.some((p) => p.type === t && p.name !== except)
+  const guess = (n: string): Department => { const g = kindFromName(n); return usedBy(g, n) ? 'GENERAL' : g }
+  const flip = (n: string) => setPicked((p) => (has(n) ? p.filter((x) => x.made || x.name.toLowerCase() !== n.toLowerCase()) : [...p, { name: n, type: guess(n) }]))
+  const setType = (n: string, t: Department) => setPicked((p) => p.map((x) => (x.name === n ? { ...x, type: t } : x)))
   async function save() {
-    try { const r = await api.post<{ departments: SetupStatus['departments'] }>('/setup/departments', { departments: picked.map((name) => ({ name })) }); onDone(r.departments) }
+    try { const r = await api.post<{ departments: SetupStatus['departments'] }>('/setup/departments', { departments: picked.map(({ name, type }) => ({ name, type })) }); onDone(r.departments) }
     catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not add the departments.') }) }
   }
+  const kinds = (Object.keys(KIND_INFO) as Department[]).filter((k) => k !== 'TALKLOOP')
   return (
-    <Card title="Departments" subtitle="Groups of people with a team lead. Pick some, or type your own.">
+    <Card title="Departments" subtitle="Groups of people with a team lead. Pick some, or type your own, then say what kind of work each one does.">
       <div className="flex flex-wrap gap-2">
-        {[...new Set([...SUGGESTED, ...picked])].map((n) => (
-          <button key={n} type="button" onClick={() => flip(n)} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm', picked.includes(n) ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
-            {picked.includes(n) && <Check size={13} />}{n}
-          </button>
-        ))}
+        {[...new Set([...SUGGESTED, ...picked.map((p) => p.name)])].map((n) => {
+          const on = has(n)
+          const made = picked.some((p) => p.made && p.name === n)
+          return (
+            <button key={n} type="button" disabled={made} onClick={() => flip(n)} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm disabled:cursor-default', on ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
+              {on && <Check size={13} />}{n}
+            </button>
+          )
+        })}
       </div>
-      <form className="mt-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (own.trim().length >= 2) { setPicked((p) => [...new Set([...p, own.trim()])]); setOwn('') } }}>
-        <input className={inputCls + ' max-w-xs'} value={own} onChange={(e) => setOwn(e.target.value)} placeholder="Another department" maxLength={60} />
+      <form className="mt-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); const n = own.trim(); if (n.length >= 2 && !has(n)) setPicked((p) => [...p, { name: n, type: guess(n) }]); setOwn('') }}>
+        <input className={inputCls + ' max-w-xs'} value={own} onChange={(e) => setOwn(e.target.value)} placeholder="Another department, e.g. Lead generation" maxLength={60} />
         <Button type="submit" variant="secondary">Add</Button>
       </form>
-      <p className="mt-3 text-body-sm text-ink-muted">Sales calling, marketing, e-commerce and inventory teams have screens of their own: choose them later in Company Settings.</p>
+
+      {picked.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-2 text-body-sm font-semibold text-ink">What each one does</p>
+          <ul className="divide-y divide-line rounded-card border border-line">
+            {picked.map((p) => (
+              <li key={p.name} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                <span className="min-w-[140px] flex-1 text-body-md font-medium text-ink">{p.name}</span>
+                <select className={inputCls + ' !h-9 max-w-[220px]'} value={p.type} disabled={p.made} onChange={(e) => setType(p.name, e.target.value as Department)} aria-label={`Kind of work for ${p.name}`}>
+                  {kinds.map((k) => <option key={k} value={k} disabled={usedBy(k, p.name)}>{KIND_INFO[k].label}{usedBy(k, p.name) ? ' (taken)' : ''}</option>)}
+                </select>
+                <span className="w-full text-body-sm text-ink-muted sm:w-auto sm:flex-[2]">{p.made ? 'Already made. ' : ''}{KIND_INFO[p.type].description}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-body-sm text-ink-muted">General is right for most teams. Sales calling, Lead Generation, Marketing, E-commerce and Inventory come with screens of their own (one of each); choose which screens each team uses later in Company Settings, Departments.</p>
+        </div>
+      )}
       <div className="mt-5"><Button onClick={save} disabled={!picked.length}>Next</Button></div>
     </Card>
   )

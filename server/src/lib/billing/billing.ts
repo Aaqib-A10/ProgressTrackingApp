@@ -3,7 +3,7 @@ import { prisma } from '../prisma'
 import { HOME_COMPANY_ID } from '../company'
 import { PLANS, planOf, activePeople, type PlanKey } from '../plans'
 import { sendMail, appUrl } from '../mail'
-import type { BillingMessage, Interval, ProviderKey } from './providers'
+import { activeProvider, type BillingMessage, type Interval, type ProviderKey } from './providers'
 
 /**
  * Billing (Phase 1, step 8): what a company pays, and what happens when it does not.
@@ -34,10 +34,15 @@ export function billingState(c: CompanyLike, sub: SubLike, now = new Date()): Bi
   return 'free'
 }
 
-/** Why nothing new can be saved right now (the company can still look at everything), or null. */
-export function readOnlyReason(state: BillingState): string | null {
+/**
+ * Why nothing new can be saved right now (the company can still look at everything), or null.
+ * While online payments are not open yet (no payment provider set up: "coming soon"), a trial
+ * that ended does not stop anyone, since there is no way to pay yet.
+ */
+export function readOnlyReason(state: BillingState, canPayOnline = !!activeProvider()): string | null {
   switch (state) {
-    case 'trial_ended': return 'Your free trial has ended. Choose a plan in Billing to keep going; nothing has been lost.'
+    case 'trial_ended': if (!canPayOnline) return null
+      return 'Your free trial has ended. Choose a plan in Billing to keep going; nothing has been lost.'
     case 'locked': return `Your payment has not gone through for ${GRACE_DAYS} days. Update your card in Billing to keep going; nothing has been lost.`
     case 'ended': return 'Your plan has ended. Choose a plan in Billing to keep going; nothing has been lost.'
     default: return null
@@ -159,6 +164,8 @@ export async function testPayment(companyId: string, plan: string, interval: Int
 export async function runBillingReminders(companyId: string, now = new Date()): Promise<void> {
   const c = await prisma.company.findUnique({ where: { id: companyId }, include: { subscription: true } })
   if (!c || c.id === HOME_COMPANY_ID || c.status !== 'TRIAL' || !c.trialEndsAt || c.subscription) return
+  // No "choose a plan" emails while online payments are coming soon: there is nothing to choose yet.
+  if (!activeProvider()) return
   const left = (c.trialEndsAt.getTime() - now.getTime()) / 86400_000
   if (left <= 0 && !c.trialEndedMailAt) {
     await prisma.company.update({ where: { id: c.id }, data: { trialEndedMailAt: now } })

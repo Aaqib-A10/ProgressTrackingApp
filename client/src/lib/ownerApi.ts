@@ -73,6 +73,13 @@ export interface OwnerErrorDetail extends Omit<OwnerErrorRow, 'people'> {
   events: { id: string; at: string; user: OwnerErrorPerson | null; url: string | null; status: number | null; durationMs: number | null; meta: unknown }[]
 }
 
+export interface SellerDetails { name: string; address: string | null; taxId: string | null; email: string | null; fromConsole: boolean }
+export interface OwnerSettings {
+  seller: SellerDetails
+  payments: { provider: string | null; label: string | null; test: boolean; configured: { stripe: boolean; paddle: boolean } }
+  signIn: { open: boolean; google: boolean; microsoft: boolean }
+}
+
 export const ownerApi = {
   login: (email: string, password: string) => call<{ needCode: boolean; ticket?: string; owner?: { name: string; email: string } }>('POST', '/login', { email, password }),
   code: (ticket: string, code: string) => call<{ owner: { name: string; email: string } }>('POST', '/login/code', { ticket, code }),
@@ -101,6 +108,8 @@ export const ownerApi = {
   errors: (f: { state: string; since: string; q: string }) => call<{ errors: OwnerErrorRow[] }>('GET', `/errors?${new URLSearchParams(f)}`),
   error: (id: string) => call<{ error: OwnerErrorDetail; brief: string | null }>('GET', `/errors/${id}`),
   setErrorState: (id: string, state: ErrorState) => call<{ ok: true }>('PATCH', `/errors/${id}`, { state }),
+  settings: () => call<OwnerSettings>('GET', '/settings'),
+  saveSeller: (input: { name: string; address: string; taxId: string; email: string }) => call<{ seller: SellerDetails }>('PUT', '/settings/seller', input),
 }
 
 export const STATUS_LABEL: Record<TicketStatus, string> = { OPEN: 'New', IN_PROGRESS: 'Working on it', WAITING_ON_COMPANY: 'Waiting for them', RESOLVED: 'Solved' }

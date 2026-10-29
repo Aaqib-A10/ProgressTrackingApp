@@ -101,13 +101,15 @@ enum FeedbackSentiment {
 // ---------- Org structure ----------
 
 model Department {
-  id        String         @id @default(cuid())
+  id          String         @id @default(cuid())
   /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
-  companyId String         @default("")
-  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  type      DepartmentType
-  name      String
-  createdAt DateTime       @default(now())
+  companyId   String         @default("")
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        DepartmentType
+  name        String
+  /// Sections of its kind turned off by the company (lib/sections.ts): hidden, and no new entries.
+  sectionsOff String[]       @default([])
+  createdAt   DateTime       @default(now())
 
   subDepartments  SubDepartment[]
   users           User[]
@@ -2934,6 +2936,12 @@ model DialerLead {
   backlogKeptAt   DateTime?
   firstImportId   String?
   lastImportId    String?
+  /// Status changed in Metriq by a rep (or manager), waiting for Earthzone: while an import still
+  /// brings the old CRM status (statusHereFrom), Metriq keeps statusHere. Cleared once the CRM
+  /// shows it, or shows any other status (the CRM moved on).
+  statusHere      String?
+  statusHereFrom  String?
+  statusHereAt    DateTime?
   /// From the predictive dialer (never touched by an import): never dial this lead again.
   doNotCall       Boolean   @default(false)
   doNotCallAt     DateTime?
@@ -2988,6 +2996,8 @@ model DialerStatusChange {
   fromStage  Int?
   toStage    Int
   importId   String?
+  /// Who changed it in Metriq (empty for an import or the predictive dialer).
+  byName     String?
   createdAt  DateTime   @default(now())
 
   @@index([leadId, createdAt])
@@ -3640,6 +3650,16 @@ model SupportMessage {
 
   @@index([ticketId, createdAt])
   @@index([companyId])
+}
+
+/// Settings for the whole of Metriq that the owner keeps in the owner console (not secrets: keys
+/// stay in the server's .env). Example: "seller", the business name, address and tax ID printed on
+/// every invoice.
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }
 
 /// On/off switches for new parts of Metriq (Phase 1, step 1). A switch with no row uses its

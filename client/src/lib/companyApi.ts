@@ -9,8 +9,8 @@ import { useAuth } from './auth'
 
 export interface CompanyInfo { id: string; name: string; kind: 'TEAM' | 'PERSONAL'; timeZone: string; plan: string; status: string; createdAt: string; home: boolean; supportAccessUntil: string | null }
 export interface CompanyUsage { plan: string; people: { used: number; limit: number | null }; storage: { usedBytes: number; limitBytes: number | null }; aiHours: { used: number; limit: number | null } }
-export interface CompanyDepartment { id: string; name: string; type: Department; kind: string; people: number; createdAt: string }
-export interface DepartmentKind { type: Department; label: string; description: string }
+export interface CompanyDepartment { id: string; name: string; type: Department; kind: string; people: number; createdAt: string; sectionsOff: string[] }
+export interface DepartmentKind { type: Department; label: string; description: string; sections: { key: string; label: string; description: string }[] }
 export interface CompanyRoleRow { id: string; name: string; baseRole: Role; baseLabel: string; areasOff: string[]; powers: string[]; people: number }
 export interface RolesData {
   builtIn: { role: Role; label: string; powers: string[] }[]
@@ -25,7 +25,8 @@ export const companyApi = {
   supportAccess: (hours: 0 | 24 | 72 | 168) => api.post<{ supportAccessUntil: string | null }>('/company/support-access', { hours }),
   update: (input: { name?: string; timeZone?: string }) => api.patch<{ company: CompanyInfo }>('/company', input),
   departments: () => api.get<{ departments: CompanyDepartment[]; kinds: DepartmentKind[] }>('/company/departments'),
-  addDepartment: (input: { name: string; type: Department }) => api.post<{ departments: CompanyDepartment[] }>('/company/departments', input),
+  addDepartment: (input: { name: string; type: Department; sectionsOff?: string[] }) => api.post<{ departments: CompanyDepartment[] }>('/company/departments', input),
+  setSections: (id: string, sectionsOff: string[]) => api.patch<{ departments: CompanyDepartment[] }>(`/company/departments/${id}/sections`, { sectionsOff }),
   renameDepartment: (id: string, name: string) => api.patch<{ departments: CompanyDepartment[] }>(`/company/departments/${id}`, { name }),
   removeDepartment: (id: string) => api.del<{ departments: CompanyDepartment[] }>(`/company/departments/${id}`),
   roles: () => api.get<RolesData>('/company/roles'),

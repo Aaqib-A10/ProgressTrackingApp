@@ -2,6 +2,8 @@ import type { Request, Response } from 'express'
 import { z } from 'zod'
 import { DepartmentType } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { activeProvider } from '../lib/billing/providers'
+import { companySectionsOff } from '../lib/sectionsOff'
 import {
   hashPassword,
   verifyPassword,
@@ -76,8 +78,12 @@ async function publicUser(userId: string) {
     company: {
       id: user.company.id, name: user.company.name, slug: user.company.slug, kind: user.company.kind, plan: user.company.plan, status: user.company.status, timeZone: user.company.timeZone,
       trialEndsAt: user.company.status === 'TRIAL' ? user.company.trialEndsAt : null, setupDone: !!user.company.setupDoneAt,
+      // Online payment open (a payment provider is set up), or "coming soon".
+      paymentsOpen: !!activeProvider(),
       // The kinds of department the company has: the menu leaves out sections for kinds it has none of.
       departmentKinds: [...new Set((await prisma.department.findMany({ where: { companyId: user.companyId }, select: { type: true } })).map((d) => d.type))],
+      // Sections the company turned off (Phase 2): their screens are left out of the menu.
+      sectionsOff: await companySectionsOff(user.companyId),
     },
     emailCheckPending: user.emailCheckPending,
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,

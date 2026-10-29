@@ -10,6 +10,8 @@ import { pageModule } from '../lib/staleChunks'
 // Public pages people open rarely load on demand (Login stays in the main bundle: it is
 // the page most people land on).
 const Landing = lazy(pageModule(() => import('../pages/Landing')))
+const Pricing = lazy(pageModule(() => import('../pages/marketing/Pricing')))
+const Security = lazy(pageModule(() => import('../pages/marketing/Security')))
 const Signup = lazy(pageModule(() => import('../pages/auth/Signup')))
 const ForgotPassword = lazy(pageModule(() => import('../pages/auth/ForgotPassword')))
 const ResetPassword = lazy(pageModule(() => import('../pages/auth/ResetPassword')))
@@ -108,6 +110,8 @@ const Notifications = lazy(pageModule(() => import('../pages/app/Notifications')
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
 export const router = createBrowserRouter([
   { path: '/', element: <Page><Landing /></Page> },
+  { path: '/pricing', element: <Page><Pricing /></Page> },
+  { path: '/security', element: <Page><Security /></Page> },
 
   // Public auth
   { path: '/login', element: <Login /> },

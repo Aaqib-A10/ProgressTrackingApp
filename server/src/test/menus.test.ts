@@ -88,6 +88,35 @@ describe('parts of Metriq a role can switch off', () => {
   })
 })
 
+describe('department sections (Phase 2)', () => {
+  it('the app and the server have the same sections and screens', async () => {
+    const { SECTIONS, KIND_INFO } = await import('../lib/sections')
+    const client = await import(path.resolve(__dirname, '../../../client/src/lib/sections.ts'))
+    expect(client.SECTIONS.map((x: { key: string; kind: string; label: string; app: string[] }) => [x.key, x.kind, x.label, x.app])).toEqual(SECTIONS.map((x) => [x.key, x.kind, x.label, x.app]))
+    expect(client.KIND_INFO).toEqual(KIND_INFO)
+    for (const name of ['Lead generation', 'Digital marketing', 'Amazon store', 'Warehouse', 'Outbound calling', 'Customer support', 'Finance', 'Sales']) expect(client.kindFromName(name), name).toBe((await import('../lib/sections')).kindFromName(name))
+  })
+
+  it('every section screen is a real menu item, and a section that is off leaves the menu', async () => {
+    const { NAV_GROUPS } = await import(path.resolve(__dirname, '../../../client/src/components/layout/navConfig.ts')) as { NAV_GROUPS: Group[] }
+    const { SECTIONS } = await import('../lib/sections')
+    const items = NAV_GROUPS.flatMap((g) => [...g.items, ...(g.subgroups ?? []).flatMap((sg) => sg.items)]).map((i) => i.to)
+    for (const sec of SECTIONS) for (const p of sec.app) expect(items.some((i) => i === p.replace(/\$$/, '') || i.startsWith(p + '/')), `${sec.key} ${p}`).toBe(true)
+    const sa = { role: 'SUPER_ADMIN', department: null, subDepartment: null, email: 'h@x.example', isDeveloper: false, permissions: [], company: { id: 'other-co', departmentKinds: ['LEAD_GEN', 'INVENTORY'], sectionsOff: [] as string[] } }
+    const all = menu(filterNav(sa as unknown as U))
+    expect(all).toContain('/app/leadgen/breakdown')
+    expect(all).toContain('/app/inventory')
+    const off = menu(filterNav({ ...sa, company: { ...sa.company, sectionsOff: ['leadgen-breakdown', 'inv-items'] } } as unknown as U))
+    expect(off).not.toContain('/app/leadgen/breakdown')
+    expect(off).not.toContain('/app/inventory')
+    // Always there: team views and analytics (and Inventory's team screen is not inside the stock list).
+    expect(off).toContain('/app/leadgen/team')
+    expect(off).toContain('/app/leadgen/analytics')
+    expect(off).toContain('/app/inventory/team')
+    expect(items.length).toBeGreaterThan(10)
+  })
+})
+
 describe('the Daily Report', () => {
   it('is in the menu once the owner switches it on: My report for everyone, team and forms for team leads', () => {
     setFlags({ 'daily-report': true })

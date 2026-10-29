@@ -1,3 +1,5 @@
+import { sectionBlocked } from './sections'
+
 /**
  * Parts of Metriq a company role can have switched off (Phase 1, step 4). The same list as the
  * server's lib/permissions.ts AREAS (a test checks they match); here only where they live in the
@@ -30,8 +32,9 @@ export function areaOfPath(pathname: string): string | null {
   return best?.key ?? null
 }
 
-/** Is this address switched off for the person's company role? */
-export function areaBlocked(u: { areasOff?: string[] } | null | undefined, pathname: string): boolean {
+/** Is this address switched off for the person (plan, company role, or a department section the company turned off)? */
+export function areaBlocked(u: { areasOff?: string[]; company?: { sectionsOff?: string[] } | null } | null | undefined, pathname: string): boolean {
+  if (sectionBlocked(u?.company?.sectionsOff, pathname)) return true
   if (!u?.areasOff?.length) return false
   const a = areaOfPath(pathname)
   return !!a && u.areasOff.includes(a)

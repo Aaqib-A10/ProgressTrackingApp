@@ -39,7 +39,7 @@ export interface CurrentUser {
   memberships?: Membership[]
   avatarUrl?: string | null
   /** The company (or personal workspace) they are in (Phase 1). */
-  company?: { id: string; name: string; slug?: string; kind: 'TEAM' | 'PERSONAL'; plan: string; status: string; timeZone: string; trialEndsAt?: string | null; setupDone?: boolean; departmentKinds?: string[] } | null
+  company?: { id: string; name: string; slug?: string; kind: 'TEAM' | 'PERSONAL'; plan: string; status: string; timeZone: string; trialEndsAt?: string | null; setupDone?: boolean; paymentsOpen?: boolean; sectionsOff?: string[]; departmentKinds?: string[] } | null
   /** Signed up on their own and has not confirmed the email yet (step 7). */
   emailCheckPending?: boolean
   /** A role the company made itself, on top of `role`. */

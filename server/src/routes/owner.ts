@@ -6,7 +6,7 @@ import {
   ownerLogin, ownerLoginCode, ownerLogout, ownerMe, ownerHome,
   listCompanies, getCompany, updateCompany,
   listTickets, getTicket, replyTicket, updateTicket, ownerActivity, listFlags, updateFlag, listCompanyFlags, updateCompanyFlag, exportCompany, deleteCompany, helpSignIn,
-  ownerErrors, ownerError, ownerErrorState,
+  ownerErrors, ownerError, ownerErrorState, ownerSettings, ownerSaveSeller,
 } from '../controllers/ownerController'
 
 // The owner console's API (erp, step 0). Only the owner's own session opens it.
@@ -35,3 +35,5 @@ ownerRouter.patch('/companies/:id/flags/:key', requireOwner, asyncHandler(update
 ownerRouter.get('/errors', requireOwner, asyncHandler(ownerErrors))
 ownerRouter.get('/errors/:id', requireOwner, asyncHandler(ownerError))
 ownerRouter.patch('/errors/:id', requireOwner, asyncHandler(ownerErrorState))
+ownerRouter.get('/settings', requireOwner, asyncHandler(ownerSettings))
+ownerRouter.put('/settings/seller', requireOwner, asyncHandler(ownerSaveSeller))

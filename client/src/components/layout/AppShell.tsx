@@ -169,8 +169,10 @@ function AccountBanners({ user }: { user: CurrentUser }) {
       )}
       {days !== null && admin && (
         <div className={cn('flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-1.5 text-center text-body-sm', days <= 0 ? 'bg-danger/10 text-danger' : days <= 3 ? 'bg-warning/15 text-ink' : 'bg-slate-100 text-ink-muted')}>
-          <span>{days <= 0 ? 'Your free trial has ended. You can still look at everything; choose a plan to keep going.' : `Free trial: ${days} day${days === 1 ? '' : 's'} left.`}</span>
-          <Link to="/app/billing" className="font-semibold text-primary hover:underline">{days <= 0 ? 'Choose a plan' : 'See plans'}</Link>
+          <span>{days <= 0
+            ? (user.company?.paymentsOpen === false ? 'Your free trial has ended. Online payment is coming soon; until then everything keeps working.' : 'Your free trial has ended. You can still look at everything; choose a plan to keep going.')
+            : `Free trial: ${days} day${days === 1 ? '' : 's'} left.`}</span>
+          <Link to="/app/billing" className="font-semibold text-primary hover:underline">{days <= 0 && user.company?.paymentsOpen !== false ? 'Choose a plan' : 'See plans'}</Link>
         </div>
       )}
     </>

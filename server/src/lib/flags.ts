@@ -55,6 +55,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  'social-sign-in': {
+    label: 'Sign in with Google and Microsoft',
+    description: 'The Google and Microsoft buttons on the sign-in and sign-up pages work (when their keys are on the server). Off: the buttons show "coming soon" and nobody can sign in or sign up with them.',
+    default: false,
+    client: false,
+    scope: 'platform',
+  },
   'new-companies': {
     label: 'New companies can sign up',
     description: 'Anyone can start a free trial for a company or for themselves (the Start a free trial page, and Google or Microsoft sign up). Off: the page says Metriq is not open yet, and the sign-in page shows the old Sign up link as before.',

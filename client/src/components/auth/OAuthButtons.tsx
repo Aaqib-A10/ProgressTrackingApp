@@ -2,25 +2,35 @@ import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 
 /**
- * Sign in or sign up with Google / Microsoft (Phase 1, step 7). Shown only for the providers
- * whose keys are set on the server.
+ * Sign in or sign up with Google / Microsoft (Phase 1, step 7). Until the owner turns on "Sign in
+ * with Google and Microsoft" (and the keys are on the server), both buttons show "coming soon".
  */
+const ALL = [{ key: 'google', label: 'Google' }, { key: 'microsoft', label: 'Microsoft' }]
+
 export function OAuthButtons({ intent, mode, company, label }: { intent: 'signin' | 'signup'; mode?: 'team' | 'solo'; company?: string; label: string }) {
-  const [providers, setProviders] = useState<{ key: string; label: string }[]>([])
-  useEffect(() => { api.get<{ providers: { key: string; label: string }[] }>('/auth/oauth/providers').then((r) => setProviders(r.providers)).catch(() => undefined) }, [])
-  if (!providers.length) return null
+  const [state, setState] = useState<{ open: boolean; providers: { key: string; label: string }[] } | null>(null)
+  useEffect(() => { api.get<{ open?: boolean; providers: { key: string; label: string }[] }>('/auth/oauth/providers').then((r) => setState({ open: !!r.open, providers: r.providers })).catch(() => setState({ open: false, providers: [] })) }, [])
+  if (!state) return null
   const href = (key: string) => `/api/auth/oauth/${key}/start?${new URLSearchParams({ intent, ...(mode ? { mode } : {}), ...(company ? { company } : {}) })}`
+  const live = state.open && state.providers.length > 0
+  const list = live ? state.providers : ALL
   return (
     <>
       <div className="my-5 flex items-center gap-3 text-body-sm text-ink-muted">
         <span className="h-px flex-1 bg-line" /> {label} <span className="h-px flex-1 bg-line" />
       </div>
-      <div className="grid gap-2">
-        {providers.map((p) => (
+      <div className="grid grid-cols-2 gap-2">
+        {list.map((p) => live ? (
           <a key={p.key} href={href(p.key)} className="inline-flex h-10 items-center justify-center gap-2.5 rounded-btn border border-line bg-card text-body-md font-semibold text-ink transition-colors hover:bg-slate-50">
             {p.key === 'google' ? <GoogleMark /> : <MicrosoftMark />}
             {p.label}
           </a>
+        ) : (
+          <span key={p.key} aria-disabled="true" title={`${p.label} sign-in is coming soon`} className="inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-btn border border-dashed border-line bg-card text-body-md font-semibold text-ink-muted">
+            <span className="opacity-60">{p.key === 'google' ? <GoogleMark /> : <MicrosoftMark />}</span>
+            {p.label}
+            <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-ink-muted">Soon</span>
+          </span>
         ))}
       </div>
     </>

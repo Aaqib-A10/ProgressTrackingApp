@@ -4,6 +4,8 @@ import { verifyToken } from '../lib/auth'
 import { prisma } from '../lib/prisma'
 import { runAsCompany } from '../lib/tenancy'
 import { areaOf } from '../lib/permissions'
+import { sectionOf } from '../lib/sections'
+import { companySectionsOff } from '../lib/sectionsOff'
 import { companyAreasOff } from '../lib/plans'
 import { billingState, readOnlyReason } from '../lib/billing/billing'
 
@@ -111,6 +113,15 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     if (area && roleOff.includes(area)) {
       res.status(403).json({ error: 'This part of Metriq is switched off for your role.' })
       return
+    }
+    // A section the company turned off for a department (Phase 2): nothing new is saved there.
+    // Reading stays open, so dashboards keep their history.
+    if (req.method !== 'GET') {
+      const section = sectionOf(req.originalUrl, 'api')
+      if (section && (await companySectionsOff(user.companyId).catch(() => [] as string[])).includes(section.key)) {
+        res.status(403).json({ error: `${section.label} is turned off for your company (Company Settings, Departments).`, sectionOff: section.key })
+        return
+      }
     }
     req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}) }
     timeZone = user.company.timeZone
