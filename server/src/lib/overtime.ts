@@ -34,7 +34,10 @@ export function shiftCompleteAt(checkInAt: Date, spanMin: number): Date {
 
 /** When PulseTrack will check this session out by itself. */
 export function autoCheckoutAt(checkInAt: Date, spanMin: number, overtimeAt: Date | null): Date {
-  return new Date(checkInAt.getTime() + (spanMin + (overtimeAt ? OVERTIME_MAX_MIN : 0)) * 60_000)
+  const complete = shiftCompleteAt(checkInAt, spanMin).getTime()
+  if (!overtimeAt) return new Date(complete)
+  // Overtime started after the shift hours (after an automatic check-out): the limit runs from then.
+  return new Date(Math.max(complete, overtimeAt.getTime()) + OVERTIME_MAX_MIN * 60_000)
 }
 
 /** Overtime worked: time after the shift's hours were complete, minus breaks taken in that time. */

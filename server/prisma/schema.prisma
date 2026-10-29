@@ -1173,6 +1173,7 @@ enum NotificationType {
 enum BreakType {
   BREAK // regular break / lunch (configurable allowance, default 65m)
   BRB // Be Right Back — short breaks (configurable allowance, default 20m)
+  OFF // off the clock: between an automatic check-out and starting overtime after it (not a break, no allowance)
 }
 
 enum ViolationKind {

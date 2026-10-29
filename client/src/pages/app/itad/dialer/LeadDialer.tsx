@@ -77,6 +77,13 @@ export default function LeadDialer() {
   const lastAt = data?.lastImport ? new Date(data.lastImport.at) : null
   const stale = lastAt ? now.getTime() - lastAt.getTime() > 18 * 3600000 : false
   const openLead = (id: string, ids?: string[]) => setPanel({ id, ids: ids ?? [id] })
+  // Opened from the app-wide search (Ctrl K): straight to that lead.
+  const leadParam = params.get('lead')
+  useEffect(() => {
+    if (!leadParam) return
+    setPanel({ id: leadParam, ids: [leadParam] })
+    setParam('lead', null)
+  }, [leadParam]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabs: { key: View; label: string; count?: number; tone?: 'red' | 'amber'; manager?: boolean }[] = [
     { key: 'dashboard', label: 'Dashboard' },

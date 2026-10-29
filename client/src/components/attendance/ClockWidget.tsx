@@ -320,11 +320,16 @@ export function ClockWidget() {
                     <Action icon={<LogOut size={16} />} label="Check out" onClick={() => setConfirmOut(true)} disabled={busy} tone="danger" />
                   </>
                 )}
-                {today.state === 'OUT' && (
+                {today.state === 'OUT' && (today.canStartOvertime ? (
+                  <>
+                    <div className="px-3 pb-1 pt-2 text-body-sm text-ink-muted">Your shift hours were complete, so you were checked out at {today.checkOutLabel}. Still working?</div>
+                    <Action icon={<AlarmClockPlus size={16} />} label="Start overtime" hint="Keep working: the time from now counts as overtime" onClick={() => run(clockStartOvertime, 'Overtime started. Check out yourself when you finish.')} disabled={busy} tone="primary" />
+                  </>
+                ) : (
                   <div className="flex items-center gap-2 px-3 py-2 text-body-sm text-success">
                     <CheckCircle2 size={16} /> Checked out for the day.
                   </div>
-                )}
+                ))}
               </>
             )}
           </div>

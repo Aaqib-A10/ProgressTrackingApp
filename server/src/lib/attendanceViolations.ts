@@ -30,7 +30,7 @@ export interface ViolationShift {
   workingDays: number[] // 0=Sun … 6=Sat
   timeZone: string | null
 }
-type BreakLike = { type: 'BREAK' | 'BRB'; startAt: Date; endAt: Date | null }
+type BreakLike = { type: 'BREAK' | 'BRB' | 'OFF'; startAt: Date; endAt: Date | null }
 
 function toMin(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number)

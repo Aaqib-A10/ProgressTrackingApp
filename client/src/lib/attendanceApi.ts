@@ -43,6 +43,8 @@ export interface TodayState {
   completed: boolean
   /** "Start overtime" was pressed: no automatic check-out at the end of the shift hours. */
   overtime: boolean
+  /** Checked out by Metriq when the shift hours were complete: "Start overtime" opens the day again. */
+  canStartOvertime?: boolean
   overtimeMin: number
   /** When PulseTrack will check this session out by itself (null once checked out). */
   autoCheckoutAt: string | null

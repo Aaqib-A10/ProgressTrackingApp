@@ -1,6 +1,8 @@
 import type { Response } from 'express'
 import { DateTime } from 'luxon'
+import { Prisma, type DepartmentType, type Role } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { personBlocks } from '../lib/personBlocks'
 import type { AuthedRequest } from '../middleware/auth'
 import { visibleProjectIds } from '../lib/pm/access'
 import { dateStringFromDb } from '../lib/time'
@@ -23,6 +25,8 @@ export interface SearchHit {
 export interface SearchResponse {
   q: string
   people: (SearchHit & { userId: string })[]
+  /** Lead Dialer leads (ITAD): by company, contact, email or phone number. */
+  leads: SearchHit[]
   projects: SearchHit[]
   tasks: SearchHit[]
   chats: SearchHit[]
@@ -44,12 +48,12 @@ function snippet(text: string, q: string, width = 70): string {
 
 export async function search(req: AuthedRequest, res: Response): Promise<void> {
   const q = String(req.query.q ?? '').trim().slice(0, 80)
-  const empty: SearchResponse = { q, people: [], projects: [], tasks: [], chats: [], files: [], meetings: [] }
+  const empty: SearchResponse = { q, people: [], leads: [], projects: [], tasks: [], chats: [], files: [], meetings: [] }
   if (q.length < 2) {
     res.json(empty)
     return
   }
-  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { id: true, role: true, department: { select: { type: true } } } })
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { id: true, role: true, companyId: true, departmentId: true, department: { select: { type: true, layout: true } } } })
   const like = { contains: q, mode: 'insensitive' as const }
   const isAdmin = me.role === 'SUPER_ADMIN'
   const dept = me.department?.type
@@ -60,7 +64,8 @@ export async function search(req: AuthedRequest, res: Response): Promise<void> {
   ])
   const convIds = myConvs.map((c) => c.conversationId)
 
-  const [people, projects, pmTasks, mktTasks, ecomTasks, todos, workLog, convs, messages, chatFiles, pmFiles, meetings] = await Promise.all([
+  const [leadHits, people, projects, pmTasks, mktTasks, ecomTasks, todos, workLog, convs, messages, chatFiles, pmFiles, meetings] = await Promise.all([
+    searchLeads(me, q),
     prisma.user.findMany({
       where: { isActive: true, status: 'ACTIVE', id: { not: me.id }, OR: [{ name: like }, { email: like }] },
       select: { id: true, name: true, role: true, department: { select: { type: true } } },
@@ -145,6 +150,7 @@ export async function search(req: AuthedRequest, res: Response): Promise<void> {
       sub: [p.department ? DEPT_LABEL[p.department.type] : null, p.role === 'TEAM_LEAD' ? 'Team Lead' : p.role === 'SUPER_ADMIN' ? 'Admin' : p.role === 'QA' || p.role === 'QA_LEAD' ? 'QA' : null].filter(Boolean).join(' · ') || undefined,
       link: `/app/chat?dm=${encodeURIComponent(p.id)}`,
     })),
+    leads: leadHits,
     projects: projects.map((p) => ({ id: p.key, title: p.name, sub: `${p.key}${p.status === 'ARCHIVED' ? ' · archived' : ''}`, link: `/app/projects/${encodeURIComponent(p.key)}` })),
     tasks: [
       ...pmTasks.map((t) => ({ id: t.code, title: t.title, sub: `${t.code} · ${t.project.name} · ${t.column.name}`, link: `/app/projects/${encodeURIComponent(t.project.key)}?task=${encodeURIComponent(t.code)}` })),
@@ -171,4 +177,58 @@ export async function search(req: AuthedRequest, res: Response): Promise<void> {
     meetings: meetings.map((m) => ({ id: m.id, title: m.title, sub: m.startsAt.toISOString().slice(0, 10), link: `/app/meetings/${encodeURIComponent(m.id)}` })),
   }
   res.json(out)
+}
+
+// ------------------------------------------------------------------ Lead Dialer leads
+
+/**
+ * Leads this person can open in the Lead Dialer, matching the words: the company, the contact,
+ * an email, a CRM id, a city, or a phone number written any way ("(555) 123-4567",
+ * "555-123-4567" and "+1 555 123 4567" all match 5551234567). Reps find their own leads; an ITAD
+ * team lead finds the team's; the Super Admin finds every lead. A department with the Lead Dialer
+ * in its menu (Department Studio) works the same way for its own people.
+ */
+async function searchLeads(me: { id: string; role: Role; companyId: string; departmentId: string | null; department: { type: DepartmentType; layout: unknown } | null }, q: string): Promise<SearchHit[]> {
+  const admin = me.role === 'SUPER_ADMIN'
+  let owners: string[] | null = null // null = every lead (Super Admin)
+  if (!admin) {
+    const home = me.department?.type === 'ITAD'
+    const blocks = home ? null : await personBlocks(me)
+    if (!home && !blocks?.includes('itad-dialer')) return []
+    if (me.role !== 'TEAM_LEAD') owners = [me.id]
+    else owners = (await prisma.user.findMany({ where: home ? { department: { type: 'ITAD' } } : { departmentId: me.departmentId ?? '__none__' }, select: { id: true } })).map((u) => u.id).concat(me.id)
+  }
+  const like = { contains: q, mode: 'insensitive' as const }
+  const words = q.split(/\s+/).filter(Boolean).slice(0, 5)
+  // Phone numbers are kept as typed: compare digits only (the last 10 when there is a +1 in front).
+  const digits = q.replace(/\D/g, '')
+  const looksLikePhone = digits.length >= 4 && /^[\d\s()+.\-]+$/.test(q)
+  const phoneIds: string[] = []
+  if (looksLikePhone) {
+    const d = digits.length > 10 ? digits.slice(-10) : digits
+    const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT "id" FROM "DialerLead"
+      WHERE "companyId" = ${me.companyId}
+        ${owners ? Prisma.sql`AND "ownerId" IN (${Prisma.join(owners)})` : Prisma.empty}
+        AND (regexp_replace(COALESCE("phone", ''), '[^0-9]', '', 'g') LIKE ${'%' + d + '%'}
+          OR regexp_replace(COALESCE("phone2", ''), '[^0-9]', '', 'g') LIKE ${'%' + d + '%'})
+      LIMIT 20`)
+    phoneIds.push(...rows.map((r) => r.id))
+  }
+  const ci = (w: string) => ({ contains: w, mode: 'insensitive' as const })
+  const textMatch = words.length > 1
+    ? { AND: words.map((w) => ({ OR: [{ company: ci(w) }, { contactName: ci(w) }, { city: ci(w) }, { email: ci(w) }] })) }
+    : { OR: [{ company: like }, { contactName: like }, { email: like }, { email2: like }, { externalId: like }, { city: like }, { linkedin: like }] }
+  const leads = await prisma.dialerLead.findMany({
+    where: { ...(owners ? { ownerId: { in: owners } } : {}), OR: [textMatch, ...(phoneIds.length ? [{ id: { in: phoneIds } }] : [])] },
+    select: { id: true, company: true, contactName: true, phone: true, email: true, status: true, ownerId: true, owner: { select: { name: true } } },
+    orderBy: [{ inLatestImport: 'desc' }, { updatedAt: 'desc' }],
+    take: LIMIT + 2,
+  })
+  return leads.map((l) => ({
+    id: l.id,
+    title: l.contactName ? `${l.company} · ${l.contactName}` : l.company,
+    sub: [l.status, l.phone, l.email, l.ownerId !== me.id ? l.owner.name : null].filter(Boolean).join(' · '),
+    link: `/app/itad/dialer?${l.ownerId !== me.id ? `rep=${encodeURIComponent(l.ownerId)}&` : ''}lead=${encodeURIComponent(l.id)}`,
+  }))
 }

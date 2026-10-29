@@ -1022,6 +1022,7 @@ export async function listAttendanceActivity(req: AuthedRequest, res: Response):
     const userName = d.user?.name ?? '—'
     if (d.checkInAt) events.push({ userName, kind: 'CHECK_IN', at: d.checkInAt, ua: d.checkInUa, mobile: !!d.checkInMobile })
     for (const b of d.breaks) {
+      if (b.type === 'OFF') continue // off the clock (before overtime), not a break
       events.push({ userName, kind: 'BREAK_START', breakType: b.type, at: b.startAt, ua: b.startUa, mobile: !!b.startMobile })
       if (b.endAt) events.push({ userName, kind: 'BREAK_END', breakType: b.type, at: b.endAt, ua: b.endUa, mobile: !!b.endMobile })
     }

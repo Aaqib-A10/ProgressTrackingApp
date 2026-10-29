@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Search, Loader2, User, FolderKanban, ListChecks, MessagesSquare, Paperclip, CalendarDays, LayoutGrid, CornerDownLeft, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, Loader2, User, FolderKanban, ListChecks, MessagesSquare, Paperclip, CalendarDays, LayoutGrid, PhoneCall, CornerDownLeft, ArrowUp, ArrowDown } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/cn'
@@ -15,11 +15,12 @@ import { filterNav } from './navConfig'
  */
 
 interface Hit { id: string; title: string; sub?: string; link: string; icon?: ReactNode }
-interface Results { q: string; people: Hit[]; projects: Hit[]; tasks: Hit[]; chats: Hit[]; files: Hit[]; meetings: Hit[] }
+interface Results { q: string; people: Hit[]; leads?: Hit[]; projects: Hit[]; tasks: Hit[]; chats: Hit[]; files: Hit[]; meetings: Hit[] }
 
 const GROUPS: { key: keyof Omit<Results, 'q'> | 'pages'; label: string; icon: ReactNode }[] = [
   { key: 'pages', label: 'Pages', icon: <LayoutGrid size={14} /> },
   { key: 'people', label: 'People', icon: <User size={14} /> },
+  { key: 'leads', label: 'Leads', icon: <PhoneCall size={14} /> },
   { key: 'projects', label: 'Projects', icon: <FolderKanban size={14} /> },
   { key: 'tasks', label: 'Tasks', icon: <ListChecks size={14} /> },
   { key: 'chats', label: 'Chats', icon: <MessagesSquare size={14} /> },
@@ -147,7 +148,7 @@ export function CommandPalette() {
             value={q}
             onChange={(e) => { setQ(e.target.value); setCursor(0) }}
             onKeyDown={onKeyDown}
-            placeholder="Search pages, people, projects, tasks, chats…"
+            placeholder="Search pages, people, leads, projects, tasks, chats…"
             aria-label="Search"
             autoComplete="off"
             className="h-12 min-w-0 flex-1 border-0 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-faint focus:ring-0"

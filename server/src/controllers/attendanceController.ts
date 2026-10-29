@@ -10,6 +10,7 @@ import { getClientIp, ipAllowed, isLoopback, networkOf } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { sendCsv } from '../lib/csv'
 import { shiftSpanMin, autoCheckoutAt, overtimeMinutes, OVERTIME_MAX_MIN } from '../lib/overtime'
+import { AUTO_CHECKOUT_NOTE } from '../lib/autoCheckout'
 import type { Role, DepartmentType } from '@prisma/client'
 
 type DayWithBreaks = Prisma.AttendanceDayGetPayload<{ include: { breaks: true } }>
@@ -137,8 +138,13 @@ export function leftEarly(checkOutAt: Date | null | undefined, workedMin: number
   return isEarlyLeave(checkOutAt, shift)
 }
 
-/** Total break minutes; an open break is counted up to `now`. */
+/** Total break minutes (not the time off the clock); an open break is counted up to `now`. */
 function breakMinutes(day: DayWithBreaks, now: Date): number {
+  return Math.max(0, pauseMinutes(day, now) - breakMinutesOfType(day, 'OFF', now))
+}
+
+/** Every minute not worked inside the session: breaks, and the time off the clock between an automatic check-out and overtime. */
+function pauseMinutes(day: DayWithBreaks, now: Date): number {
   let ms = 0
   for (const b of day.breaks) {
     const end = b.endAt ?? now
@@ -148,7 +154,7 @@ function breakMinutes(day: DayWithBreaks, now: Date): number {
 }
 
 /** Break minutes for a single break type (BREAK or BRB); open break counted to `now`. */
-function breakMinutesOfType(day: DayWithBreaks, type: 'BREAK' | 'BRB', now: Date): number {
+function breakMinutesOfType(day: DayWithBreaks, type: 'BREAK' | 'BRB' | 'OFF', now: Date): number {
   let ms = 0
   for (const b of day.breaks) {
     if (b.type !== type) continue
@@ -180,7 +186,7 @@ function workedMinutes(day: DayWithBreaks, now: Date): number | null {
     else return null
   }
   const gross = Math.round((end.getTime() - day.checkInAt.getTime()) / 60000)
-  return Math.max(0, gross - breakMinutes(day, end))
+  return Math.max(0, gross - pauseMinutes(day, end))
 }
 
 type LiveState = 'NOT_IN' | 'IN' | 'ON_BREAK' | 'OUT'
@@ -212,8 +218,19 @@ function serializeToday(day: DayWithBreaks | null, shift: Shift, now: Date) {
     earlyLeave: leftEarly(day?.checkOutAt, worked, shift),
     requiredMin: shift.requiredMinutes,
     completed: worked != null && worked >= shift.requiredMinutes,
+    // Checked out by Metriq when the shift hours were complete: they can still start overtime.
+    canStartOvertime: canRestartForOvertime(day, now),
     ...overtimeInfo(day, shift, now),
   }
+}
+
+/** How long after the automatic check-out someone can still start overtime on that day. */
+const OVERTIME_RESTART_HOURS = 8
+
+/** Checked out automatically (not by themselves), no overtime yet, and not long ago. */
+function canRestartForOvertime(day: DayWithBreaks | null, now: Date): boolean {
+  return !!day?.checkInAt && !!day.checkOutAt && !day.overtimeAt && day.note === AUTO_CHECKOUT_NOTE
+    && now.getTime() - day.checkOutAt.getTime() <= OVERTIME_RESTART_HOURS * 3600_000 && now >= day.checkOutAt
 }
 
 /** Overtime and the automatic check-out time, for the clock and history. */
@@ -575,7 +592,18 @@ export async function startOvertime(req: AuthedRequest, res: Response): Promise<
     return
   }
   if (existing.checkOutAt) {
-    res.status(409).json({ error: 'You have already checked out for today.' })
+    // Metriq checked them out when the shift hours were complete, and they want to keep
+    // working: the day opens again in overtime. The time in between is off the clock (not
+    // work, not a break), so overtime counts from now.
+    if (!canRestartForOvertime(existing, now)) {
+      res.status(409).json({ error: 'You have already checked out for today.' })
+      return
+    }
+    await prisma.$transaction([
+      prisma.breakEntry.create({ data: { dayId: existing.id, type: 'OFF', startAt: existing.checkOutAt, endAt: now } }),
+      prisma.attendanceDay.update({ where: { id: existing.id }, data: { checkOutAt: null, overtimeAt: now, note: 'Overtime started after the automatic check-out' } }),
+    ])
+    res.json(await buildMePayload(me))
     return
   }
   if (!existing.overtimeAt) await prisma.attendanceDay.update({ where: { id: existing.id }, data: { overtimeAt: now } })
@@ -1601,7 +1629,8 @@ export async function getDayBreaks(req: AuthedRequest, res: Response): Promise<v
     checkIn: day?.checkInAt ? hhmm(day.checkInAt, shift) : null,
     checkOut: day?.checkOutAt ? hhmm(day.checkOutAt, shift) : null,
     overtime: day?.overtimeAt ? hhmm(day.overtimeAt, shift) : null,
-    breaks: (day?.breaks ?? []).map((b) => breakView(b, shift, now)),
+    // Time off the clock is not a break a team lead edits.
+    breaks: (day?.breaks ?? []).filter((b) => b.type !== 'OFF').map((b) => breakView(b, shift, now)),
     allowance: { breakMin: shift.breakAllowanceMin, brbMin: shift.brbAllowanceMin, breakCutoffMin: shift.breakCutoffMin, brbCutoffMin: shift.brbCutoffMin },
   })
 }
@@ -1654,7 +1683,7 @@ export async function addDayBreak(req: AuthedRequest, res: Response): Promise<vo
 
 async function breakForEdit(req: AuthedRequest, res: Response) {
   const b = await prisma.breakEntry.findUnique({ where: { id: req.params.id }, include: { day: { include: { breaks: true } } } })
-  if (!b) { res.status(404).json({ error: 'Break not found' }); return null }
+  if (!b || b.type === 'OFF') { res.status(404).json({ error: 'Break not found' }); return null }
   const me = await loadUser(req.user!.id)
   const target = await requireManageableTarget(me, b.day.userId, res)
   if (!target) return null

@@ -47,6 +47,24 @@ describe('automatic check-out after the shift hours', () => {
     expect(n?.body).toContain('8:20 PM')
   })
 
+  it('still working after the automatic check-out: "Start overtime" opens the day again, counted from then', async () => {
+    const a = as(w.itadMember)
+    at('2026-10-13T21:00')
+    expect((await a.me().expect(200)).body.today).toMatchObject({ state: 'OUT', canStartOvertime: true })
+    const o = await a.post('overtime').expect(200)
+    expect(o.body.today).toMatchObject({ state: 'IN', overtime: true, overtimeMin: 0, autoCheckoutLabel: '1:00 AM', canStartOvertime: false })
+    at('2026-10-13T22:00')
+    // The 40 minutes between the check-out and pressing it are off the clock: not work, not a break.
+    expect((await a.me().expect(200)).body.today).toMatchObject({ state: 'IN', overtimeMin: 60, workedMin: 600, breakMin: 0, regularBreakMin: 0 })
+    await a.post('check-out').expect(200)
+    const h = await request(app).get('/api/attendance/history?range=custom&start=2026-10-13&end=2026-10-13').set(...auth(w.itadMember)).expect(200)
+    expect(h.body.rows[0]).toMatchObject({ overtimeMin: 60, workedMin: 600 })
+    // Checked out by themselves this time: no second restart.
+    at('2026-10-13T22:05')
+    expect((await a.me().expect(200)).body.today.canStartOvertime).toBe(false)
+    await a.post('overtime').expect(409)
+  })
+
   it('with "Start overtime" the clock keeps running and the extra time is counted', async () => {
     const a = as(w.leadgenMember)
     at('2026-10-13T11:00')

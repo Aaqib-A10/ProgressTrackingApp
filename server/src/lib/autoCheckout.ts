@@ -100,7 +100,7 @@ export async function runAutoCheckoutTick(
           title: 'You were checked out',
           body: overtime
             ? `Checked out at ${clockAt(at, zone)} after ${OVERTIME_MAX_MIN / 60} hours of overtime.`
-            : `Your shift hours were complete, so you were checked out at ${clockAt(at, zone)}. Next time press "Start overtime" to keep working.`,
+            : `Your shift hours were complete, so you were checked out at ${clockAt(at, zone)}. Still working? Open the clock and press "Start overtime".`,
           link: '/app/attendance/me',
         },
       }),
