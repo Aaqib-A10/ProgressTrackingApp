@@ -4,6 +4,7 @@ import { DepartmentType } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { activeProvider } from '../lib/billing/providers'
 import { companySectionsOff } from '../lib/sectionsOff'
+import { personBlocks } from '../lib/personBlocks'
 import {
   hashPassword,
   verifyPassword,
@@ -47,7 +48,7 @@ async function publicUser(userId: string) {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     include: {
-      department: { select: { type: true, name: true } },
+      department: { select: { type: true, name: true, layout: true } },
       subDepartment: { select: { slug: true, name: true } },
       memberships: {
         include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
@@ -85,6 +86,8 @@ async function publicUser(userId: string) {
       // Sections the company turned off (Phase 2): their screens are left out of the menu.
       sectionsOff: await companySectionsOff(user.companyId),
     },
+    // Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind).
+    blocks: await personBlocks(user),
     emailCheckPending: user.emailCheckPending,
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,
     permissions: powersOf(user),

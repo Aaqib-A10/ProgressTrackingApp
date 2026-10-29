@@ -42,10 +42,10 @@ describe('switches', () => {
   it('everything is on by default (new sign-ups off), and the app can read its switches', async () => {
     const a = await owner()
     const list = (await a.get('/api/owner/flags').expect(200)).body.flags
-    expect(list.map((f: { key: string }) => f.key)).toEqual(['silent-updates', 'help-button', 'break-cutoff', 'dialer-sync', 'company-settings', 'daily-report', 'social-sign-in', 'new-companies', 'company-walls'])
+    expect(list.map((f: { key: string }) => f.key)).toEqual(['silent-updates', 'help-button', 'break-cutoff', 'dialer-sync', 'company-settings', 'daily-report', 'department-studio', 'social-sign-in', 'new-companies', 'company-walls'])
     expect(list.every((f: { key: string; enabled: boolean; isDefault: boolean }) => f.isDefault && f.enabled === !['new-companies', 'social-sign-in'].includes(f.key))).toBe(true)
     const app1 = (await request(app).get('/api/flags').set(...auth(w.itadMember)).expect(200)).body.flags
-    expect(app1).toEqual({ 'silent-updates': true, 'help-button': true, 'company-settings': true, 'daily-report': true })
+    expect(app1).toEqual({ 'silent-updates': true, 'help-button': true, 'company-settings': true, 'daily-report': true, 'department-studio': true })
     await request(app).get('/api/flags').expect(401)
   })
 

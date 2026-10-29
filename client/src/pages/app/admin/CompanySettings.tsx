@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers, SlidersHorizontal } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers, SlidersHorizontal, LayoutGrid } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { flagOn } from '../../../lib/flags'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
@@ -161,6 +163,8 @@ function DepartmentsTab() {
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const navigate = useNavigate()
+  const studio = flagOn('department-studio')
   useEffect(() => { companyApi.departments().then((r) => { setList(r.departments); setKinds(r.kinds) }).catch(() => addToast({ type: 'error', message: 'Could not load departments.' })) }, [addToast])
 
   async function run(p: Promise<{ departments: CompanyDepartment[] }>, ok: string) {
@@ -206,6 +210,7 @@ function DepartmentsTab() {
                     )}
                     {editing?.id !== d.id && (
                       <div className="flex items-center gap-1">
+                        {studio && <Button size="sm" variant="secondary" leadingIcon={<LayoutGrid size={15} />} onClick={() => navigate(`/app/admin/company/departments/${d.id}`)}>{d.layout ? 'Studio · own menus' : 'Open studio'}</Button>}
                         {sections.length > 0 && <Button size="sm" variant={open === d.id ? 'secondary' : 'ghost'} leadingIcon={<SlidersHorizontal size={15} />} onClick={() => setOpen(open === d.id ? null : d.id)}>Sections</Button>}
                         <Button size="sm" variant="ghost" onClick={() => setEditing({ id: d.id, name: d.name })} aria-label={`Rename ${d.name}`}><Pencil size={15} /></Button>
                         <Button size="sm" variant="ghost" disabled={busy || d.people > 0} title={d.people > 0 ? 'Move its people to another department first' : 'Remove'} onClick={() => run(companyApi.removeDepartment(d.id), `${d.name} removed.`)} aria-label={`Remove ${d.name}`}><Trash2 size={15} /></Button>

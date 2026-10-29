@@ -89,6 +89,7 @@ const TestCheckout = lazy(pageModule(() => import('../pages/app/billing/TestChec
 const InvoiceView = lazy(pageModule(() => import('../pages/app/billing/InvoiceView')))
 const VerifyEmail = lazy(pageModule(() => import('../pages/auth/VerifyEmail')))
 const CompanySettings = lazy(pageModule(() => import('../pages/app/admin/CompanySettings')))
+const DepartmentStudio = lazy(pageModule(() => import('../pages/app/admin/DepartmentStudio')))
 const MyDailyReport = lazy(pageModule(() => import('../pages/app/dailyReport/MyDailyReport')))
 const TeamDailyReport = lazy(pageModule(() => import('../pages/app/dailyReport/TeamDailyReport')))
 const ReportForms = lazy(pageModule(() => import('../pages/app/dailyReport/ReportForms')))
@@ -250,6 +251,7 @@ export const router = createBrowserRouter([
       { path: 'admin/leave', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><AdminLeave /></RequireRole> },
       { path: 'admin/networks', element: <RequireRole roles={['SUPER_ADMIN']}><AdminNetworks /></RequireRole> },
       { path: 'admin/company', element: <RequirePower power="company.settings"><CompanySettings /></RequirePower> },
+      { path: 'admin/company/departments/:id', element: <RequirePower power="company.settings"><RequireFlag flag="department-studio"><DepartmentStudio /></RequireFlag></RequirePower> },
       { path: 'admin/financials', element: <RequireFinance><FinancialReports /></RequireFinance> },
       { path: 'admin/activity', element: <RequireRole roles={['SUPER_ADMIN', 'TEAM_LEAD']}><AdminActivity /></RequireRole> },
       { path: 'admin/health', element: <RequireHealth><SystemHealth /></RequireHealth> },

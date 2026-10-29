@@ -48,6 +48,8 @@ export interface CurrentUser {
   permissions?: string[]
   /** Parts of Metriq switched off for their company (plan) or company role (lib/areas.ts). */
   areasOff?: string[]
+  /** Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind). */
+  blocks?: string[] | null
   /** Help sign-in: Metriq support is using Metriq as this person (a banner shows). */
   supportSession?: boolean
 }

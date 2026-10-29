@@ -1,6 +1,6 @@
 import { api } from '../../lib/api'
 import { createContext, useContext, useState, useEffect, useRef, Suspense, type ReactNode } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Activity } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import type { CurrentUser } from '../../lib/types'
@@ -12,6 +12,7 @@ import { CallProvider } from '../calls/CallProvider'
 import { SilentUpdater } from './SilentUpdater'
 import { PushBanner } from './PushControls'
 import { CommandPalette } from './GlobalSearch'
+import { endPreview, usePreview } from '../../lib/preview'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -121,6 +122,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
           <div className="flex min-w-0 flex-1 flex-col">
             {user.supportSession && <SupportBanner name={user.name} />}
+            <PreviewBanner />
             <AccountBanners user={user} />
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
             <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:px-8 sm:py-7">
@@ -140,6 +142,19 @@ export function AppShell({ user, children }: AppShellProps) {
 }
 
 /** Help sign-in (Phase 1, step 6): Metriq support is using Metriq as this person, with the company's consent. */
+function PreviewBanner() {
+  const p = usePreview()
+  const navigate = useNavigate()
+  if (!p) return null
+  return (
+    <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-primary px-4 py-1.5 text-center text-body-sm font-medium text-white">
+      <span>Previewing <b>{p.departmentName}</b> as a {p.role === 'TEAM_LEAD' ? 'Team Lead' : 'Member'}: this is the menu they get.</span>
+      <button type="button" onClick={() => { const id = p.departmentId; endPreview(); navigate(`/app/admin/company/departments/${id}`) }} className="rounded-btn bg-white/15 px-2.5 py-0.5 font-semibold hover:bg-white/25">Back to the studio</button>
+      <button type="button" onClick={() => endPreview()} className="rounded-btn bg-white/15 px-2.5 py-0.5 font-semibold hover:bg-white/25">End preview</button>
+    </div>
+  )
+}
+
 function SupportBanner({ name }: { name: string }) {
   async function end() {
     try { await api.post('/auth/logout') } catch { /* signed out anyway */ }

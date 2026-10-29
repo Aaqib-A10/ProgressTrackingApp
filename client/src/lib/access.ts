@@ -1,6 +1,7 @@
 import { matchPath } from 'react-router-dom'
 import type { CurrentUser, Department, Role } from './types'
 import { areaBlocked } from './areas'
+import { blocksOfPath } from './blocks'
 
 /**
  * Who may open which screen: ONE list used by both the side menu and the page guard, so a
@@ -120,7 +121,7 @@ export const ACCESS: Record<string, AccessLine[]> = {
   '/app/admin/activity': [{ roles: LEAD }],
 }
 
-type Who = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'areasOff'> & { company?: CurrentUser['company'] }
+type Who = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'areasOff'> & { company?: CurrentUser['company']; blocks?: string[] | null }
 
 function lineAllows(line: AccessLine, u: Who): boolean {
   if (line.roles && !line.roles.includes(u.role)) return false
@@ -146,6 +147,11 @@ export function canOpen(u: Who | null | undefined, pathname: string): boolean {
   // A company role can have parts of Metriq switched off (Phase 1, step 4), Super Admin based ones too.
   if (areaBlocked(u, pathname)) return false
   if (u.role === 'SUPER_ADMIN') return true
+  // Department Studio: a screen that belongs to a block opens only when the block is in the person's menu.
+  if (u.blocks) {
+    const owners = blocksOfPath(pathname, 'app')
+    if (owners.length) return owners.some((b) => u.blocks!.includes(b.key))
+  }
   const rule = accessRuleFor(pathname.replace(/\/+$/, '') || '/')
   if (!rule) return true
   return rule.some((line) => lineAllows(line, u))

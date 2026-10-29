@@ -55,6 +55,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  'department-studio': {
+    label: 'Department Studio',
+    description: "The Super Admin shapes each department's menu for its members and team leads by drag and drop (Company Settings, Departments, Open studio). Off for 99 Technologies: their menus stay as they are.",
+    default: true,
+    client: true,
+    scope: 'company',
+  },
   'social-sign-in': {
     label: 'Sign in with Google and Microsoft',
     description: 'The Google and Microsoft buttons on the sign-in and sign-up pages work (when their keys are on the server). Off: the buttons show "coming soon" and nobody can sign in or sign up with them.',

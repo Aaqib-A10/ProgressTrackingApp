@@ -8,6 +8,7 @@ import { canViewFinance } from '../lib/finance'
 import { flagOn, refreshFlags } from '../lib/flags'
 import { inHomeCompany } from '../lib/types'
 import { canOpen } from '../lib/access'
+import { asPreviewed, usePreview } from '../lib/preview'
 import { AppShell } from '../components/layout/AppShell'
 
 function FullScreenSpinner() {
@@ -29,9 +30,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 /** Renders the app shell with the authenticated user; nested routes fill the Outlet. */
 export function AppShellRoute() {
-  const { user } = useAuth()
+  const { user: real } = useAuth()
   const { pathname } = useLocation()
-  if (!user) return <Navigate to="/login" replace />
+  // Department Studio preview: the Super Admin sees a department's menu as its member or team lead.
+  const preview = usePreview()
+  if (!real) return <Navigate to="/login" replace />
+  const user = asPreviewed(real, preview)
   // Every page under /app checks the same access list as the menu (lib/access.ts), so a
   // screen for another department or role cannot be opened by typing its address.
   if (!canOpen(user, pathname)) return <Navigate to="/app/dashboard" replace />

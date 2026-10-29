@@ -109,6 +109,9 @@ model Department {
   name        String
   /// Sections of its kind turned off by the company (lib/sections.ts): hidden, and no new entries.
   sectionsOff String[]       @default([])
+  /// Department Studio (lib/blocks.ts): { member: string[], lead: string[] }, the blocks in each
+  /// role's menu, in order. Empty = the menu that comes with its kind.
+  layout      Json?
   createdAt   DateTime       @default(now())
 
   subDepartments  SubDepartment[]

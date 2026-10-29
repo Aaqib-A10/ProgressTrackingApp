@@ -50,7 +50,8 @@ import type { BadgeTone } from '../ui/Badge'
 import { canViewFinance } from '../../lib/finance'
 import { areaBlocked } from '../../lib/areas'
 import { flagOn } from '../../lib/flags'
-import { inHomeCompany } from '../../lib/types'
+import { inHomeCompany, type Department } from '../../lib/types'
+import { blockByKey, blocksOfPath, type BlockGroup } from '../../lib/blocks'
 
 export interface NavItem {
   label: string
@@ -268,7 +269,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company'>
+type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company'> & { blocks?: string[] | null }
 
 /** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
 function itemVisible(item: NavItem, u: NavUser): boolean {
@@ -291,6 +292,8 @@ const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/ad
 
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
 export function filterNav(u: NavUser): NavGroup[] {
+  // Department Studio: the department has its own menu for this person's role.
+  if (u.blocks && u.role !== 'SUPER_ADMIN') return blockNav(u, u.blocks)
   if (u.company?.kind === 'PERSONAL') {
     return filterTeamNav(u).map((g) => ({ ...g, items: g.items.filter((i) => !TEAM_ONLY.has(i.to)), subgroups: g.subgroups?.map((sg) => ({ ...sg, items: sg.items.filter((i) => !TEAM_ONLY.has(i.to)) })).filter((sg) => sg.items.length) })).filter((g) => g.items.length || g.subgroups?.length)
   }
@@ -333,4 +336,67 @@ function filterKinds(u: NavUser): NavGroup[] {
       ?.map((sg) => ({ ...sg, items: sg.items.filter((i) => itemVisible(i, u)) }))
       .filter((sg) => sg.items.length > 0),
   })).filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
+}
+
+// ------------------------------------------------------------------ Department Studio menus
+
+/** Where each block group sits in the classic menu (its heading, icon and color come from there). */
+const GROUP_TITLE: Record<BlockGroup, string | undefined> = {
+  main: undefined, projects: 'Projects', 'daily-report': 'Daily Report', attendance: 'Attendance', itad: 'ITAD', leadgen: 'Lead Generation', ecommerce: 'Ecommerce', inventory: 'Inventory', marketing: 'Marketing',
+}
+/** Groups that stay as they were: they follow the person's role, not the department. */
+const ROLE_GROUPS = ['Quality Assurance', 'Admin']
+
+const allItems = (g: NavGroup) => [...g.items, ...(g.subgroups ?? []).flatMap((sg) => sg.items)]
+/** The menu item a block shows as (same name and icon as the classic menu). */
+export function navItemOfBlock(key: string): NavItem | null {
+  const b = blockByKey(key)
+  if (!b) return null
+  const to = b.app[0].replace(/\$$/, '')
+  for (const g of NAV_GROUPS) {
+    const i = g.items.find((x) => x.to === to)
+    if (i) return i
+    // Inside a sub-heading (Marketing → SEO → Daily Log): the block's own name says which one.
+    for (const sg of g.subgroups ?? []) { const j = sg.items.find((x) => x.to === to); if (j) return { ...j, label: b.label } }
+  }
+  return null
+}
+/** The heading, icon and color of a block group, from the classic menu. */
+export function navGroupOf(group: BlockGroup): Pick<NavGroup, 'title' | 'icon' | 'color'> {
+  const title = GROUP_TITLE[group]
+  const g = NAV_GROUPS.find((x) => x.title === title) ?? NAV_GROUPS[0]
+  return { title: g.title, icon: g.icon, color: g.color }
+}
+
+/** A menu made of the department's blocks, in the order the Super Admin put them, plus the role-based groups. */
+export function blockNav(u: NavUser, blocks: string[]): NavGroup[] {
+  const out: (NavGroup & { key: BlockGroup })[] = []
+  for (const key of blocks) {
+    const b = blockByKey(key)
+    const item = navItemOfBlock(key)
+    if (!b || !item) continue
+    if (item.flag && !flagOn(item.flag)) continue
+    if (areaBlocked(u, item.to)) continue
+    let g = out.find((x) => x.key === b.group)
+    if (!g) { g = { key: b.group, ...navGroupOf(b.group), items: [] }; out.push(g) }
+    g.items.push({ ...item, hideFor: undefined })
+  }
+  // The project dashboard stays with Projects for project admins (the Sidebar checks that).
+  const pd = NAV_GROUPS.find((g) => g.title === 'Projects')?.items.find((i) => i.projectAdminOnly)
+  const proj = out.find((g) => g.key === 'projects')
+  if (pd && proj && blocks.includes('projects')) proj.items.push(pd)
+  const roleGroups = filterTeamNav(u).filter((g) => g.title && ROLE_GROUPS.includes(g.title))
+  return [...out.map(({ key: _k, ...g }) => g), ...roleGroups]
+}
+
+/** The classic menu of a kind of department for a role, as blocks (the Studio's starting point). */
+export function templateBlocks(kind: Department, role: 'MEMBER' | 'TEAM_LEAD'): string[] {
+  const u: NavUser = { role, department: kind, subDepartment: null, email: '', isDeveloper: false, permissions: [], areasOff: [], company: { id: 'template', name: '', kind: 'TEAM', plan: 'business', status: 'ACTIVE', timeZone: 'UTC', departmentKinds: [kind] } }
+  const keys: string[] = []
+  for (const g of filterTeamNav(u)) for (const i of allItems(g)) {
+    const b = blocksOfPath(i.to, 'app').find((x) => x.app.some((a) => a.replace(/\$$/, '') === i.to))
+    if (b && !keys.includes(b.key) && (!b.kinds.length || b.kinds.includes(kind)) && !(b.leadOnly && role === 'MEMBER')) keys.push(b.key)
+  }
+  if (!keys.includes('dashboard')) keys.unshift('dashboard')
+  return keys
 }

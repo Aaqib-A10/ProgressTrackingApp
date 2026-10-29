@@ -6,6 +6,8 @@ import { runAsCompany } from '../lib/tenancy'
 import { areaOf } from '../lib/permissions'
 import { sectionOf } from '../lib/sections'
 import { companySectionsOff } from '../lib/sectionsOff'
+import { blocksOfPath } from '../lib/blocks'
+import { personBlocks } from '../lib/personBlocks'
 import { companyAreasOff } from '../lib/plans'
 import { billingState, readOnlyReason } from '../lib/billing/billing'
 
@@ -66,6 +68,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true,
         company: { select: { id: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true, trialEndsAt: true, subscription: { select: { status: true, currentPeriodEnd: true, pastDueSince: true, cancelAtPeriodEnd: true } } } },
         customRole: { select: { areasOff: true } },
+        department: { select: { type: true, layout: true } },
       },
     })
     // A suspended company (owner console) signs all its people out.
@@ -121,6 +124,18 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       if (section && (await companySectionsOff(user.companyId).catch(() => [] as string[])).includes(section.key)) {
         res.status(403).json({ error: `${section.label} is turned off for your company (Company Settings, Departments).`, sectionOff: section.key })
         return
+      }
+    }
+    // A block the Super Admin took out of the person's department menu (Department Studio):
+    // nothing new is saved there either.
+    if (req.method !== 'GET' && user.department?.layout && user.role !== 'SUPER_ADMIN') {
+      const owners = blocksOfPath(req.originalUrl, 'api')
+      if (owners.length) {
+        const mine = await personBlocks(user).catch(() => null)
+        if (mine && !owners.some((b) => mine.includes(b.key))) {
+          res.status(403).json({ error: `${owners[0].label} is not in your department's menu (Company Settings, Departments).`, blockOff: owners[0].key })
+          return
+        }
       }
     }
     req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}) }

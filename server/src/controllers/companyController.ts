@@ -1,7 +1,7 @@
 import type { Response } from 'express'
 import { z } from 'zod'
 import { IANAZone } from 'luxon'
-import type { DepartmentType, Role } from '@prisma/client'
+import { Prisma, type DepartmentType, type Role } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { KIND_INFO, SECTION_KEYS, sectionsOfKind } from '../lib/sections'
 import { forgetSections } from '../lib/sectionsOff'
@@ -10,6 +10,8 @@ import { HOME_COMPANY_ID } from '../lib/company'
 import { forgetTimeZone } from '../lib/tenancy'
 import { AREAS, AREA_KEYS, BUILTIN_POWERS, POWERS, POWER_KEYS, loadPowers, type PowerKey } from '../lib/permissions'
 import { usageOf } from '../lib/plans'
+import { cleanLayout, readLayout } from '../lib/blocks'
+import { isOn } from '../lib/flags'
 
 /**
  * Company settings (Phase 1, step 4), for the Super Admin or anyone with the Company settings
@@ -86,11 +88,13 @@ export async function updateCompany(req: AuthedRequest, res: Response): Promise<
 async function departmentList() {
   const rows = await prisma.department.findMany({
     orderBy: { createdAt: 'asc' },
-    select: { id: true, name: true, type: true, sectionsOff: true, createdAt: true, _count: { select: { users: true, userMemberships: true } } },
+    select: { id: true, name: true, type: true, sectionsOff: true, layout: true, createdAt: true, _count: { select: { users: true, userMemberships: true } } },
   })
   return rows.map((d) => ({
     id: d.id, name: d.name, type: d.type, kind: DEPARTMENT_KINDS.find((k) => k.type === d.type)?.label ?? d.type, people: Math.max(d._count.users, d._count.userMemberships), createdAt: d.createdAt,
     sectionsOff: d.sectionsOff.filter((k) => SECTION_KEYS.includes(k)),
+    // Department Studio: its own member and team lead menus (null: the menu of its kind).
+    layout: readLayout(d.layout),
   }))
 }
 
@@ -164,6 +168,28 @@ export async function setDepartmentSections(req: AuthedRequest, res: Response): 
     if (!d) throw new Refused(404, 'Department not found')
     await prisma.department.update({ where: { id: d.id }, data: { sectionsOff: checkSections(d.type, sectionsOff) } })
     forgetSections()
+    res.json({ departments: await departmentList() })
+  } catch (e) { send(res, e) }
+}
+
+/**
+ * PUT /api/company/departments/:id/layout { member, lead } | { reset: true } — Department Studio:
+ * the blocks in the department's member and team lead menus, in order. Reset goes back to the
+ * menu of its kind. Needs the Studio switched on for the company.
+ */
+export async function setDepartmentLayout(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const u = await settingsUser(req)
+    if (!(await isOn('department-studio', u.companyId))) throw new Refused(403, 'The Department Studio is not switched on for your company.')
+    const d = await prisma.department.findUnique({ where: { id: req.params.id }, select: { id: true, type: true } })
+    if (!d) throw new Refused(404, 'Department not found')
+    if (req.body?.reset === true) {
+      await prisma.department.update({ where: { id: d.id }, data: { layout: Prisma.DbNull } })
+    } else {
+      const r = cleanLayout(req.body, d.type)
+      if ('error' in r) throw new Refused(400, r.error)
+      await prisma.department.update({ where: { id: d.id }, data: { layout: r.layout as unknown as Prisma.InputJsonValue } })
+    }
     res.json({ departments: await departmentList() })
   } catch (e) { send(res, e) }
 }
