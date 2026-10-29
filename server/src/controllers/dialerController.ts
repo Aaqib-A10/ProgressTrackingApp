@@ -7,6 +7,7 @@ import { OUTCOMES, type Outcome } from '../lib/dialer/calls'
 import type { AuthedRequest } from '../middleware/auth'
 import { findState, stateFromPhone } from '../lib/dialer/states'
 import { DEFAULT_SETTINGS, FOLLOW_UP_MAX, FOLLOW_UP_MIN, funnel, normalizeStatus, stageOf, withDefaults, type DialerSettingsData, type FunnelNumbers } from '../lib/dialer/rules'
+import { actsAs } from '../lib/acting'
 
 /**
  * Lead Dialer (ITAD). Plan: "Lead Dialer Dashboard, Final Plan" (Oct 2026).
@@ -31,13 +32,14 @@ export async function loadSettings(): Promise<DialerSettingsData> {
 
 export async function whoAmI(req: AuthedRequest) {
   const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { id: true, name: true, role: true, departmentId: true, department: { select: { type: true } } } })
-  const isManager = me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'ITAD')
+  const isManager = me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && actsAs(me, 'ITAD'))
   return { ...me, isManager }
 }
 
-/** ITAD people whose leads a manager may look at. */
-async function itadUserIds(): Promise<string[]> {
-  const users = await prisma.user.findMany({ where: { department: { type: 'ITAD' } }, select: { id: true } })
+/** ITAD people whose leads a manager may look at. A team lead of another kind of department that has the Lead Dialer in its menu (Department Studio) sees their own department's people. */
+async function itadUserIds(me?: { role: string; departmentId: string | null; department: { type: string } | null }): Promise<string[]> {
+  const where = me && me.role !== 'SUPER_ADMIN' && me.department && me.department.type !== 'ITAD' && me.departmentId ? { departmentId: me.departmentId } : { department: { type: 'ITAD' as const } }
+  const users = await prisma.user.findMany({ where, select: { id: true } })
   return users.map((u) => u.id)
 }
 
@@ -46,8 +48,8 @@ async function scopeOwners(req: AuthedRequest, me: Awaited<ReturnType<typeof who
   const rep = String(req.query.rep ?? 'me')
   if (rep === 'me' || rep === me.id) return [me.id]
   if (!me.isManager) return null
-  if (rep === 'all') return [...new Set([...(await itadUserIds()), me.id])]
-  const ids = await itadUserIds()
+  if (rep === 'all') return [...new Set([...(await itadUserIds(me)), me.id])]
+  const ids = await itadUserIds(me)
   return ids.includes(rep) || rep === me.id ? [rep] : null
 }
 
@@ -332,7 +334,7 @@ export async function dialerData(req: AuthedRequest, res: Response): Promise<voi
     }),
     prisma.dialerImport.findFirst({ where: { userId: { in: owners } }, orderBy: { createdAt: 'desc' }, select: { id: true, createdAt: true, fileName: true, headerSignature: true, mapping: true, summary: true, user: { select: { name: true } } } }),
     me.isManager
-      ? prisma.user.findMany({ where: { department: { type: 'ITAD' }, isActive: true }, select: { id: true, name: true, dialerImports: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } }, orderBy: { name: 'asc' } })
+      ? prisma.user.findMany({ where: { ...(me.role !== 'SUPER_ADMIN' && me.department && me.department.type !== 'ITAD' && me.departmentId ? { departmentId: me.departmentId } : { department: { type: 'ITAD' } }), isActive: true }, select: { id: true, name: true, dialerImports: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } }, orderBy: { name: 'asc' } })
       : Promise.resolve([]),
   ])
   // The mapping the rep used last time (to fill the import screen and spot changed columns).
@@ -406,7 +408,7 @@ async function loadOwnLead(req: AuthedRequest, res: Response) {
   const lead = await prisma.dialerLead.findUnique({ where: { id: req.params.id } })
   if (!lead) { res.status(404).json({ error: 'Lead not found' }); return null }
   if (lead.ownerId !== me.id) {
-    const ok = me.isManager && (await itadUserIds()).includes(lead.ownerId)
+    const ok = me.isManager && (await itadUserIds(me)).includes(lead.ownerId)
     if (!ok) { res.status(404).json({ error: 'Lead not found' }); return null }
   }
   return { me, lead }
@@ -710,7 +712,7 @@ export async function updateNote(req: AuthedRequest, res: Response): Promise<voi
   const me = await whoAmI(req)
   const note = await prisma.dialerNote.findUnique({ where: { id: req.params.id }, include: { lead: { select: { ownerId: true } } } })
   if (!note) { res.status(404).json({ error: 'Note not found' }); return }
-  const canSee = note.lead.ownerId === me.id || (me.isManager && (await itadUserIds()).includes(note.lead.ownerId))
+  const canSee = note.lead.ownerId === me.id || (me.isManager && (await itadUserIds(me)).includes(note.lead.ownerId))
   if (!canSee) { res.status(404).json({ error: 'Note not found' }); return }
   const parsed = z.object({ text: z.string().trim().min(1).max(4000).optional(), pinned: z.boolean().optional() }).safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid note' }); return }
@@ -806,7 +808,7 @@ export async function importChanges(req: AuthedRequest, res: Response): Promise<
   const me = await whoAmI(req)
   const imp = await prisma.dialerImport.findUnique({ where: { id: req.params.id }, select: { userId: true } })
   if (!imp) { res.status(404).json({ error: 'Import not found' }); return }
-  if (imp.userId !== me.id && !(me.isManager && (await itadUserIds()).includes(imp.userId))) { res.status(404).json({ error: 'Import not found' }); return }
+  if (imp.userId !== me.id && !(me.isManager && (await itadUserIds(me)).includes(imp.userId))) { res.status(404).json({ error: 'Import not found' }); return }
   const rows = await prisma.dialerStatusChange.findMany({
     where: { importId: req.params.id, ...(req.query.from ? { fromStatus: String(req.query.from) } : {}), ...(req.query.to ? { toStatus: String(req.query.to) } : {}) },
     take: 5000,

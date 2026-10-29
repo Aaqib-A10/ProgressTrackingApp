@@ -148,6 +148,9 @@ export function canOpen(u: Who | null | undefined, pathname: string): boolean {
   if (areaBlocked(u, pathname)) return false
   if (u.role === 'SUPER_ADMIN') return true
   // Department Studio: a screen that belongs to a block opens only when the block is in the person's menu.
+  // A block the company made itself: only for people whose menu has it.
+  const custom = /^\/app\/custom\/([a-z0-9]+)/.exec(pathname)
+  if (custom) return !!u.blocks?.includes(`custom:${custom[1]}`)
   if (u.blocks) {
     const owners = blocksOfPath(pathname, 'app')
     if (owners.length) return owners.some((b) => u.blocks!.includes(b.key))

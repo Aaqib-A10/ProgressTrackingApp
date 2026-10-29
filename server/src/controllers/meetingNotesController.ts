@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString, dateStringFromDb } from '../lib/time'
+import { actsAs } from '../lib/acting'
 
 /**
  * Ecommerce meeting notes — shared across the department. Any EC member (or
@@ -15,15 +16,15 @@ function loadUser(id: string) {
 }
 
 function isEcommerce(me: Awaited<ReturnType<typeof loadUser>>): boolean {
-  return me.department?.type === 'ECOMMERCE' || me.role === 'SUPER_ADMIN'
+  return actsAs(me, 'ECOMMERCE') || me.role === 'SUPER_ADMIN'
 }
 
 function isManager(me: Awaited<ReturnType<typeof loadUser>>): boolean {
-  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'ECOMMERCE')
+  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && actsAs(me, 'ECOMMERCE'))
 }
 
 async function ecommerceDept(me: Awaited<ReturnType<typeof loadUser>>) {
-  if (me.department?.type === 'ECOMMERCE') return me.department
+  if (actsAs(me, 'ECOMMERCE')) return me.department
   if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'ECOMMERCE' } })
   return null
 }

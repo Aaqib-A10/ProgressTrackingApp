@@ -9,7 +9,9 @@ import { useAuth } from './auth'
 
 export interface CompanyInfo { id: string; name: string; kind: 'TEAM' | 'PERSONAL'; timeZone: string; plan: string; status: string; createdAt: string; home: boolean; supportAccessUntil: string | null }
 export interface CompanyUsage { plan: string; people: { used: number; limit: number | null }; storage: { usedBytes: number; limitBytes: number | null }; aiHours: { used: number; limit: number | null } }
-export interface CompanyDepartment { id: string; name: string; type: Department; kind: string; people: number; createdAt: string; sectionsOff: string[]; layout: DepartmentLayout | null }
+export interface CompanyDepartment { id: string; name: string; type: Department; kind: string; people: number; createdAt: string; sectionsOff: string[]; layout: DepartmentLayout | null; dashboard: DepartmentDashboard | null }
+/** Department Studio, part B: the cards on its member and team lead dashboards. */
+export interface DepartmentDashboard { member: { key: string; size: 1 | 2 | 3 }[]; lead: { key: string; size: 1 | 2 | 3 }[] }
 /** Department Studio: the blocks in its member and team lead menus, in order. */
 export interface DepartmentLayout { member: string[]; lead: string[] }
 export interface DepartmentKind { type: Department; label: string; description: string; sections: { key: string; label: string; description: string }[] }
@@ -31,6 +33,7 @@ export const companyApi = {
   setSections: (id: string, sectionsOff: string[]) => api.patch<{ departments: CompanyDepartment[] }>(`/company/departments/${id}/sections`, { sectionsOff }),
   renameDepartment: (id: string, name: string) => api.patch<{ departments: CompanyDepartment[] }>(`/company/departments/${id}`, { name }),
   setLayout: (id: string, layout: DepartmentLayout | { reset: true }) => api.put<{ departments: CompanyDepartment[] }>(`/company/departments/${id}/layout`, layout),
+  setDashboard: (id: string, dashboard: DepartmentDashboard | { reset: true }) => api.put<{ departments: CompanyDepartment[] }>(`/company/departments/${id}/dashboard`, dashboard),
   removeDepartment: (id: string) => api.del<{ departments: CompanyDepartment[] }>(`/company/departments/${id}`),
   roles: () => api.get<RolesData>('/company/roles'),
   addRole: (input: { name: string; baseRole: Role; areasOff: string[]; powers: string[] }) => api.post<{ roles: CompanyRoleRow[] }>('/company/roles', input),

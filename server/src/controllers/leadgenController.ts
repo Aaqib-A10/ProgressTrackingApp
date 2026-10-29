@@ -15,6 +15,7 @@ import {
   emptyTotals,
 } from '../lib/leadgen'
 import { periodDelta } from '../lib/kpi'
+import { actsAs, kindDept } from '../lib/acting'
 
 type EntryWithVerticals = Prisma.LeadGenDailyEntryGetPayload<{
   include: { verticalCounts: { include: { tag: true } } }
@@ -63,7 +64,7 @@ async function deptLeadTypes(departmentId: string) {
 
 /** Resolve the caller's Lead Gen department, or 403/500 via the returned null. */
 async function resolveLeadGenDept(me: Awaited<ReturnType<typeof loadUser>>) {
-  if (me.department?.type === 'LEAD_GEN') return me.department
+  if (actsAs(me, 'LEAD_GEN')) return me.department
   if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
   return null
 }
@@ -71,7 +72,7 @@ async function resolveLeadGenDept(me: Awaited<ReturnType<typeof loadUser>>) {
 /** GET /api/leadgen/entries?date= */
 export async function getMyEntry(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.department?.type !== 'LEAD_GEN' && me.role !== 'SUPER_ADMIN') {
+  if (!actsAs(me, 'LEAD_GEN') && me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Not a Lead Gen member' })
     return
   }
@@ -128,7 +129,7 @@ const upsertSchema = z.object({
 /** PUT /api/leadgen/entries — upsert entry + per-vertical breakdown. */
 export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.department?.type !== 'LEAD_GEN' && me.role !== 'SUPER_ADMIN') {
+  if (!actsAs(me, 'LEAD_GEN') && me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Not a Lead Gen member' })
     return
   }
@@ -235,7 +236,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
+  const dept = await kindDept(me, 'LEAD_GEN')
   if (!dept) {
     res.status(500).json({ error: 'Lead Gen department missing' })
     return

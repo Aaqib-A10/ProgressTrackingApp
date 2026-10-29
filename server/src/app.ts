@@ -21,6 +21,7 @@ import { qaRouter } from './routes/qa'
 import { attachmentsRouter } from './routes/attachments'
 import { todosRouter } from './routes/todos'
 import { worklogRouter } from './routes/worklog'
+import { customRouter } from './routes/customBlocks'
 import { tasksRouter } from './routes/tasks'
 import { financialsRouter } from './routes/financials'
 import { pushRouter } from './routes/push'
@@ -68,6 +69,7 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/attachments', attachmentsRouter],
   ['/api/todos', todosRouter],
   ['/api/worklog', worklogRouter],
+  ['/api/custom', customRouter],
   ['/api/tasks', tasksRouter],
   ['/api/financials', financialsRouter],
   ['/api/inventory', inventoryRouter],

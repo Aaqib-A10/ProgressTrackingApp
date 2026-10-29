@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import path from 'node:path'
 import { BLOCKS, BLOCK_KEYS, blockRefusal, blocksOfPath, cleanLayout, readLayout } from '../lib/blocks'
+import { CARDS } from '../lib/cards'
 
 // Department Studio: the app's copy of the blocks matches the server's, every block has a menu
 // item, and the starting menus of each kind are what that kind's people already had.
@@ -8,6 +9,7 @@ import { BLOCKS, BLOCK_KEYS, blockRefusal, blocksOfPath, cleanLayout, readLayout
 type U = { role: string; department: string | null; subDepartment: string | null; email: string; isDeveloper: boolean; permissions?: string[]; areasOff?: string[]; company?: unknown; blocks?: string[] | null }
 type Group = { title?: string; items: { to: string; label: string }[]; subgroups?: { title: string; items: { to: string }[] }[] }
 let client: { BLOCKS: typeof BLOCKS }
+let clientCards: { CARDS: typeof CARDS }
 let nav: {
   filterNav: (u: U) => Group[]
   templateBlocks: (kind: string, role: 'MEMBER' | 'TEAM_LEAD') => string[]
@@ -23,6 +25,7 @@ const paths = (g: Group[]) => g.flatMap((x) => [...x.items.map((i) => i.to), ...
 beforeAll(async () => {
   const root = path.resolve(__dirname, '../../../client/src')
   client = await import(path.join(root, 'lib/blocks.ts'))
+  clientCards = await import(path.join(root, 'lib/cards.ts'))
   nav = await import(path.join(root, 'components/layout/navConfig.ts'))
   access = await import(path.join(root, 'lib/access.ts'))
   setFlags = (await import(path.join(root, 'lib/flags.ts'))).setFlagsForTest
@@ -33,6 +36,11 @@ describe('blocks', () => {
     const shape = (b: (typeof BLOCKS)[number]) => ({ key: b.key, group: b.group, kinds: b.kinds, leadOnly: !!b.leadOnly, fixed: !!b.fixed, app: b.app, api: b.api ?? [] })
     expect(client.BLOCKS.map(shape)).toEqual(BLOCKS.map(shape))
     expect(new Set(BLOCK_KEYS).size).toBe(BLOCK_KEYS.length)
+  })
+
+  it("the app's copy of the dashboard cards is the same as the server's", () => {
+    const shape = (c: (typeof CARDS)[number]) => ({ key: c.key, kinds: c.kinds, leadOnly: !!c.leadOnly, size: c.size })
+    expect(clientCards.CARDS.map(shape)).toEqual(CARDS.map(shape))
   })
 
   it('every block shows as a menu item', () => {
@@ -50,7 +58,8 @@ describe('blocks', () => {
   })
 
   it('the rules: team blocks stay with their kind, team lead blocks with team leads, the Dashboard is always in', () => {
-    expect(cleanLayout({ member: ['itad-dialer'], lead: [] }, 'GENERAL')).toEqual({ error: 'Lead Dialer comes with a Sales calling department.' })
+    expect(cleanLayout({ member: ['my-reports'], lead: [] }, 'GENERAL')).toEqual({ error: 'My Reports comes with a Sales calling or Lead Generation department.' })
+    expect(cleanLayout({ member: ['itad-dialer'], lead: [] }, 'GENERAL')).toEqual({ layout: { member: ['dashboard', 'itad-dialer'], lead: ['dashboard'] } })
     expect(cleanLayout({ member: ['itad-team'], lead: [] }, 'ITAD')).toEqual({ error: 'Team view is for team leads.' })
     expect(cleanLayout({ member: ['nope'], lead: [] }, 'ITAD')).toEqual({ error: 'Unknown block: nope' })
     expect(cleanLayout({ member: ['my-todo', 'my-todo'], lead: ['itad-team'] }, 'ITAD')).toEqual({ layout: { member: ['dashboard', 'my-todo'], lead: ['dashboard', 'itad-team'] } })

@@ -1,10 +1,11 @@
 import type { Request, Response } from 'express'
 import { z } from 'zod'
-import { DepartmentType } from '@prisma/client'
+import { DepartmentType, Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { activeProvider } from '../lib/billing/providers'
 import { companySectionsOff } from '../lib/sectionsOff'
-import { personBlocks } from '../lib/personBlocks'
+import { personBlocks, personDashboard } from '../lib/personBlocks'
+import { cleanPrefs } from '../lib/cards'
 import {
   hashPassword,
   verifyPassword,
@@ -48,7 +49,7 @@ async function publicUser(userId: string) {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     include: {
-      department: { select: { type: true, name: true, layout: true } },
+      department: { select: { type: true, name: true, layout: true, dashboard: true } },
       subDepartment: { select: { slug: true, name: true } },
       memberships: {
         include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
@@ -88,6 +89,11 @@ async function publicUser(userId: string) {
     },
     // Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind).
     blocks: await personBlocks(user),
+    // Part B: the cards on their dashboard (null: the dashboard of their department's kind), and how they arranged them.
+    dashboard: await personDashboard(user),
+    dashboardPrefs: cleanPrefs(user.dashboardPrefs),
+    // Part C: the blocks the company made itself (name and icon, for menus and links).
+    customBlocks: (await prisma.customBlock.findMany({ where: { companyId: user.companyId }, select: { id: true, name: true, icon: true, color: true }, orderBy: { createdAt: 'asc' } })),
     emailCheckPending: user.emailCheckPending,
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,
     permissions: powersOf(user),
@@ -331,4 +337,17 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     data: { passwordHash: await hashPassword(parsed.data.password), sessionsValidFrom: new Date() },
   })
   res.json({ ok: true })
+}
+
+/** PUT /api/auth/me/dashboard { order, hidden } | { reset: true } — how this person arranged their own dashboard. */
+export async function saveDashboardPrefs(req: AuthedRequest, res: Response): Promise<void> {
+  if (req.body?.reset === true) {
+    await prisma.user.update({ where: { id: req.user!.id }, data: { dashboardPrefs: Prisma.DbNull } })
+    res.json({ dashboardPrefs: null })
+    return
+  }
+  const prefs = cleanPrefs(req.body)
+  if (!prefs) { res.status(400).json({ error: 'Send the order of the cards and the ones hidden.' }); return }
+  await prisma.user.update({ where: { id: req.user!.id }, data: { dashboardPrefs: prefs as unknown as Prisma.InputJsonValue } })
+  res.json({ dashboardPrefs: prefs })
 }

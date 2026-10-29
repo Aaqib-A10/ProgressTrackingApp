@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { INVENTORY_CATEGORIES, stockStatus } from '../lib/inventory'
 import { notifyStockAssigned } from '../lib/notify'
+import { actsAs } from '../lib/acting'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -14,17 +15,17 @@ type Me = Awaited<ReturnType<typeof loadUser>>
 
 /** Caller is an Inventory member (or Super Admin). */
 function isInventory(me: Me): boolean {
-  return me.department?.type === 'INVENTORY' || me.role === 'SUPER_ADMIN'
+  return actsAs(me, 'INVENTORY') || me.role === 'SUPER_ADMIN'
 }
 
 /** Caller can add/edit items + assign (Inventory Team Lead or Super Admin). */
 function canManage(me: Me): boolean {
-  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'INVENTORY')
+  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && actsAs(me, 'INVENTORY'))
 }
 
 /** Resolve the Inventory department for the caller, or null if not allowed. */
 async function inventoryDept(me: Me) {
-  if (me.department?.type === 'INVENTORY') return me.department
+  if (actsAs(me, 'INVENTORY')) return me.department
   if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'INVENTORY' } })
   return null
 }

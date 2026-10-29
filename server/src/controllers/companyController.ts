@@ -11,6 +11,7 @@ import { forgetTimeZone } from '../lib/tenancy'
 import { AREAS, AREA_KEYS, BUILTIN_POWERS, POWERS, POWER_KEYS, loadPowers, type PowerKey } from '../lib/permissions'
 import { usageOf } from '../lib/plans'
 import { cleanLayout, readLayout } from '../lib/blocks'
+import { cleanDashboard, readDashboard } from '../lib/cards'
 import { isOn } from '../lib/flags'
 
 /**
@@ -88,13 +89,15 @@ export async function updateCompany(req: AuthedRequest, res: Response): Promise<
 async function departmentList() {
   const rows = await prisma.department.findMany({
     orderBy: { createdAt: 'asc' },
-    select: { id: true, name: true, type: true, sectionsOff: true, layout: true, createdAt: true, _count: { select: { users: true, userMemberships: true } } },
+    select: { id: true, name: true, type: true, sectionsOff: true, layout: true, dashboard: true, createdAt: true, _count: { select: { users: true, userMemberships: true } } },
   })
   return rows.map((d) => ({
     id: d.id, name: d.name, type: d.type, kind: DEPARTMENT_KINDS.find((k) => k.type === d.type)?.label ?? d.type, people: Math.max(d._count.users, d._count.userMemberships), createdAt: d.createdAt,
     sectionsOff: d.sectionsOff.filter((k) => SECTION_KEYS.includes(k)),
     // Department Studio: its own member and team lead menus (null: the menu of its kind).
     layout: readLayout(d.layout),
+    // Part B: its own member and team lead dashboards (null: the dashboard of its kind).
+    dashboard: readDashboard(d.dashboard),
   }))
 }
 
@@ -186,9 +189,35 @@ export async function setDepartmentLayout(req: AuthedRequest, res: Response): Pr
     if (req.body?.reset === true) {
       await prisma.department.update({ where: { id: d.id }, data: { layout: Prisma.DbNull } })
     } else {
-      const r = cleanLayout(req.body, d.type)
+      const r = cleanLayout(req.body, d.type, await customIds())
       if ('error' in r) throw new Refused(400, r.error)
       await prisma.department.update({ where: { id: d.id }, data: { layout: r.layout as unknown as Prisma.InputJsonValue } })
+    }
+    res.json({ departments: await departmentList() })
+  } catch (e) { send(res, e) }
+}
+
+/** The ids of the blocks the company made itself (part C). */
+async function customIds(): Promise<string[]> {
+  return (await prisma.customBlock.findMany({ select: { id: true } })).map((b) => b.id)
+}
+
+/**
+ * PUT /api/company/departments/:id/dashboard { member, lead } | { reset: true } — Department
+ * Studio, part B: the cards on the department's member and team lead dashboards.
+ */
+export async function setDepartmentDashboard(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const u = await settingsUser(req)
+    if (!(await isOn('department-studio', u.companyId))) throw new Refused(403, 'The Department Studio is not switched on for your company.')
+    const d = await prisma.department.findUnique({ where: { id: req.params.id }, select: { id: true, type: true } })
+    if (!d) throw new Refused(404, 'Department not found')
+    if (req.body?.reset === true) {
+      await prisma.department.update({ where: { id: d.id }, data: { dashboard: Prisma.DbNull } })
+    } else {
+      const r = cleanDashboard(req.body, d.type, await customIds())
+      if ('error' in r) throw new Refused(400, r.error)
+      await prisma.department.update({ where: { id: d.id }, data: { dashboard: r.dashboard as unknown as Prisma.InputJsonValue } })
     }
     res.json({ departments: await departmentList() })
   } catch (e) { send(res, e) }

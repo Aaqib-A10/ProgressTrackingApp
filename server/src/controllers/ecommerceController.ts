@@ -6,6 +6,7 @@ import type { AuthedRequest } from '../middleware/auth'
 import { dbDateFromString, dateStringFromDb, periodRange, type RangeKey } from '../lib/time'
 import { userToday, todayByMember } from '../lib/userDay'
 import { notifyMentions } from '../lib/notify'
+import { actsAs, kindDept } from '../lib/acting'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -13,12 +14,12 @@ function loadUser(id: string) {
 
 /** Caller is an Ecommerce member (or Super Admin). */
 function isEcommerce(me: Awaited<ReturnType<typeof loadUser>>): boolean {
-  return me.department?.type === 'ECOMMERCE' || me.role === 'SUPER_ADMIN'
+  return actsAs(me, 'ECOMMERCE') || me.role === 'SUPER_ADMIN'
 }
 
 /** Resolve the Ecommerce department for the caller, or null if not allowed. */
 async function ecommerceDept(me: Awaited<ReturnType<typeof loadUser>>) {
-  if (me.department?.type === 'ECOMMERCE') return me.department
+  if (actsAs(me, 'ECOMMERCE')) return me.department
   if (me.role === 'SUPER_ADMIN') return prisma.department.findFirst({ where: { type: 'ECOMMERCE' } })
   return null
 }
@@ -178,11 +179,11 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
  *  breakdown. Visible to the whole Ecommerce team (the team works together). */
 export async function teamView(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.department?.type !== 'ECOMMERCE' && me.role !== 'SUPER_ADMIN') {
+  if (!actsAs(me, 'ECOMMERCE') && me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findFirst({ where: { type: 'ECOMMERCE' } })
+  const dept = await kindDept(me, 'ECOMMERCE')
   if (!dept) {
     res.status(500).json({ error: 'Ecommerce department missing' })
     return
@@ -269,7 +270,7 @@ const STATUS_LABEL: Record<EcomStatus, string> = { TODO: 'To Do', IN_PROGRESS: '
 
 /** Caller is the Ecommerce HOD (Team Lead of the dept) or Super Admin. */
 function isHod(me: Awaited<ReturnType<typeof loadUser>>): boolean {
-  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'ECOMMERCE')
+  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && actsAs(me, 'ECOMMERCE'))
 }
 
 function serializeTask(

@@ -112,6 +112,9 @@ model Department {
   /// Department Studio (lib/blocks.ts): { member: string[], lead: string[] }, the blocks in each
   /// role's menu, in order. Empty = the menu that comes with its kind.
   layout      Json?
+  /// Department Studio, part B: { member: Card[], lead: Card[] }, the cards on each role's
+  /// dashboard (lib/cards.ts). Empty = the dashboard that comes with its kind.
+  dashboard   Json?
   createdAt   DateTime       @default(now())
 
   subDepartments  SubDepartment[]
@@ -131,6 +134,7 @@ model Department {
   salaryRecords   SalaryRecord[]
   inventoryItems  InventoryItem[]
   reportForms     ReportForm[]
+  customRecords   CustomRecord[]
 
   @@index([companyId, type])
   @@index([companyId])
@@ -301,6 +305,11 @@ model User {
   claudeKeys          ClaudeKey[]
   reportForms         ReportForm[]         @relation("ReportFormCreator")
   reportEntries       ReportEntry[]        @relation("ReportEntries")
+  customBlocks        CustomBlock[]        @relation("CustomBlockCreator")
+  customRecords       CustomRecord[]       @relation("CustomRecordCreator")
+  /// Department Studio, part B: how this person arranged their own dashboard
+  /// ({ order: string[], hidden: string[] }); empty = as their department has it.
+  dashboardPrefs      Json?
 
   @@index([companyId])
   @@index([departmentId])
@@ -3556,6 +3565,8 @@ model Company {
   reportForms              ReportForm[]
   reportFields             ReportField[]
   reportEntries            ReportEntry[]
+  customBlocks             CustomBlock[]
+  customRecords            CustomRecord[]
   subscription             Subscription?
   invoices                 Invoice[]
 }
@@ -3880,4 +3891,51 @@ model BillingEvent {
 
   @@unique([provider, externalId])
   @@index([receivedAt])
+}
+
+/// Department Studio, part C: a screen a company makes itself (a form, a table, a board, a
+/// calendar), put in any department's menu like the built-in blocks. lib/customBlocks.ts.
+model CustomBlock {
+  id          String         @id @default(cuid())
+  /// The company this belongs to. Filled in by lib/tenancy.
+  companyId   String         @default("")
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  /// A lucide icon name from the builder's list.
+  icon        String         @default("LayoutGrid")
+  color       String         @default("#6366F1")
+  /// [{ key, label, type, options?, required? }]
+  fields      Json
+  /// { membersSee: 'own' | 'all', membersAdd: boolean, boardField?, dateField? }
+  settings    Json
+  createdById String?
+  createdBy   User?          @relation("CustomBlockCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  records     CustomRecord[]
+
+  @@index([companyId])
+}
+
+/// One row of a custom block. Kept with the department of the person who added it, so each
+/// department that uses the block has its own records.
+model CustomRecord {
+  id           String      @id @default(cuid())
+  /// The company this belongs to. Filled in by lib/tenancy.
+  companyId    String      @default("")
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  blockId      String
+  block        CustomBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdById  String?
+  createdBy    User?       @relation("CustomRecordCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  /// { [field key]: value }
+  data         Json
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([blockId, departmentId])
+  @@index([companyId])
 }

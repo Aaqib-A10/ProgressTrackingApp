@@ -49,7 +49,7 @@ describe('Department Studio', () => {
 
   it('only the Super Admin saves it, and only blocks that fit', async () => {
     await put(member, salesId, { member: ['my-todo'], lead: [] }).expect(403)
-    await put(admin, generalId, { member: ['itad-dialer'], lead: [] }).expect(400)
+    await put(admin, generalId, { member: ['my-reports'], lead: [] }).expect(400)
     await put(admin, salesId, { member: ['itad-team'], lead: [] }).expect(400)
     const r = await put(admin, salesId, { member: ['itad-dialer', 'my-todo', 'chat'], lead: ['itad-dialer', 'itad-team', 'my-team'] }).expect(200)
     expect(r.body.departments.find((x: { id: string }) => x.id === salesId).layout).toEqual({ member: ['dashboard', 'itad-dialer', 'my-todo', 'chat'], lead: ['dashboard', 'itad-dialer', 'itad-team', 'my-team'] })

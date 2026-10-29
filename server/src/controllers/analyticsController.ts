@@ -5,6 +5,7 @@ import { dbDateFromString, dateStringFromDb, periodRange, previousRange, type Ra
 import { sumItad, itadKpis } from '../lib/itad'
 import { sumLeadGen, leadGenKpis, funnelStages } from '../lib/leadgen'
 import { buildSeries, pctDelta, type TrendPoint } from '../lib/trends'
+import { kindDept } from '../lib/acting'
 
 const inRange = (r: DateRange) => ({ gte: dbDateFromString(r.startDate), lte: dbDateFromString(r.endDate) })
 
@@ -23,7 +24,7 @@ export async function itadAnalytics(req: AuthedRequest, res: Response): Promise<
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findFirst({ where: { type: 'ITAD' } })
+  const dept = await kindDept(me, 'ITAD')
   if (!dept) {
     res.status(500).json({ error: 'ITAD department missing' })
     return
@@ -105,7 +106,7 @@ export async function leadgenAnalytics(req: AuthedRequest, res: Response): Promi
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findFirst({ where: { type: 'LEAD_GEN' } })
+  const dept = await kindDept(me, 'LEAD_GEN')
   if (!dept) {
     res.status(500).json({ error: 'Lead Gen department missing' })
     return

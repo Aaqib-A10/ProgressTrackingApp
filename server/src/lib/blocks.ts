@@ -9,8 +9,10 @@ import type { DepartmentType, Role } from '@prisma/client'
  *
  * Rules (the same in the app and on the server; the app's copy is client/src/lib/blocks.ts and a
  * test checks they match):
- * - Everyday blocks (dashboard, to-do, projects, chat, attendance, daily report…) go in any
- *   department. A team block (Lead Dialer, Stock list…) goes in a department of its kind.
+ * - Every block goes in any department: a General "Sales 2" can have the Lead Dialer and the
+ *   daily calls log. Its people then work as that kind on those screens; their entries are kept
+ *   with their own department and their team lead's team views show their own department.
+ *   (The reports of a daily log, My Reports and the like, need a department of that kind.)
  * - "Team lead" blocks (team views, analytics) go only in the team lead menu.
  * - The Dashboard is always there.
  * - Taking a block out hides it and stops new entries in it; nothing is deleted, and putting it
@@ -120,6 +122,8 @@ export const BLOCKS: Block[] = [
 ]
 
 export const BLOCK_KEYS = BLOCKS.map((b) => b.key)
+/** A block the company made itself (part C): "custom:<its id>". */
+export const CUSTOM_BLOCK = /^custom:[a-z0-9]{8,40}$/
 const byKey = new Map(BLOCKS.map((b) => [b.key, b]))
 export const blockByKey = (key: string): Block | undefined => byKey.get(key)
 
@@ -130,13 +134,15 @@ export const menuOf = (role: Role): 'member' | 'lead' => (role === 'TEAM_LEAD' |
 
 /** Can this block go in this menu of a department of this kind? Returns why not, or null. */
 export function blockRefusal(b: Block, kind: DepartmentType, menu: 'member' | 'lead'): string | null {
-  if (b.kinds.length && !b.kinds.includes(kind)) return `${b.label} comes with a ${b.kinds.map((k) => KIND_LABEL[k]).join(' or ')} department.`
+  // Team screens go in any department (it works as that kind on them, with its own entries);
+  // the everyday report screens need the daily log of their own kind.
+  if (b.group === 'main' && b.kinds.length && !b.kinds.includes(kind)) return `${b.label} comes with a ${b.kinds.map((k) => KIND_LABEL[k]).join(' or ')} department.`
   if (b.leadOnly && menu === 'member') return `${b.label} is for team leads.`
   return null
 }
 
 /** Check a layout sent by the Studio: known blocks, each once, allowed for the kind; the Dashboard always in. */
-export function cleanLayout(input: unknown, kind: DepartmentType): { layout: Layout } | { error: string } {
+export function cleanLayout(input: unknown, kind: DepartmentType, customIds: string[] = []): { layout: Layout } | { error: string } {
   const x = input as Partial<Record<'member' | 'lead', unknown>> | null
   if (!x || !Array.isArray(x.member) || !Array.isArray(x.lead)) return { error: 'Send the member and team lead menus.' }
   const out: Layout = { member: [], lead: [] }
@@ -144,6 +150,12 @@ export function cleanLayout(input: unknown, kind: DepartmentType): { layout: Lay
     const list = x[menu] as unknown[]
     if (list.length > BLOCKS.length) return { error: 'Too many blocks.' }
     for (const k of list) {
+      // A block of the company's own: it goes in any department's menus.
+      if (typeof k === 'string' && CUSTOM_BLOCK.test(k)) {
+        if (!customIds.includes(k.slice(7))) return { error: 'That block of your own no longer exists.' }
+        if (!out[menu].includes(k)) out[menu].push(k)
+        continue
+      }
       const b = typeof k === 'string' ? byKey.get(k) : undefined
       if (!b) return { error: `Unknown block: ${String(k)}` }
       if (out[menu].includes(b.key)) continue
@@ -160,7 +172,8 @@ export function cleanLayout(input: unknown, kind: DepartmentType): { layout: Lay
 export function readLayout(stored: unknown): Layout | null {
   const x = stored as Partial<Layout> | null
   if (!x || !Array.isArray(x.member) || !Array.isArray(x.lead)) return null
-  return { member: x.member.filter((k) => byKey.has(k)), lead: x.lead.filter((k) => byKey.has(k)) }
+  const ok = (k: string) => byKey.has(k) || CUSTOM_BLOCK.test(k)
+  return { member: x.member.filter(ok), lead: x.lead.filter(ok) }
 }
 
 /** The block an address belongs to (longest prefix wins). For the API, every block owning that prefix. */

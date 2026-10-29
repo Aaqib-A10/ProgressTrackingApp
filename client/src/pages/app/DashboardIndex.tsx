@@ -9,6 +9,7 @@ const DashboardHome = lazy(pageModule(() => import('./DashboardHome')))
 const TeamLeadDashboard = lazy(pageModule(() => import('./TeamLeadDashboard')))
 const ExecutiveDashboard = lazy(pageModule(() => import('./ExecutiveDashboard')))
 const QaTeam = lazy(pageModule(() => import('./qa/QaTeam')))
+const CardDashboard = lazy(pageModule(() => import('../../components/dashboard/CardDashboard').then((m) => ({ default: m.CardDashboard }))))
 
 /** Routes /app/dashboard to the right view per role. */
 export default function DashboardIndex() {
@@ -19,6 +20,8 @@ export default function DashboardIndex() {
   const user = asPreviewed(real, preview)
   // Inventory staff work from their Inventory tab; their team lead gets the team dashboard.
   if (user.department === 'INVENTORY' && user.role === 'MEMBER' && (!user.blocks || user.blocks.includes('inv-items'))) return <Navigate to="/app/inventory" replace />
+  // Department Studio, part B: the department's own dashboard of cards.
+  if (user.dashboard && user.role !== 'SUPER_ADMIN') return <CardDashboard user={user} cards={user.dashboard} editable={!preview} />
   if (user.role === 'SUPER_ADMIN') return <ExecutiveDashboard />
   if (user.role === 'QA' || user.role === 'QA_LEAD') return <QaTeam />
   if (user.role === 'TEAM_LEAD' || user.role === 'SUB_DEPT_LEAD') return <TeamLeadDashboard />

@@ -50,6 +50,12 @@ export interface CurrentUser {
   areasOff?: string[]
   /** Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind). */
   blocks?: string[] | null
+  /** Department Studio, part B: the cards on their dashboard (null: the dashboard of their department's kind). */
+  dashboard?: { key: string; size: 1 | 2 | 3 }[] | null
+  /** How they arranged their own dashboard. */
+  dashboardPrefs?: { order: string[]; hidden: string[] } | null
+  /** Part C: the blocks the company made itself. */
+  customBlocks?: { id: string; name: string; icon: string; color: string }[]
   /** Help sign-in: Metriq support is using Metriq as this person (a banner shows). */
   supportSession?: boolean
 }

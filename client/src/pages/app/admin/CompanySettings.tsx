@@ -186,7 +186,7 @@ function DepartmentsTab() {
 
   return (
     <div className="space-y-5">
-      <Card title="Departments" subtitle="People belong to a department. Each kind comes with its own screens; turn the ones a team does not use off." flush>
+      <Card title="Departments" subtitle={studio ? "People belong to a department. Open its studio to choose the menu and dashboard its members and team leads get, and to add blocks of your own." : "People belong to a department. Each kind comes with its own screens; turn the ones a team does not use off."} flush>
         {!list ? <p className="px-5 py-4 text-body-md text-ink-muted">Loading…</p> : list.length === 0 ? <p className="px-5 py-4 text-body-md text-ink-muted">No departments yet. Add your first one below.</p> : (
           <ul className="divide-y divide-line">
             {list.map((d) => {

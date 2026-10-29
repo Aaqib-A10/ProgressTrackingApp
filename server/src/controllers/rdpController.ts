@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Prisma, RdpTeam } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
+import { actsAs } from '../lib/acting'
 
 type Me = { id: string; role: string; department: { type: string } | null }
 
@@ -12,7 +13,7 @@ function loadUser(id: string) {
 
 /** RDP records are managed by the Ecommerce HOD and Super Admin. */
 function canManage(me: Me): boolean {
-  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'ECOMMERCE')
+  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && actsAs(me, 'ECOMMERCE'))
 }
 
 async function guard(req: AuthedRequest, res: Response): Promise<Me | null> {

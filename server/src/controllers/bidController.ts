@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
+import { actsAs } from '../lib/acting'
 
 /**
  * ITAD Bid Tracker. agentId is auto-mapped to the submitting user. Access:
@@ -19,10 +20,10 @@ function loadUser(id: string) {
 type Me = Awaited<ReturnType<typeof loadUser>>
 
 function isItad(me: Me): boolean {
-  return me.department?.type === 'ITAD' || me.role === 'SUPER_ADMIN'
+  return actsAs(me, 'ITAD') || me.role === 'SUPER_ADMIN'
 }
 function isLead(me: Me): boolean {
-  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && me.department?.type === 'ITAD')
+  return me.role === 'SUPER_ADMIN' || (me.role === 'TEAM_LEAD' && actsAs(me, 'ITAD'))
 }
 
 type BidRow = Prisma.BidGetPayload<{ include: { agent: { select: { id: true; name: true } } } }>
@@ -282,7 +283,7 @@ export async function teamActiveBids(req: AuthedRequest, res: Response): Promise
     res.status(403).json({ error: 'ITAD access only' })
     return
   }
-  const dept = me.department?.type === 'ITAD' ? me.department : await prisma.department.findFirst({ where: { type: 'ITAD' } })
+  const dept = actsAs(me, 'ITAD') ? me.department : await prisma.department.findFirst({ where: { type: 'ITAD' } })
   const bids = await prisma.bid.findMany({
     where: { departmentId: dept?.id ?? '__none__', status: { in: ['ACTIVE', 'SUBMITTED'] } },
     orderBy: [{ dueDate: 'asc' }],

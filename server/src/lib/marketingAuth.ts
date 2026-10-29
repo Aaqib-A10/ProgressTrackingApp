@@ -2,6 +2,7 @@ import type { Response } from 'express'
 import type { Department, SubDepartment, User } from '@prisma/client'
 import { prisma } from './prisma'
 import type { AuthedRequest } from '../middleware/auth'
+import { actsAs } from './acting'
 
 export type MarketingActor = {
   me: User & { department: Department | null; subDepartment: SubDepartment | null }
@@ -29,13 +30,13 @@ export async function resolveMarketingActor(req: AuthedRequest, res: Response): 
     include: { department: true, subDepartment: true },
   })
   const isAdmin = me.role === 'SUPER_ADMIN'
-  const isMarketing = me.department?.type === 'MARKETING'
+  const isMarketing = actsAs(me, 'MARKETING')
   if (!isMarketing && !isAdmin) {
     res.status(403).json({ error: 'Marketing access only' })
     return null
   }
   const marketingDept =
-    me.department?.type === 'MARKETING' ? me.department : await prisma.department.findFirst({ where: { type: 'MARKETING' } })
+    actsAs(me, 'MARKETING') ? me.department : await prisma.department.findFirst({ where: { type: 'MARKETING' } })
   const isLead = isAdmin || me.role === 'TEAM_LEAD'
   const subDeptSlug = me.subDepartment?.slug ?? null
   return {

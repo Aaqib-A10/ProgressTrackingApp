@@ -51,7 +51,8 @@ import { canViewFinance } from '../../lib/finance'
 import { areaBlocked } from '../../lib/areas'
 import { flagOn } from '../../lib/flags'
 import { inHomeCompany, type Department } from '../../lib/types'
-import { blockByKey, blocksOfPath, type BlockGroup } from '../../lib/blocks'
+import { CUSTOM_BLOCK, blockByKey, blocksOfPath, type BlockGroup } from '../../lib/blocks'
+import { iconOf } from '../../lib/customApi'
 
 export interface NavItem {
   label: string
@@ -269,7 +270,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company'> & { blocks?: string[] | null }
+type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company'> & { blocks?: string[] | null; customBlocks?: CurrentUser['customBlocks'] }
 
 /** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
 function itemVisible(item: NavItem, u: NavUser): boolean {
@@ -349,7 +350,12 @@ const ROLE_GROUPS = ['Quality Assurance', 'Admin']
 
 const allItems = (g: NavGroup) => [...g.items, ...(g.subgroups ?? []).flatMap((sg) => sg.items)]
 /** The menu item a block shows as (same name and icon as the classic menu). */
-export function navItemOfBlock(key: string): NavItem | null {
+export function navItemOfBlock(key: string, custom?: CurrentUser['customBlocks']): NavItem | null {
+  // A block the company made itself (part C).
+  if (CUSTOM_BLOCK.test(key)) {
+    const c = custom?.find((x) => x.id === key.slice(7))
+    return c ? { label: c.name, to: `/app/custom/${c.id}`, icon: iconOf(c.icon) } : null
+  }
   const b = blockByKey(key)
   if (!b) return null
   const to = b.app[0].replace(/\$$/, '')
@@ -368,10 +374,21 @@ export function navGroupOf(group: BlockGroup): Pick<NavGroup, 'title' | 'icon' |
   return { title: g.title, icon: g.icon, color: g.color }
 }
 
+/** The heading of the blocks a company made itself. */
+export const CUSTOM_GROUP: Pick<NavGroup, 'title' | 'icon' | 'color'> = { title: 'Our tools', icon: LayoutGrid, color: '#64748B' }
+
 /** A menu made of the department's blocks, in the order the Super Admin put them, plus the role-based groups. */
 export function blockNav(u: NavUser, blocks: string[]): NavGroup[] {
-  const out: (NavGroup & { key: BlockGroup })[] = []
+  const out: (NavGroup & { key: BlockGroup | 'custom' })[] = []
   for (const key of blocks) {
+    if (CUSTOM_BLOCK.test(key)) {
+      const item = navItemOfBlock(key, u.customBlocks)
+      if (!item) continue
+      let g = out.find((x) => x.key === 'custom')
+      if (!g) { g = { key: 'custom', ...CUSTOM_GROUP, items: [] }; out.push(g) }
+      g.items.push(item)
+      continue
+    }
     const b = blockByKey(key)
     const item = navItemOfBlock(key)
     if (!b || !item) continue

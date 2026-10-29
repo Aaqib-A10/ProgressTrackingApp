@@ -13,6 +13,8 @@ export interface Preview {
   kind: Department
   role: 'MEMBER' | 'TEAM_LEAD'
   blocks: string[]
+  /** Part B: the dashboard cards of that role (none: the dashboard of its kind). */
+  dashboard?: { key: string; size: 1 | 2 | 3 }[] | null
 }
 
 const KEY = 'studio.preview'
@@ -39,5 +41,5 @@ export function usePreview(): Preview | null {
 /** The person as the preview shows them: that role, that department, its menu. Super Admins only. */
 export function asPreviewed(user: CurrentUser, p: Preview | null): CurrentUser {
   if (!p || user.role !== 'SUPER_ADMIN') return user
-  return { ...user, role: p.role, department: p.kind, subDepartment: null, blocks: p.blocks, permissions: [], isDeveloper: false }
+  return { ...user, role: p.role, department: p.kind, subDepartment: null, blocks: p.blocks, dashboard: p.dashboard ?? null, dashboardPrefs: null, permissions: [], isDeveloper: false }
 }

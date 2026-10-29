@@ -7,6 +7,7 @@ import { dbDateFromString, dateStringFromDb, periodRange, previousRange, type Ra
 import { userToday, todayByMember } from '../lib/userDay'
 import { ITAD_METRIC_KEYS, sumItad, itadKpis, aggregateAgent, emptyTotals } from '../lib/itad'
 import { periodDelta } from '../lib/kpi'
+import { actsAs, kindDept } from '../lib/acting'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -39,7 +40,7 @@ async function itadDailyTarget(departmentId: string): Promise<number> {
 /** GET /api/itad/entries?date= — the caller's entry for a day + personal stats. */
 export async function getMyEntry(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.department?.type !== 'ITAD' && me.role !== 'SUPER_ADMIN') {
+  if (!actsAs(me, 'ITAD') && me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Not an ITAD member' })
     return
   }
@@ -84,7 +85,7 @@ const upsertSchema = z.object({
 /** PUT /api/itad/entries — upsert the caller's entry (one per user per day). */
 export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<void> {
   const me = await loadUser(req.user!.id)
-  if (me.department?.type !== 'ITAD' && me.role !== 'SUPER_ADMIN') {
+  if (!actsAs(me, 'ITAD') && me.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'Not an ITAD member' })
     return
   }
@@ -140,7 +141,7 @@ export async function teamView(req: AuthedRequest, res: Response): Promise<void>
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  const dept = await prisma.department.findFirst({ where: { type: 'ITAD' } })
+  const dept = await kindDept(me, 'ITAD')
   if (!dept) {
     res.status(500).json({ error: 'ITAD department missing' })
     return

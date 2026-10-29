@@ -22,7 +22,7 @@ import { Prisma, type PrismaClient } from '@prisma/client'
  * for while 99 Technologies is the only company); new rows still get their company.
  */
 
-type Ctx = { companyId: string; timeZone?: string }
+type Ctx = { companyId: string; timeZone?: string; acting?: string[] }
 const als = new AsyncLocalStorage<Ctx | null>()
 
 /**
@@ -59,6 +59,19 @@ export function contextTimeZone(): string | undefined {
 /** Run fn with no company: nothing is limited (owner console, jobs that look at every company). */
 export function runAsSystem<T>(fn: () => T | PromiseLike<T>): Promise<T> {
   return als.run(null, async () => await fn())
+}
+
+/**
+ * Department Studio: the kinds of team screens this request may use because the person's
+ * department menu has those blocks (a General department with the Lead Dialer, say), set by
+ * requireDepartment. Read by lib/acting.ts.
+ */
+export function setActingKinds(kinds: string[]): void {
+  const s = als.getStore()
+  if (s) s.acting = kinds
+}
+export function actingKinds(): string[] {
+  return als.getStore()?.acting ?? []
 }
 
 /** The company the current request runs as, or null outside one. */

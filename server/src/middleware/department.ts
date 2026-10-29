@@ -2,6 +2,9 @@ import type { Response, NextFunction } from 'express'
 import type { DepartmentType } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from './auth'
+import { personBlocks } from '../lib/personBlocks'
+import { kindsOfBlocks } from '../lib/acting'
+import { setActingKinds } from '../lib/tenancy'
 
 const LABEL: Record<DepartmentType, string> = {
   ITAD: 'ITAD',
@@ -28,11 +31,17 @@ export function requireDepartment(...types: DepartmentType[]) {
     }
     if (req.user.role === 'SUPER_ADMIN') return next()
     try {
-      const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { department: { select: { type: true } } } })
+      const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { role: true, companyId: true, department: { select: { type: true, layout: true } } } })
       const type = me?.department?.type
       if (!type || !types.includes(type)) {
-        res.status(403).json({ error: `This is only for the ${types.map((t) => LABEL[t]).join(' / ')} team` })
-        return
+        // Department Studio: the person's department menu has this kind's team screens.
+        const blocks = me ? await personBlocks(me) : null
+        const borrowed = blocks ? types.filter((t) => kindsOfBlocks(blocks).includes(t)) : []
+        if (!borrowed.length) {
+          res.status(403).json({ error: `This is only for the ${types.map((t) => LABEL[t]).join(' / ')} team` })
+          return
+        }
+        setActingKinds(borrowed)
       }
       next()
     } catch (e) {

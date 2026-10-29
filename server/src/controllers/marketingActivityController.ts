@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { dbDateFromString, dateStringFromDb } from '../lib/time'
 import { userToday } from '../lib/userDay'
+import { actsAs } from '../lib/acting'
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -12,7 +13,7 @@ function loadUser(id: string) {
 
 async function marketingUser(req: AuthedRequest, res: Response) {
   const me = await loadUser(req.user!.id)
-  if (me.department?.type === 'MARKETING' || me.role === 'SUPER_ADMIN') return me
+  if (actsAs(me, 'MARKETING') || me.role === 'SUPER_ADMIN') return me
   res.status(403).json({ error: 'Marketing access only' })
   return null
 }

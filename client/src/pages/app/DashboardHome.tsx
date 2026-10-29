@@ -14,7 +14,7 @@ import { AssignedTasksCard } from '../../components/AssignedTasksCard'
 import { TodoList } from '../../components/TodoList'
 
 /** Where this user logs their daily work — Marketing routes to its sub-department page. */
-function logPath(user: CurrentUser): string | null {
+export function logPath(user: CurrentUser): string | null {
   switch (user.department) {
     case 'ITAD':
       return '/app/itad/log'
@@ -32,7 +32,7 @@ function logPath(user: CurrentUser): string | null {
   }
 }
 
-function greeting(): string {
+export function greeting(): string {
   const h = new Date().getHours()
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
@@ -98,7 +98,7 @@ export default function DashboardHome() {
 }
 
 /** Latest feedback threads for this user, with an unread count. */
-function RecentFeedback() {
+export function RecentFeedback() {
   const { user } = useAuth()
   const [threads, setThreads] = useState<FeedbackThread[] | null>(null)
 
@@ -146,7 +146,7 @@ function RecentFeedback() {
   )
 }
 
-function QuickAction({ to, icon, title, desc }: { to: string; icon: React.ReactNode; title: string; desc: string }) {
+export function QuickAction({ to, icon, title, desc }: { to: string; icon: React.ReactNode; title: string; desc: string }) {
   return (
     <Link
       to={to}

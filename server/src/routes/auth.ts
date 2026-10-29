@@ -9,6 +9,7 @@ import {
   resetPassword,
   updateProfile,
   changePassword,
+  saveDashboardPrefs,
 } from '../controllers/authController'
 import { requireAuth } from '../middleware/auth'
 import { loginLimiter, sensitiveAuthLimiter } from '../middleware/rateLimit'
@@ -34,6 +35,7 @@ authRouter.get('/oauth/:provider/start', sensitiveAuthLimiter, asyncHandler(S.oa
 authRouter.get('/oauth/:provider/callback', asyncHandler(S.oauthCallback))
 authRouter.post('/logout', logout)
 authRouter.get('/me', requireAuth, asyncHandler(me))
+authRouter.put('/me/dashboard', requireAuth, asyncHandler(saveDashboardPrefs))
 authRouter.post('/active-department', requireAuth, asyncHandler(setActiveDepartment))
 authRouter.patch('/profile', requireAuth, asyncHandler(updateProfile))
 authRouter.post('/change-password', requireAuth, asyncHandler(changePassword))

@@ -6,6 +6,7 @@ import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString } from '../lib/time'
+import { actsAs } from '../lib/acting'
 
 const MONTH_RE = /^\d{4}-\d{2}$/
 
@@ -68,7 +69,7 @@ export async function getBreakdown(req: AuthedRequest, res: Response): Promise<v
     res.status(403).json({ error: 'Forbidden' })
     return
   }
-  if (me.role === 'TEAM_LEAD' && me.department?.type !== 'LEAD_GEN') {
+  if (me.role === 'TEAM_LEAD' && !actsAs(me, 'LEAD_GEN')) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
@@ -91,7 +92,7 @@ const putSchema = z.object({
 /** PUT /api/leadgen/breakdown — replace all rows for a month. */
 export async function putBreakdown(req: AuthedRequest, res: Response): Promise<void> {
   const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, include: { department: true } })
-  if (!canManage(me.role) || (me.role === 'TEAM_LEAD' && me.department?.type !== 'LEAD_GEN')) {
+  if (!canManage(me.role) || (me.role === 'TEAM_LEAD' && !actsAs(me, 'LEAD_GEN'))) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }

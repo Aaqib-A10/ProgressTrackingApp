@@ -24,7 +24,7 @@ const STATUS_LABEL: Record<EcomTaskStatus, string> = { TODO: 'To Do', IN_PROGRES
 export default function EcommerceBoard() {
   const { user } = useAuth()
   const { addToast } = useToast()
-  const isHod = user?.role === 'SUPER_ADMIN' || (user?.role === 'TEAM_LEAD' && user?.department === 'ECOMMERCE')
+  const isHod = user?.role === 'SUPER_ADMIN' || (user?.role === 'TEAM_LEAD' && (user?.department === 'ECOMMERCE' || !!user?.blocks?.includes('ecom-board')))
   const [tasks, setTasks] = useState<EcomTask[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
