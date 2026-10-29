@@ -83,20 +83,46 @@ export const status = wrap(async (req, res) => {
 
 const deptSchema = z.object({ departments: z.array(z.object({ name: z.string().trim().min(2).max(60), type: z.enum(['GENERAL', 'ITAD', 'LEAD_GEN', 'MARKETING', 'ECOMMERCE', 'INVENTORY', 'CSR']).optional() })).max(20) })
 
-/** POST /api/setup/departments { departments: [{ name, type }] } — adds the ones that are not there yet; the founder joins the first. */
+/**
+ * POST /api/setup/departments { departments: [{ name, type }] } — while the setup is not finished
+ * the list on screen is the truth: new names are added, a department taken off the list is removed
+ * (only when nobody is in it and it has no records yet), and a changed kind is saved (when that kind
+ * is free). After the setup is finished it only adds, as before; changes go through Company Settings.
+ */
 export const departments = wrap(async (req, res) => {
   const u = await founder(req)
   const body = deptSchema.parse(req.body)
-  const have = await prisma.department.findMany({ select: { id: true, name: true, type: true } })
+  const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, select: { setupDoneAt: true } })
+  const kept: { name: string; reason: string }[] = []
+  let have = await prisma.department.findMany({ select: { id: true, name: true, type: true, _count: { select: { users: true } } }, orderBy: { createdAt: 'asc' } })
+  const wanted = (name: string) => body.departments.find((d) => d.name.toLowerCase() === name.toLowerCase())
+
+  if (!c.setupDoneAt) {
+    for (const h of have) {
+      const w = wanted(h.name)
+      if (!w) {
+        if (h._count.users > 0) { kept.push({ name: h.name, reason: 'people are in it' }); continue }
+        try { await prisma.department.delete({ where: { id: h.id } }) } catch { kept.push({ name: h.name, reason: 'it already has records' }) }
+        continue
+      }
+      const type = w.type as DepartmentType | undefined
+      if (type && type !== h.type && (type === 'GENERAL' || !have.some((o) => o.id !== h.id && o.type === type && wanted(o.name)))) {
+        await prisma.department.update({ where: { id: h.id }, data: { type, sectionsOff: [] } })
+      }
+    }
+    have = await prisma.department.findMany({ select: { id: true, name: true, type: true, _count: { select: { users: true } } }, orderBy: { createdAt: 'asc' } })
+  }
+
+  const out = have.map((h) => ({ id: h.id, name: h.name, type: h.type }))
   for (const d of body.departments) {
-    if (have.some((h) => h.name.toLowerCase() === d.name.toLowerCase())) continue
+    if (out.some((h) => h.name.toLowerCase() === d.name.toLowerCase())) continue
     // The kind picked (or guessed from the name). Each built-in kind once per company: a second one is General.
     let type: DepartmentType = (d.type as DepartmentType | undefined) ?? kindFromName(d.name)
-    if (type !== 'GENERAL' && have.some((h) => h.type === type)) type = 'GENERAL'
-    have.push(await prisma.department.create({ data: { name: d.name, type }, select: { id: true, name: true, type: true } }))
+    if (type !== 'GENERAL' && out.some((h) => h.type === type)) type = 'GENERAL'
+    out.push(await prisma.department.create({ data: { name: d.name, type }, select: { id: true, name: true, type: true } }))
   }
   forgetSections()
-  res.json({ departments: have, me: u.id })
+  res.json({ departments: out, kept, me: u.id })
 })
 
 /** POST /api/setup/daily-form { template, departmentId? } — start from a ready daily form (or skip with "none"). */

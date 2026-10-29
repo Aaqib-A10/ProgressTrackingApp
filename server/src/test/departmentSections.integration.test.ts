@@ -85,4 +85,20 @@ describe('the setup wizard', () => {
     const by = Object.fromEntries(r.body.departments.map((d: { name: string; type: string }) => [d.name, d.type]))
     expect(by).toMatchObject({ 'Digital marketing': 'MARKETING', 'Lead gen two': 'GENERAL', Operations: 'GENERAL', Phones: 'ITAD' })
   })
+
+  it('before the setup is finished, untick a department to remove it or change its kind; one with people is kept', async () => {
+    const r = await request(app).post('/api/setup/departments').set(...auth(admin)).send({ departments: [
+      { name: 'Digital marketing', type: 'GENERAL' }, { name: 'Operations', type: 'INVENTORY' },
+    ] }).expect(200)
+    const by = Object.fromEntries(r.body.departments.map((d: { name: string; type: string }) => [d.name, d.type]))
+    expect(by).toEqual({ 'Lead generation': 'LEAD_GEN', 'Digital marketing': 'GENERAL', Operations: 'INVENTORY' })
+    expect(r.body.kept).toEqual([{ name: 'Lead generation', reason: 'people are in it' }])
+  })
+
+  it('after the setup is finished it only adds', async () => {
+    await prisma.company.update({ where: { id: O }, data: { setupDoneAt: new Date() } })
+    const r = await request(app).post('/api/setup/departments').set(...auth(admin)).send({ departments: [{ name: 'Finance', type: 'GENERAL' }] }).expect(200)
+    expect(r.body.departments.map((d: { name: string }) => d.name).sort()).toEqual(['Digital marketing', 'Finance', 'Lead generation', 'Operations'])
+    expect(r.body.departments.find((d: { name: string }) => d.name === 'Operations').type).toBe('INVENTORY')
+  })
 })

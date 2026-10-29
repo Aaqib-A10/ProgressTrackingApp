@@ -112,7 +112,9 @@ function CompanyStep({ s, solo, onNext }: { s: SetupStatus; solo: boolean; onNex
 function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatus['departments']) => void }) {
   const { addToast } = useToast()
   type Pick = { name: string; type: Department; made?: boolean }
-  // Departments already made keep their kind; new ones get a guess from the name, which can be changed.
+  // Departments already made start with their kind; new ones get a guess from the name. Until the setup is
+  // finished every one can be taken off the list or given another kind (the server keeps a department
+  // that already has people in it, and says so).
   const [picked, setPicked] = useState<Pick[]>(s.departments.length
     ? s.departments.map((d) => ({ name: d.name, type: d.type as Department, made: true }))
     : [{ name: 'Sales', type: 'GENERAL' }, { name: 'Operations', type: 'GENERAL' }])
@@ -120,10 +122,14 @@ function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatu
   const has = (n: string) => picked.some((p) => p.name.toLowerCase() === n.toLowerCase())
   const usedBy = (t: Department, except: string) => t !== 'GENERAL' && picked.some((p) => p.type === t && p.name !== except)
   const guess = (n: string): Department => { const g = kindFromName(n); return usedBy(g, n) ? 'GENERAL' : g }
-  const flip = (n: string) => setPicked((p) => (has(n) ? p.filter((x) => x.made || x.name.toLowerCase() !== n.toLowerCase()) : [...p, { name: n, type: guess(n) }]))
+  const flip = (n: string) => setPicked((p) => (has(n) ? p.filter((x) => x.name.toLowerCase() !== n.toLowerCase()) : [...p, { name: n, type: s.departments.find((d) => d.name.toLowerCase() === n.toLowerCase())?.type as Department ?? guess(n), made: s.departments.some((d) => d.name.toLowerCase() === n.toLowerCase()) }]))
   const setType = (n: string, t: Department) => setPicked((p) => p.map((x) => (x.name === n ? { ...x, type: t } : x)))
   async function save() {
-    try { const r = await api.post<{ departments: SetupStatus['departments'] }>('/setup/departments', { departments: picked.map(({ name, type }) => ({ name, type })) }); onDone(r.departments) }
+    try {
+      const r = await api.post<{ departments: SetupStatus['departments']; kept?: { name: string; reason: string }[] }>('/setup/departments', { departments: picked.map(({ name, type }) => ({ name, type })) })
+      if (r.kept?.length) addToast({ type: 'info', message: `Kept ${r.kept.map((k) => `${k.name} (${k.reason})`).join(', ')}. Move them in Company Settings, Departments.` })
+      onDone(r.departments)
+    }
     catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not add the departments.') }) }
   }
   const kinds = (Object.keys(KIND_INFO) as Department[]).filter((k) => k !== 'TALKLOOP')
@@ -132,9 +138,8 @@ function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatu
       <div className="flex flex-wrap gap-2">
         {[...new Set([...SUGGESTED, ...picked.map((p) => p.name)])].map((n) => {
           const on = has(n)
-          const made = picked.some((p) => p.made && p.name === n)
           return (
-            <button key={n} type="button" disabled={made} onClick={() => flip(n)} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm disabled:cursor-default', on ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
+            <button key={n} type="button" onClick={() => flip(n)} aria-pressed={on} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm', on ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
               {on && <Check size={13} />}{n}
             </button>
           )
@@ -152,10 +157,10 @@ function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatu
             {picked.map((p) => (
               <li key={p.name} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
                 <span className="min-w-[140px] flex-1 text-body-md font-medium text-ink">{p.name}</span>
-                <select className={inputCls + ' !h-9 max-w-[220px]'} value={p.type} disabled={p.made} onChange={(e) => setType(p.name, e.target.value as Department)} aria-label={`Kind of work for ${p.name}`}>
+                <select className={inputCls + ' !h-9 max-w-[220px]'} value={p.type} onChange={(e) => setType(p.name, e.target.value as Department)} aria-label={`Kind of work for ${p.name}`}>
                   {kinds.map((k) => <option key={k} value={k} disabled={usedBy(k, p.name)}>{KIND_INFO[k].label}{usedBy(k, p.name) ? ' (taken)' : ''}</option>)}
                 </select>
-                <span className="w-full text-body-sm text-ink-muted sm:w-auto sm:flex-[2]">{p.made ? 'Already made. ' : ''}{KIND_INFO[p.type].description}</span>
+                <span className="w-full text-body-sm text-ink-muted sm:w-auto sm:flex-[2]">{KIND_INFO[p.type].description}</span>
               </li>
             ))}
           </ul>
