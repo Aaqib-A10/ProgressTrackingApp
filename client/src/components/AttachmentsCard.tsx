@@ -3,7 +3,7 @@ import { Upload, Download, Trash2, FileSpreadsheet, FileText, File as FileIcon, 
 import { Card } from './ui/Card'
 import { Button } from './ui/Button'
 import { useToast } from './ui/Toast'
-import { ApiError } from '../lib/api'
+import { apiErrorText } from '../lib/api'
 import {
   listAttachments,
   uploadAttachment,
@@ -67,7 +67,7 @@ export function AttachmentsCard({ kind, date, disabled }: AttachmentsCardProps) 
         const att = await uploadAttachment(kind, f, date)
         setFiles((p) => [...p, att])
       } catch (err) {
-        const msg = err instanceof ApiError ? err.message : `Could not upload ${f.name}`
+        const msg = apiErrorText(err, `Could not upload ${f.name}`)
         addToast({ type: 'error', message: msg })
       }
     }

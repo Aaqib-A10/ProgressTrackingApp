@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
 import { PasswordField, PasswordStrength } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
-import { api, ApiError } from '../../lib/api'
+import { api, apiErrorText } from '../../lib/api'
 
 export default function ResetPassword() {
   const [params] = useSearchParams()
@@ -25,7 +25,7 @@ export default function ResetPassword() {
       await api.post('/auth/reset-password', { token, password })
       navigate('/reset-success', { replace: true })
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not reset password. Try again.')
+      setError(apiErrorText(err, 'Could not reset password. Try again.'))
     } finally {
       setSubmitting(false)
     }

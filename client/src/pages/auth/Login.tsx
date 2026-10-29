@@ -1,12 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { OAuthButtons } from '../../components/auth/OAuthButtons'
-import { api } from '../../lib/api'
+import { api, apiErrorText } from '../../lib/api'
 import { AuthLayout } from './AuthLayout'
 import { TextField, PasswordField } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
 import { useAuth, SESSION_EXPIRED_KEY } from '../../lib/auth'
-import { ApiError } from '../../lib/api'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -58,7 +57,7 @@ export default function Login() {
       await login(email, password)
       navigate(from, { replace: true })
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.')
+      setFormError(apiErrorText(err, 'Something went wrong. Try again.'))
     } finally {
       setSubmitting(false)
     }

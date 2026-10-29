@@ -17,6 +17,17 @@ export class ApiError extends Error {
   }
 }
 
+/** The words to show for a failed request: the server's {"error": "..."} text, not the raw JSON. */
+export function apiErrorText(err: unknown, fallback: string): string {
+  if (!(err instanceof ApiError) || !err.message) return fallback
+  try {
+    const j = JSON.parse(err.message) as { error?: unknown }
+    return typeof j.error === 'string' && j.error ? j.error : fallback
+  } catch {
+    return err.message
+  }
+}
+
 // Global handler invoked when an authenticated request comes back 401 — i.e. the
 // session died mid-use (expired, or revoked server-side by a disable/reset). The
 // AuthProvider registers it to clear auth state so the route guard redirects to

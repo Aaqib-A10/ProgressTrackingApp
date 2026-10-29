@@ -6,7 +6,7 @@ import { TextField, PasswordField, PasswordStrength } from '../../components/ui/
 import { Button } from '../../components/ui/Button'
 import { useAuth } from '../../lib/auth'
 import { useToast } from '../../components/ui/Toast'
-import { ApiError } from '../../lib/api'
+import { apiErrorText } from '../../lib/api'
 import type { Department } from '../../lib/types'
 import { SIGNUP_TEAM_OPTIONS } from '../../lib/departments'
 
@@ -45,7 +45,7 @@ export default function Signup() {
       if (result.pending) setSubmitted(true)
       else navigate('/app/dashboard', { replace: true })
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.')
+      setError(apiErrorText(err, 'Something went wrong. Try again.'))
     } finally {
       setSubmitting(false)
     }
