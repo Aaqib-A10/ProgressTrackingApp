@@ -1,7 +1,7 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { MarketingLayout, Container, SectionHead, PrimaryCta, SecondaryCta, Reveal, usePageTitle, useLaunch } from './MarketingLayout'
-import { CtaBand, Crumbs, FEATURE_ICON, HueBackdrop, HueCanvas, HueTile } from './Blocks'
+import { AccentTitle, CtaBand, Crumbs, FEATURE_ICON, HueBackdrop, HueCanvas, HueTile } from './Blocks'
 import { ConsolidateArt, TeamsArt, RolesArt, AskArt, PhoneArt } from './Pictures'
 import { EXTRAS, FEATURES, featureBySlug } from './pages'
 import { IconArrow, IconCheck, IconConnect, IconDepartments, IconPhone, IconRoles } from './icons'
@@ -44,10 +44,11 @@ function Overview() {
                       <p className="mt-3 text-[14.5px] leading-relaxed text-ink-muted">{f.menu}.</p>
                       <span className="mt-3 inline-flex items-center gap-1 text-[14px] font-semibold text-primary">See how it works <IconArrow size={15} className="transition-transform group-hover:translate-x-0.5" /></span>
                     </div>
-                    <div className="relative mt-auto h-[170px] overflow-hidden sm:h-[210px]">
-                      <div aria-hidden className="absolute inset-0" style={{ background: `linear-gradient(135deg, rgb(${f.hue.a} / 0.22), rgb(${f.hue.b} / 0.22))` }} />
-                      <img src={site(f.image)} alt="" loading="lazy" className={cn('absolute left-6 top-6 w-[150%] max-w-none rounded-tl-[12px] border border-line shadow-overlay transition-transform duration-700 group-hover:-translate-y-2', f.darkImage && 'dark:hidden')} />
-                      {f.darkImage && <img src={site(f.darkImage)} alt="" loading="lazy" className="absolute left-6 top-6 hidden w-[150%] max-w-none rounded-tl-[12px] border border-line shadow-overlay transition-transform duration-700 group-hover:-translate-y-2 dark:block" />}
+                    <div className="relative mt-auto overflow-hidden p-4 pt-0 sm:p-5 sm:pt-0">
+                      <div className="relative overflow-hidden rounded-[14px] p-3 sm:p-4" style={{ background: `linear-gradient(135deg, rgb(${f.hue.a} / 0.2), rgb(${f.hue.b} / 0.2))` }}>
+                        <img src={site(f.image)} alt="" loading="lazy" className={cn('block w-full rounded-[10px] border border-line shadow-overlay transition-transform duration-700 group-hover:-translate-y-1', f.darkImage && 'dark:hidden')} />
+                        {f.darkImage && <img src={site(f.darkImage)} alt="" loading="lazy" className="hidden w-full rounded-[10px] border border-line shadow-overlay transition-transform duration-700 group-hover:-translate-y-1 dark:block" />}
+                      </div>
                     </div>
                   </Link>
                 </Reveal>
@@ -101,23 +102,21 @@ function FeaturePage({ slug }: { slug: string }) {
   usePageTitle(f ? `${f.name} · Metriq` : 'Metriq', f?.lead)
   const { free } = useLaunch()
   if (!f) return <Navigate to="/product" replace />
-  const Icon = FEATURE_ICON[f.key]
   const others = FEATURES.filter((x) => x.key !== f.key)
   return (
     <MarketingLayout>
       <section className="relative overflow-hidden">
         <HueBackdrop hue={f.hue} />
-        <Container className="relative grid items-center gap-12 pb-16 pt-14 sm:pt-20 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="relative mx-auto grid max-w-[1280px] items-center gap-10 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[0.82fr_1.18fr] lg:gap-14">
           <div>
             <Crumbs items={[{ to: '/product', label: 'Product' }, { label: f.name }]} />
-            <div className="mk-up mt-6 flex items-center gap-3"><HueTile hue={f.hue} size={44}><Icon size={22} /></HueTile><span className="text-[15px] font-semibold text-ink">{f.name}</span></div>
-            <h1 className="mk-up mt-5 text-balance text-[38px] font-semibold leading-[1.05] tracking-[-0.04em] text-ink sm:text-[52px]" style={{ animationDelay: '80ms' }}>{f.title}</h1>
-            <p className="mk-up mt-5 text-pretty text-[17px] leading-relaxed text-ink-muted" style={{ animationDelay: '160ms' }}>{f.lead}</p>
+            <h1 className="mk-up mt-6 text-balance text-[40px] font-semibold leading-[1.02] tracking-[-0.045em] text-ink sm:text-[56px] lg:text-[58px]" style={{ animationDelay: '60ms' }}><AccentTitle text={f.title} accent={f.accent} hue={f.hue} /></h1>
+            <p className="mk-up mt-6 max-w-xl text-pretty text-[17px] leading-relaxed text-ink-muted sm:text-[18px]" style={{ animationDelay: '160ms' }}>{f.lead}</p>
             <div className="mk-up mt-8 flex flex-wrap gap-3" style={{ animationDelay: '240ms' }}><PrimaryCta /><SecondaryCta to="/product">All of Metriq</SecondaryCta></div>
             <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px] text-ink-muted">{[free ? 'Free while we launch' : '14 days free', 'No card needed'].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><IconCheck size={14} className="text-success" />{t}</span>)}</p>
           </div>
           <HueCanvas hue={f.hue} image={f.image} darkImage={f.darkImage} alt={`${f.name} in Metriq`} eager />
-        </Container>
+        </div>
       </section>
 
       <section className="border-y border-line bg-card py-20 sm:py-24">

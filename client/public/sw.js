@@ -11,6 +11,20 @@ async function focusedClient() {
   return list.find((c) => c.focused && c.visibilityState === 'visible') || null
 }
 
+/** One message or call = one pop-up on this browser. The open page uses the same keys
+ *  (lib/desktopAlerts claimOnce), so a background tab and a push never both show it. */
+async function claimOnce(key) {
+  try {
+    const c = await caches.open('pt-shown-v1')
+    const url = '/__pt-shown/' + encodeURIComponent(key)
+    if (await c.match(url)) return false
+    await c.put(url, new Response('1'))
+    const all = await c.keys()
+    if (all.length > 300) await Promise.all(all.slice(0, all.length - 300).map((r) => c.delete(r)))
+    return true
+  } catch { return true }
+}
+
 self.addEventListener('push', (event) => {
   let p = {}
   try { p = event.data ? event.data.json() : {} } catch { p = { title: 'PulseTrack', body: event.data ? event.data.text() : '' } }
@@ -21,11 +35,13 @@ self.addEventListener('push', (event) => {
       front.postMessage({ type: 'pt-push', payload: p })
       return
     }
+    const once = p.kind === 'msg' && p.messageId ? 'msg-' + p.messageId : p.kind === 'call' && p.callId ? 'ring-' + p.callId : null
+    if (once && !(await claimOnce(once))) return
     const isCall = p.kind === 'call'
     const options = {
       body: p.body || '',
       tag: p.tag || undefined,
-      renotify: true,
+      renotify: !!p.tag,
       icon: '/icons/icon-192.png',
       badge: '/icons/badge-96.png',
       requireInteraction: !!p.sticky,

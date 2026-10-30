@@ -12,6 +12,8 @@ export interface Feature {
   name: string
   menu: string
   title: string
+  /** The part of the title shown in the feature's colours. */
+  accent: string
   lead: string
   image: string
   darkImage?: string
@@ -24,7 +26,8 @@ export interface Feature {
 export const FEATURES: Feature[] = [
   {
     key: 'attendance', slug: 'attendance', name: 'Attendance', menu: 'Check-in, breaks, overtime and leave',
-    title: "Know who's in, without a fingerprint machine",
+    title: "Know who's in. No fingerprint machine.",
+    accent: 'No fingerprint machine.',
     lead: 'People check in from the browser or their phone. Metriq keeps the hours, breaks, late starts, leave and overtime, and team leads see the whole day and the whole month.',
     image: 'app-attendance.webp', hue: { a: '16 185 129', b: '6 182 212' },
     highlights: [
@@ -47,7 +50,8 @@ export const FEATURES: Feature[] = [
   },
   {
     key: 'projects', slug: 'projects', name: 'Projects', menu: 'Boards, owners, due dates and reviews',
-    title: 'Every task on a board, with an owner and a date',
+    title: 'Every task gets an owner and a date',
+    accent: 'an owner and a date',
     lead: 'Projects with boards and lists, assignees, priorities, checklists and reviews. Overdue work is flagged before it slips, not after.',
     image: 'app-board.webp', darkImage: 'app-board-dark.webp', hue: { a: '99 102 241', b: '168 85 247' },
     highlights: [
@@ -70,7 +74,8 @@ export const FEATURES: Feature[] = [
   },
   {
     key: 'chat', slug: 'chat', name: 'Chat and calls', menu: 'Groups, calls, meetings with AI notes',
-    title: 'Team chat and calls that stay with the work',
+    title: 'Chat and calls that stay with the work',
+    accent: 'stay with the work',
     lead: 'Groups, direct messages, voice and video calls and meetings, in the same app as the tasks, so a decision in chat becomes a task in one click.',
     image: 'app-chat.webp', hue: { a: '14 165 233', b: '99 102 241' },
     highlights: [
@@ -93,7 +98,8 @@ export const FEATURES: Feature[] = [
   },
   {
     key: 'reports', slug: 'daily-reports', name: 'Daily reports', menu: 'A form your team fills in under a minute',
-    title: 'A daily report your team fills in under a minute',
+    title: 'The daily report, done in under a minute',
+    accent: 'under a minute',
     lead: 'Design the form yourself: numbers with targets, text, choices and ratings. Leads see who sent theirs, the totals against target, and how the team moves over the month.',
     image: 'app-daily.webp', hue: { a: '245 158 11', b: '239 68 68' },
     highlights: [
@@ -117,6 +123,7 @@ export const FEATURES: Feature[] = [
   {
     key: 'sales', slug: 'lead-dialer', name: 'Lead Dialer', menu: 'Who to call now, follow-ups and tasks',
     title: 'Call the right lead at the right time',
+    accent: 'at the right time',
     lead: 'For calling teams: import your CRM list and the Lead Dialer shows who is open right now by time zone, who needs a follow-up, and how the funnel is moving.',
     image: 'app-dialer.webp', darkImage: 'app-dialer-dark.webp', hue: { a: '139 92 246', b: '236 72 153' },
     highlights: [

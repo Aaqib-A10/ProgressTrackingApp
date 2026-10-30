@@ -450,39 +450,60 @@
 .mk-acc[data-open='true'] { grid-template-rows: 1fr; }
 .mk-acc > div { overflow: hidden; }
 
-/* Security picture: other companies' requests stop at your wall. */
-.mk-try {
-  left: var(--fx);
-  top: var(--fy);
-  animation: mk-try 6.4s cubic-bezier(0.45, 0, 0.3, 1) infinite;
-}
-@keyframes mk-try {
-  0% { left: var(--fx); top: var(--fy); opacity: 0; }
-  8% { opacity: 1; }
-  38%, 60% { left: var(--tx); top: var(--ty); opacity: 1; }
-  75%, 100% { left: var(--tx); top: var(--ty); opacity: 0; }
-}
-.mk-try-dot { animation: mk-try-dot 6.4s linear infinite; }
-@keyframes mk-try-dot {
-  0%, 36% { background: rgb(252 211 77); transform: translate(-50%, -50%) scale(1); }
-  40%, 60% { background: rgb(244 63 94); transform: translate(-50%, -50%) scale(1.5); box-shadow: 0 0 16px 4px rgb(244 63 94 / 0.7); }
-  100% { transform: translate(-50%, -50%) scale(1); }
-}
-.mk-try-x { opacity: 0; animation: mk-try-x 6.4s linear infinite; }
-@keyframes mk-try-x {
-  0%, 38% { opacity: 0; }
-  42%, 62% { opacity: 1; }
-  72%, 100% { opacity: 0; }
-}
-.mk-wall { animation: mk-wall 3.2s ease-in-out infinite; }
-@keyframes mk-wall {
-  0%, 100% { box-shadow: 0 0 0 0 rgb(103 232 249 / 0); opacity: 0.55; }
-  50% { box-shadow: 0 0 24px 2px rgb(103 232 249 / 0.35); opacity: 1; }
-}
+/* Security picture: checks tick one by one, the log fills in. */
+.mk-sec-ring { background: conic-gradient(from 0deg, rgb(129 140 248), rgb(34 211 238 / 0.2), rgb(129 140 248 / 0.1), rgb(129 140 248)); animation: mk-spin 2.4s linear infinite; }
+.mk-sec-ring-on { background: conic-gradient(from 0deg, rgb(52 211 153), rgb(34 211 238 / 0.6), rgb(129 140 248), rgb(52 211 153)); animation-duration: 9s; box-shadow: 0 0 28px -4px rgb(52 211 153 / 0.6); }
+@keyframes mk-spin { to { transform: rotate(360deg); } }
+.mk-sec-tick { stroke-dasharray: 12; stroke-dashoffset: 12; transition: stroke-dashoffset 0.6s cubic-bezier(0.3, 0.8, 0.3, 1) 0.1s; }
+.mk-sec-tick-on { stroke-dashoffset: 0; }
+.mk-sec-pop { animation: mk-sec-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes mk-sec-pop { from { transform: scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
+.mk-sec-sweep { animation: mk-sec-sweep 0.9s ease-in-out infinite; }
+@keyframes mk-sec-sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+.mk-sec-in { animation: mk-sec-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes mk-sec-in { from { opacity: 0; transform: translateY(-14px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.mk-sec-live { animation: mk-sec-live 1.6s ease-in-out infinite; }
+@keyframes mk-sec-live { 50% { opacity: 0.3; } }
 
 /* The Product and Solutions panels under the top bar. */
+.mk-chip-in { animation: mk-chip-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes mk-chip-in { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
 .mk-mega { animation: mk-mega 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); transform-origin: top center; }
 @keyframes mk-mega {
   from { opacity: 0; transform: translateY(-6px) scale(0.985); }
   to { opacity: 1; transform: none; }
 }
+
+/* Feature titles: the coloured words drift slowly. */
+.mk-accent { background-size: 200% 100%; animation: mk-accent 8s ease-in-out infinite alternate; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+@keyframes mk-accent { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+
+/* The big name in the footer. */
+@property --mo { syntax: '<number>'; inherits: true; initial-value: 0; }
+.mk-word-foot {
+  --mx: 50%; --my: 50%;
+  color: transparent;
+  background-image:
+    radial-gradient(260px circle at var(--mx) var(--my), rgb(var(--primary) / calc(0.55 * var(--mo))), rgb(6 182 212 / calc(0.3 * var(--mo))) 45%, transparent 70%),
+    linear-gradient(100deg, transparent 35%, rgb(var(--primary) / 0.3) 47%, rgb(6 182 212 / 0.26) 53%, transparent 65%);
+  background-size: 100% 100%, 250% 100%;
+  background-position: 0 0, 150% 0;
+  opacity: 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  transition: --mo 0.5s ease;
+}
+.mk-word-base, .mk-word-foot { font-kerning: none; }
+.mk-word-base { color: rgb(var(--ink) / 0.06); }
+.mk-word-foot.mk-word-foot-in { opacity: 1; transition: opacity 0.6s ease 1.2s, --mo 0.5s ease; animation: mk-word-sheen 7s ease-in-out 1.4s infinite; }
+@keyframes mk-word-sheen {
+  0% { background-position: 0 0, 150% 0; }
+  45%, 100% { background-position: 0 0, -50% 0; }
+}
+.mk-word-ch { opacity: 0; transform: translateY(45%); filter: blur(10px); }
+.mk-word-foot-in .mk-word-ch {
+  animation: mk-word-ch 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: calc(var(--i) * 90ms);
+}
+@keyframes mk-word-ch { to { opacity: 1; transform: none; filter: none; } }

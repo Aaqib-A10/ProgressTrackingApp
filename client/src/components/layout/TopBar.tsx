@@ -75,7 +75,8 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           // Pop up stored alerts that arrived since the last check (never the ones already there on load).
           const stored = r.notifications.filter((n) => n.persistent)
           if (seenIds.current) {
-            const fresh = stored.filter((n) => !seenIds.current!.has(n.id))
+            // A chat @mention already pops up as the chat message itself: don't show it twice.
+            const fresh = stored.filter((n) => !seenIds.current!.has(n.id) && !(n.link?.startsWith('/app/chat') && desktop.active('chat')))
             if (fresh.length === 1) desktop.popup({ kind: 'tasks', title: fresh[0].title, body: fresh[0].body, link: fresh[0].link, tag: fresh[0].id })
             else if (fresh.length > 1) desktop.popup({ kind: 'tasks', title: `${fresh.length} new PulseTrack alerts`, body: fresh.slice(0, 3).map((n) => n.title).join('\n'), link: '/app/notifications', tag: 'pt-many' })
           }

@@ -33,14 +33,28 @@ export function HueCanvas({ hue, image, darkImage, alt, eager, className }: { hu
     <div className={cn('relative overflow-hidden rounded-[24px] border border-line', className)} onPointerMove={tilt} onPointerLeave={() => { if (stage.current) stage.current.style.transform = '' }}>
       <div aria-hidden className="absolute inset-0" style={{ background: `radial-gradient(120% 90% at 0% 0%, rgb(${hue.a} / 0.24), transparent 55%), radial-gradient(100% 80% at 100% 100%, rgb(${hue.b} / 0.24), transparent 60%), rgb(var(--card))` }} />
       <div aria-hidden className="mk-grid absolute inset-0 opacity-70 [mask-image:linear-gradient(to_bottom,#000,transparent)]" style={{ backgroundSize: '32px 32px' }} />
-      <div className="relative pl-6 pt-6 sm:pl-10 sm:pt-10">
-        <div ref={stage} className="transition-transform duration-300 ease-out" style={{ transformOrigin: '0 0' }}>
-          <div className="mk-rise -mr-[16%]">
-            <AppFrame src={site(image)} darkSrc={darkImage ? site(darkImage) : undefined} alt={alt} eager={eager} className="rounded-br-none rounded-tr-none shadow-[0_30px_60px_-20px_rgb(var(--shadow)/0.45)]" />
+      {/* The whole screen, with room around it (never cut off at the edge). */}
+      <div className="relative p-4 sm:p-7 lg:p-9">
+        <div ref={stage} className="transition-transform duration-300 ease-out" style={{ transformOrigin: '50% 50%' }}>
+          <div className="mk-rise">
+            <AppFrame src={site(image)} darkSrc={darkImage ? site(darkImage) : undefined} alt={alt} eager={eager} className="shadow-[0_30px_60px_-20px_rgb(var(--shadow)/0.45)]" />
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+/** A page title with its last words in the feature's colours. */
+export function AccentTitle({ text, accent, hue }: { text: string; accent?: string; hue: Hue }) {
+  const at = accent ? text.lastIndexOf(accent) : -1
+  if (at < 0) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, at)}
+      <span className="mk-accent bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(100deg, rgb(${hue.a}), rgb(${hue.b}), rgb(${hue.a}))` }}>{accent}</span>
+      {text.slice(at + accent!.length)}
+    </>
   )
 }
 

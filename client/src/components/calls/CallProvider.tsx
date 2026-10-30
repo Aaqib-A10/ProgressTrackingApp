@@ -395,6 +395,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
         body: c.isDirect ? `${c.video ? 'Video' : 'Voice'} call · open PulseTrack to answer` : `${c.startedBy.name} started a call · open PulseTrack to join`,
         link: `/app/chat?c=${encodeURIComponent(c.conversationId)}`,
         tag: `call-${c.id}`,
+        once: `ring-${c.id}`,
       })
     }
   }, [ringing])

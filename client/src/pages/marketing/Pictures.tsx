@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { cn } from '../../lib/cn'
 import {
   IconAttendance, IconBoard, IconChat, IconCheck, IconDialer, IconFingerprint, IconForm, IconReport, IconSheet, IconSticky, IconVideo, IconWhatsapp,
-  IconBackup, IconKey, IconLock, IconNotes, IconSpark, IconWalls, MetriqMark,
+  IconBackup, IconKey, IconLock, IconNotes, IconSpark, IconSupport, IconWalls, MetriqMark,
 } from './icons'
 import { useInView } from './MarketingLayout'
 
@@ -355,73 +355,123 @@ export function StepArt({ step }: { step: number }) {
 
 /* ------------------------------------------------------------------ security */
 
-const OTHERS = [
-  { name: 'Harbor Cold Storage', x: 2, y: 4 },
-  { name: 'Summit Freight', x: 64, y: 0 },
-  { name: 'Bluefin Studio', x: 0, y: 70 },
-  { name: 'Pine Clinics', x: 66, y: 74 },
-]
-const RECORDS = [
-  { label: 'Attendance today', value: '42 in' },
-  { label: 'Open tasks', value: '318' },
-  { label: 'Daily reports', value: '26 sent' },
-]
-/** Another company's request, stopped at your company's wall. */
-const TRIES = [
-  { from: [17, 14], to: [23.5, 31], d: 0 },
-  { from: [80, 10], to: [76.5, 30], d: 1.6 },
-  { from: [16, 80], to: [23.5, 60], d: 3.2 },
-  { from: [82, 84], to: [76.5, 62], d: 4.8 },
-]
+/** What the security screen checks, in order. All of it is what Metriq does today. */
+const CHECKS = [
+  { icon: IconWalls, label: 'Company walls', note: 'App and database' },
+  { icon: IconLock, label: 'HTTPS on every request', note: 'TLS' },
+  { icon: IconKey, label: 'Passwords hashed', note: 'One-way, never text' },
+  { icon: IconBackup, label: 'Nightly backup', note: 'Last: 2:00 AM' },
+] as const
+
+/** The activity log's lines (made-up people), arriving one at a time. */
+const LOG = [
+  { who: 'SK', name: 'Sara Khan', what: 'signed in with Google', tone: 'text-emerald-300' },
+  { who: 'BK', name: 'Backup', what: 'finished · database and files', tone: 'text-cyan-300' },
+  { who: 'AR', name: 'Ali Raza', what: 'made Hina a team lead', tone: 'text-violet-300' },
+  { who: 'HN', name: 'Hina Noor', what: 'checked in · office network', tone: 'text-emerald-300' },
+  { who: 'SA', name: 'Super Admin', what: 'turned support access off', tone: 'text-amber-300' },
+  { who: 'UA', name: 'Usman Ali', what: 'exported March attendance', tone: 'text-cyan-300' },
+] as const
+
+const TIMES = ['09:41', '09:38', '09:32', '09:30', '09:26', '09:21', '09:17']
 
 /**
- * Security, as it really works: your company's records in the middle (made-up numbers), other
- * companies around it, each behind its own wall. Their requests stop at your wall; yours go
- * through, encrypted, and the database is backed up every night.
+ * Security, as a real screen: the company's security checks run one by one and tick, the support
+ * switch sits off (our team gets in only when the Super Admin allows it), and the activity log
+ * keeps filling in. Everything shown is something Metriq does today; the names are made up.
  */
-export function WallsArt() {
+export function SecurityArt() {
+  const [ref, seen] = useInView<HTMLDivElement>()
+  const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const [done, setDone] = useState(reduced ? CHECKS.length : 0)
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (!seen || reduced) return
+    let n = 0
+    const a = window.setInterval(() => { n++; setDone(n); if (n >= CHECKS.length) window.clearInterval(a) }, 650)
+    const b = window.setInterval(() => setTick((t) => t + 1), 2600)
+    return () => { window.clearInterval(a); window.clearInterval(b) }
+  }, [seen, reduced])
+  const all = done >= CHECKS.length
+  // The newest four lines, newest on top; each new one slides in.
+  const rows = [0, 1, 2, 3].map((k) => ({ ...LOG[(tick - k + LOG.length * 100) % LOG.length], key: tick - k, time: TIMES[k] }))
+
   return (
-    <div aria-hidden className="relative mx-auto aspect-[1.05] w-full max-w-[460px] select-none text-white">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-        {TRIES.map((t, i) => <line key={i} x1={t.from[0]} y1={t.from[1]} x2={t.to[0]} y2={t.to[1]} stroke="rgb(255 255 255 / 0.12)" strokeWidth={0.4} strokeDasharray="1.2 1.6" vectorEffect="non-scaling-stroke" />)}
-      </svg>
-      {OTHERS.map((o) => (
-        <div key={o.name} className="absolute w-[34%] rounded-[12px] border border-white/10 bg-white/[0.04] p-2.5 backdrop-blur-sm" style={{ left: `${o.x}%`, top: `${o.y}%` }}>
-          <p className="truncate text-[11px] font-semibold text-white/70">{o.name}</p>
-          <div className="mt-1.5 space-y-1"><span className="block h-1.5 w-[80%] rounded-full bg-white/10" /><span className="block h-1.5 w-[55%] rounded-full bg-white/10" /></div>
-          <span className="absolute right-2 top-2 text-white/40"><IconLock size={11} /></span>
+    <div ref={ref} aria-hidden className="relative mx-auto w-full max-w-[480px] select-none text-white">
+      {/* Soft light behind the window */}
+      <div className="absolute -inset-6 rounded-[40px] bg-[radial-gradient(60%_50%_at_50%_30%,rgb(var(--primary)/0.35),transparent_70%)] blur-2xl" />
+      <div className="relative overflow-hidden rounded-[20px] border border-white/10 bg-[#11131b]/95 shadow-[0_40px_80px_-30px_rgb(0_0_0/0.8)] backdrop-blur">
+        <div className="flex h-9 items-center gap-1.5 border-b border-white/[0.07] px-3.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-white/15" /><span className="h-2.5 w-2.5 rounded-full bg-white/15" /><span className="h-2.5 w-2.5 rounded-full bg-white/15" />
+          <span className="ml-3 text-[11px] font-medium text-white/45">Settings · Security</span>
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300"><IconLock size={10} />HTTPS</span>
         </div>
-      ))}
-      {/* Your company, behind its wall */}
-      <div className="absolute left-[27%] top-[27%] w-[46%]">
-        <div className="mk-wall absolute -inset-3 rounded-[22px] border-2 border-cyan-300/50" />
-        <div className="relative overflow-hidden rounded-[16px] border border-primary/60 bg-[#151827] p-3 shadow-[0_0_50px_-10px_rgb(var(--primary)/0.9)]">
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] font-semibold">Northgate Foods <span className="font-normal text-white/50">· you</span></p>
-            <span className="text-cyan-200"><IconWalls size={15} /></span>
+
+        {/* Status */}
+        <div className="flex items-center gap-4 px-5 pb-4 pt-5">
+          <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
+            <span className={cn('mk-sec-ring absolute inset-0 rounded-full', all && 'mk-sec-ring-on')} />
+            <span className="absolute inset-[3px] rounded-full bg-[#11131b]" />
+            <svg viewBox="0 0 24 24" width="26" height="26" className="relative" fill="none" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3 5 6v5.5c0 4.4 3 8.2 7 9.5 4-1.3 7-5.1 7-9.5V6l-7-3Z" stroke="rgb(165 180 252)" strokeWidth={1.6} fill="rgb(99 102 241 / 0.18)" />
+              <path d="m8.8 12.2 2.2 2.2 4.3-4.6" stroke="rgb(110 231 183)" strokeWidth={2} className={cn('mk-sec-tick', all && 'mk-sec-tick-on')} />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold tracking-[-0.01em]">{all ? 'All checks passing' : 'Checking your company…'}</p>
+            <p className="mt-0.5 text-[12px] text-white/50">Northgate Foods · 48 people</p>
           </div>
-          <ul className="mt-2 space-y-1.5">
-            {RECORDS.map((r, i) => (
-              <li key={r.label} className="mk-appear flex items-center justify-between rounded-[8px] bg-white/[0.06] px-2 py-1 text-[11px]" style={{ '--mk-delay': `${i * 0.3}s`, '--mk-dur': '9s' } as CSSProperties}>
-                <span className="text-white/70">{r.label}</span><span className="font-semibold tabular-nums">{r.value}</span>
+          <span className={cn('ml-auto rounded-full px-2 py-0.5 text-[10.5px] font-semibold transition-colors duration-500', all ? 'bg-emerald-400/15 text-emerald-300' : 'bg-white/[0.06] text-white/50')}>{all ? 'Protected' : `${done}/${CHECKS.length}`}</span>
+        </div>
+
+        <ul className="mx-3 space-y-1 rounded-[14px] border border-white/[0.07] bg-white/[0.025] p-1.5">
+          {CHECKS.map((c, i) => {
+            const Icon = c.icon
+            const ok = i < done, now = i === done
+            return (
+              <li key={c.label} className={cn('relative flex items-center gap-3 overflow-hidden rounded-[10px] px-2.5 py-2 transition-colors duration-500', now && 'bg-white/[0.04]')}>
+                {now && <span className="mk-sec-sweep absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-indigo-400/15 to-transparent" />}
+                <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors duration-500', ok ? 'bg-indigo-400/15 text-indigo-200' : 'bg-white/[0.05] text-white/35')}><Icon size={15} /></span>
+                <span className="min-w-0 flex-1">
+                  <span className={cn('block truncate text-[12.5px] font-medium transition-colors duration-500', ok ? 'text-white' : 'text-white/55')}>{c.label}</span>
+                  <span className="block truncate text-[10.5px] text-white/40">{c.note}</span>
+                </span>
+                <span className="relative flex h-5 w-5 items-center justify-center">
+                  {ok ? (
+                    <span className="mk-sec-pop flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400 text-[#0b0c10]"><IconCheck size={12} /></span>
+                  ) : now ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/15 border-t-indigo-300" />
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
+                  )}
+                </span>
+              </li>
+            )
+          })}
+          {/* Support access: off until the Super Admin allows it */}
+          <li className="flex items-center gap-3 rounded-[10px] px-2.5 py-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-white/[0.05] text-amber-200"><IconSupport size={15} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12.5px] font-medium text-white">Support access</span>
+              <span className="block truncate text-[10.5px] text-white/40">Only when you allow it, up to a week</span>
+            </span>
+            <span className="relative h-5 w-9 rounded-full bg-white/[0.12]"><span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white/70 shadow" /></span>
+          </li>
+        </ul>
+
+        {/* Activity log */}
+        <div className="px-5 pb-5 pt-4">
+          <p className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.08em] text-white/40">Activity log<span className="flex items-center gap-1.5 normal-case tracking-normal text-emerald-300/80"><span className="mk-sec-live h-1.5 w-1.5 rounded-full bg-emerald-400" />Live</span></p>
+          <ul className="relative mt-2.5 h-[136px] overflow-hidden [mask-image:linear-gradient(to_bottom,#000_62%,transparent)]">
+            {rows.map((r, k) => (
+              <li key={r.key} className={cn('absolute inset-x-0 flex items-center gap-2.5 transition-all duration-700 ease-out', k === 0 && tick > 0 && 'mk-sec-in')} style={{ top: k * 37 }}>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-[10px] font-bold text-white/80">{r.who}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-white/60"><span className="font-semibold text-white">{r.name}</span> {r.what}</span>
+                <span className={cn('font-mono text-[10.5px] tabular-nums', k === 0 ? r.tone : 'text-white/35')}>{r.time}</span>
               </li>
             ))}
           </ul>
-          <p className="mt-2 flex items-center gap-1 text-[10px] text-emerald-300"><IconLock size={10} />Encrypted on the way · HTTPS</p>
-          <span className="mk-scan absolute inset-x-0 top-1/2 h-px bg-gradient-to-r from-transparent via-cyan-300/80 to-transparent" />
         </div>
-      </div>
-      {/* Requests from other companies, stopped at the wall */}
-      {TRIES.map((t, i) => (
-        <span key={i} className="mk-try absolute" style={{ '--fx': `${t.from[0]}%`, '--fy': `${t.from[1]}%`, '--tx': `${t.to[0]}%`, '--ty': `${t.to[1]}%`, animationDelay: `${t.d}s` } as CSSProperties}>
-          <span className="mk-try-dot block h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-300 shadow-[0_0_12px_2px_rgb(252_211_77/0.7)]" style={{ animationDelay: `${t.d}s` }} />
-          <span className="mk-try-x absolute left-0 top-0 -translate-x-1/2 -translate-y-[160%] whitespace-nowrap rounded-full bg-rose-500/90 px-1.5 py-0.5 text-[9px] font-bold" style={{ animationDelay: `${t.d}s` }}>Blocked</span>
-        </span>
-      ))}
-      {/* What runs every night */}
-      <div className="absolute inset-x-[8%] bottom-[-2%] flex flex-wrap items-center justify-center gap-1.5">
-        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-white/75"><IconBackup size={12} className="text-cyan-200" />Backed up 2:00 AM</span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-white/75"><IconKey size={12} className="text-cyan-200" />Support access: off</span>
       </div>
     </div>
   )

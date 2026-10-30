@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ElementType, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { ChevronDown, Menu, Moon, Sun, X, ArrowRight } from 'lucide-react'
 import { useTheme } from '../../lib/theme'
 import { cn } from '../../lib/cn'
 import { api } from '../../lib/api'
 import './marketing.css'
-import { FEATURES, SOLUTIONS } from './pages'
+import { EXTRAS, FEATURES, SOLUTIONS } from './pages'
 import { site } from './content'
 import { IconAttendance, IconBoard, IconChat, IconDialer, IconReport } from './icons'
 import metriqLogo from '../../assets/metriq-logo.svg'
@@ -19,50 +19,75 @@ const LINKS: { to: string; label: string; menu?: 'product' | 'solutions' }[] = [
   { to: '/pricing', label: 'Pricing' },
   { to: '/security', label: 'Security' },
 ]
+const TEAM_KINDS = ['General', 'Sales calling', 'Lead Generation', 'Marketing', 'E-commerce', 'Inventory', 'Customer service']
 const FEATURE_ICON = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, sales: IconDialer } as const
 
 function Tile({ hue, children, size = 34 }: { hue: { a: string; b: string }; children: ReactNode; size?: number }) {
   return <span className="flex shrink-0 items-center justify-center rounded-[30%] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]" style={{ width: size, height: size, backgroundImage: `linear-gradient(to bottom, rgb(${hue.a}), rgb(${hue.b}))` }}>{children}</span>
 }
 
-/** The Product and Solutions panels that open under the top bar. */
+/** The Product and Solutions panels that open under the top bar: the same size, side by side in feel. */
 function MegaPanel({ which, onClose }: { which: 'product' | 'solutions'; onClose: () => void }) {
-  const item = 'group flex items-start gap-3 rounded-[12px] p-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+  const item = 'group flex items-start gap-3.5 rounded-[14px] p-3 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+  const head = 'px-3 pb-1 pt-1 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint'
   return (
-    <div className="mk-mega mx-auto grid max-w-[880px] gap-2 rounded-[20px] border border-line bg-card p-3 shadow-[0_30px_80px_-30px_rgb(var(--shadow)/0.45)] md:grid-cols-[1.6fr_1fr]">
+    <div className="mk-mega mx-auto grid w-full max-w-[1040px] gap-3 rounded-[22px] border border-line bg-card p-3.5 shadow-[0_30px_80px_-30px_rgb(var(--shadow)/0.45)] md:h-[392px] md:grid-cols-[1.45fr_1fr]">
       {which === 'product' ? (
         <>
-          <div className="grid content-start gap-1 sm:grid-cols-2">
-            {FEATURES.map((f) => {
-              const Icon = FEATURE_ICON[f.key]
-              return (
-                <Link key={f.key} to={`/product/${f.slug}`} onClick={onClose} className={item}>
-                  <Tile hue={f.hue}><Icon size={17} /></Tile>
-                  <span><span className="block text-[14px] font-semibold text-ink">{f.name}</span><span className="block text-[12.5px] leading-snug text-ink-muted">{f.menu}</span></span>
-                </Link>
-              )
-            })}
+          <div className="flex flex-col">
+            <p className={head}>The parts of Metriq</p>
+            <div className="grid flex-1 content-start gap-1 sm:grid-cols-2">
+              {FEATURES.map((f) => {
+                const Icon = FEATURE_ICON[f.key]
+                return (
+                  <Link key={f.key} to={`/product/${f.slug}`} onClick={onClose} className={item}>
+                    <Tile hue={f.hue} size={40}><Icon size={19} /></Tile>
+                    <span className="min-w-0"><span className="flex items-center gap-1 text-[14.5px] font-semibold text-ink">{f.name}<ArrowRight size={13} className="-translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" /></span><span className="mt-0.5 block text-[13px] leading-snug text-ink-muted">{f.menu}</span></span>
+                  </Link>
+                )
+              })}
+            </div>
+            <div className="mx-3 mt-2 flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
+              <span className="mr-1 text-[12px] font-medium text-ink-faint">Also in every plan</span>
+              {EXTRAS.map((x) => <Link key={x.key} to="/product" onClick={onClose} className="rounded-full border border-line px-2.5 py-1 text-[12px] font-medium text-ink-muted transition-colors hover:border-primary/40 hover:text-ink">{x.title}</Link>)}
+            </div>
           </div>
-          <Link to="/product" onClick={onClose} className="group relative flex max-h-[250px] flex-col overflow-hidden rounded-[14px] border border-line bg-bg p-4">
+          <Link to="/product" onClick={onClose} className="group relative flex flex-col overflow-hidden rounded-[16px] border border-line bg-bg p-5">
             <div aria-hidden className="absolute inset-0 bg-[radial-gradient(80%_70%_at_100%_0%,rgb(var(--primary)/0.2),transparent)]" />
-            <span className="relative"><span className="block text-[14px] font-semibold text-ink">All of Metriq</span><span className="mt-1 block text-[12.5px] leading-snug text-ink-muted">How the five parts fit together, and Department Studio.</span></span>
-            <img src={site('app-board.webp')} alt="" className="relative mt-3 w-[140%] max-w-none rounded-[8px] border border-line shadow-overlay transition-transform duration-500 group-hover:-translate-y-1 dark:hidden" />
-            <img src={site('app-board-dark.webp')} alt="" className="relative mt-3 hidden w-[140%] max-w-none rounded-[8px] border border-line shadow-overlay transition-transform duration-500 group-hover:-translate-y-1 dark:block" />
+            <span className="relative"><span className="flex items-center gap-1.5 text-[15px] font-semibold text-ink">All of Metriq<ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" /></span><span className="mt-1 block text-[13px] leading-snug text-ink-muted">How the five parts fit together, and Department Studio.</span></span>
+            <span className="relative mt-auto block pt-4">
+              <img src={site('app-board.webp')} alt="" className="block w-full rounded-[10px] border border-line shadow-overlay transition-transform duration-500 group-hover:-translate-y-1 dark:hidden" />
+              <img src={site('app-board-dark.webp')} alt="" className="hidden w-full rounded-[10px] border border-line shadow-overlay transition-transform duration-500 group-hover:-translate-y-1 dark:block" />
+            </span>
           </Link>
         </>
       ) : (
         <>
-          <div className="grid content-start gap-1 sm:grid-cols-2">
-            {SOLUTIONS.map((t) => (
-              <Link key={t.key} to={`/solutions/${t.slug}`} onClick={onClose} className={item}>
-                <img src={site(t.image)} alt="" className="h-[38px] w-[38px] shrink-0 rounded-[10px] object-cover" />
-                <span><span className="block text-[14px] font-semibold text-ink">{t.name}</span><span className="block text-[12.5px] leading-snug text-ink-muted">{t.menu}</span></span>
-              </Link>
-            ))}
+          <div className="flex flex-col">
+            <p className={head}>By kind of team</p>
+            <div className="grid flex-1 grid-cols-2 content-start gap-2 px-1">
+              {SOLUTIONS.map((t) => (
+                <Link key={t.key} to={`/solutions/${t.slug}`} onClick={onClose} className="group rounded-[14px] p-2 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.04]">
+                  <span className="block overflow-hidden rounded-[10px]"><img src={site(t.image)} alt="" className="block h-[88px] w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]" /></span>
+                  <span className="mt-2 flex items-center gap-1 text-[14px] font-semibold text-ink">{t.name}<ArrowRight size={13} className="-translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" /></span>
+                  <span className="block text-[12.5px] leading-snug text-ink-muted">{t.menu}</span>
+                </Link>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <Link to="/solutions" onClick={onClose} className="rounded-[14px] border border-line bg-bg p-4 transition-colors hover:border-primary/40"><span className="block text-[14px] font-semibold text-ink">Every kind of team</span><span className="mt-1 block text-[12.5px] text-ink-muted">Seven kinds of work, each with its own screens.</span></Link>
-            <Link to="/start" onClick={onClose} className="rounded-[14px] border border-dashed border-line-strong p-4 transition-colors hover:border-primary/40"><span className="block text-[14px] font-semibold text-ink">Just you?</span><span className="mt-1 block text-[12.5px] text-ink-muted">Your own tasks, to-dos and hours.</span></Link>
+          <div className="flex flex-col gap-3">
+            <Link to="/solutions" onClick={onClose} className="group relative flex flex-1 flex-col overflow-hidden rounded-[16px] border border-line bg-bg p-5">
+              <div aria-hidden className="absolute inset-0 bg-[radial-gradient(80%_70%_at_100%_0%,rgb(16_185_129/0.18),transparent),radial-gradient(70%_60%_at_0%_100%,rgb(var(--primary)/0.16),transparent)]" />
+              <span className="relative flex items-center gap-1.5 text-[15px] font-semibold text-ink">Every kind of team<ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" /></span>
+              <span className="relative mt-1 block text-[13px] leading-snug text-ink-muted">Pick the kind of work each department does; it comes with the right screens.</span>
+              <span className="relative mt-auto flex flex-wrap gap-1.5 pt-4">
+                {TEAM_KINDS.map((k, i) => <span key={k} className="mk-chip-in rounded-full border border-line bg-card px-2.5 py-1 text-[12px] font-medium text-ink shadow-[0_6px_14px_-10px_rgb(var(--shadow)/0.5)]" style={{ animationDelay: `${i * 45}ms` }}>{k}</span>)}
+              </span>
+            </Link>
+            <Link to="/start" onClick={onClose} className="flex items-center justify-between gap-3 rounded-[16px] border border-dashed border-line-strong px-5 py-3.5 transition-colors hover:border-primary/40">
+              <span><span className="block text-[14px] font-semibold text-ink">Just you?</span><span className="block text-[12.5px] text-ink-muted">Your own tasks, to-dos and hours.</span></span>
+              <ArrowRight size={15} className="shrink-0 text-ink-muted" />
+            </Link>
           </div>
         </>
       )}
@@ -170,10 +195,15 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
           <Logo />
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
             {LINKS.map((l) => l.menu ? (
-              <button key={l.to} type="button" aria-expanded={mega === l.menu} onMouseEnter={() => hoverOpen(l.menu!)} onClick={() => setMega(mega === l.menu ? null : l.menu!)}
-                className={cn('inline-flex items-center gap-1 rounded-btn px-3 py-2 text-[14px] font-medium transition-colors', mega === l.menu || pathname.startsWith(l.to) ? 'text-ink' : 'text-ink-muted hover:text-ink')}>
-                {l.label}<ChevronDown size={14} className={cn('transition-transform duration-200', mega === l.menu && 'rotate-180')} />
-              </button>
+              <span key={l.to} className="inline-flex items-center" onMouseEnter={() => hoverOpen(l.menu!)}>
+                {/* The name opens its page; hovering (or the arrow) opens the menu. */}
+                <Link to={l.to} onClick={() => setMega(null)} onFocus={() => hoverOpen(l.menu!)}
+                  className={cn('rounded-btn py-2 pl-3 pr-0.5 text-[14px] font-medium transition-colors', mega === l.menu || pathname.startsWith(l.to) ? 'text-ink' : 'text-ink-muted hover:text-ink')}>{l.label}</Link>
+                <button type="button" aria-label={`${l.label} menu`} aria-expanded={mega === l.menu} onClick={() => setMega(mega === l.menu ? null : l.menu!)}
+                  className={cn('rounded-btn py-2 pl-0.5 pr-2 transition-colors', mega === l.menu || pathname.startsWith(l.to) ? 'text-ink' : 'text-ink-muted hover:text-ink')}>
+                  <ChevronDown size={14} className={cn('transition-transform duration-200', mega === l.menu && 'rotate-180')} />
+                </button>
+              </span>
             ) : (
               <NavLink key={l.to} to={l.to} onMouseEnter={() => hoverOpen(null)} className={({ isActive }) => cn('rounded-btn px-3 py-2 text-[14px] font-medium transition-colors', isActive ? 'text-ink' : 'text-ink-muted hover:text-ink')}>{l.label}</NavLink>
             ))}
@@ -195,9 +225,9 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
         )}
         {open && (
           <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-line bg-bg px-4 pb-5 pt-2 md:hidden">
-            <p className="px-2 pt-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Product</p>
+            <Link to="/product" className="flex items-center justify-between px-2 pt-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Product<span className="normal-case tracking-normal text-primary">See all</span></Link>
             {FEATURES.map((f) => { const Icon = FEATURE_ICON[f.key]; return <Link key={f.key} to={`/product/${f.slug}`} className="flex items-center gap-3 rounded-btn px-2 py-2 text-[15px] font-medium text-ink"><Tile hue={f.hue} size={28}><Icon size={15} /></Tile>{f.name}</Link> })}
-            <p className="px-2 pt-3 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Solutions</p>
+            <Link to="/solutions" className="flex items-center justify-between px-2 pt-3 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Solutions<span className="normal-case tracking-normal text-primary">See all</span></Link>
             {SOLUTIONS.map((t) => <Link key={t.key} to={`/solutions/${t.slug}`} className="flex items-center gap-3 rounded-btn px-2 py-2 text-[15px] font-medium text-ink"><img src={site(t.image)} alt="" className="h-7 w-7 rounded-[8px] object-cover" />{t.name}</Link>)}
             <div className="mt-2 border-t border-line pt-2">
               {LINKS.filter((l) => !l.menu).map((l) => <Link key={l.to} to={l.to} className="block rounded-btn px-2 py-2.5 text-[15px] font-medium text-ink">{l.label}</Link>)}
@@ -239,8 +269,37 @@ function SiteFooter() {
         <p className="flex gap-4"><Link to="/terms" className="hover:text-ink">Terms</Link><Link to="/privacy" className="hover:text-ink">Privacy</Link><Link to="/cookies" className="hover:text-ink">Cookies</Link></p>
       </div>
       {/* The name, large and quiet, under everything. */}
-      <p aria-hidden className="pointer-events-none -mb-[0.22em] select-none text-center text-[22vw] font-bold leading-none tracking-[-0.06em] text-ink/[0.035] lg:text-[260px]">Metriq</p>
+      <FooterWord />
     </footer>
+  )
+}
+
+/**
+ * The name, large, under everything. The letters come together when the footer scrolls in, a slow
+ * light passes across them, and a soft glow follows the pointer. Still with reduced motion.
+ */
+function FooterWord() {
+  const [ref, seen] = useInView<HTMLDivElement>('0px 0px -5% 0px')
+  const word = useRef<HTMLParagraphElement>(null)
+  const move = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const el = word.current
+    if (!el || e.pointerType !== 'mouse') return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--mx', `${e.clientX - r.left}px`)
+    el.style.setProperty('--my', `${e.clientY - r.top}px`)
+    el.style.setProperty('--mo', '1')
+  }
+  const leave = () => word.current?.style.setProperty('--mo', '0')
+  return (
+    <div ref={ref} aria-hidden onPointerMove={move} onPointerLeave={leave} className="relative select-none overflow-hidden">
+      {/* The letters (they rise into place) and, on top, the same word lit by a passing light and the pointer. */}
+      <p className={cn('mk-word-base -mb-[0.2em] text-center text-[22vw] font-bold leading-none tracking-[-0.06em] lg:text-[260px]', seen && 'mk-word-foot-in')}>
+        {'Metriq'.split('').map((ch, i) => <span key={i} className="mk-word-ch inline-block" style={{ '--i': i } as CSSProperties}>{ch}</span>)}
+      </p>
+      <p ref={word} className={cn('mk-word-foot pointer-events-none absolute inset-x-0 top-0 text-center text-[22vw] font-bold leading-none tracking-[-0.06em] lg:text-[260px]', seen && 'mk-word-foot-in')}>
+        {'Metriq'.split('').map((ch, i) => <span key={i} className="inline-block">{ch}</span>)}
+      </p>
+    </div>
   )
 }
 

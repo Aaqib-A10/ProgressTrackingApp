@@ -59,13 +59,21 @@ export default function Pricing() {
       </section>
 
       <section className="py-16 sm:py-24">
-        <Container className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
-          <SectionHead title="Billing questions" />
-          <dl className="space-y-6">
-            {[...billingFaq, { q: 'Can we change plans later?', a: 'Yes, up or down at any time. A change in the middle of a month is worked out to the day. A smaller plan has to fit the people you have.' }, { q: 'Do you charge per person?', a: 'No. You pay for the plan; everyone up to its limit is included.' }].map((f) => (
-              <div key={f.q}><dt className="text-[15.5px] font-semibold text-ink">{f.q}</dt><dd className="mt-1.5 text-[14.5px] leading-relaxed text-ink-muted">{f.a}</dd></div>
+        <Container>
+          <SectionHead center eyebrow="Questions" title="Billing questions" text="Plans, changes and what is included. Ask us anything else from the Help button inside Metriq." />
+          <div className="mx-auto mt-10 max-w-3xl space-y-3">
+            {[...billingFaq, { q: 'Can we change plans later?', a: 'Yes, up or down at any time. A change in the middle of a month is worked out to the day. A smaller plan has to fit the people you have.' }, { q: 'Do you charge per person?', a: 'No. You pay for the plan; everyone up to its limit is included.' }].map((f, i) => (
+              <details key={f.q} open={i === 0} className="group rounded-[16px] border border-line bg-card transition-shadow open:shadow-[0_18px_40px_-28px_rgb(var(--shadow)/0.5)]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-[15.5px] font-semibold text-ink [&::-webkit-details-marker]:hidden">
+                  {f.q}
+                  <span aria-hidden className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-ink-muted transition-colors group-open:border-primary/40 group-open:text-primary">
+                    <span className="absolute h-[1.5px] w-3 rounded bg-current" /><span className="absolute h-3 w-[1.5px] rounded bg-current transition-transform duration-300 group-open:rotate-90 group-open:scale-0" />
+                  </span>
+                </summary>
+                <p className="-mt-1 px-5 pb-5 text-[14.5px] leading-relaxed text-ink-muted">{f.a}</p>
+              </details>
             ))}
-          </dl>
+          </div>
         </Container>
         <Container className="mt-14 text-center"><PrimaryCta /></Container>
       </section>

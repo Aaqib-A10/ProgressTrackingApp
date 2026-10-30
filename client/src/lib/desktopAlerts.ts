@@ -102,11 +102,42 @@ export interface PopupInput {
   tag?: string
   /** Show even when the tab is focused (used by "Send a test alert"). */
   force?: boolean
+  /** One message or call = one pop-up. The background worker (/sw.js) uses the same key for
+   *  its push pop-ups, so a tab in the background and a push never both show the same thing. */
+  once?: string
+}
+
+const SHOWN_CACHE = 'pt-shown-v1'
+
+/** True the first time a key is claimed on this browser (shared with /sw.js through the
+ *  Cache API, so the page and the background worker agree). Works offline; fails open. */
+export async function claimOnce(key: string): Promise<boolean> {
+  try {
+    if (typeof caches === 'undefined') return true
+    const c = await caches.open(SHOWN_CACHE)
+    const url = `/__pt-shown/${encodeURIComponent(key)}`
+    if (await c.match(url)) return false
+    await c.put(url, new Response('1'))
+    const all = await c.keys()
+    if (all.length > 300) await Promise.all(all.slice(0, all.length - 300).map((r) => c.delete(r)))
+    return true
+  } catch {
+    return true
+  }
 }
 
 export function popup(p: PopupInput): boolean {
   if (!active(p.kind)) return false
   if (!p.force && !userIsAway()) return false
+  if (p.once) {
+    const key = p.once
+    void claimOnce(key).then((first) => { if (first) show(p) })
+    return true
+  }
+  return show(p)
+}
+
+function show(p: PopupInput): boolean {
   try {
     const n = new Notification(p.title, { body: p.body, tag: p.tag, icon: '/favicon.svg', badge: '/favicon.svg', requireInteraction: !!p.sticky })
     n.onclick = () => {

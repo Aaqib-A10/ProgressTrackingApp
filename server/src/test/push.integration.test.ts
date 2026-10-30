@@ -49,10 +49,11 @@ describe('pop-up notifications when PulseTrack is closed', () => {
   })
 
   it('a new message reaches the other person, not the sender; muted chats stay quiet', async () => {
-    await request(app).post(`/api/chat/conversations/${dm}/messages`).set(...auth(w.itadLead)).send({ body: 'Are the pages ready?' }).expect(201)
+    const posted = await request(app).post(`/api/chat/conversations/${dm}/messages`).set(...auth(w.itadLead)).send({ body: 'Are the pages ready?' }).expect(201)
     await flush()
     expect(sent).toHaveLength(1)
-    expect(sent[0].payload).toMatchObject({ kind: 'msg', body: 'Are the pages ready?', tag: `chat-${dm}`, url: `/app/chat?c=${dm}` })
+    // The message id lets the browser show each message once (push and open tab agree).
+    expect(sent[0].payload).toMatchObject({ kind: 'msg', body: 'Are the pages ready?', tag: `chat-${dm}`, url: `/app/chat?c=${dm}`, messageId: posted.body.message.id })
     sent.length = 0
     await prisma.chatMember.updateMany({ where: { conversationId: dm, userId: w.itadMember.id }, data: { mutedUntil: new Date(Date.now() + 3600_000) } })
     await request(app).post(`/api/chat/conversations/${dm}/messages`).set(...auth(w.itadLead)).send({ body: 'ping' }).expect(201)

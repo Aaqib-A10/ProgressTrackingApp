@@ -5,7 +5,7 @@ import { MarketingLayout, Container, SectionHead, Eyebrow, PrimaryCta, Secondary
 import { BENTO, DAY, PLANS, SECURITY, STEPS, TEAMS, TOUR, faqsFor, site } from './marketing/content'
 import { HeroBackdrop, HeroStage, trackPointer } from './marketing/HeroStage'
 import { SOLUTIONS } from './marketing/pages'
-import { AskArt, ClocksArt, ConsolidateArt, NotesArt, OrbitArt, PhoneArt, RolesArt, StepArt, TeamsArt, WallsArt } from './marketing/Pictures'
+import { AskArt, ClocksArt, ConsolidateArt, NotesArt, OrbitArt, PhoneArt, RolesArt, StepArt, TeamsArt, SecurityArt } from './marketing/Pictures'
 import {
   IconArrow, IconAttendance, IconBackup, IconBoard, IconChat, IconCheck, IconConnect, IconDepartments, IconDialer, IconExport, IconGlobeClock,
   IconKey, IconLock, IconNotes, IconPhone, IconReport, IconRoles, IconSupport, IconWalls,
@@ -163,14 +163,14 @@ function Tour() {
             })}
           </div>
 
-          <div role="tabpanel" aria-label={t.tab} className="relative min-h-[300px] overflow-hidden rounded-[24px] border border-line sm:min-h-[420px] lg:min-h-[520px]" onPointerMove={tilt} onPointerLeave={untilt}>
-            {/* The part's own light, a fine grid, and the screen coming in from the corner. */}
+          <div role="tabpanel" aria-label={t.tab} className="relative flex flex-col overflow-hidden rounded-[24px] border border-line" onPointerMove={tilt} onPointerLeave={untilt}>
+            {/* The part's own light, a fine grid, and the whole screen (never cut off at the edge). */}
             <div aria-hidden className="absolute inset-0 transition-[background] duration-700" style={{ background: `radial-gradient(120% 90% at 0% 0%, rgb(${hue.a} / 0.22), transparent 55%), radial-gradient(100% 80% at 100% 100%, rgb(${hue.b} / 0.22), transparent 60%), rgb(var(--card))` }} />
             <div aria-hidden className="mk-grid absolute inset-0 opacity-70 [mask-image:linear-gradient(to_bottom,#000,transparent)]" style={{ backgroundSize: '32px 32px' }} />
-            <div className="relative pl-6 pt-6 sm:pl-12 sm:pt-12 lg:absolute lg:inset-0">
-              <div ref={stage} className="transition-transform duration-300 ease-out will-change-transform lg:w-[142%]" style={{ transformOrigin: '0 0' }}>
-                <div key={t.key} className="mk-swap -mr-[18%] sm:-mr-[12%] lg:mr-0">
-                  <AppFrame src={site(t.image)} darkSrc={dark} alt={`${t.tab} in Metriq`} className="rounded-br-none rounded-tr-none shadow-[0_30px_60px_-20px_rgb(var(--shadow)/0.45)]" />
+            <div className="relative flex flex-1 items-center p-4 sm:p-8 lg:p-10">
+              <div ref={stage} className="w-full transition-transform duration-300 ease-out will-change-transform" style={{ transformOrigin: '50% 50%' }}>
+                <div key={t.key} className="mk-swap">
+                  <AppFrame src={site(t.image)} darkSrc={dark} alt={`${t.tab} in Metriq`} className="shadow-[0_30px_60px_-20px_rgb(var(--shadow)/0.45)]" />
                 </div>
               </div>
             </div>
@@ -293,7 +293,7 @@ function SecurityPreview() {
             <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-white/65 sm:text-[18px]">Each company only ever sees its own records, and our team can only look in when you allow it.</p>
             <Link to="/security" className="mt-8 inline-flex h-11 items-center gap-2 rounded-btn border border-white/15 bg-white/5 px-5 text-[15px] font-semibold text-white transition-colors hover:bg-white/10">How we keep it safe <IconArrow size={16} /></Link>
           </Reveal>
-          <Reveal delay={150}><WallsArt /></Reveal>
+          <Reveal delay={150}><SecurityArt /></Reveal>
         </div>
         <ul className="mt-16 grid gap-px overflow-hidden rounded-[18px] border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
           {SECURITY.slice(0, 4).map((s, i) => {

@@ -21,6 +21,8 @@ export interface PushPayload {
   url: string
   callId?: string
   conversationId?: string
+  /** The chat message: the browser shows each message once (see /sw.js claimOnce). */
+  messageId?: string
   video?: boolean
   /** Keep on screen until clicked (ringing calls). */
   sticky?: boolean
@@ -100,7 +102,7 @@ export async function sendPush(userIds: string[], payload: PushPayload, opts: { 
 }
 
 /** A new chat message: everyone else in the chat who has not muted it (an @mention gets through a mute). */
-export async function pushChatMessage(input: { conversationId: string; senderId: string; senderName: string; text: string; mentions: string[] }): Promise<void> {
+export async function pushChatMessage(input: { conversationId: string; messageId?: string; senderId: string; senderName: string; text: string; mentions: string[] }): Promise<void> {
   const conv = await prisma.chatConversation.findUnique({
     where: { id: input.conversationId },
     select: { type: true, name: true, members: { select: { userId: true, mutedUntil: true } } },
@@ -121,6 +123,7 @@ export async function pushChatMessage(input: { conversationId: string; senderId:
     tag: `chat-${input.conversationId}`,
     url: `/app/chat?c=${encodeURIComponent(input.conversationId)}`,
     conversationId: input.conversationId,
+    messageId: input.messageId,
   })
 }
 

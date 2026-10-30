@@ -395,10 +395,10 @@ async function resolveTaskRef(body: string): Promise<string | null> {
   return t && !t.deletedAt ? t.id : null
 }
 
-async function afterSend(convId: string, senderId: string, senderName: string, body: string, mentions: string[], convTitle: string) {
+async function afterSend(convId: string, messageId: string, senderId: string, senderName: string, body: string, mentions: string[], convTitle: string) {
   await prisma.chatConversation.update({ where: { id: convId }, data: { lastMessageAt: new Date() } })
   // Pop-up on phones / computers where PulseTrack is closed (never holds up the reply).
-  void pushChatMessage({ conversationId: convId, senderId, senderName, text: body, mentions }).catch(() => undefined)
+  void pushChatMessage({ conversationId: convId, messageId, senderId, senderName, text: body, mentions }).catch(() => undefined)
   if (mentions.length) {
     await pmNotify({
       userIds: mentions,
@@ -445,7 +445,7 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
   // Sending means you've read everything up to your own message.
   await prisma.chatMember.update({ where: { id: m.id }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
   setTyping(m.conversationId, me.id, false)
-  await afterSend(m.conversationId, me.id, msg.user.name, text, mentions, convTitleFor(m.conversation, msg.user.name))
+  await afterSend(m.conversationId, msg.id, me.id, msg.user.name, text, mentions, convTitleFor(m.conversation, msg.user.name))
   const visible = new Set(await visibleProjectIds(me, true))
   res.status(201).json({ message: serializeMessage(msg, visible) })
 }
@@ -480,7 +480,7 @@ export async function sendFile(req: AuthedRequest, res: Response): Promise<void>
   })
   await prisma.chatMember.update({ where: { id: m.id }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
   await prisma.chatConversation.update({ where: { id: m.conversationId }, data: { lastMessageAt: new Date() } })
-  void pushChatMessage({ conversationId: m.conversationId, senderId: me.id, senderName: msg.user.name, text: caption || fileLabel(msg.fileName, msg.fileMime), mentions: [] }).catch(() => undefined)
+  void pushChatMessage({ conversationId: m.conversationId, messageId: msg.id, senderId: me.id, senderName: msg.user.name, text: caption || fileLabel(msg.fileName, msg.fileMime), mentions: [] }).catch(() => undefined)
   const visible = new Set(await visibleProjectIds(me, true))
   res.status(201).json({ message: serializeMessage(msg, visible) })
 }
@@ -573,7 +573,7 @@ export async function finishUpload(req: AuthedRequest, res: Response): Promise<v
   })
   await prisma.chatMember.update({ where: { id: m.id }, data: { lastReadSeq: msg.seq, lastReadAt: new Date() } })
   await prisma.chatConversation.update({ where: { id: u.conversationId }, data: { lastMessageAt: new Date() } })
-  void pushChatMessage({ conversationId: u.conversationId, senderId: me.id, senderName: msg.user.name, text: caption || fileLabel(msg.fileName, msg.fileMime), mentions: [] }).catch(() => undefined)
+  void pushChatMessage({ conversationId: u.conversationId, messageId: msg.id, senderId: me.id, senderName: msg.user.name, text: caption || fileLabel(msg.fileName, msg.fileMime), mentions: [] }).catch(() => undefined)
   const visible = new Set(await visibleProjectIds(me, true))
   res.status(201).json({ message: serializeMessage(msg, visible) })
 }

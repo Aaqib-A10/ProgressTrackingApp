@@ -30,6 +30,7 @@ async function refresh(): Promise<void> {
           body: latest.text,
           link: `/app/chat?c=${encodeURIComponent(latest.conversationId)}`,
           tag: `chat-${latest.conversationId}`,
+          once: `msg-${latest.id}`,
         })
       }
     }

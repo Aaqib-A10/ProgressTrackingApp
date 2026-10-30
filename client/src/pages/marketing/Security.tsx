@@ -1,7 +1,7 @@
 import { MarketingLayout, Container, PrimaryCta, Reveal, usePageTitle } from './MarketingLayout'
 import { SECURITY } from './content'
 import { IconBackup, IconExport, IconKey, IconLock, IconSupport, IconWalls } from './icons'
-import { WallsArt } from './Pictures'
+import { SecurityArt } from './Pictures'
 
 const ICONS = [IconWalls, IconLock, IconBackup, IconKey, IconSupport, IconExport]
 
@@ -18,7 +18,7 @@ export default function Security() {
             <h1 className="mt-4 text-balance text-[36px] font-semibold leading-[1.05] tracking-[-0.035em] sm:text-[52px]">Your company's data stays your company's</h1>
             <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-white/65 sm:text-[18px]">What Metriq does today to keep your records separate, safe and yours. No promises we do not keep.</p>
           </Reveal>
-          <Reveal delay={150}><WallsArt /></Reveal>
+          <Reveal delay={150}><SecurityArt /></Reveal>
         </Container>
       </section>
       <section className="py-16 sm:py-24">
