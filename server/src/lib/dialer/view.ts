@@ -22,6 +22,9 @@ export interface DialerSettings {
   primeTimes: TimeSpan[]
   /** Mark leads whose details were added here so the rep also updates Earthzone. */
   earthzoneTick: boolean
+  bulkUpdatePct?: number
+  outcomeChipStatuses?: string[]
+  taskReminders?: number[]
 }
 export interface DialerLead {
   id: string
@@ -76,6 +79,28 @@ export interface DialerLead {
   backlogKeptAt: string | null
   lastImportId: string | null
   firstImportId: string | null
+  jobTitle?: string | null
+  assignedTo?: string | null
+  lastTouchedAt?: string | null
+  attempts?: number
+  tries?: number
+  reAttempts?: number
+  manualTouches?: number
+}
+export interface DialerTask {
+  id: string
+  leadId: string
+  ownerId: string
+  kind: 'CALL' | 'EMAIL' | 'TODO'
+  title: string
+  note: string | null
+  dueAt: string | null
+  origin: 'MANUAL' | 'AUTO'
+  reason: 'FOLLOW_UP_RULE' | 'CALL_LATER' | null
+  status: 'OPEN' | 'DONE' | 'CANCELLED'
+  doneAt: string | null
+  outcome: string | null
+  reminders: number[]
 }
 export interface FunnelNumbers {
   total: number; attempted: number; connected: number; positive: number
@@ -510,6 +535,212 @@ export function filterLeads(leads: DialerLead[], f: LeadFilters, now: Date, last
     if (!anyOf(f.list, l.listName)) return false
     if (f.tag && !multiOf(f.tag).some((t) => l.tags.includes(t))) return false
     if (!anyOf(f.rep, l.ownerId)) return false
+    return true
+  })
+}
+
+// ------------------------------------------------------------------ Follow-ups (ITAD revised spec, 30 Oct 2026)
+
+/**
+ * Touches, days quiet and the follow-up list. The stages and statuses stay as Metriq has them;
+ * the three follow-up stage cards are the statuses that have follow-up days (Pipeline 7,
+ * Interested 14, Connected 30 by default).
+ */
+
+/** The latest touch: the CRM's Updated At, or a touch added here if that is later. */
+export const lastTouched = (l: DialerLead) => l.lastTouchedAt ?? l.lastActivityAt ?? l.leadDate ?? l.createdAt
+/** Still Assigned and never worked: no touch was ever added here. */
+export const neverWorked = (l: DialerLead) => l.status === 'Assigned' && !l.manualTouches
+/** Days quiet: from the assignment (Created At) for a lead never worked, else from the last touch. */
+export function daysQuiet(l: DialerLead, now: Date): number {
+  return daysSince(neverWorked(l) ? l.leadDate ?? l.createdAt : lastTouched(l), now)
+}
+/** The follow-up rule for a lead (days), or null when its status has none. */
+export const ruleDays = (l: DialerLead, s: DialerSettings, by?: FollowUpDays): number | null => thresholdOf(l, s, by) ?? null
+
+/** Quiet longer than its rule, and nothing else is holding it (closed, dropped, snoozed, a call back set). */
+export function isRuleDue(l: DialerLead, s: DialerSettings, now: Date, by?: FollowUpDays): boolean {
+  if (l.duplicate || isClosed(l, s) || isBlocked(l) || l.followUpDropped || l.callLaterAt || isFuture(l.snoozeUntil, now)) return false
+  const rule = ruleDays(l, s, by)
+  return rule != null && daysQuiet(l, now) >= rule
+}
+
+/**
+ * How far past its rule a lead is, 0 (not due) to 4 (severe). Measured against the rule, so
+ * 125 days on a 7-day rule is severe and 105 days on a 30-day rule is moderate.
+ */
+export function overdueLevel(days: number, rule: number | null): 0 | 1 | 2 | 3 | 4 {
+  if (!rule || days < rule) return 0
+  const r = days / rule
+  return r < 2 ? 1 : r < 4 ? 2 : r < 8 ? 3 : 4
+}
+
+export type TaskBucket = 'overdue' | 'today' | 'upcoming' | 'done'
+/** Where a task sits on the strip. Today runs from the rep's day start (noon Pakistan time). Cancelled and older done tasks: null. */
+export function taskBucket(t: DialerTask, now: Date, dayStart: Date): TaskBucket | null {
+  const end = dayStart.getTime() + 86400000
+  if (t.status === 'CANCELLED') return null
+  if (t.status === 'DONE') return t.doneAt && new Date(t.doneAt).getTime() >= dayStart.getTime() ? 'done' : null
+  const due = t.dueAt ? new Date(t.dueAt).getTime() : null
+  if (due == null) return 'upcoming'
+  if (due < now.getTime()) return 'overdue'
+  return due < end ? 'today' : 'upcoming'
+}
+
+export const OUTCOMES = [
+  { key: 'NO_ANSWER', label: 'No answer' },
+  { key: 'VOICEMAIL', label: 'Voicemail' },
+  { key: 'GATEKEEPER', label: 'Gatekeeper' },
+  { key: 'CONNECTED', label: 'Connected' },
+  { key: 'WRONG_NUMBER', label: 'Wrong number' },
+] as const
+export const outcomeLabel = (k: string | null | undefined) => OUTCOMES.find((o) => o.key === k)?.label ?? k ?? ''
+export const TASK_KINDS = [{ key: 'CALL', label: 'Call' }, { key: 'EMAIL', label: 'Email' }, { key: 'TODO', label: 'To-do' }] as const
+
+export interface FollowUpRow {
+  lead: DialerLead
+  days: number
+  rule: number | null
+  level: 0 | 1 | 2 | 3 | 4
+  ruleDue: boolean
+  /** Open tasks on the lead, the earliest due first. */
+  tasks: DialerTask[]
+  /** Tasks ticked today. */
+  done: DialerTask[]
+  /** Why it is here, in a few words: "call back due 22 Oct", "quiet 85 days, rule 7". */
+  why: string
+  callNow: boolean
+}
+
+const dayMonth = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+const KIND_DUE: Record<string, string> = { CALL: 'call', EMAIL: 'email', TODO: 'to-do' }
+
+/** One row per lead that needs following up (quiet past its rule) or has a task. */
+export function followUpRows(leads: DialerLead[], tasks: DialerTask[], s: DialerSettings, now: Date, by?: FollowUpDays, includeAll = false): FollowUpRow[] {
+  const open = new Map<string, DialerTask[]>()
+  const done = new Map<string, DialerTask[]>()
+  for (const t of tasks) {
+    const m = t.status === 'OPEN' ? open : t.status === 'DONE' ? done : null
+    if (m) { const a = m.get(t.leadId) ?? []; a.push(t); m.set(t.leadId, a) }
+  }
+  const out: FollowUpRow[] = []
+  for (const l of leads) {
+    if (l.duplicate) continue
+    const ts = (open.get(l.id) ?? []).sort((a, b) => (a.dueAt ?? '9').localeCompare(b.dueAt ?? '9'))
+    const rule = ruleDays(l, s, by)
+    const ruleDue = isRuleDue(l, s, now, by)
+    const inStage = rule != null && !isClosed(l, s) && !l.followUpDropped
+    const dn = done.get(l.id) ?? []
+    if (!ruleDue && !ts.length && !dn.length && !(includeAll && inStage)) continue
+    const days = daysQuiet(l, now)
+    const first = ts.find((t) => t.reason !== 'FOLLOW_UP_RULE') ?? null
+    const why = neverWorked(l) ? `Assigned ${days}d ago, never worked`
+      : first?.dueAt ? `${first.reason === 'CALL_LATER' ? 'call back' : KIND_DUE[first.kind] ?? 'task'} due ${dayMonth(first.dueAt)}`
+        : ruleDue && rule != null ? `quiet ${days} days, rule ${rule}`
+          : rule != null ? `rule ${rule} days` : ''
+    const r = leadRegion(l, now)
+    out.push({ lead: l, days, rule, level: ruleDue ? overdueLevel(days, rule) : 0, ruleDue, tasks: ts, done: dn, why, callNow: isDialable(l, s, now) && !!r && regionWindow(r, s, now).open })
+  }
+  return out
+}
+
+export const FU_SORT_FIELDS = [
+  { key: 'stage', label: 'Stage' },
+  { key: 'overdue', label: 'Days overdue' },
+  { key: 'callNow', label: 'Can call now' },
+  { key: 'region', label: 'Region' },
+  { key: 'industry', label: 'Industry' },
+  { key: 'state', label: 'State' },
+  { key: 'company', label: 'Company' },
+  { key: 'quiet', label: 'Days quiet' },
+  { key: 'touched', label: 'Last touched' },
+  { key: 'tries', label: 'Tries, same status' },
+  { key: 'due', label: 'Task due' },
+] as const
+export type FuSortKey = (typeof FU_SORT_FIELDS)[number]['key']
+export interface FuSort { key: FuSortKey; dir: 'asc' | 'desc' }
+/** Default order: stage (Pipeline, Interested, Connected), most overdue, can call now, region, industry. */
+export const DEFAULT_FU_SORT: FuSort[] = [{ key: 'stage', dir: 'asc' }, { key: 'overdue', dir: 'desc' }, { key: 'callNow', dir: 'desc' }, { key: 'region', dir: 'asc' }, { key: 'industry', dir: 'asc' }]
+export const sortToParam = (s: FuSort[]) => s.map((x) => `${x.key}:${x.dir}`).join(',')
+export function sortFromParam(v: string | null | undefined): FuSort[] {
+  if (!v) return DEFAULT_FU_SORT
+  const keys = FU_SORT_FIELDS.map((f) => f.key as string)
+  const out = v.split(',').map((x) => x.split(':')).filter(([k, d]) => keys.includes(k) && (d === 'asc' || d === 'desc')).map(([k, d]) => ({ key: k as FuSortKey, dir: d as 'asc' | 'desc' }))
+  return out.length ? out : DEFAULT_FU_SORT
+}
+
+const STAGE_RANK: Record<string, number> = { Pipeline: 0, Interested: 1, Connected: 2 }
+function sortValue(r: FollowUpRow, k: FuSortKey, now: Date): number | string {
+  switch (k) {
+    case 'stage': return STAGE_RANK[r.lead.status] ?? 3
+    case 'overdue': return r.rule != null && r.ruleDue ? r.days - r.rule : -1
+    case 'callNow': return r.callNow ? 1 : 0
+    case 'region': return leadRegion(r.lead, now) ?? 'ZZ'
+    case 'industry': return (r.lead.industry ?? '~').toLowerCase()
+    case 'state': return (leadState(r.lead) ?? '~').toLowerCase()
+    case 'company': return r.lead.company.toLowerCase()
+    case 'quiet': return r.days
+    case 'touched': return new Date(lastTouched(r.lead)).getTime()
+    case 'tries': return r.lead.tries ?? 0
+    case 'due': return r.tasks[0]?.dueAt ? new Date(r.tasks[0].dueAt).getTime() : Number.MAX_SAFE_INTEGER
+  }
+}
+export function sortFollowUps(rows: FollowUpRow[], sort: FuSort[], now: Date): FollowUpRow[] {
+  return [...rows].sort((a, b) => {
+    for (const s of sort) {
+      const x = sortValue(a, s.key, now), y = sortValue(b, s.key, now)
+      const c = typeof x === 'string' ? x.localeCompare(y as string) : x - (y as number)
+      if (c) return s.dir === 'asc' ? c : -c
+    }
+    return a.lead.company.localeCompare(b.lead.company)
+  })
+}
+
+/**
+ * Follow-up filters, all kept in the address bar. Quiet for: more than / less than / between
+ * (days). Last activity: a date range. Task due within the next N days. Attempts: 0, 1, 2, 3+.
+ */
+export interface FuFilters {
+  q?: string; stage?: string; task?: string; state?: string; region?: string; industry?: string
+  attempts?: string; reattempt?: string; tries?: string; callNow?: string
+  quietOp?: string; quietA?: string; quietB?: string
+  actFrom?: string; actTo?: string; dueIn?: string; touchedAgo?: string; all?: string
+}
+export const FU_FILTER_KEYS: (keyof FuFilters)[] = ['q', 'stage', 'task', 'state', 'region', 'industry', 'attempts', 'reattempt', 'tries', 'callNow', 'quietOp', 'quietA', 'quietB', 'actFrom', 'actTo', 'dueIn', 'touchedAgo', 'all']
+
+/** Every filter but the task strip's (the strip counts what the other filters leave). */
+export function filterFollowUps(rows: FollowUpRow[], f: FuFilters, now: Date, dayStart: Date, skipTask = false): FollowUpRow[] {
+  const n = (v?: string) => (v == null || v === '' ? null : Number(v))
+  const qa = n(f.quietA), qb = n(f.quietB), tries = n(f.tries), dueIn = n(f.dueIn), ago = n(f.touchedAgo)
+  const from = f.actFrom ? new Date(`${f.actFrom}T00:00:00`).getTime() : null
+  const to = f.actTo ? new Date(`${f.actTo}T23:59:59`).getTime() : null
+  return rows.filter((r) => {
+    const l = r.lead
+    if (f.q && !matchesSearch(l, f.q)) return false
+    if (!anyOf(f.stage, l.status)) return false
+    if (!anyOf(f.state, leadState(l) ?? '(no state)')) return false
+    if (!anyOf(f.region, leadRegion(l, now) ?? '')) return false
+    if (!anyOf(f.industry, l.industry ?? '(no industry)')) return false
+    if (f.attempts) { const a = l.attempts ?? 0; if (!multiOf(f.attempts).some((x) => (x === '3+' ? a >= 3 : a === Number(x)))) return false }
+    if (f.reattempt === 'yes' && !(l.reAttempts ?? 0)) return false
+    if (tries != null && (l.tries ?? 0) < tries) return false
+    if (f.callNow === '1' && !r.callNow) return false
+    if (qa != null && f.quietOp === 'gt' && !(r.days > qa)) return false
+    if (qa != null && f.quietOp === 'lt' && !(r.days < qa)) return false
+    if (qa != null && qb != null && f.quietOp === 'between' && !(r.days >= Math.min(qa, qb) && r.days <= Math.max(qa, qb))) return false
+    if (from != null || to != null) {
+      const t = new Date(lastTouched(l)).getTime()
+      if ((from != null && t < from) || (to != null && t > to)) return false
+    }
+    if (ago != null && daysSince(lastTouched(l), now) <= ago) return false
+    if (dueIn != null) {
+      const limit = now.getTime() + dueIn * 86400000
+      if (!r.tasks.some((t) => t.dueAt && new Date(t.dueAt).getTime() <= limit)) return false
+    }
+    if (!skipTask && f.task) {
+      const want = multiOf(f.task)
+      if (![...r.tasks, ...r.done].some((t) => want.includes(taskBucket(t, now, dayStart) ?? ''))) return false
+    }
     return true
   })
 }

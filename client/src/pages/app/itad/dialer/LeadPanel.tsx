@@ -4,8 +4,9 @@ import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerLead, type DialerSettings, type LeadDetail, type LeadEdit } from '../../../../lib/dialerApi'
-import { REGIONS, REGION_META, US_STATES, daysInStatus, leadRegion, leadState, regionWindow, shortDate } from '../../../../lib/dialer'
+import { REGIONS, REGION_META, TASK_KINDS, US_STATES, daysInStatus, leadRegion, leadState, outcomeLabel, regionWindow, shortDate } from '../../../../lib/dialer'
 import { LeadActions, NoteFields, RegionBadge, StatusPill, errMsg } from './ui'
+import { AddTaskModal, AddTouchModal } from './TaskParts'
 import { downloadNotes } from './exports'
 
 /**
@@ -23,10 +24,11 @@ import { downloadNotes } from './exports'
 const KIND_LABEL: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups' }
 const fmt = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
-export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, onClose, onChanged }: {
+export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavigate, onClose, onChanged }: {
   id: string
   ids: string[]
   lookup: (id: string) => DialerLead | undefined
+  leads: DialerLead[]
   now: Date
   settings: DialerSettings
   meId: string
@@ -169,6 +171,7 @@ export function LeadPanel({ id, ids, lookup, now, settings, meId, onNavigate, on
               <AddedHere lead={l} settings={settings} onSave={edit} />
             </div>
             <div className="space-y-3">
+              <TouchesAndTasks lead={l} d={d} leads={leads} now={now} onChanged={changed} />
               <NotesGroup lead={l} notes={d.notes} meId={meId} settings={settings} focusKey={noteFocus} onChanged={changed} />
 
               {(d.calls?.length ?? 0) > 0 && (
@@ -419,5 +422,66 @@ function StatusChanger({ lead, statusHere, statusHereFrom, settings, onDone }: {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Touches (dated: "20 Aug touched", "3 Sep status changed"; how each was found is never shown)
+ * with Add touch and dismiss, and the lead's tasks with Add task and tick.
+ */
+function TouchesAndTasks({ lead, d, leads, now, onChanged }: { lead: DialerLead; d: LeadDetail; leads: DialerLead[]; now: Date; onChanged: () => void }) {
+  const { addToast } = useToast()
+  const [touch, setTouch] = useState(false)
+  const [task, setTask] = useState(false)
+  const [all, setAll] = useState(false)
+  const touches = d.touches ?? []
+  const tasks = d.tasks ?? []
+  const open = tasks.filter((t) => t.status === 'OPEN')
+  const done = tasks.filter((t) => t.status === 'DONE').slice(0, 5)
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  async function run(p: Promise<unknown>, ok: string) {
+    try { await p; addToast({ type: 'success', message: ok }); onChanged() } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save') }) }
+  }
+  const edit = !!d.canEdit
+  return (
+    <Group name="touches" title={`Touches and tasks${touches.length ? ` · ${touches.length} touch${touches.length === 1 ? '' : 'es'}` : ''}`}>
+      <div className="flex flex-wrap gap-2 pb-2">
+        {edit && <Button size="sm" variant="secondary" onClick={() => setTouch(true)}>Add touch</Button>}
+        {edit && <Button size="sm" variant="secondary" onClick={() => setTask(true)}>Add task</Button>}
+      </div>
+      {open.length > 0 && (
+        <ul className="mb-2 space-y-1.5">
+          {open.map((t) => {
+            const late = t.dueAt && new Date(t.dueAt) < now
+            return (
+              <li key={t.id} className="flex items-start gap-2 rounded-btn border border-line px-2.5 py-2">
+                {edit && <input type="checkbox" onChange={() => run(dialerApi.updateTask(t.id, { done: true }), 'Task done.')} className="mt-0.5 h-4 w-4 accent-primary" aria-label="Mark done" />}
+                <div className="min-w-0 flex-1">
+                  <p className="text-body-sm font-semibold text-ink">{TASK_KINDS.find((k) => k.key === t.kind)?.label ?? t.kind}{t.reason === 'CALL_LATER' ? ' · call back' : t.reason === 'FOLLOW_UP_RULE' ? ' · follow-up rule' : ''}</p>
+                  <p className={cn('text-[12px]', late ? 'font-semibold text-rose-600 dark:text-rose-300' : 'text-ink-muted')}>Due {t.dueAt ? new Date(t.dueAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</p>
+                  {t.note && <p className="text-[12px] text-ink-muted">{t.note}</p>}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {done.length > 0 && <p className="mb-2 text-[12px] text-ink-muted">Done: {done.map((t) => `${t.doneAt ? day(t.doneAt) : ''} ${TASK_KINDS.find((k) => k.key === t.kind)?.label.toLowerCase() ?? ''}${t.outcome ? ` (${t.outcome})` : ''}`).join(', ')}</p>}
+      {touches.length === 0 ? <p className="text-body-sm text-ink-muted">No touches yet.</p> : (
+        <ul className="divide-y divide-line">
+          {(all ? touches : touches.slice(0, 8)).map((t) => (
+            <li key={t.id} className="group flex items-center gap-2 py-1.5 text-body-sm">
+              <span className="w-14 shrink-0 tabular-nums text-ink-muted">{day(t.at)}</span>
+              <span className="text-ink">{t.statusChange ? 'status changed' : 'touched'}</span>
+              {t.outcome && <span className="rounded-full bg-slate-100 px-1.5 text-[11.5px] text-ink">{outcomeLabel(t.outcome)}</span>}
+              {edit && <button type="button" onClick={() => run(dialerApi.dismissTouch(t.id), 'Touch dismissed.')} className="ml-auto text-[12px] font-semibold text-ink-faint opacity-0 hover:text-danger group-hover:opacity-100" title="Not a real try (e.g. a re-assignment): take it out">Dismiss</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {touches.length > 8 && <button type="button" onClick={() => setAll(!all)} className="mt-1 text-[12px] font-semibold text-primary">{all ? 'Show fewer' : `Show all ${touches.length}`}</button>}
+      {touch && <AddTouchModal lead={lead} onClose={() => setTouch(false)} onDone={() => { setTouch(false); onChanged() }} />}
+      {task && <AddTaskModal leads={leads} leadId={lead.id} onClose={() => setTask(false)} onDone={() => { setTask(false); onChanged() }} />}
+    </Group>
   )
 }

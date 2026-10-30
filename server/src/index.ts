@@ -7,6 +7,7 @@ import { startAttendanceViolations } from './lib/attendanceViolations'
 import { startAutoCheckout } from './lib/autoCheckout'
 import { startMonthlyReports } from './lib/monthlyReportCron'
 import { startTaskReminders } from './lib/taskReminders'
+import { startDialerReminders } from './lib/dialer/tasks'
 import { startPmDeadlines } from './lib/pm/deadlines'
 import { startCallSweeper, setOnCallEnded } from './lib/pm/calls'
 import { startMeetingReminders } from './lib/pm/meetings'
@@ -53,6 +54,7 @@ app.listen(PORT, () => {
   startAutoCheckout()
   startMonthlyReports()
   startTaskReminders()
+  startDialerReminders()
   startPmDeadlines()
   startCallSweeper()
   startMeetingReminders()

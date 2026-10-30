@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, FileUp, PhoneCall, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead } from '../../../../lib/dialerApi'
-import { NO_FILTERS, PKT, REGIONS, applyFilters, clock, followUpTabs, latestActedToday, leadState, multiLabel, toggleMulti, type Filters } from '../../../../lib/dialer'
+import { NO_FILTERS, PKT, REGIONS, applyFilters, clock, leadState, multiLabel, taskBucket, toggleMulti, type Filters } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { DashboardView } from './DashboardView'
 import { FollowUpsView } from './FollowUpsView'
@@ -36,7 +36,10 @@ export default function LeadDialer() {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [importing, setImporting] = useState(false)
   const [listModal, setListModal] = useState<{ title: string; leads: DialerLead[] } | null>(null)
-  const [panel, setPanel] = useState<{ id: string; ids: string[] } | null>(null)
+  // The open lead is in the address (?lead=), so the browser's Back closes it and the list stays as it was.
+  const navigate = useNavigate()
+  const [panelIds, setPanelIds] = useState<string[]>([])
+  const [pushed, setPushed] = useState(false)
   const [dupCount, setDupCount] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -62,11 +65,12 @@ export default function LeadDialer() {
   const isManager = !!data?.me.isManager
   const showOwner = rep !== 'me' && isManager
   const fuDays = data?.followUpByOwner
+  // One overdue number: tasks past their time, including leads quiet longer than their rule.
   const fuCount = useMemo(() => {
     if (!data) return 0
-    const t = followUpTabs(leads, data.settings, now, new Date(data.dayStart), latestActedToday(data.actedToday), fuDays)
-    return t.overdue.length + t.dueToday.filter((x) => x.callBackDue).length
-  }, [data, leads, now, fuDays])
+    const ds = new Date(data.dayStart)
+    return data.tasks.filter((t) => taskBucket(t, now, ds) === 'overdue').length
+  }, [data, now])
   const noStateCount = leads.filter((l) => !leadState(l) && !l.duplicate && !l.sentToLeadGen).length
   const needsCrm = leads.filter((l) => l.needsCrmUpdate && !l.duplicate).length
   const unknownStatuses = useMemo(() => [...new Set(leads.map((l) => l.status))].filter((s) => data && data.settings.stageMap[s] == null), [leads, data])
@@ -76,14 +80,18 @@ export default function LeadDialer() {
   const filtersOn = Object.values(filters).some(Boolean)
   const lastAt = data?.lastImport ? new Date(data.lastImport.at) : null
   const stale = lastAt ? now.getTime() - lastAt.getTime() > 18 * 3600000 : false
-  const openLead = (id: string, ids?: string[]) => setPanel({ id, ids: ids ?? [id] })
-  // Opened from the app-wide search (Ctrl K): straight to that lead.
   const leadParam = params.get('lead')
-  useEffect(() => {
-    if (!leadParam) return
-    setPanel({ id: leadParam, ids: [leadParam] })
-    setParam('lead', null)
-  }, [leadParam]) // eslint-disable-line react-hooks/exhaustive-deps
+  const openLead = (id: string, ids?: string[]) => {
+    setPanelIds(ids ?? [id])
+    const n = new URLSearchParams(params); n.set('lead', id)
+    if (leadParam) setParams(n, { replace: true })
+    else { setParams(n); setPushed(true) }
+  }
+  const closeLead = () => {
+    // Opened here: Back returns to the list exactly as it was. Opened from a link: just drop it.
+    if (pushed) { setPushed(false); navigate(-1) } else setParam('lead', null)
+  }
+  const panel = leadParam ? { id: leadParam, ids: panelIds.includes(leadParam) ? panelIds : [leadParam] } : null
 
   const tabs: { key: View; label: string; count?: number; tone?: 'red' | 'amber'; manager?: boolean }[] = [
     { key: 'dashboard', label: 'Dashboard' },
@@ -185,7 +193,7 @@ export default function LeadDialer() {
           onImported={() => { setFilters(NO_FILTERS); setRefreshKey((k) => k + 1); if (rep !== 'me') setParam('rep', null); load() }} />
       )}
       {listModal && <LeadsListModal title={listModal.title} leads={listModal.leads} now={now} showOwner={showOwner} onClose={() => setListModal(null)} onOpen={(id, ids) => openLead(id, ids)} />}
-      {panel && data && <LeadPanel id={panel.id} ids={panel.ids} lookup={(id) => byId.get(id)} now={now} settings={data.settings} meId={data.me.id} onNavigate={(id) => setPanel({ ...panel, id })} onClose={() => setPanel(null)} onChanged={load} />}
+      {panel && data && <LeadPanel id={panel.id} ids={panel.ids} lookup={(id) => byId.get(id)} leads={leads} now={now} settings={data.settings} meId={data.me.id} onNavigate={(id) => setParam('lead', id)} onClose={closeLead} onChanged={load} />}
     </div>
   )
 }

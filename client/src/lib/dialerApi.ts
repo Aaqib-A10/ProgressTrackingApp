@@ -22,6 +22,12 @@ export interface DialerSettings {
   primeTimes: TimeSpan[]
   /** Mark leads whose details were added here so the rep also updates Earthzone. */
   earthzoneTick: boolean
+  /** Imports: when more than this share of leads get the same new Updated At, it is a bulk update, not calls (default 20). */
+  bulkUpdatePct?: number
+  /** Follow-ups: the rows that show the one-tap outcome chips after Call now (default Pipeline and Interested). */
+  outcomeChipStatuses?: string[]
+  /** Lead Dialer task reminders, minutes before the due time (default 15 and at the due time). */
+  taskReminders?: number[]
 }
 
 export interface DialerLead {
@@ -77,6 +83,33 @@ export interface DialerLead {
   backlogKeptAt: string | null
   lastImportId: string | null
   firstImportId: string | null
+  /** From the export: the contact's job title and the CRM's "Assigned To". */
+  jobTitle?: string | null
+  assignedTo?: string | null
+  /** Touches (attempts): the latest one (import or added here), how many, and how many since the status last changed. */
+  lastTouchedAt?: string | null
+  attempts?: number
+  tries?: number
+  reAttempts?: number
+  /** A touch added here (an outcome or Add touch): the lead was worked even if the CRM still says Assigned. */
+  manualTouches?: number
+}
+
+/** A Lead Dialer task: a My To-Do entry about one lead, owned by the lead's owner (ITAD spec, 30 Oct 2026). */
+export interface DialerTask {
+  id: string
+  leadId: string
+  ownerId: string
+  kind: 'CALL' | 'EMAIL' | 'TODO'
+  title: string
+  note: string | null
+  dueAt: string | null
+  origin: 'MANUAL' | 'AUTO'
+  reason: 'FOLLOW_UP_RULE' | 'CALL_LATER' | null
+  status: 'OPEN' | 'DONE' | 'CANCELLED'
+  doneAt: string | null
+  outcome: string | null
+  reminders: number[]
 }
 
 export interface FunnelNumbers {
@@ -95,13 +128,22 @@ export interface ImportSummary {
   topChanges: { from: string; to: string; count: number }[]
   unknownStatuses: { status: string; count: number }[]
   missingState: number
+  /** Touches found against the previous import (older imports: missing). */
+  touches?: number
+  bulkUpdateDays?: string[]
   previousImportAt: string | null
   funnelBefore: FunnelNumbers | null
   funnelNow: FunnelNumbers
 }
 
 export interface SavedView { id: string; name: string; filters: Record<string, string> }
-export interface DialerPrefs { views: SavedView[]; followUp: Record<string, number> }
+export interface DialerPrefs {
+  views: SavedView[]; followUp: Record<string, number>
+  /** All-leads list: the columns picked, in order (empty = the standard set). */
+  columns?: string[]
+  /** Follow-ups: saved views (filters and sort). */
+  fuViews?: SavedView[]
+}
 export interface ActedToday { leadId: string; userId: string; kind: string; at: string }
 
 export interface DialerData {
@@ -117,6 +159,8 @@ export interface DialerData {
   scope: string
   settings: DialerSettings
   leads: DialerLead[]
+  /** Lead Dialer tasks: open ones, and the ones done today. */
+  tasks: DialerTask[]
   lastImport: { id: string; at: string; fileName: string; by: string; summary: ImportSummary } | null
   myMapping: { headerSignature: string; mapping: Record<string, string | null> } | null
   reps: { id: string; name: string; lastImportAt: string | null }[]
@@ -135,7 +179,16 @@ export interface LeadDetail {
   notes: DialerNote[]
   /** Calls the predictive dialer reported for this lead, newest first. */
   calls?: DialerCallRow[]
+  /** Touches as dates: "20 Aug touched", "3 Sep status changed". */
+  touches?: { id: string; at: string; statusChange: boolean; outcome: string | null }[]
+  tasks?: DialerTask[]
+  /** The rep owns this lead (touches and tasks are theirs to change). */
+  canEdit?: boolean
 }
+export interface TaskHistoryRow extends DialerTask { company: string; contactName: string | null; leadStatus: string | null; owner: string; createdAt: string; onTime: boolean | null }
+export interface TaskHistory { tasks: TaskHistoryRow[]; summary: { completedThisWeek: number; onTimePct: number | null; avgDaysLate: number | null }; range: { from: string; to: string } }
+export type Outcome = 'NO_ANSWER' | 'VOICEMAIL' | 'GATEKEEPER' | 'CONNECTED' | 'WRONG_NUMBER'
+export type BulkAction = 'SNOOZE' | 'ADD_TASK' | 'LOG_TOUCH' | 'RESCHEDULE'
 export interface DialerCallRow { id: string; calledAt: string; disposition: string; outcome: string | null; outcomeLabel: string | null; notes: string | null; durationSec: number | null; agent: string | null; effect: string | null }
 export interface NoteExportRow extends DialerNote { company: string; contactName: string | null; phone: string | null; crmId: string | null; status: string; rep: string }
 export interface FillRow { matchKey?: string | null; crmId?: string | null; email?: string | null; company?: string | null; contactName?: string | null; phone?: string | null; phone2?: string | null; email2?: string | null; linkedin?: string | null; decisionMaker?: string | null; bestTime?: string | null; note?: string | null }
@@ -163,6 +216,8 @@ export const IMPORT_FIELDS = [
   { key: 'lastActivity', label: 'Last activity / modified date', hint: 'Used for follow-up alerts' },
   { key: 'website', label: 'Website' },
   { key: 'companySize', label: 'Company size / employees' },
+  { key: 'title', label: 'Job title' },
+  { key: 'assignedTo', label: 'Assigned to (CRM)' },
 ] as const
 export type ImportField = (typeof IMPORT_FIELDS)[number]['key']
 
@@ -194,6 +249,12 @@ export const dialerApi = {
   testIntegration: (message: string) => api.post<IntegrationTest>('/dialer/integration/test', { message }),
   linkCall: (callId: string, leadId: string) => api.post<{ ok: true; effect: string }>(`/dialer/calls/${callId}/link`, { leadId }),
   searchLeads: (q: string) => api.get<{ leads: { id: string; company: string; contactName: string | null; phone: string | null; status: string; owner: string }[] }>(`/dialer/leads-search?q=${encodeURIComponent(q)}`),
+  addTouch: (leadId: string, body: { at?: string; outcome?: Outcome | null }) => api.post<{ ok: true }>(`/dialer/leads/${leadId}/touches`, body),
+  dismissTouch: (id: string) => api.del(`/dialer/touches/${id}`),
+  addTask: (body: { leadId: string; kind: DialerTask['kind']; dueAt: string; note?: string; reminders?: number[] }) => api.post<{ task: DialerTask }>('/dialer/tasks', body),
+  updateTask: (id: string, body: { done?: boolean; outcome?: string | null; dueAt?: string; note?: string | null; reminders?: number[] }) => api.patch<{ task: DialerTask }>(`/dialer/tasks/${id}`, body),
+  taskHistory: (q: { from?: string; to?: string; kind?: string; rep?: string }) => api.get<TaskHistory>(`/dialer/tasks/history?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()}`),
+  bulk: (body: { leadIds: string[]; action: BulkAction; at?: string; kind?: DialerTask['kind']; outcome?: Outcome | null; note?: string }) => api.post<{ updated: number; skipped: number }>('/dialer/bulk', body),
   resolveDuplicate: (matchKey: string, keepOwnerId: string) => api.post<{ ok: true }>('/dialer/duplicates/resolve', { matchKey, keepOwnerId }),
 }
 

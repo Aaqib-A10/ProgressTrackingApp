@@ -40,6 +40,13 @@ type Note = Awaited<ReturnType<typeof prisma.workLogNote.findFirstOrThrow>>
 function noteView(n: Note) {
   return { id: n.id, entryId: n.entryId, source: n.source, sender: n.sender, body: n.body, createdAt: n.createdAt.toISOString(), updatedAt: n.updatedAt.toISOString() }
 }
+/**
+ * Lead Dialer tasks are To-Do entries too (ITAD spec, 30 Oct 2026). My To-Do shows the call
+ * backs and the tasks a rep added; the automatic follow-up tasks (there can be hundreds) stay in
+ * the Lead Dialer's Follow-ups, and tasks closed as no longer needed are not shown.
+ */
+const VISIBLE = { cancelledAt: null, OR: [{ autoReason: null }, { autoReason: { not: 'FOLLOW_UP_RULE' } }] }
+
 /** Notes are loaded with the entries, oldest first. */
 const WITH_NOTES = { notes: { orderBy: { createdAt: 'asc' as const } } }
 function view(e: Entry & { notes?: Note[] }) {
@@ -48,6 +55,8 @@ function view(e: Entry & { notes?: Note[] }) {
     status: e.status, doneAt: e.doneAt?.toISOString() ?? null, hours: e.hours, quantity: e.quantity, tag: e.tag, private: e.private, blocked: e.blocked,
     order: e.order, createdAt: e.createdAt.toISOString(), updatedAt: e.updatedAt.toISOString(),
     notes: (e.notes ?? []).map(noteView),
+    // A Lead Dialer task: the lead it is about, and when it is due.
+    dialerLeadId: e.dialerLeadId, dueAt: e.dueAt?.toISOString() ?? null, taskKind: e.taskKind,
   }
 }
 
@@ -73,7 +82,7 @@ export async function listWorkLog(req: AuthedRequest, res: Response): Promise<vo
   const ownerId = (req.query.userId as string) || viewer.id
   if (!(await canRead(viewer, ownerId))) { res.status(403).json({ error: 'You can only see your own work log.' }); return }
   const rows = await prisma.workLogEntry.findMany({
-    where: { userId: ownerId, periodStart: { gte: dbDateFromString(from), lte: dbDateFromString(to) }, ...(ownerId !== viewer.id ? { private: false } : {}) },
+    where: { userId: ownerId, periodStart: { gte: dbDateFromString(from), lte: dbDateFromString(to) }, ...(ownerId !== viewer.id ? { private: false } : {}), ...VISIBLE },
     orderBy: [{ periodStart: 'asc' }, { status: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
     include: WITH_NOTES,
   })
@@ -224,7 +233,7 @@ export async function teamWorkLog(req: AuthedRequest, res: Response): Promise<vo
   const range = { gte: dbDateFromString(start), lte: dbDateFromString(end) }
   const [entries, reviews, leave, holidays] = await Promise.all([
     prisma.workLogEntry.findMany({
-      where: { userId: { in: ids }, private: false, periodStart: range, period: { in: (Object.keys(RANK) as WorkLogPeriod[]).filter((p) => RANK[p] <= RANK[period]) } },
+      where: { userId: { in: ids }, private: false, periodStart: range, period: { in: (Object.keys(RANK) as WorkLogPeriod[]).filter((p) => RANK[p] <= RANK[period]) }, ...VISIBLE },
       orderBy: [{ periodStart: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
       include: WITH_NOTES,
     }),
@@ -418,7 +427,7 @@ export async function searchWorkLog(req: AuthedRequest, res: Response): Promise<
     ],
   }))
   const rows = await prisma.workLogEntry.findMany({
-    where: { AND: [who, ...match] },
+    where: { AND: [who, VISIBLE, ...match] },
     orderBy: [{ periodStart: 'desc' }, { order: 'asc' }, { createdAt: 'desc' }],
     include: { ...WITH_NOTES, user: { select: { name: true } } },
     take: SEARCH_LIMIT + 1,

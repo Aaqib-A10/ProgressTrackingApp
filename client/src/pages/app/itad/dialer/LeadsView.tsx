@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Download, FileUp, Save, Search, X } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Columns3, Download, FileUp, Save, Search, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { Modal } from '../../../../components/ui/Modal'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerData, type SavedView } from '../../../../lib/dialerApi'
 import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, type LeadFilters } from '../../../../lib/dialer'
-import { DownloadLeads, InfoTip, LeadTable, MultiFilter, Pager, errMsg, usePaged } from './ui'
+import { DownloadLeads, InfoTip, MultiFilter, Pager, errMsg, usePaged } from './ui'
+import { ColumnPicker, LeadsTable } from './LeadColumns'
+import { BulkBar } from './TaskParts'
 import { BulkFillModal } from './BulkFillModal'
 import { downloadNotes } from './exports'
 
@@ -17,9 +20,17 @@ import { downloadNotes } from './exports'
  */
 export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { data: DialerData; now: Date; showOwner: boolean; onOpenLead: (id: string, ids: string[]) => void; onChanged: () => void }) {
   const { addToast } = useToast()
-  const [f, setF] = useState<LeadFilters>({ preset: 'all' })
+  // Filters and the active view live in the address bar: opening a lead and coming back keeps them.
+  const [params, setParams] = useSearchParams()
+  const f: LeadFilters = useMemo(() => { try { return JSON.parse(params.get('lf') ?? '') as LeadFilters } catch { return { preset: 'all' } } }, [params])
+  const activeView = params.get('lv') ?? (params.get('lf') ? '' : 'all')
+  const write = (nf: LeadFilters, view: string) => { const n = new URLSearchParams(params); n.set('lf', JSON.stringify(nf)); if (view) n.set('lv', view); else n.delete('lv'); setParams(n, { replace: true }) }
+  const setF = (fn: (x: LeadFilters) => LeadFilters) => write(fn(f), activeView)
+  const setActiveView = (v: string) => write(f, v)
   const [views, setViews] = useState<SavedView[]>(data.prefs.views)
-  const [activeView, setActiveView] = useState<string>('all')
+  const [columns, setColumns] = useState<string[]>(data.prefs.columns ?? [])
+  const [picking, setPicking] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
   const [naming, setNaming] = useState(false)
   const [fill, setFill] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
@@ -32,9 +43,9 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
   const opts = (fn: (l: (typeof leads)[number]) => string | null, empty: string) => [...new Set(leads.map((l) => fn(l) ?? empty))].sort((a, b) => a.localeCompare(b))
   const lists = [...new Set(leads.map((l) => l.listName))]
   const tags = [...new Set(leads.flatMap((l) => l.tags))].sort()
-  const set = (k: keyof LeadFilters, v: string) => { setF((x) => ({ ...x, [k]: v || undefined })); setActiveView('') }
-  const pickPreset = (id: string) => { setF({ preset: id, q: f.q }); setActiveView(id) }
-  const pickView = (v: SavedView) => { setF({ ...(v.filters as LeadFilters) }); setActiveView(v.id) }
+  const set = (k: keyof LeadFilters, v: string) => write({ ...f, [k]: v || undefined }, '')
+  const pickPreset = (id: string) => write({ preset: id, q: f.q }, id)
+  const pickView = (v: SavedView) => write({ ...(v.filters as LeadFilters) }, v.id)
   const extra = Object.entries(f).filter(([k, v]) => v && k !== 'q' && !(k === 'preset' && v === 'all')).length
 
   async function saveViews(next: SavedView[], msg: string) {
@@ -90,7 +101,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
         {tags.length > 0 && <MultiFilter label="Tag" value={f.tag} onChange={(v) => set('tag', v)} options={tags.map((t) => ({ value: t }))} />}
         {lists.length > 1 && <MultiFilter label="List" value={f.list} onChange={(v) => set('list', v)} options={lists.map((t) => ({ value: t, label: t === 'CRM' ? 'CRM (SMB)' : t }))} />}
         {showOwner && <MultiFilter label="Rep" value={f.rep} onChange={(v) => set('rep', v)} options={[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => ({ value: id, label: n || 'Unknown' }))} />}
-        {(extra > 0 || f.q) && <button type="button" onClick={() => { setF({ preset: 'all' }); setActiveView('all') }} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
+        {(extra > 0 || f.q) && <button type="button" onClick={() => write({ preset: 'all' }, 'all')} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
         {extra > 0 && !activeView && <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Save size={14} /> Save view</button>}
       </div>
 
@@ -98,6 +109,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-body-sm text-ink-muted"><b className="text-ink">{list.length.toLocaleString()}</b> leads{f.callAt && /^\d/.test(f.callAt) ? <> you can call at <b className="text-ink">{fmtPkt(f.callAt)} PKT</b> (inside their calling hours then)</> : f.callAt === 'now' ? ' you can call now' : f.callAt === 'prime' ? ' in prime time now' : ''}</span>
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" leadingIcon={<Columns3 size={14} />} onClick={() => setPicking(true)}>Columns</Button>
             <Button size="sm" variant="secondary" leadingIcon={<FileUp size={14} />} onClick={() => setFill(true)}>Bulk fill extra contacts</Button>
             <Button size="sm" variant="secondary" leadingIcon={<Download size={14} />} onClick={() => setNotesOpen(true)}>Export notes</Button>
             <DownloadLeads title={activeView ? `leads ${views.find((v) => v.id === activeView)?.name ?? PRESET_VIEWS.find((v) => v.id === activeView)?.name ?? ''}` : 'leads filtered'} leads={list} now={now} showOwner={showOwner} label="Download this list" />
@@ -105,12 +117,18 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
         </div>
         {list.length === 0 ? <p className="py-8 text-center text-body-md text-ink-muted">No leads match.</p> : (
           <>
-            <LeadTable leads={p.rows} now={now} showOwner={showOwner} onOpen={(id) => onOpenLead(id, list.map((l) => l.id))} />
+            <LeadsTable leads={p.rows} now={now} columns={columns} showOwner={showOwner} onOpen={(id) => onOpenLead(id, list.map((l) => l.id))}
+              picked={picked} canPick={(l) => l.ownerId === data.me.id}
+              onPick={(ids, on) => setPicked((s) => { const n = new Set(s); ids.forEach((id) => (on ? n.add(id) : n.delete(id))); return n })} />
             <Pager p={p} />
           </>
         )}
       </div>
 
+      <BulkBar ids={[...picked]} count={picked.size} onClear={() => setPicked(new Set())} onDone={onChanged} />
+      {picking && <ColumnPicker columns={columns} onClose={() => setPicking(false)} onSave={async (cols) => {
+        try { await dialerApi.savePrefs({ columns: cols }); setColumns(cols); setPicking(false); addToast({ type: 'success', message: 'Columns saved.' }) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save') }) }
+      }} />}
       {naming && <NameView onClose={() => setNaming(false)} onSave={(name) => { const v = { id: `v${Date.now().toString(36)}`, name, filters: Object.fromEntries(Object.entries(f).filter(([, x]) => x)) as Record<string, string> }; saveViews([...views, v], `"${name}" saved as your view.`).then(() => { setActiveView(v.id); setNaming(false) }) }} />}
       {fill && <BulkFillModal leads={leads.filter((l) => l.ownerId === data.me.id)} onClose={() => setFill(false)} onDone={onChanged} />}
       {notesOpen && <NotesExportModal data={data} onClose={() => setNotesOpen(false)} />}

@@ -49,6 +49,15 @@ export interface DialerSettingsData {
   primeTimes: TimeSpan[]
   /** Mark leads whose details were added here so the rep also updates Earthzone (the CRM). */
   earthzoneTick: boolean
+  /**
+   * Touches at import (ITAD spec, 30 Oct 2026): when more than this share (%) of the leads in an
+   * import get the same new Updated At, it was a bulk update (or a batch of new leads), not calls.
+   */
+  bulkUpdatePct: number
+  /** Follow-up rows that show the one-tap outcome chips after Call now. */
+  outcomeChipStatuses: string[]
+  /** Reminders for Lead Dialer tasks, in minutes before the due time (0 = at the due time). */
+  taskReminders: number[]
 }
 
 /** Each rep may set their own follow-up days within these limits. */
@@ -78,6 +87,9 @@ export const DEFAULT_SETTINGS: DialerSettingsData = {
   weekdaysOnly: true,
   primeTimes: [{ start: '10:00', end: '11:00' }, { start: '14:00', end: '16:00' }],
   earthzoneTick: true,
+  bulkUpdatePct: 20,
+  outcomeChipStatuses: ['Pipeline', 'Interested'],
+  taskReminders: [15, 0],
 }
 
 const CANON = new Map<string, string>(STATUSES.map((s) => [s.toLowerCase(), s]))

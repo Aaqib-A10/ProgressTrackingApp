@@ -278,6 +278,34 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
         <p className="mt-2 text-[11px] text-ink-muted">Calling hours: 9 AM to 5 PM on the lead's clock in every region. With fixed local hours only the local times count; with fixed PKT slots only the PKT times count.</p>
       </Panel>
 
+      <Panel title="Follow-ups, touches and tasks">
+        <div className="space-y-3 text-body-sm text-ink">
+          <label className="flex flex-wrap items-center gap-2">
+            A bulk update, not calls, when more than
+            <input type="number" min={1} max={100} disabled={!canEdit} value={s.bulkUpdatePct ?? 20} onChange={(e) => set('bulkUpdatePct', Math.max(1, Math.min(100, Number(e.target.value) || 20)))} className={cn(inp, 'w-20')} />
+            % of an import's leads get the same new Updated At
+            <InfoTip>Such a date counts no re-attempts (a batch of new leads, or a mass edit in Earthzone). Status changes on that date still count. Check it against your past imports before changing it.</InfoTip>
+          </label>
+          <div>
+            <p className="mb-1.5">One-tap outcome chips after Call now on these rows (the others use "..." and Add touch):</p>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.keys(s.followUp).map((st) => {
+                const on = (s.outcomeChipStatuses ?? ['Pipeline', 'Interested']).includes(st)
+                return <button key={st} type="button" disabled={!canEdit} onClick={() => set('outcomeChipStatuses', on ? (s.outcomeChipStatuses ?? ['Pipeline', 'Interested']).filter((x) => x !== st) : [...(s.outcomeChipStatuses ?? ['Pipeline', 'Interested']), st])} className={cn('rounded-full border px-3 py-1 font-medium', on ? 'border-primary bg-primary text-white' : 'border-line text-ink')}>{st}</button>
+              })}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span>Task reminders in Metriq:</span>
+            {[15, 0].map((m) => {
+              const cur = s.taskReminders ?? [15, 0]
+              const on = cur.includes(m)
+              return <label key={m} className="flex items-center gap-1.5"><input type="checkbox" disabled={!canEdit} checked={on} onChange={() => set('taskReminders', on ? cur.filter((x) => x !== m) : [...cur, m].sort((a, b) => b - a))} className="h-4 w-4 accent-primary" />{m ? `${m} minutes before` : 'At the due time'}</label>
+            })}
+          </div>
+        </div>
+      </Panel>
+
       {canEdit && (
         <div className="flex justify-end gap-2">
           <Button variant="secondary" leadingIcon={<RotateCcw size={14} />} onClick={() => setS(defaults)}>Back to the plan's defaults</Button>

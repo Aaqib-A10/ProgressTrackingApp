@@ -108,3 +108,17 @@ export async function fillContactsFromRaw(): Promise<number> {
   }
   return filled
 }
+
+// ITAD spec (30 Oct 2026): the all-leads list can show the contact's title and the CRM's "Assigned To".
+const TITLE = ['title', 'jobtitle', 'contacttitle', 'designation', 'position', 'role', 'jobrole', 'leadtitle']
+const ASSIGNED = ['assignedto', 'assigned', 'leadowner', 'owner', 'ownername', 'assignee', 'salesrep', 'rep', 'accountowner']
+
+export function titleFromRaw(raw: Raw | null | undefined): string | null {
+  if (!raw) return null
+  return pick(raw, TITLE, (v) => /[a-z]/i.test(v) && v.length <= 120 && !/@/.test(v))
+}
+
+export function assignedToFromRaw(raw: Raw | null | undefined): string | null {
+  if (!raw) return null
+  return pick(raw, ASSIGNED, (v) => /[a-z]/i.test(v) && v.length <= 120 && !/@/.test(v))
+}

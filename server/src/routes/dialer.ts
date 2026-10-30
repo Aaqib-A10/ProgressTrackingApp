@@ -5,6 +5,7 @@ import express from 'express'
 import { asyncHandler } from '../lib/asyncHandler'
 import { createIntegration, dialerHook, getIntegration, linkCall, revokeIntegration, searchLeads, testIntegration, updateIntegration } from '../controllers/dialerIntegrationController'
 import { dialerHookLimiter } from '../middleware/rateLimit'
+import { addTask, addTouch, bulkAction, dismissTouch, taskHistory, updateTask } from '../controllers/dialerTaskController'
 import { importLeads, dialerData, importHistory, leadDetail, leadAction, fixLead, changeStatus, getSettings, putSettings, listDuplicates, resolveDuplicate, addNote, updateNote, listNotes, followUpBulk, getPrefs, putPrefs, importChanges, bulkFill } from '../controllers/dialerController'
 
 /** Lead Dialer (ITAD only; Super Admins too). Each rep sees only their own leads. */
@@ -30,6 +31,13 @@ dialerRouter.get('/prefs', asyncHandler(getPrefs))
 dialerRouter.put('/prefs', asyncHandler(putPrefs))
 dialerRouter.get('/imports/:id/changes', asyncHandler(importChanges))
 dialerRouter.post('/bulk-fill', asyncHandler(bulkFill))
+// Touches and tasks (ITAD spec, 30 Oct 2026).
+dialerRouter.post('/leads/:id/touches', asyncHandler(addTouch))
+dialerRouter.delete('/touches/:id', asyncHandler(dismissTouch))
+dialerRouter.post('/tasks', asyncHandler(addTask))
+dialerRouter.patch('/tasks/:id', asyncHandler(updateTask))
+dialerRouter.get('/tasks/history', asyncHandler(taskHistory))
+dialerRouter.post('/bulk', asyncHandler(bulkAction))
 // Predictive dialer set-up (ITAD managers): the private link, mappings, a dry run, matching calls.
 dialerRouter.get('/integration', asyncHandler(getIntegration))
 dialerRouter.post('/integration', asyncHandler(createIntegration))

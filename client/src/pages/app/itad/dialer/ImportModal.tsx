@@ -31,6 +31,8 @@ const SYNONYMS: Record<ImportField, string[]> = {
   lastActivity: ['last modified', 'modified', 'modified date', 'last activity', 'last activity date', 'updated', 'last updated', 'updated at', 'modified time', 'last touched'],
   website: ['website', 'web site', 'url', 'company website', 'domain', 'website url', 'web address', 'web', 'company url', 'company domain', 'homepage', 'webpage'],
   companySize: ['company size', 'size', 'employees', 'no. of employees', 'number of employees', 'employee count', 'headcount'],
+  title: ['title', 'job title', 'contact title', 'designation', 'position'],
+  assignedTo: ['assigned to', 'assignedto', 'lead owner', 'owner', 'assignee'],
 }
 
 function autoMap(headers: string[], saved: Record<string, string | null> | null): Record<ImportField, string | null> {

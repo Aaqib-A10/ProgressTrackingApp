@@ -295,6 +295,7 @@ model User {
   dialerImports       DialerImport[]       @relation("DialerImporter")
   dialerActions       DialerAction[]       @relation("DialerActor")
   dialerNotes         DialerNote[]         @relation("DialerNoteAuthor")
+  dialerTouches       DialerTouch[]        @relation("DialerTouchBy")
   dialerPrefs         DialerUserPrefs?     @relation("DialerPrefsOwner")
   dialerCalls         DialerCall[]         @relation("DialerCallAgent")
   workLogs            WorkLogEntry[]       @relation("WorkLogOwner")
@@ -2960,6 +2961,9 @@ model DialerLead {
   doNotCallAt     DateTime?
   /// From the predictive dialer: the number is wrong; kept out of dialing until the phone changes.
   wrongNumber     Boolean   @default(false)
+  /// The contact's job title and the CRM's "Assigned To", from the export (shown in the all-leads columns).
+  jobTitle        String?
+  assignedTo      String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -2967,6 +2971,8 @@ model DialerLead {
   changes DialerStatusChange[]
   notes   DialerNote[]
   calls   DialerCall[]
+  touches DialerTouch[]
+  tasks   WorkLogEntry[]
 
   @@unique([ownerId, matchKey])
   @@index([matchKey])
@@ -3054,6 +3060,42 @@ model DialerNote {
 
   @@index([leadId, createdAt])
   @@index([userId, createdAt])
+  @@index([companyId])
+}
+
+/// A touch (attempt) on a lead (ITAD spec, 30 Oct 2026). The CRM export has no call log, so Metriq
+/// works touches out at each import (a status change, or the same status with a new Updated At:
+/// a re-attempt) and the rep adds their own (an outcome chip, or Add touch). How a touch was found
+/// (source, confidence) is kept for corrections only and never shown. Survives every import.
+model DialerTouch {
+  id             String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId      String     @default("")
+  company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leadId         String
+  lead           DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  /// The day of the touch: Updated At for an import, the date the rep picked for a manual one.
+  at             DateTime
+  /// IMPORT or MANUAL (internal).
+  source         String
+  /// STATUS_CHANGE, RE_ATTEMPT or TOUCH (a manual one).
+  kind           String
+  /// NO_ANSWER, VOICEMAIL, GATEKEEPER, CONNECTED, WRONG_NUMBER (optional).
+  outcome        String?
+  /// EXACT or ESTIMATED (internal).
+  confidence     String     @default("EXACT")
+  /// The lead's status at the touch.
+  status         String?
+  importId       String?
+  /// A manual touch that a later import also saw: the two count once.
+  mergedImportId String?
+  userId         String?
+  user           User?      @relation("DialerTouchBy", fields: [userId], references: [id], onDelete: SetNull)
+  /// Dismissed from the lead's timeline (e.g. a re-assignment that looked like a re-attempt).
+  dismissedAt    DateTime?
+  createdAt      DateTime   @default(now())
+
+  @@index([leadId, at])
   @@index([companyId])
 }
 
@@ -3165,35 +3207,56 @@ enum WorkLogStatus {
 }
 
 model WorkLogEntry {
-  id          String        @id @default(cuid())
+  id            String        @id @default(cuid())
   /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
-  companyId   String        @default("")
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User          @relation("WorkLogOwner", fields: [userId], references: [id], onDelete: Cascade)
-  period      WorkLogPeriod
+  companyId     String        @default("")
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User          @relation("WorkLogOwner", fields: [userId], references: [id], onDelete: Cascade)
+  period        WorkLogPeriod
   /// First day of the period: the day itself, the Monday, the 1st of the month, or 1 January.
-  periodStart DateTime      @db.Date
-  title       String
-  details     String?
-  status      WorkLogStatus @default(PLANNED)
-  doneAt      DateTime?
+  periodStart   DateTime      @db.Date
+  title         String
+  details       String?
+  status        WorkLogStatus @default(PLANNED)
+  doneAt        DateTime?
   /// Time spent, optional (e.g. 1.5).
-  hours       Float?
+  hours         Float?
   /// How many, optional (e.g. 25 listings uploaded).
-  quantity    Int?
-  tag         String?
+  quantity      Int?
+  tag           String?
   /// Only the owner sees it (hidden from their Team Lead).
-  private     Boolean       @default(false)
+  private       Boolean       @default(false)
   /// Stuck, needs help from the Team Lead. Shown at the top of the team view.
-  blocked     Boolean       @default(false)
-  order       Int           @default(0)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  notes       WorkLogNote[]
+  blocked       Boolean       @default(false)
+  order         Int           @default(0)
+  /// Lead Dialer tasks (ITAD spec, 30 Oct 2026): a to-do about one lead, owned by the lead's owner.
+  dialerLeadId  String?
+  dialerLead    DialerLead?   @relation(fields: [dialerLeadId], references: [id], onDelete: SetNull)
+  /// CALL, EMAIL or TODO.
+  taskKind      String?
+  /// Due date and time (the day itself is periodStart).
+  dueAt         DateTime?
+  /// MANUAL (+ Add task) or AUTO (made by Metriq).
+  origin        String?
+  /// Why an automatic task exists: FOLLOW_UP_RULE (quiet too long) or CALL_LATER. One open per lead and reason.
+  autoReason    String?
+  /// What happened when it was done (No answer, Voicemail, Connected...).
+  outcome       String?
+  /// No longer needed (an automatic task whose lead moved on): kept, but not counted as done.
+  cancelledAt   DateTime?
+  cancelReason  String?
+  /// Reminders, in minutes before dueAt (0 = at the due time), and the ones already sent.
+  remindMinutes Int[]         @default([])
+  remindersSent Int[]         @default([])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  notes         WorkLogNote[]
 
   @@index([userId, periodStart])
   @@index([userId, period, periodStart])
+  @@index([dialerLeadId])
+  @@index([userId, dueAt])
   @@index([companyId])
 }
 
@@ -3553,6 +3616,7 @@ model Company {
   dialerStatusChangeRows   DialerStatusChange[]
   dialerActionRows         DialerAction[]
   dialerNoteRows           DialerNote[]
+  dialerTouchRows          DialerTouch[]
   dialerUserPrefsRows      DialerUserPrefs[]
   dialerIntegrationRows    DialerIntegration[]
   dialerCallRows           DialerCall[]

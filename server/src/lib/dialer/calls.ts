@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { DateTime } from 'luxon'
 import type { DialerIntegration, DialerLead, Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
+import { completeOnTouch, syncAutoTasks } from './tasks'
 import { STATUSES, withDefaults } from './rules'
 import { maybeCompanyId } from '../tenancy'
 
@@ -284,9 +285,16 @@ export async function applyToLead(callId: string, leadId: string, outcome: Outco
     prisma.dialerAction.create({ data: { leadId, userId: by, kind: 'DIALER_CALL', note: summary, at: c.calledAt } }),
     ...(c.notes ? [prisma.dialerNote.create({ data: { leadId, userId: by, text: `From the dialer (${summary}): ${c.notes}`.slice(0, 4000), nextActionAt: outcome === 'CALLBACK' ? (data.callLaterAt as Date) : null } })] : []),
     prisma.dialerCall.update({ where: { id: callId }, data: { leadId, effect } }),
+    // A call is a touch (ITAD spec, 30 Oct 2026): it counts as an attempt and closes the lead's call tasks.
+    prisma.dialerTouch.create({ data: { leadId, at: c.calledAt > now ? now : c.calledAt, source: 'MANUAL', kind: 'TOUCH', outcome: TOUCH_OUTCOME[outcome ?? ''] ?? null, confidence: 'EXACT', status: (data.status as string | undefined) ?? lead.status, userId: by } }),
   ])
+  await completeOnTouch(leadId, lead.ownerId, outcome ? OUTCOMES[outcome] : 'Dialer call', now).catch(() => undefined)
+  await syncAutoTasks([lead.ownerId]).catch(() => undefined)
   return effect
 }
+
+/** The predictive dialer's outcomes that match a touch outcome chip. */
+const TOUCH_OUTCOME: Record<string, string> = { NO_ANSWER: 'NO_ANSWER', BUSY: 'NO_ANSWER', VOICEMAIL: 'VOICEMAIL', CONNECTED: 'CONNECTED', INTERESTED: 'CONNECTED', NOT_INTERESTED: 'CONNECTED', CALLBACK: 'CONNECTED', WRONG_NUMBER: 'WRONG_NUMBER' }
 
 export interface Received { ok: boolean; status: number; message: string; callId?: string; leadId?: string | null; outcome?: Outcome | null; duplicate?: boolean }
 

@@ -127,7 +127,8 @@ export function LeadActions({ lead, onDone, compact, onNote }: { lead: Pick<Dial
     try {
       await dialerApi.action(lead.id, { kind: 'CALL_NOW' })
       if (lead.phone) { try { await navigator.clipboard?.writeText(lead.phone) } catch { /* clipboard blocked */ } }
-      addToast({ type: 'success', message: lead.phone ? `Logged. ${lead.phone} copied. It comes back tomorrow if the CRM still shows no update.` : 'Logged. It comes back tomorrow if the CRM still shows no update.' })
+      // Call now only copies the number (ITAD spec, 30 Oct 2026); the call counts once its outcome is logged.
+      addToast({ type: 'success', message: lead.phone ? `${lead.phone} copied. After the call, log what happened (Add touch).` : 'No phone number on this lead.' })
       onDone()
     } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not log the call') }) } finally { setBusy(false) }
   }
@@ -144,7 +145,7 @@ export function LeadActions({ lead, onDone, compact, onNote }: { lead: Pick<Dial
   )
 }
 
-function ActionModal({ lead, kind, onClose, onDone }: { lead: Pick<DialerLead, 'id' | 'company'>; kind: ActionKind; onClose: () => void; onDone: () => void }) {
+export function ActionModal({ lead, kind, onClose, onDone }: { lead: Pick<DialerLead, 'id' | 'company'>; kind: ActionKind; onClose: () => void; onDone: () => void }) {
   const { addToast } = useToast()
   const now = new Date()
   const [when, setWhen] = useState(toLocalInput(new Date(now.getTime() + (kind === 'SNOOZE' ? 3 * 86400000 : 2 * 3600000))))
