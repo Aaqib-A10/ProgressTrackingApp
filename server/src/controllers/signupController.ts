@@ -9,12 +9,17 @@ import { sendVerifyEmail } from '../lib/mail'
 import { PROVIDERS, authorizeLink, exchangeCode, providerList, type ProviderKey } from '../lib/oauth'
 import { getClientIp } from '../lib/ip'
 import { isOn } from '../lib/flags'
+import { activeProvider } from '../lib/billing/providers'
 
 const NOT_OPEN = 'Metriq is not open for new companies yet.'
 
-/** GET /api/auth/open — can new companies sign up (the owner's "New companies can sign up" switch)? */
+/**
+ * GET /api/auth/open — can new companies sign up (the owner's "New companies can sign up"
+ * switch), and is online payment open yet? Until it is, the website says Metriq is free while
+ * it launches.
+ */
 export async function signupOpen(_req: Request, res: Response): Promise<void> {
-  res.json({ newCompanies: await isOn('new-companies') })
+  res.json({ newCompanies: await isOn('new-companies'), paymentsOpen: !!activeProvider() })
 }
 
 /**
@@ -125,30 +130,45 @@ export async function oauthCallback(req: Request, res: Response): Promise<void> 
   const who = typeof req.query.code === 'string' ? await exchangeCode(provider, req.query.code).catch(() => null) : null
   if (!who) { fail(`${PROVIDERS[provider].label} did not let us in. Try again.`); return }
 
-  // Google says when an address is confirmed, so it opens the account with that email.
-  // Microsoft does not always, so it only opens accounts made with Microsoft.
-  const existing = provider === 'google'
-    ? await prisma.user.findUnique({ where: { email: who.email } })
-    : await prisma.user.findUnique({ where: { microsoftId: who.subject } })
+  // Test accounts made on a PC never sign in on the live server.
+  if (process.env.NODE_ENV === 'production' && who.email.endsWith('@local.test')) { fail('That sign-in is not available.'); return }
+  // Who is this? First the account already joined to this Google / Microsoft account. Otherwise
+  // the account with the same email, but only when the provider itself confirmed the person owns
+  // that email (Google always does; Microsoft for personal accounts, and for work accounts whose
+  // organisation owns the email's domain). An invited person can then sign in with it too.
+  const idField = provider === 'google' ? 'googleId' : 'microsoftId'
+  const linked = await prisma.user.findUnique({ where: provider === 'google' ? { googleId: who.subject } : { microsoftId: who.subject } })
+  const byEmail = linked ? null : await prisma.user.findUnique({ where: { email: who.email } })
+  if (byEmail && !who.emailVerified) {
+    fail(`${PROVIDERS[provider].label} could not confirm that ${who.email} is yours. Sign in with your password, then try again.`)
+    return
+  }
+  const existing = linked ?? byEmail
   if (existing) {
-    const c = await prisma.company.findUnique({ where: { id: existing.companyId }, select: { status: true } })
+    const c = existing.companyId ? await prisma.company.findUnique({ where: { id: existing.companyId }, select: { status: true } }) : null
+    if (existing.status === 'PENDING') { fail('Your account is awaiting admin approval.'); return }
     if (!existing.isActive || existing.status !== 'ACTIVE' || c?.status === 'SUSPENDED') { fail('This account cannot sign in. Ask your Super Admin.'); return }
-    if (provider === 'google' && !existing.googleId) await prisma.user.update({ where: { id: existing.id }, data: { googleId: who.subject, emailCheckPending: false, emailVerifiedAt: existing.emailVerifiedAt ?? new Date() } })
+    // Join the account to this Google / Microsoft account (once), and the email counts as confirmed.
+    if (!existing[idField]) await prisma.user.update({ where: { id: existing.id }, data: { [idField]: who.subject, emailCheckPending: false, emailVerifiedAt: existing.emailVerifiedAt ?? new Date() } })
     setSession(res, existing)
+    await logOAuth(req, existing.id, 'LOGIN')
     res.redirect('/app/dashboard')
     return
   }
-  if (provider === 'microsoft' && (await prisma.user.findUnique({ where: { email: who.email }, select: { id: true } }))) {
-    fail('This email already has a Metriq account. Sign in with your password.')
-    return
-  }
   if (!(await isOn('new-companies'))) { fail(`There is no Metriq account for ${who.email}.`); return }
-  if (st.intent !== 'signup') { fail(`There is no Metriq account for ${who.email} yet. Start a free trial instead.`); return }
+  if (st.intent !== 'signup') { fail(`There is no Metriq account for ${who.email} yet. Start free instead.`); return }
+  // A new company only with an email the provider confirmed, so no one can take someone else's address.
+  if (!who.emailVerified) { fail(`${PROVIDERS[provider].label} could not confirm that ${who.email} is yours. Start with your email and a password instead.`); return }
   const { user } = await createCompanyWithOwner({
     mode: st.mode === 'solo' ? 'solo' : 'team', companyName: st.company || null, name: who.name, email: who.email, passwordHash: null,
     googleId: provider === 'google' ? who.subject : null, verified: true,
   })
   if (provider === 'microsoft') await prisma.user.update({ where: { id: user.id }, data: { microsoftId: who.subject } })
   setSession(res, user)
+  await logOAuth(req, user.id, 'SIGNUP')
   res.redirect('/app/setup')
+}
+
+async function logOAuth(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP'): Promise<void> {
+  await prisma.loginEvent.create({ data: { userId, kind, ip: getClientIp(req), userAgent: String(req.headers['user-agent'] ?? '').slice(0, 400) || null } }).catch(() => undefined)
 }

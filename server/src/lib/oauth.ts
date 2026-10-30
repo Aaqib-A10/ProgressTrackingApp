@@ -7,6 +7,10 @@
  */
 
 export type ProviderKey = 'google' | 'microsoft'
+export type OAuthProfile = { email: string; name: string; subject: string; emailVerified: boolean }
+
+/** Microsoft's tenant for personal accounts (Outlook.com, Hotmail): Microsoft owns and checks those addresses. */
+export const MS_PERSONAL_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad'
 
 interface Provider {
   label: string
@@ -16,8 +20,11 @@ interface Provider {
   clientId: () => string
   clientSecret: () => string
   scope: string
-  /** Turn the token answer into the person's verified email and name, or null. */
-  profile: (tokens: { access_token?: string; id_token?: string }) => Promise<{ email: string; name: string; subject: string } | null>
+  /**
+   * Turn the token answer into the person's email, name and account id, or null. emailVerified
+   * says the provider itself confirmed that the person owns the email address.
+   */
+  profile: (tokens: { access_token?: string; id_token?: string }) => Promise<OAuthProfile | null>
 }
 
 const env = (k: string) => process.env[k] ?? ''
@@ -42,7 +49,7 @@ export const PROVIDERS: Record<ProviderKey, Provider> = {
       if (!res.ok) return null
       const u = (await res.json()) as { email?: string; email_verified?: boolean; name?: string; sub?: string }
       if (!u.email || u.email_verified !== true || !u.sub) return null
-      return { email: u.email.toLowerCase(), name: u.name || u.email.split('@')[0], subject: u.sub }
+      return { email: u.email.toLowerCase(), name: u.name || u.email.split('@')[0], subject: u.sub, emailVerified: true }
     },
   },
   microsoft: {
@@ -57,11 +64,17 @@ export const PROVIDERS: Record<ProviderKey, Provider> = {
       const res = await fetch('https://graph.microsoft.com/v1.0/me', { headers: { Authorization: `Bearer ${tokens.access_token}` } })
       if (!res.ok) return null
       const u = (await res.json()) as { mail?: string | null; userPrincipalName?: string; displayName?: string; id?: string }
-      // A work or school account's address is checked by Microsoft; a personal account says so in its sign-in token.
       const claims = decodeJwtPayload(tokens.id_token)
       const email = (u.mail || (claims?.email as string | undefined) || '').toLowerCase()
       if (!email || !u.id) return null
-      return { email, name: u.displayName || email.split('@')[0], subject: u.id }
+      // A work or school account's email is typed in by that organisation's own admin, so it is
+      // only trusted when Microsoft says the organisation owns the email's domain (the "xms_edov"
+      // claim, turned on in the app registration). A personal account's address is Microsoft's own.
+      // The token comes straight from Microsoft over HTTPS in exchange for the code, so it is read as is.
+      const personal = claims?.tid === MS_PERSONAL_TENANT
+      const domainOwned = claims?.xms_edov === true || claims?.xms_edov === 'true' || claims?.xms_edov === 1
+      const sameEmail = typeof claims?.email === 'string' && claims.email.toLowerCase() === email
+      return { email, name: u.displayName || email.split('@')[0], subject: u.id, emailVerified: sameEmail && (personal || domainOwned) }
     },
   },
 }
@@ -78,7 +91,7 @@ export function authorizeLink(provider: ProviderKey, state: string): string {
   return `${p.authorizeUrl()}?${q}`
 }
 
-export async function exchangeCode(provider: ProviderKey, code: string): Promise<{ email: string; name: string; subject: string } | null> {
+export async function exchangeCode(provider: ProviderKey, code: string): Promise<OAuthProfile | null> {
   const p = PROVIDERS[provider]
   const res = await fetch(p.tokenUrl(), {
     method: 'POST',

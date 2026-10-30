@@ -122,10 +122,13 @@ export default function Login() {
 
       <p className="mt-6 text-center text-body-sm text-ink-muted">
         {open ? (
-          <>New to Metriq?{' '}<Link to="/start" className="font-semibold text-primary hover:underline">Start a free trial</Link></>
+          <>New to Metriq?{' '}<Link to="/start" className="font-semibold text-primary hover:underline">Start free</Link></>
         ) : (
           <>Don&apos;t have an account?{' '}<Link to="/signup" className="font-semibold text-primary hover:underline">Sign up</Link></>
         )}
+      </p>
+      <p className="mt-3 text-center text-body-sm text-ink-faint">
+        <Link to="/terms" className="hover:text-ink">Terms</Link> · <Link to="/privacy" className="hover:text-ink">Privacy</Link> · <Link to="/cookies" className="hover:text-ink">Cookies</Link>
       </p>
     </AuthLayout>
   )

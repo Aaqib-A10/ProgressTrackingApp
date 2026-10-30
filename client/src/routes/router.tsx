@@ -12,6 +12,7 @@ import { pageModule } from '../lib/staleChunks'
 const Landing = lazy(pageModule(() => import('../pages/Landing')))
 const Pricing = lazy(pageModule(() => import('../pages/marketing/Pricing')))
 const Security = lazy(pageModule(() => import('../pages/marketing/Security')))
+const Legal = lazy(pageModule(() => import('../pages/marketing/Legal')))
 const Signup = lazy(pageModule(() => import('../pages/auth/Signup')))
 const ForgotPassword = lazy(pageModule(() => import('../pages/auth/ForgotPassword')))
 const ResetPassword = lazy(pageModule(() => import('../pages/auth/ResetPassword')))
@@ -115,6 +116,7 @@ export const router = createBrowserRouter([
   { path: '/', element: <Page><Landing /></Page> },
   { path: '/pricing', element: <Page><Pricing /></Page> },
   { path: '/security', element: <Page><Security /></Page> },
+  ...['/terms', '/privacy', '/cookies', '/dpa'].map((path) => ({ path, element: <Page><Legal /></Page> })),
 
   // Public auth
   { path: '/login', element: <Login /> },

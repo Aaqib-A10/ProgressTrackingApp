@@ -1,0 +1,451 @@
+/*
+ * Motion for the public website only (class names start with "mk-"). Everything here is
+ * decoration: with "reduce motion" on, index.css shortens every animation to one quick pass,
+ * and the loops below end on a quiet frame.
+ */
+
+@property --mk-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ----------------------------------------------------------------- reveal on scroll */
+
+.mk-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: var(--mk-delay, 0ms);
+}
+.mk-reveal.mk-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ----------------------------------------------------------------- hero background */
+
+.mk-grid {
+  background-image:
+    linear-gradient(to right, rgb(var(--ink) / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(var(--ink) / 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
+}
+.dark .mk-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+}
+
+/* Grid squares that light up one after another. */
+.mk-cell {
+  position: absolute;
+  width: 55px;
+  height: 55px;
+  background: rgb(var(--primary) / 0.12);
+  opacity: 0;
+  animation: mk-cell 7s ease-in-out infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+@keyframes mk-cell {
+  0%, 100% { opacity: 0; }
+  20%, 35% { opacity: 1; }
+  60% { opacity: 0; }
+}
+
+/* Slow light in the background. */
+.mk-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.mk-aurora-a {
+  background: radial-gradient(circle, rgb(var(--primary) / 0.55), transparent 65%);
+  animation: mk-drift-a 18s ease-in-out infinite alternate;
+}
+.mk-aurora-b {
+  background: radial-gradient(circle, rgb(6 182 212 / 0.4), transparent 65%);
+  animation: mk-drift-b 22s ease-in-out infinite alternate;
+}
+.dark .mk-aurora { opacity: 0.35; }
+@keyframes mk-drift-a {
+  0% { transform: translate3d(-8%, -6%, 0) scale(1); }
+  100% { transform: translate3d(10%, 8%, 0) scale(1.15); }
+}
+@keyframes mk-drift-b {
+  0% { transform: translate3d(8%, 4%, 0) scale(1.1); }
+  100% { transform: translate3d(-10%, -6%, 0) scale(0.95); }
+}
+
+/* Words that slide up into place. */
+.mk-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.45em);
+  filter: blur(6px);
+  animation: mk-word 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: var(--mk-delay, 0ms);
+}
+.mk-up {
+  opacity: 0;
+  transform: translateY(14px);
+  filter: blur(6px);
+  animation: mk-word 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: var(--mk-delay, 0ms);
+}
+@keyframes mk-word {
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* The moving shine on "one app". */
+.mk-shine {
+  background: linear-gradient(100deg, rgb(var(--primary)) 20%, rgb(6 182 212) 45%, rgb(var(--primary)) 70%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mk-shine 6s ease-in-out infinite;
+}
+@keyframes mk-shine {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0% 0; }
+}
+
+/* ----------------------------------------------------------------- the app frame */
+
+/* A light that runs around the frame's edge. */
+.mk-beam {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--mk-angle), transparent 0deg, transparent 250deg, rgb(var(--primary)) 300deg, rgb(34 211 238) 330deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: mk-spin 6s linear infinite;
+  pointer-events: none;
+}
+@keyframes mk-spin {
+  to { --mk-angle: 360deg; }
+}
+
+.mk-glow {
+  position: absolute;
+  inset: 8% 6% -4%;
+  border-radius: 40px;
+  background: radial-gradient(50% 50% at 50% 50%, rgb(var(--primary) / 0.45), transparent 70%);
+  filter: blur(50px);
+  animation: mk-breathe 6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes mk-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 0.9; transform: scale(1.02); }
+}
+
+.mk-kenburns {
+  animation: mk-kenburns 30s ease-in-out infinite alternate;
+  transform-origin: 60% 40%;
+}
+@keyframes mk-kenburns {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.12) translate3d(-1.5%, -1%, 0); }
+}
+
+.mk-rise {
+  animation: mk-rise 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.35s both;
+}
+@keyframes mk-rise {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* A soft light that passes over the screen now and then. */
+.mk-sweep {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.mk-sweep::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  width: 22%;
+  left: -30%;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  transform: skewX(-12deg);
+  animation: mk-sweep 9s ease-in-out 2s infinite;
+}
+.dark .mk-sweep::after { background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.06), transparent); }
+@keyframes mk-sweep {
+  0% { left: -30%; }
+  22%, 100% { left: 130%; }
+}
+
+/* The task that is dragged from "In progress" to "Done" on the board picture. */
+.mk-demo { container-type: inline-size; }
+.mk-cursor {
+  position: absolute;
+  width: 2.1cqw;
+  min-width: 14px;
+  z-index: 3;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+  animation: mk-cursor 10s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+@keyframes mk-cursor {
+  0% { left: 88%; top: 88%; opacity: 0; transform: scale(1); }
+  6% { opacity: 1; }
+  16% { left: 52%; top: 38%; transform: scale(1); }
+  19% { left: 52%; top: 38%; transform: scale(0.82); }
+  22% { left: 52%; top: 38%; transform: scale(0.82); }
+  44% { left: 91.3%; top: 37.5%; transform: scale(0.82); }
+  48% { left: 91.3%; top: 37.5%; transform: scale(1); }
+  66% { left: 86%; top: 60%; opacity: 1; }
+  76%, 100% { left: 92%; top: 92%; opacity: 0; transform: scale(1); }
+}
+.mk-ghost {
+  position: absolute;
+  top: 31.7%;
+  width: 11.6%;
+  height: 14.6%;
+  z-index: 2;
+  border-radius: 0.55cqw;
+  border: 1px solid rgb(0 0 0 / 0.08);
+  background: #fff;
+  padding: 0.85cqw 0.9cqw;
+  color: #18181b;
+  opacity: 0;
+  animation: mk-ghost 10s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+.dark .mk-ghost { background: rgb(22 24 25); border-color: rgb(255 255 255 / 0.12); color: #f4f4f5; }
+@keyframes mk-ghost {
+  0%, 18% { left: 46.2%; opacity: 0; transform: none; box-shadow: none; }
+  19% { left: 46.2%; opacity: 1; transform: none; box-shadow: none; }
+  23% { left: 46.2%; transform: rotate(2.5deg) scale(1.04); box-shadow: 0 18px 30px -10px rgb(0 0 0 / 0.35); }
+  44% { left: 86.7%; transform: rotate(2.5deg) scale(0.86); box-shadow: 0 18px 30px -10px rgb(0 0 0 / 0.35); }
+  49% { left: 86.7%; transform: scale(0.8); box-shadow: 0 1px 2px rgb(0 0 0 / 0.06); opacity: 1; }
+  78% { left: 86.7%; transform: scale(0.8); opacity: 1; }
+  86%, 100% { left: 86.7%; transform: scale(0.8); opacity: 0; }
+}
+/* Its date turns into "Done" once it lands. */
+.mk-chip-old { animation: mk-chip-old 10s linear infinite; }
+.mk-chip-new { animation: mk-chip-new 10s linear infinite; opacity: 0; }
+@keyframes mk-chip-old {
+  0%, 50% { opacity: 1; }
+  53%, 100% { opacity: 0; }
+}
+@keyframes mk-chip-new {
+  0%, 51% { opacity: 0; transform: scale(0.6); }
+  55% { opacity: 1; transform: scale(1.12); }
+  58%, 100% { opacity: 1; transform: scale(1); }
+}
+/* The empty place the task left behind. */
+.mk-slot {
+  position: absolute;
+  left: 46.2%;
+  top: 31.7%;
+  width: 11.6%;
+  height: 14.6%;
+  z-index: 1;
+  border-radius: 0.55cqw;
+  border: 1.5px dashed rgb(var(--primary) / 0.45);
+  background: rgb(246 246 246);
+  opacity: 0;
+  animation: mk-slot 10s linear infinite;
+}
+.dark .mk-slot { background: rgb(24 26 28); }
+@keyframes mk-slot {
+  0%, 19% { opacity: 0; }
+  21%, 78% { opacity: 1; }
+  84%, 100% { opacity: 0; }
+}
+/* ----------------------------------------------------------------- "one app instead of" */
+
+.mk-flow {
+  stroke-dasharray: 4 8;
+  animation: mk-flow 1.4s linear infinite;
+}
+@keyframes mk-flow {
+  to { stroke-dashoffset: -24; }
+}
+.mk-pulse-ring {
+  animation: mk-pulse-ring 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+@keyframes mk-pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* ----------------------------------------------------------------- tour */
+
+.mk-progress {
+  transform-origin: left;
+  animation: mk-progress var(--mk-dur, 7s) linear forwards;
+}
+@keyframes mk-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.mk-swap {
+  animation: mk-swap 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes mk-swap {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* ----------------------------------------------------------------- bento pictures */
+
+.mk-marquee {
+  display: flex;
+  width: max-content;
+  animation: mk-marquee 28s linear infinite;
+}
+.mk-marquee-rev { animation-direction: reverse; }
+@keyframes mk-marquee {
+  to { transform: translateX(-50%); }
+}
+
+.mk-wave-bar {
+  transform-origin: center;
+  animation: mk-wave 1.1s ease-in-out infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+@keyframes mk-wave {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.mk-type {
+  display: inline-block;
+  white-space: nowrap;
+  clip-path: inset(0 100% 0 0);
+  animation: mk-type var(--mk-dur, 8s) steps(var(--mk-steps, 40)) infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+@keyframes mk-type {
+  0% { clip-path: inset(0 100% 0 0); }
+  30%, 85% { clip-path: inset(0 0 0 0); }
+  95%, 100% { clip-path: inset(0 100% 0 0); }
+}
+
+.mk-appear {
+  opacity: 0;
+  animation: mk-appear var(--mk-dur, 8s) ease-out infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+@keyframes mk-appear {
+  0%, 8% { opacity: 0; transform: translateY(6px); }
+  16%, 88% { opacity: 1; transform: none; }
+  96%, 100% { opacity: 0; transform: none; }
+}
+
+.mk-dots span {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 1.5px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: mk-dot 1.2s ease-in-out infinite;
+}
+.mk-dots span:nth-child(2) { animation-delay: 0.15s; }
+.mk-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes mk-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: none; }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+.mk-toggle {
+  animation: mk-toggle 6s ease-in-out infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+.mk-toggle > i {
+  animation: mk-knob 6s ease-in-out infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+@keyframes mk-toggle {
+  0%, 40% { background: rgb(var(--line-strong)); }
+  50%, 90% { background: rgb(var(--primary)); }
+  100% { background: rgb(var(--line-strong)); }
+}
+@keyframes mk-knob {
+  0%, 40% { transform: translateX(0); }
+  50%, 90% { transform: translateX(12px); }
+  100% { transform: translateX(0); }
+}
+
+.mk-tick-on {
+  animation: mk-tick-on 5s ease-in-out infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+@keyframes mk-tick-on {
+  0%, 25% { background: transparent; border-color: rgb(var(--line-strong)); color: transparent; }
+  32%, 85% { background: rgb(var(--primary)); border-color: rgb(var(--primary)); color: #fff; }
+  95%, 100% { background: transparent; border-color: rgb(var(--line-strong)); color: transparent; }
+}
+
+.mk-ping {
+  animation: mk-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes mk-ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+
+.mk-float {
+  animation: mk-float 6s ease-in-out infinite;
+  animation-delay: var(--mk-delay, 0s);
+}
+@keyframes mk-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.mk-orbit {
+  animation: mk-orbit var(--mk-dur, 40s) linear infinite;
+}
+.mk-orbit-rev { animation-direction: reverse; }
+@keyframes mk-orbit {
+  to { transform: rotate(360deg); }
+}
+/* Keep things that ride an orbit upright. */
+.mk-upright {
+  animation: mk-orbit var(--mk-dur, 40s) linear infinite reverse;
+}
+.mk-orbit-rev .mk-upright { animation-direction: normal; }
+
+/* ----------------------------------------------------------------- steps */
+
+.mk-line-fill {
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s;
+}
+.mk-in .mk-line-fill { transform: scaleX(1); }
+
+/* ----------------------------------------------------------------- security */
+
+.mk-scan {
+  animation: mk-scan 4s ease-in-out infinite;
+}
+@keyframes mk-scan {
+  0%, 100% { transform: translateY(-40%); opacity: 0; }
+  15%, 85% { opacity: 1; }
+  50% { transform: translateY(40%); }
+}
+
+/* ----------------------------------------------------------------- faq */
+
+.mk-acc {
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mk-acc[data-open='true'] { grid-template-rows: 1fr; }
+.mk-acc > div { overflow: hidden; }

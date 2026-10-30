@@ -171,7 +171,8 @@ function SupportBanner({ name }: { name: string }) {
 /** Confirm your email, and the free trial (Phase 1, step 7). */
 function AccountBanners({ user }: { user: CurrentUser }) {
   const [sent, setSent] = useState(false)
-  const trialEnds = user.company?.status === 'TRIAL' && user.company.trialEndsAt ? new Date(user.company.trialEndsAt) : null
+  // While Metriq is free for its launch (online payment not open yet), there is no trial to count down.
+  const trialEnds = user.company?.status === 'TRIAL' && user.company.trialEndsAt && user.company.paymentsOpen !== false ? new Date(user.company.trialEndsAt) : null
   const days = trialEnds ? Math.ceil((trialEnds.getTime() - Date.now()) / 86400_000) : null
   const admin = !!user.permissions?.includes('company.settings')
   return (

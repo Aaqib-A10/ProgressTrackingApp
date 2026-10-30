@@ -88,21 +88,40 @@ export const BENTO = [
 ] as const
 
 export const TEAMS = [
-  { key: 'sales', image: 'team-sales.webp', title: 'Sales and call centres', text: 'Daily call numbers, the Lead Dialer, deals and call quality scoring in one place.' },
-  { key: 'ops', image: 'team-ops.webp', title: 'Operations and logistics', text: 'Shifts, attendance and inventory requests, with tasks that do not get lost.' },
-  { key: 'remote', image: 'team-remote.webp', title: 'Remote and hybrid teams', text: 'See who is working and what got done, without asking everyone every day.' },
-  { key: 'agency', image: 'team-agency.webp', title: 'Agencies and studios', text: 'Projects per client, content plans and marketing work, with reviews before anything ships.' },
+  { key: 'sales', image: 'team-sales.webp', title: 'Sales and call centres', text: 'Daily call numbers, the Lead Dialer, deals and call quality scoring in one place.', includes: ['Lead Dialer', 'Daily calls log', 'Deals', 'Call quality scoring'] },
+  { key: 'ops', image: 'team-ops.webp', title: 'Operations and logistics', text: 'Shifts, attendance and inventory requests, with tasks that do not get lost.', includes: ['Shifts and attendance', 'Inventory requests', 'Tasks with owners'] },
+  { key: 'remote', image: 'team-remote.webp', title: 'Remote and hybrid teams', text: 'See who is working and what got done, without asking everyone every day.', includes: ['Who is working now', 'Daily reports', 'Chat and calls'] },
+  { key: 'agency', image: 'team-agency.webp', title: 'Agencies and studios', text: 'Projects per client, content plans and marketing work, with reviews before anything ships.', includes: ['Projects per client', 'Content calendar', 'Reviews before it ships'] },
+] as const
+
+/** "A day in Metriq" on the home page: what our own teams do in it, in order. */
+export const DAY = [
+  { time: '09:02', title: 'Checks in from the office Wi-Fi', text: 'The day, breaks and overtime are kept from here on.', icon: 'attendance' },
+  { time: '10:15', title: 'Calls the leads that are open now', text: 'The Lead Dialer picks them by time zone and prime time.', icon: 'sales' },
+  { time: '14:40', title: 'Moves a task to Done', text: 'The person who asked for it reviews and signs it off.', icon: 'projects' },
+  { time: '18:05', title: 'Sends the daily report', text: 'Numbers against target, in under a minute.', icon: 'reports' },
 ] as const
 
 export const STEPS = [
-  { title: 'Start your trial', text: 'Name your company and pick your time zone. No card, nothing to install.' },
+  { title: 'Make your company', text: 'Name it and pick your time zone. No card, nothing to install.' },
   { title: 'Add your teams', text: 'Pick departments, say what each one does, and choose a daily report from a template.' },
   { title: 'Invite your people', text: 'Paste a list of emails. Everyone gets a link and is in within minutes.' },
 ] as const
 
+/** The first two answers depend on whether Metriq is still free while it launches. */
+const PRICE_FAQS = {
+  free: [
+    { q: 'Is Metriq free?', a: 'Yes, while we launch. Every company gets everything on, and no card is needed. The plans and prices are what Metriq will cost once online payment opens.' },
+    { q: 'What happens when payment opens?', a: 'We will write to every company before it opens, so you have time to choose a plan. Nothing you made is removed.' },
+  ],
+  paid: [
+    { q: 'Is there a free trial?', a: 'Yes. Every new company gets 14 days with everything on, and no card is needed to start.' },
+    { q: 'What happens when the trial ends?', a: 'Choose a plan to keep adding to Metriq. Until you do, everything you made is still there and can be looked at.' },
+  ],
+}
+export const faqsFor = (free: boolean) => [...PRICE_FAQS[free ? 'free' : 'paid'], ...FAQS]
+
 export const FAQS = [
-  { q: 'Is there a free trial?', a: 'Yes. Every new company gets 14 days with everything on, and no card is needed to start.' },
-  { q: 'What happens when the trial ends?', a: 'Online payment is coming soon. Until it opens, your company keeps working as it is after the trial; we will write to you before anything changes.' },
   { q: 'Can I use Metriq on my own?', a: 'Yes. Choose "Just me" when you start, for your own tasks, to-dos, daily report and hours, on the Personal plan.' },
   { q: 'Can each team have different screens?', a: 'Yes. A department has a kind of work (General, Sales calling, Lead Generation, Marketing, E-commerce, Inventory or Customer service) and you turn its screens on or off. Nothing is deleted when you turn one off.' },
   { q: 'Can I bring my people and lists from Excel?', a: 'Paste or upload your people when you invite them. Calling teams import their lead lists from a CSV or Excel export of their CRM.' },

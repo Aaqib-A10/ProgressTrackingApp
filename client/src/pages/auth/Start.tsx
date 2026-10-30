@@ -27,7 +27,9 @@ export default function Start() {
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<boolean | null>(null)
-  useEffect(() => { api.get<{ newCompanies: boolean }>('/auth/open').then((r) => setOpen(r.newCompanies)).catch(() => setOpen(false)) }, [])
+  // Free while Metriq launches: until online payment opens there is no trial to count down.
+  const [free, setFree] = useState(true)
+  useEffect(() => { api.get<{ newCompanies: boolean; paymentsOpen?: boolean }>('/auth/open').then((r) => { setOpen(r.newCompanies); setFree(!r.paymentsOpen) }).catch(() => setOpen(false)) }, [])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -53,8 +55,8 @@ export default function Start() {
 
   return (
     <AuthLayout headline="Daily reports, attendance and projects for your whole team, in one place.">
-      <h1 className="text-headline-lg text-ink">Start your free trial</h1>
-      <p className="mt-1 text-body-md text-ink-muted">14 days, everything included. No card needed.</p>
+      <h1 className="text-headline-lg text-ink">{free ? 'Start Metriq free' : 'Start your free trial'}</h1>
+      <p className="mt-1 text-body-md text-ink-muted">{free ? 'Free while we launch, everything included. No card needed.' : '14 days, everything included. No card needed.'}</p>
 
       <div role="radiogroup" aria-label="Who is it for" className="mt-5 grid grid-cols-2 gap-2">
         {([['team', 'For my team', 'A company, with people and departments', Users], ['solo', 'Just me', 'Plan and track your own work', User]] as const).map(([v, l, d, Icon]) => (
@@ -74,7 +76,8 @@ export default function Start() {
         <TextField label={mode === 'team' ? 'Work email' : 'Email'} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@company.com" />
         <PasswordField label="Password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="8 or more, letters and numbers" />
         {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{error}</p>}
-        <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Setting it up…' : 'Start free trial'}</Button>
+        <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Setting it up…' : free ? 'Start free' : 'Start free trial'}</Button>
+        <p className="text-center text-body-sm text-ink-muted">By starting, you agree to the <Link to="/terms" className="font-medium text-ink underline-offset-2 hover:underline">Terms of Service</Link> and <Link to="/privacy" className="font-medium text-ink underline-offset-2 hover:underline">Privacy Policy</Link>.</p>
       </form>
 
       <OAuthButtons intent="signup" mode={mode} company={mode === 'team' ? companyName : undefined} label="OR START WITH" />

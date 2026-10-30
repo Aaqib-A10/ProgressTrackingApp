@@ -124,7 +124,7 @@ export default function Billing() {
           {!data.provider && (
             <div className="flex flex-wrap items-center gap-3 rounded-card border border-primary/20 bg-primary/5 px-4 py-3 text-body-md text-ink">
               <Sparkles size={18} className="shrink-0 text-primary" />
-              <span className="flex-1"><b>Online payment is coming soon.</b> Until then your trial keeps everything on, even after its last day. Want a plan set up now? Write to us from the Help button.</span>
+              <span className="flex-1"><b>Metriq is free while we launch.</b> Everything is on and there is nothing to pay. We will write to you before online payment opens, so you have time to choose a plan.</span>
             </div>
           )}
           <p className="text-body-sm text-ink-muted">Prices are in US dollars; tax is added at checkout where it applies. Changing plan in the middle of a period is worked out to the day.</p>
@@ -162,6 +162,7 @@ function StateBanner({ data, onPortal }: { data: BillingOverview; onPortal: () =
       <AlertTriangle size={18} className="shrink-0" /><span className="flex-1">{text}</span>{action}
     </div>
   )
+  if ((s === 'trial' || s === 'trial_ended') && soon) return box('border-primary/20 bg-primary/5 text-ink', 'Free while we launch, with everything on. Nothing to pay until online payment opens.')
   if (s === 'trial') return box('border-primary/20 bg-primary/5 text-ink', soon ? `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on.` : `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on. Choose a plan any time; nothing stops when you do.`)
   if (s === 'trial_ended' && soon) return box('border-primary/20 bg-primary/5 text-ink', 'Your free trial has ended. Online payment is coming soon; until then everything keeps working as it is.')
   if (s === 'trial_ended') return box('border-danger/30 bg-danger/5 text-danger', 'Your free trial has ended. Everything is still there and can be looked at; choose a plan to keep adding to it.')

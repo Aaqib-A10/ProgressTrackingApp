@@ -34,12 +34,12 @@ describe('sign up', () => {
   it('closed until the owner opens it ("New companies can sign up" is off by default)', async () => {
     await prisma.featureFlag.deleteMany({ where: { key: 'new-companies' } })
     await setFlag('new-companies', false, 'test')
-    expect((await request(app).get('/api/auth/open').expect(200)).body).toEqual({ newCompanies: false })
+    expect((await request(app).get('/api/auth/open').expect(200)).body).toMatchObject({ newCompanies: false, paymentsOpen: expect.any(Boolean) })
     const r = await request(app).post('/api/auth/start').send({ mode: 'team', name: 'Hana Hotel', email: 'founder@hotel.local.test', password: 'Hotel2026x', companyName: 'Hotel Bravo' }).expect(403)
     expect(r.body.error).toMatch(/not open/)
     expect(await prisma.user.count({ where: { email: 'founder@hotel.local.test' } })).toBe(0)
     await setFlag('new-companies', true, 'test')
-    expect((await request(app).get('/api/auth/open').expect(200)).body).toEqual({ newCompanies: true })
+    expect((await request(app).get('/api/auth/open').expect(200)).body).toMatchObject({ newCompanies: true })
   })
 
   it('"For my team": a company on a 14-day trial, its own address, the founder as Super Admin', async () => {
@@ -142,12 +142,16 @@ describe('Google and Microsoft', () => {
     await setFlag('social-sign-in', true, 'test')
   })
 
-  async function through(provider: 'google' | 'microsoft', query: string, profile: Record<string, unknown>) {
+  // A sign-in token with these claims (Microsoft's says whose the email is).
+  const idToken = (claims: Record<string, unknown>) => `x.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.y`
+  const MS_PERSONAL = '9188040d-6c67-4c5b-b112-36a304b66dad'
+
+  async function through(provider: 'google' | 'microsoft', query: string, profile: Record<string, unknown>, claims: Record<string, unknown> = {}) {
     const a = request.agent(app)
     const go = await a.get(`/api/auth/oauth/${provider}/start?${query}`).expect(302)
     const state = new URL(go.headers.location).searchParams.get('state')!
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).includes('token')) return new Response(JSON.stringify({ access_token: 'at', id_token: 'x.e30.y' }), { status: 200 })
+      if (String(url).includes('token')) return new Response(JSON.stringify({ access_token: 'at', id_token: idToken(claims) }), { status: 200 })
       return new Response(JSON.stringify(profile), { status: 200 })
     }))
     const back = await a.get(`/api/auth/oauth/${provider}/callback?code=c&state=${encodeURIComponent(state)}`).expect(302)
@@ -173,13 +177,35 @@ describe('Google and Microsoft', () => {
     expect(to).toMatch(/^\/login\?error=/)
   })
 
-  it('Microsoft never opens an account made another way (even with the same email)', async () => {
-    const { to } = await through('microsoft', 'intent=signin', { mail: 'itad.member@test.local', displayName: 'Imposter', id: 'ms-1' })
-    expect(decodeURIComponent(to)).toMatch(/Sign in with your password|no Metriq account/)
-    const made = await through('microsoft', 'intent=signup&mode=solo', { mail: 'ms.user@kilo.local.test', displayName: 'Kilo User', id: 'ms-2' })
+  it('Microsoft opens an account by email only when Microsoft confirms the email', async () => {
+    // A work account whose organisation does not own the email's domain: not trusted.
+    const { to } = await through('microsoft', 'intent=signin', { mail: 'itad.member@test.local', displayName: 'Imposter', id: 'ms-1' }, { email: 'itad.member@test.local', tid: 'some-org' })
+    expect(decodeURIComponent(to)).toMatch(/could not confirm/)
+    expect((await prisma.user.findUniqueOrThrow({ where: { email: 'itad.member@test.local' } })).microsoftId).toBeNull()
+    // Nor does it make a new company with an address it did not confirm.
+    const notMade = await through('microsoft', 'intent=signup&mode=solo', { mail: 'ms.someone@kilo.local.test', displayName: 'Some One', id: 'ms-3' }, { email: 'ms.someone@kilo.local.test', tid: 'some-org' })
+    expect(decodeURIComponent(notMade.to)).toMatch(/could not confirm/)
+    // A personal Microsoft account: Microsoft owns the address.
+    const made = await through('microsoft', 'intent=signup&mode=solo', { mail: 'ms.user@kilo.local.test', displayName: 'Kilo User', id: 'ms-2' }, { email: 'ms.user@kilo.local.test', tid: MS_PERSONAL })
     expect(made.to).toBe('/app/setup')
+    // Later the same Microsoft account signs in by its id, whatever the token says.
     const again = await through('microsoft', 'intent=signin', { mail: 'ms.user@kilo.local.test', displayName: 'Kilo User', id: 'ms-2' })
     expect(again.to).toBe('/app/dashboard')
+  })
+
+  it('an invited person signs in with Google or a work Microsoft account their organisation owns, and it is joined to their account', async () => {
+    const companyId = (await prisma.user.findUniqueOrThrow({ where: { email: 'itad.member@test.local' }, select: { companyId: true } })).companyId
+    const u = await prisma.user.create({ data: { companyId, name: 'Invited Ivy', email: 'ivy.invited@test.local', role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash: null } })
+    const ms = await through('microsoft', 'intent=signin', { mail: 'ivy.invited@test.local', displayName: 'Ivy', id: 'ms-ivy' }, { email: 'ivy.invited@test.local', tid: 'ivy-org', xms_edov: true })
+    expect(ms.to).toBe('/app/dashboard')
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: u.id } })).microsoftId).toBe('ms-ivy')
+    const g = await through('google', 'intent=signin', { email: 'ivy.invited@test.local', email_verified: true, name: 'Ivy', sub: 'g-ivy' })
+    expect(g.to).toBe('/app/dashboard')
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: u.id } })
+    expect(after).toMatchObject({ googleId: 'g-ivy', microsoftId: 'ms-ivy' })
+    // Each sign-in is in the sign-in history.
+    expect(await prisma.loginEvent.count({ where: { userId: u.id, kind: 'LOGIN' } })).toBe(2)
+    await prisma.user.delete({ where: { id: u.id } }).catch(() => undefined)
   })
 
   it('an answer that did not start in this browser is refused', async () => {
