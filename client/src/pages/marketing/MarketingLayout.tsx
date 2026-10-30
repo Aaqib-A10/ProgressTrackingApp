@@ -1,21 +1,74 @@
 import { useEffect, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { Menu, Moon, Sun, X, ArrowRight } from 'lucide-react'
+import { ChevronDown, Menu, Moon, Sun, X, ArrowRight } from 'lucide-react'
 import { useTheme } from '../../lib/theme'
 import { cn } from '../../lib/cn'
 import { api } from '../../lib/api'
 import './marketing.css'
+import { FEATURES, SOLUTIONS } from './pages'
+import { site } from './content'
+import { IconAttendance, IconBoard, IconChat, IconDialer, IconReport } from './icons'
 import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 
 /** The public website's frame (Phase 2): top bar, footer and the shared building blocks. */
 
-const LINKS = [
-  { to: '/#tour', label: 'Product' },
-  { to: '/#teams', label: 'Solutions' },
+const LINKS: { to: string; label: string; menu?: 'product' | 'solutions' }[] = [
+  { to: '/product', label: 'Product', menu: 'product' },
+  { to: '/solutions', label: 'Solutions', menu: 'solutions' },
   { to: '/pricing', label: 'Pricing' },
   { to: '/security', label: 'Security' },
 ]
+const FEATURE_ICON = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, sales: IconDialer } as const
+
+function Tile({ hue, children, size = 34 }: { hue: { a: string; b: string }; children: ReactNode; size?: number }) {
+  return <span className="flex shrink-0 items-center justify-center rounded-[30%] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]" style={{ width: size, height: size, backgroundImage: `linear-gradient(to bottom, rgb(${hue.a}), rgb(${hue.b}))` }}>{children}</span>
+}
+
+/** The Product and Solutions panels that open under the top bar. */
+function MegaPanel({ which, onClose }: { which: 'product' | 'solutions'; onClose: () => void }) {
+  const item = 'group flex items-start gap-3 rounded-[12px] p-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+  return (
+    <div className="mk-mega mx-auto grid max-w-[880px] gap-2 rounded-[20px] border border-line bg-card p-3 shadow-[0_30px_80px_-30px_rgb(var(--shadow)/0.45)] md:grid-cols-[1.6fr_1fr]">
+      {which === 'product' ? (
+        <>
+          <div className="grid content-start gap-1 sm:grid-cols-2">
+            {FEATURES.map((f) => {
+              const Icon = FEATURE_ICON[f.key]
+              return (
+                <Link key={f.key} to={`/product/${f.slug}`} onClick={onClose} className={item}>
+                  <Tile hue={f.hue}><Icon size={17} /></Tile>
+                  <span><span className="block text-[14px] font-semibold text-ink">{f.name}</span><span className="block text-[12.5px] leading-snug text-ink-muted">{f.menu}</span></span>
+                </Link>
+              )
+            })}
+          </div>
+          <Link to="/product" onClick={onClose} className="group relative flex max-h-[250px] flex-col overflow-hidden rounded-[14px] border border-line bg-bg p-4">
+            <div aria-hidden className="absolute inset-0 bg-[radial-gradient(80%_70%_at_100%_0%,rgb(var(--primary)/0.2),transparent)]" />
+            <span className="relative"><span className="block text-[14px] font-semibold text-ink">All of Metriq</span><span className="mt-1 block text-[12.5px] leading-snug text-ink-muted">How the five parts fit together, and Department Studio.</span></span>
+            <img src={site('app-board.webp')} alt="" className="relative mt-3 w-[140%] max-w-none rounded-[8px] border border-line shadow-overlay transition-transform duration-500 group-hover:-translate-y-1 dark:hidden" />
+            <img src={site('app-board-dark.webp')} alt="" className="relative mt-3 hidden w-[140%] max-w-none rounded-[8px] border border-line shadow-overlay transition-transform duration-500 group-hover:-translate-y-1 dark:block" />
+          </Link>
+        </>
+      ) : (
+        <>
+          <div className="grid content-start gap-1 sm:grid-cols-2">
+            {SOLUTIONS.map((t) => (
+              <Link key={t.key} to={`/solutions/${t.slug}`} onClick={onClose} className={item}>
+                <img src={site(t.image)} alt="" className="h-[38px] w-[38px] shrink-0 rounded-[10px] object-cover" />
+                <span><span className="block text-[14px] font-semibold text-ink">{t.name}</span><span className="block text-[12.5px] leading-snug text-ink-muted">{t.menu}</span></span>
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Link to="/solutions" onClick={onClose} className="rounded-[14px] border border-line bg-bg p-4 transition-colors hover:border-primary/40"><span className="block text-[14px] font-semibold text-ink">Every kind of team</span><span className="mt-1 block text-[12.5px] text-ink-muted">Seven kinds of work, each with its own screens.</span></Link>
+            <Link to="/start" onClick={onClose} className="rounded-[14px] border border-dashed border-line-strong p-4 transition-colors hover:border-primary/40"><span className="block text-[14px] font-semibold text-ink">Just you?</span><span className="mt-1 block text-[12.5px] text-ink-muted">Your own tasks, to-dos and hours.</span></Link>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 /**
  * Is Metriq free while it launches? Yes until online payment opens on the server (the payment
@@ -85,9 +138,19 @@ function ThemeButton() {
 
 export function MarketingLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const [mega, setMega] = useState<'product' | 'solutions' | null>(null)
+  const closeT = useRef(0)
   const [scrolled, setScrolled] = useState(false)
   const { pathname, hash } = useLocation()
-  useEffect(() => { setOpen(false) }, [pathname, hash])
+  useEffect(() => { setOpen(false); setMega(null) }, [pathname, hash])
+  useEffect(() => {
+    if (!mega) return
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setMega(null) }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [mega])
+  const hoverOpen = (m: 'product' | 'solutions' | null) => { window.clearTimeout(closeT.current); setMega(m) }
+  const hoverClose = () => { window.clearTimeout(closeT.current); closeT.current = window.setTimeout(() => setMega(null), 140) }
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 8)
     on(); window.addEventListener('scroll', on, { passive: true })
@@ -102,12 +165,17 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bg text-ink antialiased">
-      <header className={cn('sticky top-0 z-40 border-b transition-colors', scrolled ? 'border-line bg-bg/85 backdrop-blur-md' : 'border-transparent bg-bg')}>
+      <header className={cn('sticky top-0 z-40 border-b transition-colors', scrolled || mega ? 'border-line bg-bg/90 backdrop-blur-md' : 'border-transparent bg-bg')} onMouseLeave={hoverClose}>
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
           <Logo />
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
-            {LINKS.map((l) => (
-              <NavLink key={l.to} to={l.to} className={({ isActive }) => cn('rounded-btn px-3 py-2 text-[14px] font-medium transition-colors', isActive && !l.to.includes('#') ? 'text-ink' : 'text-ink-muted hover:text-ink')}>{l.label}</NavLink>
+            {LINKS.map((l) => l.menu ? (
+              <button key={l.to} type="button" aria-expanded={mega === l.menu} onMouseEnter={() => hoverOpen(l.menu!)} onClick={() => setMega(mega === l.menu ? null : l.menu!)}
+                className={cn('inline-flex items-center gap-1 rounded-btn px-3 py-2 text-[14px] font-medium transition-colors', mega === l.menu || pathname.startsWith(l.to) ? 'text-ink' : 'text-ink-muted hover:text-ink')}>
+                {l.label}<ChevronDown size={14} className={cn('transition-transform duration-200', mega === l.menu && 'rotate-180')} />
+              </button>
+            ) : (
+              <NavLink key={l.to} to={l.to} onMouseEnter={() => hoverOpen(null)} className={({ isActive }) => cn('rounded-btn px-3 py-2 text-[14px] font-medium transition-colors', isActive ? 'text-ink' : 'text-ink-muted hover:text-ink')}>{l.label}</NavLink>
             ))}
           </nav>
           <div className="ml-auto hidden items-center gap-2 md:flex">
@@ -120,9 +188,20 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
             <button type="button" onClick={() => setOpen((o) => !o)} className="rounded-btn p-2 text-ink" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open}>{open ? <X size={20} /> : <Menu size={20} />}</button>
           </div>
         </div>
+        {mega && (
+          <div className="absolute inset-x-0 top-full hidden px-4 pt-2 md:block" onMouseEnter={() => hoverOpen(mega)}>
+            <MegaPanel which={mega} onClose={() => setMega(null)} />
+          </div>
+        )}
         {open && (
-          <div className="border-t border-line bg-bg px-4 pb-5 pt-2 md:hidden">
-            {LINKS.map((l) => <Link key={l.to} to={l.to} className="block rounded-btn px-2 py-2.5 text-[15px] font-medium text-ink">{l.label}</Link>)}
+          <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-line bg-bg px-4 pb-5 pt-2 md:hidden">
+            <p className="px-2 pt-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Product</p>
+            {FEATURES.map((f) => { const Icon = FEATURE_ICON[f.key]; return <Link key={f.key} to={`/product/${f.slug}`} className="flex items-center gap-3 rounded-btn px-2 py-2 text-[15px] font-medium text-ink"><Tile hue={f.hue} size={28}><Icon size={15} /></Tile>{f.name}</Link> })}
+            <p className="px-2 pt-3 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Solutions</p>
+            {SOLUTIONS.map((t) => <Link key={t.key} to={`/solutions/${t.slug}`} className="flex items-center gap-3 rounded-btn px-2 py-2 text-[15px] font-medium text-ink"><img src={site(t.image)} alt="" className="h-7 w-7 rounded-[8px] object-cover" />{t.name}</Link>)}
+            <div className="mt-2 border-t border-line pt-2">
+              {LINKS.filter((l) => !l.menu).map((l) => <Link key={l.to} to={l.to} className="block rounded-btn px-2 py-2.5 text-[15px] font-medium text-ink">{l.label}</Link>)}
+            </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Link to="/login" className="inline-flex h-10 items-center justify-center rounded-btn border border-line text-[14px] font-semibold text-ink">Sign in</Link>
               <Link to="/start" className="inline-flex h-10 items-center justify-center rounded-btn bg-primary text-[14px] font-semibold text-white">Start free</Link>
@@ -150,8 +229,8 @@ function SiteFooter() {
           <Logo />
           <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-ink-muted">Attendance, projects, chat and daily reports for your whole team, in one app.</p>
         </div>
-        {col('Product', [{ to: '/#tour', label: 'Attendance' }, { to: '/#tour', label: 'Projects and chat' }, { to: '/#tour', label: 'Daily reports' }, { to: '/#teams', label: 'For sales teams' }])}
-        {col('Company', [{ to: '/pricing', label: 'Pricing' }, { to: '/security', label: 'Security' }, { to: '/#faq', label: 'Questions' }])}
+        {col('Product', FEATURES.map((f) => ({ to: `/product/${f.slug}`, label: f.name })))}
+        {col('Company', [{ to: '/solutions', label: 'Solutions' }, { to: '/pricing', label: 'Pricing' }, { to: '/security', label: 'Security' }, { to: '/#faq', label: 'Questions' }])}
         {col('Legal', [{ to: '/terms', label: 'Terms of Service' }, { to: '/privacy', label: 'Privacy Policy' }, { to: '/cookies', label: 'Cookie Policy' }, { to: '/dpa', label: 'Data Processing' }])}
         {col('Get started', [{ to: '/start', label: 'Start free' }, { to: '/login', label: 'Sign in' }])}
       </div>

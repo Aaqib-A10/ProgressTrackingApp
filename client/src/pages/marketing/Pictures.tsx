@@ -1,8 +1,8 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import {
   IconAttendance, IconBoard, IconChat, IconCheck, IconDialer, IconFingerprint, IconForm, IconReport, IconSheet, IconSticky, IconVideo, IconWhatsapp,
-  IconBackup, IconKey, IconLock, IconSpark, IconWalls, MetriqMark,
+  IconBackup, IconKey, IconLock, IconNotes, IconSpark, IconWalls, MetriqMark,
 } from './icons'
 import { useInView } from './MarketingLayout'
 
@@ -12,65 +12,110 @@ const d = (ms: number, extra?: CSSProperties) => ({ '--mk-delay': `${ms}ms`, ...
 
 /* ------------------------------------------------------------------ one app instead of six */
 
+/**
+ * The tools a team stops juggling. Each is an app-style tile in that kind of tool's colour with a
+ * plain picture. To show a product's own logo instead, put its official file (from the maker's
+ * press or brand page) in client/public/assets/site/logos/ under the name below; the tile uses
+ * it when it is there.
+ */
 const OLD = [
-  { label: 'WhatsApp groups', Icon: IconWhatsapp },
-  { label: 'Attendance machine', Icon: IconFingerprint },
-  { label: 'Spreadsheets of hours', Icon: IconSheet },
-  { label: 'Google Forms reports', Icon: IconForm },
-  { label: 'Separate video calls', Icon: IconVideo },
-  { label: 'Sticky-note task lists', Icon: IconSticky },
+  { label: 'WhatsApp groups', pain: 'Updates lost in the chat', Icon: IconWhatsapp, color: 'from-[#2fd36b] to-[#14a650]', logo: 'whatsapp.svg' },
+  { label: 'Attendance machine', pain: 'A queue at the door', Icon: IconFingerprint, color: 'from-[#64748b] to-[#334155]', logo: 'attendance.svg' },
+  { label: 'Spreadsheets of hours', pain: 'Totals typed by hand', Icon: IconSheet, color: 'from-[#22a35a] to-[#127a3c]', logo: 'sheets.svg' },
+  { label: 'Google Forms reports', pain: 'Nobody reads them', Icon: IconForm, color: 'from-[#8b5cf6] to-[#6d28d9]', logo: 'forms.svg' },
+  { label: 'Separate video calls', pain: 'Another link, another app', Icon: IconVideo, color: 'from-[#3b9bff] to-[#1d6fe0]', logo: 'video.svg' },
+  { label: 'Sticky-note task lists', pain: 'Gone by Friday', Icon: IconSticky, color: 'from-[#fbd24e] to-[#f2a91c]', logo: 'notes.svg' },
 ]
 const NEW = [
-  { label: 'Attendance and hours', Icon: IconAttendance },
-  { label: 'Projects and to-dos', Icon: IconBoard },
-  { label: 'Chat, calls and meetings', Icon: IconChat },
-  { label: 'Daily reports', Icon: IconReport },
+  { label: 'Attendance and hours', sub: 'Check-in, breaks, overtime', Icon: IconAttendance },
+  { label: 'Projects and to-dos', sub: 'Boards, owners, due dates', Icon: IconBoard },
+  { label: 'Chat, calls and meetings', sub: 'With AI meeting notes', Icon: IconChat },
+  { label: 'Daily reports', sub: 'Filled in under a minute', Icon: IconReport },
 ]
-// The drawing's own coordinates (1000 × 440); rows sit on these lines.
-const OLD_Y = OLD.map((_, i) => 40 + i * 72)
-const NEW_Y = NEW.map((_, i) => 220 + (i - 1.5) * 92)
+// The drawing's own coordinates (1000 × 470); rows sit on these lines.
+const H = 470
+const OLD_Y = OLD.map((_, i) => 45 + i * 76)
+const NEW_Y = NEW.map((_, i) => H / 2 + (i - 1.5) * 100)
+
+function AppTile({ tool, size = 40 }: { tool: (typeof OLD)[number]; size?: number }) {
+  const [own, setOwn] = useState<'try' | 'yes' | 'no'>('try')
+  return (
+    <span className={cn('relative flex shrink-0 items-center justify-center overflow-hidden rounded-[30%] bg-gradient-to-b text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_4px_10px_-4px_rgb(0_0_0/0.35)]', tool.color)} style={{ width: size, height: size }}>
+      {own !== 'no' && <img src={`/assets/site/logos/${tool.logo}`} alt="" onLoad={() => setOwn('yes')} onError={() => setOwn('no')} className={cn('absolute inset-0 z-[1] h-full w-full bg-white object-contain p-[18%]', own === 'yes' ? 'opacity-100' : 'opacity-0')} />}
+      <tool.Icon size={Math.round(size * 0.52)} />
+    </span>
+  )
+}
 
 export function ConsolidateArt() {
   const [ref, seen] = useInView<HTMLDivElement>()
   return (
     <div ref={ref}>
       {/* Wide screens: six tools flow into Metriq, and out come four parts of one app. */}
-      <div aria-hidden className="relative hidden h-[440px] lg:block">
-        <svg viewBox="0 0 1000 440" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+      <div aria-hidden className="relative hidden lg:block" style={{ height: H }}>
+        <svg viewBox={`0 0 1000 ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
           <defs>
-            <linearGradient id="mk-in" x1="0" x2="1"><stop offset="0" stopColor="rgb(var(--ink-faint))" stopOpacity="0.35" /><stop offset="1" stopColor="rgb(var(--primary))" /></linearGradient>
+            <linearGradient id="mk-in" x1="0" x2="1"><stop offset="0" stopColor="rgb(var(--ink-faint))" stopOpacity="0.25" /><stop offset="1" stopColor="rgb(var(--primary))" stopOpacity="0.9" /></linearGradient>
             <linearGradient id="mk-out" x1="0" x2="1"><stop offset="0" stopColor="rgb(var(--primary))" /><stop offset="1" stopColor="rgb(6 182 212)" /></linearGradient>
           </defs>
-          {OLD_Y.map((y) => <path key={`a${y}`} d={`M300 ${y} C 400 ${y}, 400 220, 462 220`} stroke="url(#mk-in)" strokeWidth={1.5} fill="none" vectorEffect="non-scaling-stroke" className={cn(seen && 'mk-flow')} />)}
-          {NEW_Y.map((y) => <path key={`b${y}`} d={`M538 220 C 600 220, 600 ${y}, 690 ${y}`} stroke="url(#mk-out)" strokeWidth={1.75} fill="none" vectorEffect="non-scaling-stroke" className={cn(seen && 'mk-flow')} />)}
+          {OLD_Y.map((y, i) => {
+            const d = `M318 ${y} C 410 ${y}, 400 ${H / 2}, 458 ${H / 2}`
+            return (
+              <g key={`a${y}`}>
+                <path d={d} stroke="url(#mk-in)" strokeWidth={1.25} fill="none" vectorEffect="non-scaling-stroke" />
+                {seen && <circle r="3.2" fill="rgb(var(--primary))"><animateMotion dur="2.8s" begin={`${i * 0.45}s`} repeatCount="indefinite" path={d} /><animate attributeName="opacity" values="0;1;1;0" dur="2.8s" begin={`${i * 0.45}s`} repeatCount="indefinite" /></circle>}
+              </g>
+            )
+          })}
+          {NEW_Y.map((y, i) => {
+            const d = `M542 ${H / 2} C 600 ${H / 2}, 600 ${y}, 676 ${y}`
+            return (
+              <g key={`b${y}`}>
+                <path d={d} stroke="url(#mk-out)" strokeWidth={1.75} fill="none" vectorEffect="non-scaling-stroke" />
+                {seen && <circle r="3.6" fill="rgb(34 211 238)"><animateMotion dur="2.2s" begin={`${1.4 + i * 0.35}s`} repeatCount="indefinite" path={d} /><animate attributeName="opacity" values="0;1;1;0" dur="2.2s" begin={`${1.4 + i * 0.35}s`} repeatCount="indefinite" /></circle>}
+              </g>
+            )
+          })}
         </svg>
-        {OLD.map(({ label, Icon }, i) => (
-          <div key={label} className={cn('mk-reveal absolute right-[70%] flex -translate-y-1/2 items-center gap-3 rounded-full border border-line bg-card py-1.5 pl-1.5 pr-4 text-[14px] text-ink-muted shadow-xs', seen && 'mk-in')} style={{ top: `${(OLD_Y[i] / 440) * 100}%`, ...d(i * 70) }}>
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-ink-faint"><Icon size={16} /></span>
-            <span className="relative">{label}<span className="absolute inset-x-0 top-1/2 h-px origin-left bg-ink-faint/70 transition-transform duration-700" style={{ transform: seen ? 'scaleX(1)' : 'scaleX(0)', transitionDelay: `${700 + i * 120}ms` }} /></span>
+        {OLD.map((tool, i) => (
+          <div key={tool.label} className={cn('mk-reveal absolute right-[68.2%] flex w-[290px] -translate-y-1/2 items-center gap-3 rounded-[16px] border border-line bg-card/90 p-2 pr-4 shadow-[0_6px_20px_-12px_rgb(var(--shadow)/0.35)] backdrop-blur', seen && 'mk-in')} style={{ top: `${(OLD_Y[i] / H) * 100}%`, ...d(i * 80) }}>
+            <span className="relative">
+              <AppTile tool={tool} />
+              <span className="absolute -right-1.5 -top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-card text-danger shadow ring-1 ring-line transition-transform duration-500" style={{ transform: seen ? 'scale(1)' : 'scale(0)', transitionDelay: `${900 + i * 140}ms` }}><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></span>
+            </span>
+            <span className="min-w-0">
+              <span className="relative block truncate text-[14px] font-semibold text-ink-muted">{tool.label}<span className="absolute left-0 top-1/2 h-[1.5px] w-full origin-left bg-ink-faint/80 transition-transform duration-700" style={{ transform: seen ? 'scaleX(1)' : 'scaleX(0)', transitionDelay: `${900 + i * 140}ms` }} /></span>
+              <span className="block truncate text-[12.5px] text-ink-faint">{tool.pain}</span>
+            </span>
           </div>
         ))}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <span className="mk-pulse-ring absolute inset-0 rounded-[28px] border-2 border-primary/50" />
-          <span className="mk-pulse-ring absolute inset-0 rounded-[28px] border-2 border-primary/40" style={{ animationDelay: '1.3s' }} />
-          <div className="relative flex h-[76px] w-[76px] items-center justify-center rounded-[24px] bg-card shadow-[0_12px_40px_-8px_rgb(var(--primary)/0.55)] ring-1 ring-primary/30">
-            <MetriqMark size={50} />
+          <span className="mk-pulse-ring absolute inset-0 rounded-[30px] border-2 border-primary/50" />
+          <span className="mk-pulse-ring absolute inset-0 rounded-[30px] border-2 border-cyan-400/40" style={{ animationDelay: '1.3s' }} />
+          <span className="mk-orbit absolute -inset-6 rounded-full border border-dashed border-primary/25" style={{ '--mk-dur': '30s' } as CSSProperties} />
+          <div className="relative flex h-[84px] w-[84px] items-center justify-center rounded-[26px] bg-card shadow-[0_16px_50px_-10px_rgb(var(--primary)/0.65)] ring-1 ring-primary/30">
+            <MetriqMark size={54} />
           </div>
         </div>
-        {NEW.map(({ label, Icon }, i) => (
-          <div key={label} className={cn('mk-reveal absolute left-[69%] flex -translate-y-1/2 items-center gap-3 rounded-[12px] border border-primary/25 bg-card py-2 pl-2 pr-4 text-[14.5px] font-semibold text-ink shadow-[0_6px_20px_-10px_rgb(var(--primary)/0.6)]', seen && 'mk-in')} style={{ top: `${(NEW_Y[i] / 440) * 100}%`, ...d(500 + i * 90) }}>
-            <span className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-primary/10 text-primary"><Icon size={18} /></span>
-            {label}
+        {NEW.map(({ label, sub, Icon }, i) => (
+          <div key={label} className={cn('mk-reveal absolute left-[67.6%] flex w-[300px] -translate-y-1/2 items-center gap-3 rounded-[16px] border border-primary/20 bg-card p-2.5 pr-4 shadow-[0_10px_30px_-16px_rgb(var(--primary)/0.7)]', seen && 'mk-in')} style={{ top: `${(NEW_Y[i] / H) * 100}%`, ...d(600 + i * 110) }}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary to-[#4338ca] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]"><Icon size={20} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[14.5px] font-semibold text-ink">{label}</span>
+              <span className="block truncate text-[12.5px] text-ink-muted">{sub}</span>
+            </span>
+            <span className="relative flex h-2 w-2"><span className="mk-ping absolute inset-0 rounded-full bg-success/60" style={{ animationDelay: `${i * 0.4}s` }} /><span className="relative h-2 w-2 rounded-full bg-success" /></span>
           </div>
         ))}
       </div>
 
       {/* Phones and tablets: the same story, top to bottom. */}
       <div aria-hidden className="lg:hidden">
-        <div className="flex flex-wrap justify-center gap-2">
-          {OLD.map(({ label, Icon }) => (
-            <span key={label} className="inline-flex items-center gap-2 rounded-full border border-line bg-card py-1 pl-1 pr-3 text-[13px] text-ink-muted">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-ink-faint"><Icon size={14} /></span><span className="line-through decoration-ink-faint/70">{label}</span>
+        <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
+          {OLD.map((tool) => (
+            <span key={tool.label} className="flex items-center gap-2 rounded-[14px] border border-line bg-card p-1.5 pr-2.5">
+              <AppTile tool={tool} size={30} />
+              <span className="min-w-0 truncate text-[12.5px] text-ink-muted line-through decoration-ink-faint/70">{tool.label}</span>
             </span>
           ))}
         </div>
@@ -82,7 +127,7 @@ export function ConsolidateArt() {
         <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
           {NEW.map(({ label, Icon }) => (
             <span key={label} className="flex items-center gap-2 rounded-[12px] border border-primary/25 bg-card p-2 text-[13.5px] font-semibold text-ink">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-primary/10 text-primary"><Icon size={16} /></span>{label}
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-primary text-white"><Icon size={16} /></span>{label}
             </span>
           ))}
         </div>
@@ -310,51 +355,126 @@ export function StepArt({ step }: { step: number }) {
 
 /* ------------------------------------------------------------------ security */
 
+const OTHERS = [
+  { name: 'Harbor Cold Storage', x: 2, y: 4 },
+  { name: 'Summit Freight', x: 64, y: 0 },
+  { name: 'Bluefin Studio', x: 0, y: 70 },
+  { name: 'Pine Clinics', x: 66, y: 74 },
+]
+const RECORDS = [
+  { label: 'Attendance today', value: '42 in' },
+  { label: 'Open tasks', value: '318' },
+  { label: 'Daily reports', value: '26 sent' },
+]
+/** Another company's request, stopped at your company's wall. */
+const TRIES = [
+  { from: [17, 14], to: [23.5, 31], d: 0 },
+  { from: [80, 10], to: [76.5, 30], d: 1.6 },
+  { from: [16, 80], to: [23.5, 60], d: 3.2 },
+  { from: [82, 84], to: [76.5, 62], d: 4.8 },
+]
+
+/**
+ * Security, as it really works: your company's records in the middle (made-up numbers), other
+ * companies around it, each behind its own wall. Their requests stop at your wall; yours go
+ * through, encrypted, and the database is backed up every night.
+ */
 export function WallsArt() {
-  const tiles = Array.from({ length: 9 }, (_, i) => i)
   return (
-    <div aria-hidden className="relative mx-auto aspect-square w-full max-w-[360px]">
-      <svg viewBox="0 0 360 360" className="absolute inset-0 h-full w-full">
-        <circle cx="180" cy="180" r="170" fill="none" stroke="rgb(255 255 255 / 0.08)" />
-        <circle cx="180" cy="180" r="130" fill="none" stroke="rgb(255 255 255 / 0.1)" strokeDasharray="3 7" className="mk-orbit" style={{ transformOrigin: '180px 180px', '--mk-dur': '60s' } as CSSProperties} />
+    <div aria-hidden className="relative mx-auto aspect-[1.05] w-full max-w-[460px] select-none text-white">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+        {TRIES.map((t, i) => <line key={i} x1={t.from[0]} y1={t.from[1]} x2={t.to[0]} y2={t.to[1]} stroke="rgb(255 255 255 / 0.12)" strokeWidth={0.4} strokeDasharray="1.2 1.6" vectorEffect="non-scaling-stroke" />)}
       </svg>
-      <div className="absolute inset-[18%] grid grid-cols-3 gap-3">
-        {tiles.map((i) => (
-          <div key={i} className={cn('relative flex items-center justify-center rounded-[14px] border', i === 4 ? 'border-primary/70 bg-primary/20 shadow-[0_0_40px_-6px_rgb(var(--primary)/0.8)]' : 'border-white/10 bg-white/[0.04]')}>
-            {i === 4
-              ? <span className="text-white"><IconWalls size={30} /></span>
-              : <span className="h-2 w-8 rounded-full bg-white/10" />}
-            {i === 4 && <span className="mk-scan absolute inset-x-2 top-1/2 h-px bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />}
-          </div>
-        ))}
-      </div>
-      {[IconLock, IconBackup, IconKey].map((Icon, i) => (
-        <div key={i} className="absolute inset-0 mk-orbit" style={{ '--mk-dur': '36s', animationDelay: `${-i * 12}s` } as CSSProperties}>
-          <span className="mk-upright absolute left-1/2 top-0 -ml-5 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-[#14161c] text-cyan-200 shadow-lg" style={{ '--mk-dur': '36s', animationDelay: `${-i * 12}s` } as CSSProperties}><Icon size={18} /></span>
+      {OTHERS.map((o) => (
+        <div key={o.name} className="absolute w-[34%] rounded-[12px] border border-white/10 bg-white/[0.04] p-2.5 backdrop-blur-sm" style={{ left: `${o.x}%`, top: `${o.y}%` }}>
+          <p className="truncate text-[11px] font-semibold text-white/70">{o.name}</p>
+          <div className="mt-1.5 space-y-1"><span className="block h-1.5 w-[80%] rounded-full bg-white/10" /><span className="block h-1.5 w-[55%] rounded-full bg-white/10" /></div>
+          <span className="absolute right-2 top-2 text-white/40"><IconLock size={11} /></span>
         </div>
       ))}
+      {/* Your company, behind its wall */}
+      <div className="absolute left-[27%] top-[27%] w-[46%]">
+        <div className="mk-wall absolute -inset-3 rounded-[22px] border-2 border-cyan-300/50" />
+        <div className="relative overflow-hidden rounded-[16px] border border-primary/60 bg-[#151827] p-3 shadow-[0_0_50px_-10px_rgb(var(--primary)/0.9)]">
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-semibold">Northgate Foods <span className="font-normal text-white/50">· you</span></p>
+            <span className="text-cyan-200"><IconWalls size={15} /></span>
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {RECORDS.map((r, i) => (
+              <li key={r.label} className="mk-appear flex items-center justify-between rounded-[8px] bg-white/[0.06] px-2 py-1 text-[11px]" style={{ '--mk-delay': `${i * 0.3}s`, '--mk-dur': '9s' } as CSSProperties}>
+                <span className="text-white/70">{r.label}</span><span className="font-semibold tabular-nums">{r.value}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 flex items-center gap-1 text-[10px] text-emerald-300"><IconLock size={10} />Encrypted on the way · HTTPS</p>
+          <span className="mk-scan absolute inset-x-0 top-1/2 h-px bg-gradient-to-r from-transparent via-cyan-300/80 to-transparent" />
+        </div>
+      </div>
+      {/* Requests from other companies, stopped at the wall */}
+      {TRIES.map((t, i) => (
+        <span key={i} className="mk-try absolute" style={{ '--fx': `${t.from[0]}%`, '--fy': `${t.from[1]}%`, '--tx': `${t.to[0]}%`, '--ty': `${t.to[1]}%`, animationDelay: `${t.d}s` } as CSSProperties}>
+          <span className="mk-try-dot block h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-300 shadow-[0_0_12px_2px_rgb(252_211_77/0.7)]" style={{ animationDelay: `${t.d}s` }} />
+          <span className="mk-try-x absolute left-0 top-0 -translate-x-1/2 -translate-y-[160%] whitespace-nowrap rounded-full bg-rose-500/90 px-1.5 py-0.5 text-[9px] font-bold" style={{ animationDelay: `${t.d}s` }}>Blocked</span>
+        </span>
+      ))}
+      {/* What runs every night */}
+      <div className="absolute inset-x-[8%] bottom-[-2%] flex flex-wrap items-center justify-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-white/75"><IconBackup size={12} className="text-cyan-200" />Backed up 2:00 AM</span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-white/75"><IconKey size={12} className="text-cyan-200" />Support access: off</span>
+      </div>
     </div>
   )
 }
 
 /* ------------------------------------------------------------------ closing call */
 
+/**
+ * The closing call: the app's parts circle the words on an oval that always fits inside the box
+ * (it is measured), passing behind and in front like a slow carousel. Still with reduced motion.
+ */
 export function OrbitArt() {
-  const ring = [IconAttendance, IconBoard, IconChat, IconReport, IconDialer]
+  const ring = [IconAttendance, IconBoard, IconChat, IconReport, IconDialer, IconNotes]
+  const box = useRef<HTMLDivElement>(null)
+  const items = useRef<(HTMLSpanElement | null)[]>([])
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    let raf = 0
+    const start = performance.now()
+    const place = (now: number) => {
+      const w = el.clientWidth, h = el.clientHeight
+      const icon = w < 640 ? 40 : 52
+      // The oval stays a full icon inside every edge.
+      const rx = w / 2 - icon * 0.9, ry = h / 2 - icon * 0.8
+      const turn = still ? 0 : ((now - start) / 60000) * Math.PI * 2
+      items.current.forEach((n, i) => {
+        if (!n) return
+        const a = turn + (i / ring.length) * Math.PI * 2
+        const depth = (Math.sin(a) + 1) / 2 // 0 at the top (far), 1 at the bottom (near)
+        const x = w / 2 + rx * Math.cos(a) - icon / 2, y = h / 2 + ry * Math.sin(a) - icon / 2
+        n.style.width = n.style.height = `${icon}px`
+        n.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${0.72 + depth * 0.38})`
+        n.style.opacity = String(0.35 + depth * 0.65)
+        n.style.zIndex = depth > 0.55 ? '2' : '0'
+      })
+      if (!still) raf = requestAnimationFrame(place)
+    }
+    raf = requestAnimationFrame(place)
+    const ro = new ResizeObserver(() => { if (still) place(performance.now()) })
+    ro.observe(el)
+    return () => { cancelAnimationFrame(raf); ro.disconnect() }
+  }, [ring.length])
   return (
-    <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 h-[620px] w-[620px] -translate-x-1/2 -translate-y-1/2 opacity-90">
-      <div className="absolute inset-0 rounded-full border border-white/10" />
-      <div className="absolute inset-[90px] rounded-full border border-white/[0.07]" />
-      <div className="mk-orbit absolute inset-0" style={{ '--mk-dur': '50s' } as CSSProperties}>
-        {ring.map((Icon, i) => {
-          const a = (i / ring.length) * Math.PI * 2
-          return (
-            <span key={i} className="absolute" style={{ left: `${50 + 50 * Math.cos(a)}%`, top: `${50 + 50 * Math.sin(a)}%` }}>
-              <span className="mk-upright -ml-6 -mt-6 flex h-12 w-12 items-center justify-center rounded-[14px] border border-white/15 bg-white/10 text-white backdrop-blur" style={{ '--mk-dur': '50s' } as CSSProperties}><Icon size={22} /></span>
-            </span>
-          )
-        })}
-      </div>
+    <div ref={box} aria-hidden className="pointer-events-none absolute inset-0">
+      <div className="absolute inset-[9%] rounded-[50%] border border-white/[0.07]" />
+      <div className="absolute inset-[18%] rounded-[50%] border border-dashed border-white/[0.06]" />
+      {ring.map((Icon, i) => (
+        <span key={i} ref={(n) => { items.current[i] = n }} className="absolute left-0 top-0 flex items-center justify-center rounded-[30%] border border-white/15 bg-white/10 text-white shadow-[0_10px_30px_-10px_rgb(0_0_0/0.6)] backdrop-blur will-change-transform">
+          <Icon size={22} />
+        </span>
+      ))}
     </div>
   )
 }

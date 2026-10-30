@@ -111,23 +111,23 @@ export const STEPS = [
 /** The first two answers depend on whether Metriq is still free while it launches. */
 const PRICE_FAQS = {
   free: [
-    { q: 'Is Metriq free?', a: 'Yes, while we launch. Every company gets everything on, and no card is needed. The plans and prices are what Metriq will cost once online payment opens.' },
-    { q: 'What happens when payment opens?', a: 'We will write to every company before it opens, so you have time to choose a plan. Nothing you made is removed.' },
+    { cat: 'Pricing', q: 'Is Metriq free?', a: 'Yes, while we launch. Every company gets everything on, and no card is needed. The plans and prices are what Metriq will cost once online payment opens.' },
+    { cat: 'Pricing', q: 'What happens when payment opens?', a: 'We will write to every company before it opens, so you have time to choose a plan. Nothing you made is removed.' },
   ],
   paid: [
-    { q: 'Is there a free trial?', a: 'Yes. Every new company gets 14 days with everything on, and no card is needed to start.' },
-    { q: 'What happens when the trial ends?', a: 'Choose a plan to keep adding to Metriq. Until you do, everything you made is still there and can be looked at.' },
+    { cat: 'Pricing', q: 'Is there a free trial?', a: 'Yes. Every new company gets 14 days with everything on, and no card is needed to start.' },
+    { cat: 'Pricing', q: 'What happens when the trial ends?', a: 'Choose a plan to keep adding to Metriq. Until you do, everything you made is still there and can be looked at.' },
   ],
 }
 export const faqsFor = (free: boolean) => [...PRICE_FAQS[free ? 'free' : 'paid'], ...FAQS]
 
 export const FAQS = [
-  { q: 'Can I use Metriq on my own?', a: 'Yes. Choose "Just me" when you start, for your own tasks, to-dos, daily report and hours, on the Personal plan.' },
-  { q: 'Can each team have different screens?', a: 'Yes. A department has a kind of work (General, Sales calling, Lead Generation, Marketing, E-commerce, Inventory or Customer service) and you turn its screens on or off. Nothing is deleted when you turn one off.' },
-  { q: 'Can I bring my people and lists from Excel?', a: 'Paste or upload your people when you invite them. Calling teams import their lead lists from a CSV or Excel export of their CRM.' },
-  { q: 'Is our data safe and private?', a: 'Each company only ever sees its own records, everything travels encrypted, and the database is backed up every night. Our team can only look inside your Metriq when you allow it, for a set time, and every visit is logged.' },
-  { q: 'Is there a mobile app?', a: 'Metriq works in any phone browser today, check-in included. iPhone and Android apps are on the way.' },
-  { q: 'Can we cancel?', a: 'Any time. A plan runs to the end of what is paid, and you can ask us for a full export of your data.' },
+  { cat: 'Getting started', q: 'Can I use Metriq on my own?', a: 'Yes. Choose "Just me" when you start, for your own tasks, to-dos, daily report and hours, on the Personal plan.' },
+  { cat: 'Teams', q: 'Can each team have different screens?', a: 'Yes. A department has a kind of work (General, Sales calling, Lead Generation, Marketing, E-commerce, Inventory or Customer service) and you turn its screens on or off. Nothing is deleted when you turn one off.' },
+  { cat: 'Getting started', q: 'Can I bring my people and lists from Excel?', a: 'Paste or upload your people when you invite them. Calling teams import their lead lists from a CSV or Excel export of their CRM.' },
+  { cat: 'Data and security', q: 'Is our data safe and private?', a: 'Each company only ever sees its own records, everything travels encrypted, and the database is backed up every night. Our team can only look inside your Metriq when you allow it, for a set time, and every visit is logged.' },
+  { cat: 'Getting started', q: 'Is there a mobile app?', a: 'Metriq works in any phone browser today, check-in included. iPhone and Android apps are on the way.' },
+  { cat: 'Pricing', q: 'Can we cancel?', a: 'Any time. A plan runs to the end of what is paid, and you can ask us for a full export of your data.' },
 ] as const
 
 export const SECURITY = [

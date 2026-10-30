@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import { MarketingLayout, Container, SectionHead, Eyebrow, PrimaryCta, SecondaryCta, AppFrame, Reveal, usePageTitle, useInView, useLaunch } from './marketing/MarketingLayout'
 import { BENTO, DAY, PLANS, SECURITY, STEPS, TEAMS, TOUR, faqsFor, site } from './marketing/content'
 import { HeroBackdrop, HeroStage, trackPointer } from './marketing/HeroStage'
+import { SOLUTIONS } from './marketing/pages'
 import { AskArt, ClocksArt, ConsolidateArt, NotesArt, OrbitArt, PhoneArt, RolesArt, StepArt, TeamsArt, WallsArt } from './marketing/Pictures'
 import {
   IconArrow, IconAttendance, IconBackup, IconBoard, IconChat, IconCheck, IconConnect, IconDepartments, IconDialer, IconExport, IconGlobeClock,
@@ -62,7 +63,7 @@ function Hero({ free }: { free: boolean }) {
         </p>
         <div className="mk-up mt-9 flex flex-wrap justify-center gap-3" style={{ '--mk-delay': '680ms' } as CSSProperties}>
           <PrimaryCta />
-          <SecondaryCta to="/#tour">See how it works</SecondaryCta>
+          <SecondaryCta to="/product">See how it works</SecondaryCta>
         </div>
         <p className="mk-up mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[13.5px] text-ink-muted" style={{ '--mk-delay': '780ms' } as CSSProperties}>
           {[free ? 'Free while we launch' : '14 days free', 'No card needed', 'Ready in minutes'].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><IconCheck size={14} className="text-success" />{t}</span>)}
@@ -91,6 +92,14 @@ function Replaces() {
 /* ------------------------------------------------------------------ tour */
 
 const TOUR_MS = 8000
+/** Each part's own light behind its screen. */
+const TOUR_HUE: Record<string, { a: string; b: string }> = {
+  attendance: { a: '16 185 129', b: '6 182 212' },
+  projects: { a: '99 102 241', b: '168 85 247' },
+  chat: { a: '14 165 233', b: '99 102 241' },
+  reports: { a: '245 158 11', b: '239 68 68' },
+  sales: { a: '139 92 246', b: '236 72 153' },
+}
 
 function Tour() {
   const [i, setI] = useState(0)
@@ -98,6 +107,7 @@ function Tour() {
   const [hover, setHover] = useState(false)
   const [ref, seen] = useInView<HTMLDivElement>()
   const t = TOUR[i]
+  const hue = TOUR_HUE[t.key]
   // Moves on by itself while in view, until someone picks a part.
   useEffect(() => {
     if (!auto || hover || !seen) return
@@ -106,57 +116,69 @@ function Tour() {
   }, [i, auto, hover, seen])
   const pick = (n: number) => { setI(n); setAuto(false) }
   const dark = t.key === 'projects' ? site('app-board-dark.webp') : t.key === 'sales' ? site('app-dialer-dark.webp') : undefined
+  // A gentle tilt that follows the pointer over the screen.
+  const stage = useRef<HTMLDivElement>(null)
+  const tilt = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || !stage.current) return
+    const r = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5
+    stage.current.style.transform = `perspective(1600px) rotateY(${x * 5}deg) rotateX(${-y * 4}deg)`
+  }
+  const untilt = () => { if (stage.current) stage.current.style.transform = '' }
 
   return (
     <section id="tour" className="scroll-mt-20 overflow-x-clip py-20 sm:py-28">
       <Container>
         <Reveal><SectionHead center eyebrow="The product" title="Everything your team does in a day" text="Five parts that work together. Turn on the ones you need; every screen here is Metriq as it is today." /></Reveal>
-        <div ref={ref} className="mt-14 grid items-start gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-          <div role="tablist" aria-label="Parts of Metriq" aria-orientation="vertical" className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+        <div ref={ref} className="mt-14 grid items-stretch gap-6 lg:grid-cols-[0.78fr_1.22fr] lg:gap-8" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+          <div role="tablist" aria-label="Parts of Metriq" aria-orientation="vertical" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
             {TOUR.map((x, n) => {
               const Icon = TOUR_ICON[x.key]
               const on = n === i
+              const h = TOUR_HUE[x.key]
               return (
                 <button key={x.key} role="tab" type="button" aria-selected={on} onClick={() => pick(n)}
-                  className={cn('group relative shrink-0 overflow-hidden rounded-[14px] border text-left transition-all duration-300 lg:w-full',
-                    on ? 'border-primary/30 bg-card shadow-[0_10px_30px_-12px_rgb(var(--primary)/0.45)]' : 'border-transparent hover:border-line hover:bg-card/60')}>
-                  <span className="flex items-center gap-3 px-4 py-3 lg:px-5 lg:py-4">
-                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] transition-colors', on ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted group-hover:text-ink')}><Icon size={19} /></span>
+                  className={cn('group relative shrink-0 overflow-hidden rounded-[16px] border text-left transition-all duration-300 lg:w-full',
+                    on ? 'border-line bg-card shadow-[0_18px_40px_-24px_rgb(var(--shadow)/0.5)]' : 'border-transparent hover:bg-card/70')}>
+                  <span className="flex items-center gap-3 px-4 py-3 lg:px-5 lg:py-3.5">
+                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] transition-all duration-300', on ? 'text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]' : 'bg-slate-100 text-ink-muted group-hover:text-ink')}
+                      style={on ? { backgroundImage: `linear-gradient(to bottom, rgb(${h.a}), rgb(${h.b}))` } : undefined}><Icon size={19} /></span>
                     <span className={cn('whitespace-nowrap text-[15px] font-semibold', on ? 'text-ink' : 'text-ink-muted')}>{x.tab}</span>
                   </span>
-                  {/* The open part's words, on wide screens. */}
-                  <span className={cn('hidden px-5 lg:grid', 'mk-acc')} data-open={on}>
+                  {/* The open part's words and points, on wide screens. */}
+                  <span className="mk-acc hidden px-5 lg:grid" data-open={on}>
                     <span className="block overflow-hidden">
                       <span className="block pb-5 pl-12">
                         <span className="block text-[17px] font-semibold leading-snug tracking-[-0.01em] text-ink">{x.title}</span>
-                        <span className="mt-2 block text-[14.5px] leading-relaxed text-ink-muted">{x.text}</span>
+                        <span className="mt-2 block text-[14px] leading-relaxed text-ink-muted">{x.text}</span>
+                        <span className="mt-3 block space-y-1.5">
+                          {x.points.map((p) => <span key={p} className="flex gap-2 text-[13.5px] text-ink"><IconCheck size={15} className="mt-0.5 shrink-0" style={{ color: `rgb(${h.a})` }} />{p}</span>)}
+                        </span>
                       </span>
                     </span>
                   </span>
-                  {on && <span aria-hidden className="absolute inset-x-0 bottom-0 h-[2px] bg-line"><span key={`${i}-${auto}`} className={cn('block h-full bg-primary', auto && !hover ? 'mk-progress' : 'scale-x-100')} style={{ '--mk-dur': `${TOUR_MS}ms`, animationPlayState: seen ? 'running' : 'paused' } as CSSProperties} /></span>}
+                  {on && <span aria-hidden className="absolute inset-x-0 bottom-0 h-[2px] bg-line"><span key={`${i}-${auto}`} className={cn('block h-full', auto && !hover ? 'mk-progress' : 'scale-x-100')} style={{ backgroundImage: `linear-gradient(to right, rgb(${h.a}), rgb(${h.b}))`, '--mk-dur': `${TOUR_MS}ms`, animationPlayState: seen ? 'running' : 'paused' } as CSSProperties} /></span>}
                 </button>
               )
             })}
           </div>
 
-          <div role="tabpanel" aria-label={t.tab} className="relative">
-            <div aria-hidden className="absolute -inset-6 -z-10 rounded-[40px] bg-[radial-gradient(60%_60%_at_60%_40%,rgb(var(--primary)/0.18),transparent)] blur-2xl" />
-            <div aria-hidden className="absolute inset-x-8 -bottom-3 top-6 -z-10 rounded-[16px] border border-line bg-card/70" />
-            <div aria-hidden className="absolute inset-x-16 -bottom-6 top-12 -z-20 rounded-[16px] border border-line bg-card/40" />
-            <div key={t.key} className="mk-swap">
-              <AppFrame src={site(t.image)} darkSrc={dark} alt={`${t.tab} in Metriq`} />
+          <div role="tabpanel" aria-label={t.tab} className="relative min-h-[300px] overflow-hidden rounded-[24px] border border-line sm:min-h-[420px] lg:min-h-[520px]" onPointerMove={tilt} onPointerLeave={untilt}>
+            {/* The part's own light, a fine grid, and the screen coming in from the corner. */}
+            <div aria-hidden className="absolute inset-0 transition-[background] duration-700" style={{ background: `radial-gradient(120% 90% at 0% 0%, rgb(${hue.a} / 0.22), transparent 55%), radial-gradient(100% 80% at 100% 100%, rgb(${hue.b} / 0.22), transparent 60%), rgb(var(--card))` }} />
+            <div aria-hidden className="mk-grid absolute inset-0 opacity-70 [mask-image:linear-gradient(to_bottom,#000,transparent)]" style={{ backgroundSize: '32px 32px' }} />
+            <div className="relative pl-6 pt-6 sm:pl-12 sm:pt-12 lg:absolute lg:inset-0">
+              <div ref={stage} className="transition-transform duration-300 ease-out will-change-transform lg:w-[142%]" style={{ transformOrigin: '0 0' }}>
+                <div key={t.key} className="mk-swap -mr-[18%] sm:-mr-[12%] lg:mr-0">
+                  <AppFrame src={site(t.image)} darkSrc={dark} alt={`${t.tab} in Metriq`} className="rounded-br-none rounded-tr-none shadow-[0_30px_60px_-20px_rgb(var(--shadow)/0.45)]" />
+                </div>
+              </div>
             </div>
-            <div key={`p${t.key}`} className="mk-swap mt-8 lg:hidden">
-              <h3 className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">{t.title}</h3>
-              <p className="mt-3 text-[15.5px] leading-relaxed text-ink-muted">{t.text}</p>
+            <div key={`p${t.key}`} className="mk-swap relative border-t border-line bg-card/90 p-5 backdrop-blur lg:hidden">
+              <h3 className="text-[19px] font-semibold leading-tight tracking-[-0.02em] text-ink">{t.title}</h3>
+              <p className="mt-2 text-[14.5px] leading-relaxed text-ink-muted">{t.text}</p>
+              <ul className="mt-3 space-y-1.5">{t.points.map((p) => <li key={p} className="flex gap-2 text-[13.5px] text-ink"><IconCheck size={15} className="mt-0.5 shrink-0 text-primary" />{p}</li>)}</ul>
             </div>
-            <ul key={`l${t.key}`} className="mt-6 grid gap-3 sm:grid-cols-3">
-              {t.points.map((p, n) => (
-                <li key={p} className="mk-up flex gap-2.5 rounded-[12px] border border-line bg-card p-3.5 text-[13.5px] leading-snug text-ink" style={{ '--mk-delay': `${120 + n * 90}ms` } as CSSProperties}>
-                  <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><IconCheck size={12} /></span>{p}
-                </li>
-              ))}
-            </ul>
           </div>
         </div>
       </Container>
@@ -203,11 +225,12 @@ function Teams() {
       <Container>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <Reveal><SectionHead eyebrow="Solutions" title="Ready for the team you have" text="Pick the kind of work each department does and it comes with the right screens." /></Reveal>
-          <Reveal delay={120}><SecondaryCta to="/start">Set up your teams <IconArrow size={16} /></SecondaryCta></Reveal>
+          <Reveal delay={120}><SecondaryCta to="/solutions">All solutions <IconArrow size={16} /></SecondaryCta></Reveal>
         </div>
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {TEAMS.map((t, i) => (
             <Reveal key={t.key} delay={i * 90} className="group relative aspect-[3/4] overflow-hidden rounded-[18px] border border-line bg-slate-900">
+              <Link to={`/solutions/${SOLUTIONS.find((x) => x.key === t.key)?.slug ?? ''}`} className="absolute inset-0 z-[2]" aria-label={t.title} />
               <img src={site(t.image)} alt="" aria-hidden loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/0 transition-colors duration-500 group-hover:via-black/55" />
               <div className="absolute inset-x-0 bottom-0 p-5">
@@ -389,33 +412,55 @@ function Origin() {
 /* ------------------------------------------------------------------ faq */
 
 function Faq({ free }: { free: boolean }) {
-  const [open, setOpen] = useState<number | null>(0)
   const faqs = faqsFor(free)
+  const cats = ['All', ...new Set(faqs.map((f) => f.cat))]
+  const [cat, setCat] = useState('All')
+  const [open, setOpen] = useState<string | null>(faqs[0]?.q ?? null)
+  const shown = faqs.filter((f) => cat === 'All' || f.cat === cat)
   return (
-    <section id="faq" className="scroll-mt-20 border-t border-line bg-card py-20 sm:py-28">
-      <Container className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
-        <Reveal>
-          <SectionHead eyebrow="Questions" title="Things people ask before they start" />
-          <div className="mt-8 rounded-[16px] border border-line bg-bg p-5">
-            <p className="text-[15px] font-semibold text-ink">Something else on your mind?</p>
-            <p className="mt-1.5 text-[14px] leading-relaxed text-ink-muted">Start free and write to us from the Help button inside Metriq. A person answers, usually the same day.</p>
-            <Link to="/start" className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-primary hover:underline">Start free <IconArrow size={15} /></Link>
-          </div>
-        </Reveal>
+    <section id="faq" className="relative scroll-mt-20 overflow-hidden border-t border-line bg-card py-20 sm:py-28">
+      <div aria-hidden className="mk-grid absolute inset-0 opacity-50 [mask-image:radial-gradient(ellipse_50%_60%_at_15%_20%,#000,transparent)]" />
+      <Container className="relative grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <Reveal>
+            <SectionHead eyebrow="Questions" title="Things people ask before they start" />
+            <div className="mt-8 flex flex-wrap gap-2" role="tablist" aria-label="Topics">
+              {cats.map((c) => (
+                <button key={c} type="button" role="tab" aria-selected={cat === c} onClick={() => setCat(c)}
+                  className={cn('rounded-full border px-3.5 py-1.5 text-[13.5px] font-medium transition-colors', cat === c ? 'border-ink bg-ink text-card' : 'border-line bg-bg text-ink-muted hover:text-ink')}>
+                  {c}<span className="ml-1.5 tabular-nums opacity-60">{c === 'All' ? faqs.length : faqs.filter((f) => f.cat === c).length}</span>
+                </button>
+              ))}
+            </div>
+            <div className="relative mt-8 overflow-hidden rounded-[18px] border border-line bg-bg p-5">
+              <div aria-hidden className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/15 blur-2xl" />
+              <div className="relative flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary to-[#4338ca] text-white"><IconChat size={20} /></span>
+                <div>
+                  <p className="text-[15px] font-semibold text-ink">Something else on your mind?</p>
+                  <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">Start free and write to us from the Help button inside Metriq. A person answers, usually the same day.</p>
+                  <Link to="/start" className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-primary hover:underline">Start free <IconArrow size={15} /></Link>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
         <ul className="space-y-3">
-          {faqs.map((f, i) => {
-            const on = open === i
+          {shown.map((f, i) => {
+            const on = open === f.q
             return (
-              <li key={f.q} className={cn('rounded-[14px] border bg-bg transition-colors', on ? 'border-primary/30' : 'border-line')}>
-                <button type="button" aria-expanded={on} onClick={() => setOpen(on ? null : i)} className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-[15.5px] font-medium text-ink">
-                  {f.q}
-                  <span aria-hidden className={cn('relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors', on ? 'border-primary bg-primary text-white' : 'border-line text-ink-muted')}>
+              <li key={f.q} className={cn('group relative overflow-hidden rounded-[16px] border bg-bg transition-all duration-300', on ? 'border-primary/30 shadow-[0_18px_40px_-26px_rgb(var(--primary)/0.6)]' : 'border-line hover:border-line-strong')}>
+                <span aria-hidden className={cn('absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-primary to-cyan-500 transition-opacity duration-300', on ? 'opacity-100' : 'opacity-0')} />
+                <button type="button" aria-expanded={on} onClick={() => setOpen(on ? null : f.q)} className="flex w-full items-center gap-4 px-5 py-4 text-left">
+                  <span className={cn('w-6 shrink-0 text-[12.5px] font-semibold tabular-nums transition-colors', on ? 'text-primary' : 'text-ink-faint')}>{String(i + 1).padStart(2, '0')}</span>
+                  <span className="flex-1 text-[15.5px] font-medium text-ink">{f.q}</span>
+                  <span aria-hidden className={cn('relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-all duration-300', on ? 'rotate-180 border-primary bg-primary text-white' : 'border-line text-ink-muted group-hover:border-line-strong')}>
                     <span className="absolute h-[1.5px] w-3 rounded bg-current" />
-                    <span className={cn('absolute h-3 w-[1.5px] rounded bg-current transition-transform duration-300', on && 'rotate-90 opacity-0')} />
+                    <span className={cn('absolute h-3 w-[1.5px] rounded bg-current transition-transform duration-300', on && 'scale-y-0')} />
                   </span>
                 </button>
                 <div className="mk-acc grid" data-open={on}>
-                  <div><p className="px-5 pb-5 pr-14 text-[14.5px] leading-relaxed text-ink-muted">{f.a}</p></div>
+                  <div><p className="px-5 pb-5 pl-[60px] pr-14 text-[14.5px] leading-relaxed text-ink-muted">{f.a}</p></div>
                 </div>
               </li>
             )
@@ -432,14 +477,14 @@ function FinalCta({ free }: { free: boolean }) {
   return (
     <section className="py-20 sm:py-28">
       <Container>
-        <div className="relative overflow-hidden rounded-[28px] bg-[#0b0c10] px-6 py-20 text-center sm:px-12 sm:py-28">
+        <div className="relative isolate overflow-hidden rounded-[28px] bg-[#0b0c10] px-6 py-24 text-center sm:px-12 sm:py-32">
           <div aria-hidden className="mk-aurora mk-aurora-a left-[10%] top-[-30%] h-[420px] w-[520px] !opacity-80" />
           <div aria-hidden className="mk-aurora mk-aurora-b bottom-[-40%] right-[5%] h-[420px] w-[520px] !opacity-60" />
           <OrbitArt />
-          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(40%_50%_at_50%_50%,rgb(11_12_16/0.92),transparent)]" />
-          <h2 className="relative mx-auto max-w-2xl text-balance text-[32px] font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-[48px]">Give your team one place to work</h2>
-          <p className="relative mx-auto mt-5 max-w-xl text-[16px] text-white/70 sm:text-[18px]">{free ? 'Free while we launch, with everything on. No card, nothing to install.' : 'Start a 14-day trial with everything on. No card, nothing to install.'}</p>
-          <div className="relative mt-9 flex flex-wrap justify-center gap-3">
+          <div aria-hidden className="absolute inset-0 z-[1] bg-[radial-gradient(38%_42%_at_50%_50%,rgb(11_12_16/0.85),transparent)]" />
+          <h2 className="relative z-[3] mx-auto max-w-2xl text-balance text-[32px] font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-[48px]">Give your team one place to work</h2>
+          <p className="relative z-[3] mx-auto mt-5 max-w-xl text-[16px] text-white/70 sm:text-[18px]">{free ? 'Free while we launch, with everything on. No card, nothing to install.' : 'Start a 14-day trial with everything on. No card, nothing to install.'}</p>
+          <div className="relative z-[3] mt-9 flex flex-wrap justify-center gap-3">
             <Link to="/start" className="group inline-flex h-12 items-center gap-2 rounded-btn bg-white px-6 text-[15px] font-semibold text-[#0b0c10] shadow-[0_10px_40px_-10px_rgb(255_255_255/0.5)] transition-transform hover:-translate-y-0.5">Start free<IconArrow size={16} className="transition-transform group-hover:translate-x-0.5" /></Link>
             <Link to="/pricing" className="inline-flex h-12 items-center rounded-btn border border-white/20 px-6 text-[15px] font-semibold text-white transition-colors hover:bg-white/10">See pricing</Link>
           </div>
