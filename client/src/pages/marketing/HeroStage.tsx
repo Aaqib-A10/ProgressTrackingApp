@@ -72,7 +72,6 @@ export function HeroStage() {
         className="relative rounded-[26px] bg-white/50 p-[7px] shadow-[0_40px_80px_-30px_rgb(var(--shadow)/0.45)] ring-1 ring-line backdrop-blur-sm will-change-transform dark:bg-white/[0.04]"
         style={{ transform: 'rotateX(calc((1 - var(--p, 0)) * 14deg)) scale(calc(0.93 + var(--p, 0) * 0.07))', transformOrigin: '50% 0%' }}
       >
-        <div className="mk-beam" aria-hidden />
         <div className="relative overflow-hidden rounded-[20px]">
           <img src={site('office.webp')} alt="" aria-hidden className="mk-kenburns absolute inset-0 h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/5" />

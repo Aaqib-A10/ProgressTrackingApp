@@ -5,7 +5,7 @@ import { MarketingLayout, Container, SectionHead, Eyebrow, PrimaryCta, Secondary
 import { BENTO, DAY, PLANS, SECURITY, STEPS, TEAMS, TOUR, faqsFor, site } from './marketing/content'
 import { HeroBackdrop, HeroStage, trackPointer } from './marketing/HeroStage'
 import { SOLUTIONS } from './marketing/pages'
-import { AskArt, ClocksArt, ConsolidateArt, NotesArt, OrbitArt, PhoneArt, RolesArt, StepArt, TeamsArt, SecurityArt } from './marketing/Pictures'
+import { AskArt, ClocksArt, ConsolidateArt, NotesArt, OrbitArt, PhoneArt, RolesArt, StepArt, TeamsArt, ShieldArt } from './marketing/Pictures'
 import {
   IconArrow, IconAttendance, IconBackup, IconBoard, IconChat, IconCheck, IconConnect, IconDepartments, IconDialer, IconExport, IconGlobeClock,
   IconKey, IconLock, IconNotes, IconPhone, IconReport, IconRoles, IconSupport, IconWalls,
@@ -91,7 +91,7 @@ function Replaces() {
 
 /* ------------------------------------------------------------------ tour */
 
-const TOUR_MS = 8000
+const TOUR_MS = 30000
 /** Each part's own light behind its screen. */
 const TOUR_HUE: Record<string, { a: string; b: string }> = {
   attendance: { a: '16 185 129', b: '6 182 212' },
@@ -150,10 +150,6 @@ function Tour() {
                     <span className="block overflow-hidden">
                       <span className="block pb-5 pl-12">
                         <span className="block text-[17px] font-semibold leading-snug tracking-[-0.01em] text-ink">{x.title}</span>
-                        <span className="mt-2 block text-[14px] leading-relaxed text-ink-muted">{x.text}</span>
-                        <span className="mt-3 block space-y-1.5">
-                          {x.points.map((p) => <span key={p} className="flex gap-2 text-[13.5px] text-ink"><IconCheck size={15} className="mt-0.5 shrink-0" style={{ color: `rgb(${h.a})` }} />{p}</span>)}
-                        </span>
                       </span>
                     </span>
                   </span>
@@ -176,8 +172,6 @@ function Tour() {
             </div>
             <div key={`p${t.key}`} className="mk-swap relative border-t border-line bg-card/90 p-5 backdrop-blur lg:hidden">
               <h3 className="text-[19px] font-semibold leading-tight tracking-[-0.02em] text-ink">{t.title}</h3>
-              <p className="mt-2 text-[14.5px] leading-relaxed text-ink-muted">{t.text}</p>
-              <ul className="mt-3 space-y-1.5">{t.points.map((p) => <li key={p} className="flex gap-2 text-[13.5px] text-ink"><IconCheck size={15} className="mt-0.5 shrink-0 text-primary" />{p}</li>)}</ul>
             </div>
           </div>
         </div>
@@ -188,29 +182,55 @@ function Tour() {
 
 /* ------------------------------------------------------------------ bento */
 
+const BENTO_MS = 6000
+
+/** Two at a time, moving on by themselves (paused while the pointer is on them). */
 function Bento() {
+  const pages = Math.ceil(BENTO.length / 2)
+  const [page, setPage] = useState(0)
+  const [hover, setHover] = useState(false)
+  const [ref, seen] = useInView<HTMLDivElement>()
+  useEffect(() => {
+    if (hover || !seen) return
+    const t = setTimeout(() => setPage((p) => (p + 1) % pages), BENTO_MS)
+    return () => clearTimeout(t)
+  }, [page, hover, seen, pages])
+  const shown = BENTO.slice(page * 2, page * 2 + 2)
+  const go = (d: number) => setPage((p) => (p + d + pages) % pages)
   return (
     <section className="relative overflow-hidden border-y border-line bg-card py-20 sm:py-28">
       <div aria-hidden className="mk-grid absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000,transparent)]" />
       <Container className="relative">
-        <Reveal><SectionHead eyebrow="Made to fit" title={<>Built for how teams<br className="hidden sm:block" /> really work</>} text="Every company works differently. Metriq bends to yours instead of the other way round." /></Reveal>
-        <div className="mt-12 grid gap-4 md:grid-cols-3">
-          {BENTO.map((b, i) => {
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <Reveal><SectionHead eyebrow="Made to fit" title={<>Built for how teams<br className="hidden sm:block" /> really work</>} /></Reveal>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => go(-1)} aria-label="Previous" className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-bg text-ink-muted transition-colors hover:text-ink"><IconArrow size={16} className="rotate-180" /></button>
+            <button type="button" onClick={() => go(1)} aria-label="Next" className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-bg text-ink-muted transition-colors hover:text-ink"><IconArrow size={16} /></button>
+          </div>
+        </div>
+        <div ref={ref} className="mt-10 grid gap-5 md:grid-cols-2" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+          {shown.map((b, n) => {
             const Icon = BENTO_ICON[b.key]
             const Art = BENTO_ART[b.key]
-            const wide = [0, 3, 5].includes(i)
             return (
-              <Reveal key={b.key} delay={(i % 3) * 90} className={cn('group relative flex flex-col overflow-hidden rounded-[18px] border border-line bg-bg p-6 transition-shadow duration-300 hover:shadow-[0_20px_50px_-24px_rgb(var(--primary)/0.45)]', wide && 'md:col-span-2')}>
-                <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-primary/10 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-[11px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><Icon size={21} /></span>
-                  <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">{b.title}</h3>
+              <div key={b.key} className="mk-bento-in group relative flex min-h-[360px] flex-col overflow-hidden rounded-[22px] border border-line bg-bg p-7" style={{ animationDelay: `${n * 120}ms` }}>
+                <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+                <div className="relative flex items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><Icon size={22} /></span>
+                  <h3 className="text-[19px] font-semibold tracking-[-0.015em] text-ink">{b.title}</h3>
                 </div>
-                <p className="mt-3 max-w-md text-[14.5px] leading-relaxed text-ink-muted">{b.text}</p>
-                <div className="mt-auto">{<Art />}</div>
-              </Reveal>
+                <p className="relative mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">{b.text}</p>
+                <div className="relative mt-auto pt-6"><Art /></div>
+              </div>
             )
           })}
+        </div>
+        <div className="mt-8 flex items-center justify-center gap-2">
+          {Array.from({ length: pages }, (_, n) => (
+            <button key={n} type="button" onClick={() => setPage(n)} aria-label={`Show ${BENTO[n * 2].title}`} className={cn('relative h-1.5 overflow-hidden rounded-full transition-all duration-300', n === page ? 'w-10 bg-line' : 'w-4 bg-line hover:bg-line-strong')}>
+              {n === page && <span key={page} className={cn('absolute inset-0 origin-left rounded-full bg-primary', !hover && seen ? 'mk-progress' : 'scale-x-100')} style={{ '--mk-dur': `${BENTO_MS}ms` } as CSSProperties} />}
+            </button>
+          ))}
         </div>
       </Container>
     </section>
@@ -293,7 +313,7 @@ function SecurityPreview() {
             <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-white/65 sm:text-[18px]">Each company only ever sees its own records, and our team can only look in when you allow it.</p>
             <Link to="/security" className="mt-8 inline-flex h-11 items-center gap-2 rounded-btn border border-white/15 bg-white/5 px-5 text-[15px] font-semibold text-white transition-colors hover:bg-white/10">How we keep it safe <IconArrow size={16} /></Link>
           </Reveal>
-          <Reveal delay={150}><SecurityArt /></Reveal>
+          <Reveal delay={150}><ShieldArt /></Reveal>
         </div>
         <ul className="mt-16 grid gap-px overflow-hidden rounded-[18px] border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
           {SECURITY.slice(0, 4).map((s, i) => {

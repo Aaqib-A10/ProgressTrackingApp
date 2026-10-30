@@ -450,20 +450,21 @@
 .mk-acc[data-open='true'] { grid-template-rows: 1fr; }
 .mk-acc > div { overflow: hidden; }
 
-/* Security picture: checks tick one by one, the log fills in. */
-.mk-sec-ring { background: conic-gradient(from 0deg, rgb(129 140 248), rgb(34 211 238 / 0.2), rgb(129 140 248 / 0.1), rgb(129 140 248)); animation: mk-spin 2.4s linear infinite; }
-.mk-sec-ring-on { background: conic-gradient(from 0deg, rgb(52 211 153), rgb(34 211 238 / 0.6), rgb(129 140 248), rgb(52 211 153)); animation-duration: 9s; box-shadow: 0 0 28px -4px rgb(52 211 153 / 0.6); }
-@keyframes mk-spin { to { transform: rotate(360deg); } }
-.mk-sec-tick { stroke-dasharray: 12; stroke-dashoffset: 12; transition: stroke-dashoffset 0.6s cubic-bezier(0.3, 0.8, 0.3, 1) 0.1s; }
-.mk-sec-tick-on { stroke-dashoffset: 0; }
-.mk-sec-pop { animation: mk-sec-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
-@keyframes mk-sec-pop { from { transform: scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
-.mk-sec-sweep { animation: mk-sec-sweep 0.9s ease-in-out infinite; }
-@keyframes mk-sec-sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
-.mk-sec-in { animation: mk-sec-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
-@keyframes mk-sec-in { from { opacity: 0; transform: translateY(-14px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
-.mk-sec-live { animation: mk-sec-live 1.6s ease-in-out infinite; }
-@keyframes mk-sec-live { 50% { opacity: 0.3; } }
+/* Security picture: a shield that locks, with slow rings. */
+.mk-ring { position: absolute; left: 50%; top: 50%; border-radius: 9999px; border: 1px solid rgb(129 140 248 / 0.45); transform: translate(-50%, -50%) scale(0.55); opacity: 0; animation: mk-ring 6s cubic-bezier(0.2, 0.6, 0.3, 1) infinite; }
+@keyframes mk-ring { 0% { transform: translate(-50%, -50%) scale(0.55); opacity: 0; } 15% { opacity: 0.9; } 100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; } }
+.mk-shield-draw { stroke-dasharray: 100; stroke-dashoffset: 100; }
+.mk-in .mk-shield-draw { animation: mk-draw 1.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards; }
+@keyframes mk-draw { to { stroke-dashoffset: 0; } }
+.mk-shackle { transform: translateY(-3px); }
+.mk-in .mk-shackle { animation: mk-shackle 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) 1.5s forwards; }
+@keyframes mk-shackle { to { transform: none; } }
+.mk-lock-glow { opacity: 0; }
+.mk-in .mk-lock-glow { animation: mk-lock-glow 1.2s ease-out 1.9s forwards; }
+@keyframes mk-lock-glow { 0% { opacity: 0; transform: scale(0.6); } 40% { opacity: 1; } 100% { opacity: 0.55; transform: none; } }
+.mk-pill { opacity: 0; transform: translateY(8px); }
+.mk-in .mk-pill { animation: mk-pill 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; animation-delay: var(--d); }
+@keyframes mk-pill { to { opacity: 1; transform: none; } }
 
 /* The Product and Solutions panels under the top bar. */
 .mk-chip-in { animation: mk-chip-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
@@ -507,3 +508,7 @@
   animation-delay: calc(var(--i) * 90ms);
 }
 @keyframes mk-word-ch { to { opacity: 1; transform: none; filter: none; } }
+
+/* "Built for how teams really work": two cards at a time. */
+.mk-bento-in { animation: mk-bento-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes mk-bento-in { from { opacity: 0; transform: translateY(18px) scale(0.98); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
