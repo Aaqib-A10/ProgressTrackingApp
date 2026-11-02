@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { DepartmentType, Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { activeProvider } from '../lib/billing/providers'
+import { leadsRoleOf } from '../lib/leads/access'
 import { companySectionsOff } from '../lib/sectionsOff'
 import { personBlocks, personDashboard } from '../lib/personBlocks'
 import { cleanPrefs } from '../lib/cards'
@@ -99,6 +100,8 @@ async function publicUser(userId: string) {
     permissions: powersOf(user),
     // Switched off for the company's plan (or by the owner) and for the person's company role.
     areasOff: [...new Set([...companyAreasOff(user.company), ...(user.customRole?.areasOff ?? [])])],
+    // Lead Management: MANAGER or REP when the person works the leads of at least one business.
+    leadsRole: await leadsRoleOf(user.id),
   }
 }
 

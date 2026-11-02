@@ -41,7 +41,7 @@ describe("99 Technologies' menus", () => {
     const file = path.resolve(__dirname, 'fixtures/menus-before-step4.json')
     const now: Record<string, string[]> = {}
     // As 99 Technologies has its switches: the Company settings page starts off for them.
-    setFlags({ 'company-settings': false, 'daily-report': false })
+    setFlags({ 'company-settings': false, 'daily-report': false, 'lead-management': false })
     for (const u of people()) now[key(u)] = menu(filterNav({ ...u, permissions: powers(u) }))
     if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(now, null, 1))
     const before = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, string[]>

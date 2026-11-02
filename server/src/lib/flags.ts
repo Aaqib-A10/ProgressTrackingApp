@@ -62,6 +62,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  'lead-management': {
+    label: 'Lead Management',
+    description: 'Leads from website forms, phone calls, CSV files and an email inbox go to the right business, then a manager gives each one to a rep (menu: Leads). Off for 99 Technologies until you set up their businesses.',
+    default: true,
+    client: true,
+    scope: 'company',
+  },
   'social-sign-in': {
     label: 'Sign in with Google and Microsoft',
     description: 'The Google and Microsoft buttons on the sign-in and sign-up pages work (when their keys are on the server). Off: the buttons show "coming soon" and nobody can sign in or sign up with them.',

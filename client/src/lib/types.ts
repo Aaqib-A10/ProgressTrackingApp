@@ -48,6 +48,8 @@ export interface CurrentUser {
   permissions?: string[]
   /** Parts of Metriq switched off for their company (plan) or company role (lib/areas.ts). */
   areasOff?: string[]
+  /** Lead Management: MANAGER or REP when the person works the leads of at least one business. */
+  leadsRole?: 'MANAGER' | 'REP' | null
   /** Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind). */
   blocks?: string[] | null
   /** Department Studio, part B: the cards on their dashboard (null: the dashboard of their department's kind). */

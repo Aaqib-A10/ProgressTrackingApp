@@ -42,6 +42,7 @@ import {
   ClipboardPen,
   SlidersHorizontal,
   CreditCard,
+  Inbox,
   type LucideIcon,
 } from 'lucide-react'
 import type { CurrentUser, Role } from '../../lib/types'
@@ -72,6 +73,8 @@ export interface NavItem {
   notHome?: boolean
   /** System Health: Super Admins and developers (User.isDeveloper) only. */
   healthOnly?: boolean
+  /** Lead Management: people who work the leads of a business (and the Super Admin). */
+  leadsOnly?: boolean
   badge?: { text: string; tone: BadgeTone }
 }
 
@@ -252,6 +255,16 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    // Lead Management (company-wise switch "lead-management"): only people who work leads see it.
+    title: 'Leads',
+    icon: Inbox,
+    color: '#0EA5E9',
+    items: [
+      { label: 'Leads', to: '/app/leads', icon: Inbox, flag: 'lead-management', leadsOnly: true },
+      { label: 'Lead Settings', to: '/app/leads/settings', icon: SlidersHorizontal, flag: 'lead-management', hideFor: ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD', 'QA', 'QA_LEAD'] },
+    ],
+  },
+  {
     title: 'Admin',
     icon: Shield,
     color: '#EF4444',
@@ -270,7 +283,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company'> & { blocks?: string[] | null; customBlocks?: CurrentUser['customBlocks'] }
+type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company' | 'leadsRole'> & { blocks?: string[] | null; customBlocks?: CurrentUser['customBlocks'] }
 
 /** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
 function itemVisible(item: NavItem, u: NavUser): boolean {
@@ -278,6 +291,7 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
   if (item.healthOnly) return inHomeCompany(u) && (u.role === 'SUPER_ADMIN' || !!u.isDeveloper)
   if (item.flag && !flagOn(item.flag)) return false
   if (item.notHome && inHomeCompany(u)) return false
+  if (item.leadsOnly && u.role !== 'SUPER_ADMIN' && !u.leadsRole) return false
   // The finance power wins over everything, including Super Admin.
   if (item.financeOnly) return canViewFinance(u)
   if (item.power) return !!u.permissions?.includes(item.power)
@@ -326,7 +340,7 @@ function filterKinds(u: NavUser): NavGroup[] {
   if (u.department === 'INVENTORY' && u.role !== 'SUPER_ADMIN') {
     return NAV_GROUPS
       .map((g, i) => (i === 0 ? { ...g, items: u.role === 'TEAM_LEAD' ? g.items.filter((it) => it.to === '/app/dashboard') : [] } : g))
-      .filter((g, i) => i === 0 || g.title === 'Inventory' || g.title === 'Projects')
+      .filter((g, i) => i === 0 || g.title === 'Inventory' || g.title === 'Projects' || g.title === 'Leads')
       .map((g) => ({ ...g, items: g.items.filter((i) => itemVisible(i, u)) }))
       .filter((g) => g.items.length > 0)
   }
@@ -346,7 +360,7 @@ const GROUP_TITLE: Record<BlockGroup, string | undefined> = {
   main: undefined, projects: 'Projects', 'daily-report': 'Daily Report', attendance: 'Attendance', itad: 'ITAD', leadgen: 'Lead Generation', ecommerce: 'Ecommerce', inventory: 'Inventory', marketing: 'Marketing',
 }
 /** Groups that stay as they were: they follow the person's role, not the department. */
-const ROLE_GROUPS = ['Quality Assurance', 'Admin']
+const ROLE_GROUPS = ['Quality Assurance', 'Leads', 'Admin']
 
 const allItems = (g: NavGroup) => [...g.items, ...(g.subgroups ?? []).flatMap((sg) => sg.items)]
 /** The menu item a block shows as (same name and icon as the classic menu). */

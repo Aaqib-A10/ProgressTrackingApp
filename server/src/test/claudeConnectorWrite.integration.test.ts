@@ -177,7 +177,8 @@ describe('list_project_tickets', () => {
   it('every ticket in the project, filtered by column or assignee; done ones only when asked', async () => {
     const all = await call(w.leadgenMember, 'list_project_tickets', { project: 'OPS' })
     for (const c of ['OPS-1', 'OPS-2', 'OPS-3', 'OPS-4']) expect(all.text).toContain(`${c} |`)
-    expect(all.text).toContain('OPS-2 | In Progress | urgent | due Mon, Nov 2, 2026, 5:00 PM PKT | Call Microcad about bid 26-017 | to itad lead, from itad member')
+    // The due date has passed since this test was written: "(OVERDUE)" may follow it.
+    expect(all.text).toMatch(/OPS-2 \| In Progress \| urgent \| due Mon, Nov 2, 2026, 5:00 PM PKT( \(OVERDUE\))? \| Call Microcad about bid 26-017 \| to itad lead, from itad member/)
     expect((await call(w.leadgenMember, 'list_project_tickets', { project: 'OPS', status: 'In Progress' })).text).toMatch(/^1 ticket in OPS/)
     const mine = await call(w.leadgenMember, 'list_project_tickets', { project: 'OPS', assignee: 'me' })
     expect(mine.text).toContain('OPS-4')
@@ -224,6 +225,7 @@ describe('delete_ticket', () => {
       'list_my_tickets', 'get_ticket', 'list_projects', 'add_comment', 'move_ticket', 'update_checklist_item', 'read_attachment',
       'list_board_columns', 'list_project_members', 'list_project_tickets', 'create_ticket', 'update_ticket', 'add_checklist_item', 'delete_ticket',
       'metriq_guide', 'metriq_read', 'dialer_summary', 'dialer_leads', 'dialer_lead', 'dialer_update_lead',
+      'leads_list', 'lead_get', 'lead_update', 'lead_add', 'todo_list', 'todo_add', 'todo_update', 'meetings_list', 'meeting_schedule',
     ])
   })
 })

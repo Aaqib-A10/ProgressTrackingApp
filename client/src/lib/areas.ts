@@ -21,6 +21,7 @@ export const AREA_APP: Record<string, string[]> = {
   qa: ['/app/qa'],
   reports: ['/app/reports', '/app/analytics'],
   'daily-report': ['/app/daily-report'],
+  leads: ['/app/leads'],
 }
 
 export function areaOfPath(pathname: string): string | null {

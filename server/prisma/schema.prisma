@@ -296,6 +296,11 @@ model User {
   dialerActions       DialerAction[]       @relation("DialerActor")
   dialerNotes         DialerNote[]         @relation("DialerNoteAuthor")
   dialerTouches       DialerTouch[]        @relation("DialerTouchBy")
+  leadBusinessRoles   LeadBusinessMember[] @relation("LeadBusinessPerson")
+  leadsAssigned       Lead[]               @relation("LeadAssignee")
+  leadsAssignedBy     Lead[]               @relation("LeadAssigner")
+  leadsCreated        Lead[]               @relation("LeadCreator")
+  leadEvents          LeadEvent[]          @relation("LeadEventBy")
   dialerPrefs         DialerUserPrefs?     @relation("DialerPrefsOwner")
   dialerCalls         DialerCall[]         @relation("DialerCallAgent")
   workLogs            WorkLogEntry[]       @relation("WorkLogOwner")
@@ -1169,6 +1174,10 @@ enum NotificationType {
   BREAK_CUTOFF
   ATTENDANCE_EDITED
   SUPPORT_REPLY
+  // Lead Management
+  LEAD_NEW
+  LEAD_ASSIGNED
+  LEAD_SLA
 }
 
 enum BreakType {
@@ -3617,6 +3626,10 @@ model Company {
   dialerActionRows         DialerAction[]
   dialerNoteRows           DialerNote[]
   dialerTouchRows          DialerTouch[]
+  leadBusinessRows         LeadBusiness[]
+  leadBusinessMemberRows   LeadBusinessMember[]
+  leadRows                 Lead[]
+  leadEventRows            LeadEvent[]
   dialerUserPrefsRows      DialerUserPrefs[]
   dialerIntegrationRows    DialerIntegration[]
   dialerCallRows           DialerCall[]
@@ -4002,5 +4015,133 @@ model CustomRecord {
   updatedAt    DateTime    @updatedAt
 
   @@index([blockId, departmentId])
+  @@index([companyId])
+}
+
+/// Lead Management: a business (brand) that receives leads, e.g. RTI or Minnesota Computers.
+/// Leads reach the business first; its managers assign each one to a rep.
+model LeadBusiness {
+  id             String               @id @default(cuid())
+  /// The company this belongs to. Filled in by lib/tenancy.
+  companyId      String               @default("")
+  company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
+  website        String?
+  color          String               @default("#6366F1")
+  isActive       Boolean              @default(true)
+  /// Public key in the website form's address (/api/lead-in/<key>). Not a secret: it sits in the page.
+  formKey        String               @unique
+  /// Alert the managers when a new lead is still unassigned after this many minutes (0 = never).
+  slaAssignMins  Int                  @default(15)
+  /// Alert the rep (and managers) when an assigned lead has had no contact after this many minutes (0 = never).
+  slaContactMins Int                  @default(120)
+  /// Email inbox: new emails here become leads (IMAP). The password is stored encrypted.
+  inboxOn        Boolean              @default(false)
+  inboxHost      String?
+  inboxPort      Int                  @default(993)
+  inboxSecure    Boolean              @default(true)
+  inboxUser      String?
+  inboxPassEnc   String?
+  inboxFolder    String               @default("INBOX")
+  inboxLastUid   Int                  @default(0)
+  inboxCheckedAt DateTime?
+  inboxError     String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  members        LeadBusinessMember[]
+  leads          Lead[]
+
+  @@index([companyId])
+}
+
+/// Who works a business's leads: MANAGER (sees all, assigns) or REP (works the leads given to them).
+model LeadBusinessMember {
+  id         String       @id @default(cuid())
+  companyId  String       @default("")
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessId String
+  business   LeadBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User         @relation("LeadBusinessPerson", fields: [userId], references: [id], onDelete: Cascade)
+  role       String       @default("REP")
+  createdAt  DateTime     @default(now())
+
+  @@unique([businessId, userId])
+  @@index([userId])
+  @@index([companyId])
+}
+
+/// One enquiry: from a website form, a phone call, a CSV import or an email.
+model Lead {
+  id                String       @id @default(cuid())
+  companyId         String       @default("")
+  company           Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessId        String
+  business          LeadBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name              String       @default("")
+  email             String?
+  phone             String?
+  organization      String?
+  message           String?
+  location          String?
+  /// FORM, PHONE, IMPORT, EMAIL
+  source            String       @default("PHONE")
+  /// The page, file or email subject it came from.
+  sourceDetail      String?
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  utmTerm           String?
+  utmContent        String?
+  gclid             String?
+  /// NEW, CONTACTED, QUALIFIED, WON, LOST, SPAM
+  status            String       @default("NEW")
+  lostReason        String?
+  value             Float?
+  assigneeId        String?
+  assignee          User?        @relation("LeadAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignedAt        DateTime?
+  assignedById      String?
+  assignedBy        User?        @relation("LeadAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  firstContactAt    DateTime?
+  lastActivityAt    DateTime     @default(now())
+  /// Times the same person came in again (form or email) while this lead was open.
+  repeats           Int          @default(0)
+  /// Email Message-ID (or another source's id), so the same email never makes two leads.
+  externalId        String?
+  /// Every field the form or file sent, as it came.
+  raw               Json?
+  slaAssignAlertAt  DateTime?
+  slaContactAlertAt DateTime?
+  createdById       String?
+  createdBy         User?        @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  events            LeadEvent[]
+
+  @@unique([businessId, externalId])
+  @@index([businessId, status])
+  @@index([assigneeId, status])
+  @@index([businessId, email])
+  @@index([businessId, phone])
+  @@index([companyId])
+}
+
+/// The lead's timeline: created, assigned, status changes, notes, calls and emails logged.
+model LeadEvent {
+  id        String   @id @default(cuid())
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation("LeadEventBy", fields: [userId], references: [id], onDelete: SetNull)
+  /// CREATED, REPEAT, ASSIGNED, STATUS, NOTE, CALL, EMAIL, EDIT
+  kind      String
+  text      String   @default("")
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
   @@index([companyId])
 }

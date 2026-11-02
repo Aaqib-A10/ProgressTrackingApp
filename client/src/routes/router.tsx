@@ -60,6 +60,8 @@ const InventoryTeam = lazy(pageModule(() => import('../pages/app/inventory/Inven
 const RdpRecords = lazy(pageModule(() => import('../pages/app/ecommerce/RdpRecords')))
 const DocsLinks = lazy(pageModule(() => import('../pages/app/itad/DocsLinks')))
 const LeadDialer = lazy(pageModule(() => import('../pages/app/itad/dialer/LeadDialer')))
+const Leads = lazy(pageModule(() => import('../pages/app/leads/Leads')))
+const LeadSettings = lazy(pageModule(() => import('../pages/app/leads/LeadSettings')))
 const MarketingTaskRedirect = lazy(pageModule(() => import('../pages/app/marketing/MarketingTaskRedirect')))
 const MarketingTeam = lazy(pageModule(() => import('../pages/app/marketing/MarketingTeam')))
 const SeoActivity = lazy(pageModule(() => import('../pages/app/marketing/SeoActivity')))
@@ -194,6 +196,8 @@ export const router = createBrowserRouter([
       { path: 'itad/bids', element: <BidTracker /> },
       { path: 'itad/docs', element: <DocsLinks /> },
       { path: 'itad/dialer', element: <LeadDialer /> },
+      { path: 'leads', element: <RequireFlag flag="lead-management"><Leads /></RequireFlag> },
+      { path: 'leads/settings', element: <RequireFlag flag="lead-management"><RequireRole roles={['SUPER_ADMIN']}><LeadSettings /></RequireRole></RequireFlag> },
       { path: 'itad/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadTeamView /></RequireRole> },
       { path: 'itad/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadAnalytics /></RequireRole> },
 

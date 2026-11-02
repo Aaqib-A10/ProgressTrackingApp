@@ -47,6 +47,7 @@ export const ACCESS: Record<string, AccessLine[]> = {
 
   // ---- team lead tools
   '/app/team/members': [{ roles: LEAD }],
+  '/app/leads/settings': [{ roles: ['SUPER_ADMIN'] }],
   '/app/team/not-submitted': lead(['ITAD', 'LEAD_GEN', 'ECOMMERCE', 'MARKETING']),
   '/app/members/:id': [{ roles: LEAD }],
   '/app/reports/monthly': lead(['ITAD', 'LEAD_GEN']),

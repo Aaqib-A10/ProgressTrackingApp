@@ -11,7 +11,7 @@ import { hashKey, newKey } from '../lib/mcp'
  * is. Switching a key off stops it at once.
  */
 
-export const CLIENTS = ['claude', 'chatgpt', 'gemini'] as const
+export const CLIENTS = ['claude', 'chatgpt', 'gemini', 'claude-code', 'cursor', 'vscode', 'perplexity', 'other'] as const
 
 const APP_URL = () => (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
 /** Keys on at once, per app. */

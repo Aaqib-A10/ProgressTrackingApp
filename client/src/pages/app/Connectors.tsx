@@ -8,7 +8,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/cn'
 import { copyText } from '../../lib/workLogApi'
-import { CAPABILITIES, CONNECTORS, connectorById, geminiCliConfig, type Connector, type ConnectorId } from '../../lib/connectors'
+import { CAPABILITIES, CONNECTORS, claudeCodeCommand, connectorById, cursorConfig, geminiCliConfig, vscodeConfig, type Connector, type ConnectorId } from '../../lib/connectors'
 
 /**
  * Connectors: link an AI app (Claude, ChatGPT, Gemini) to Metriq. /app/connectors lists them;
@@ -52,10 +52,13 @@ function ConnectorList() {
     <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-headline-lg text-ink"><Plug size={22} className="text-ink-muted" /> Connectors</h1>
-        <p className="mt-0.5 text-body-md text-ink-muted">Connect your AI assistant to Metriq. It can then read your tickets, comment, move them and give work, as you.</p>
+        <p className="mt-0.5 text-body-md text-ink-muted">Connect your AI assistant or coding tool to Metriq. It can then work your leads, tickets, to-dos and meetings, as you.</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {CONNECTORS.map((c) => {
+      {([['AI assistants', CONNECTORS.filter((c) => !c.developer)], ['For developers', CONNECTORS.filter((c) => c.developer)]] as const).map(([title, list]) => (
+        <section key={title} className="space-y-2.5">
+          <h2 className="text-label-md uppercase text-ink-faint">{title}</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {list.map((c) => {
           const n = on(c)
           return (
             <Link key={c.id} to={`/app/connectors/${c.id}`} className="group flex flex-col rounded-card border border-line bg-card p-4 shadow-card transition-shadow hover:shadow-overlay focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
@@ -75,6 +78,8 @@ function ConnectorList() {
           )
         })}
       </div>
+        </section>
+      ))}
       <Card>
         <div className="flex gap-3 text-body-sm text-ink-muted">
           <ShieldCheck size={18} className="mt-0.5 shrink-0 text-success" />
@@ -185,6 +190,16 @@ function ConnectorDetail({ c }: { c: Connector }) {
                         {link && <Button size="sm" variant="secondary" leadingIcon={<Copy size={14} />} onClick={() => copy(link, 'Link')}>Copy</Button>}
                       </div>
                     )}
+                    {(s.code === 'cursor' || s.code === 'vscode' || s.code === 'claude-code') && (() => {
+                      const make = s.code === 'cursor' ? cursorConfig : s.code === 'vscode' ? vscodeConfig : claudeCodeCommand
+                      return (
+                        <div className="mt-1.5 space-y-1.5">
+                          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-btn border border-line bg-bg px-3 py-2 font-mono text-[12px] text-ink">{make(shown)}</pre>
+                          {link && <Button size="sm" variant="secondary" leadingIcon={<Copy size={14} />} onClick={() => copy(make(link), s.code === 'claude-code' ? 'Command' : 'Settings')}>{s.code === 'claude-code' ? 'Copy command' : 'Copy settings'}</Button>}
+                          {s.code !== 'claude-code' && <p className="text-ink-muted">If the file already has a {s.code === 'vscode' ? 'servers' : 'mcpServers'} part, add only the metriq lines inside it.</p>}
+                        </div>
+                      )
+                    })()}
                     {s.code === 'gemini-cli' && (
                       <div className="mt-1.5 space-y-1.5">
                         <pre className="overflow-x-auto rounded-btn border border-line bg-bg px-3 py-2 font-mono text-[12px] text-ink">{geminiCliConfig(shown)}</pre>

@@ -1,0 +1,28 @@
+import type { NotificationType } from '@prisma/client'
+import { prisma } from '../prisma'
+import { sendPush } from '../push'
+
+/** The managers of a business; when it has none, the company's Super Admins (someone must hear of a lead). */
+export async function leadManagers(businessId: string): Promise<string[]> {
+  const m = await prisma.leadBusinessMember.findMany({ where: { businessId, role: 'MANAGER', user: { isActive: true } }, select: { userId: true } })
+  if (m.length) return m.map((x) => x.userId)
+  const admins = await prisma.user.findMany({ where: { role: 'SUPER_ADMIN', isActive: true }, select: { id: true } })
+  return admins.map((a) => a.id)
+}
+
+export const leadLink = (leadId: string) => `/app/leads?lead=${encodeURIComponent(leadId)}`
+
+/** Bell notification and a phone/computer pop-up. Never throws (a lead is never lost over an alert). */
+export async function tellAboutLead(userIds: string[], n: { type: NotificationType; title: string; body: string; leadId: string; actorId?: string | null }): Promise<void> {
+  const ids = [...new Set(userIds)].filter((id) => id && id !== n.actorId)
+  if (!ids.length) return
+  try {
+    const link = leadLink(n.leadId)
+    await prisma.notification.createMany({
+      data: ids.map((userId) => ({ userId, type: n.type, actorId: n.actorId ?? null, title: n.title.slice(0, 200), body: n.body.slice(0, 500), link, entityType: 'Lead', entityId: n.leadId })),
+    })
+    void sendPush(ids, { kind: 'alert', title: n.title.slice(0, 120), body: n.body.slice(0, 200), tag: `lead-${n.leadId}`, url: link }).catch(() => undefined)
+  } catch (e) {
+    console.warn('[leads] notify failed', (e as Error).message)
+  }
+}

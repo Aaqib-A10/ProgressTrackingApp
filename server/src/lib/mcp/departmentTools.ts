@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 import type { Role } from '@prisma/client'
 import { apiAs, apiError } from './api'
+import { LEADS_GUIDE, WORK_GUIDE } from './workTools'
 import {
   REGION_META, clock, filterLeads, followUpTabs, funnelOf, isDialable, lastActivity, latestActedToday, leadRegion, leadState,
   daysSince, pct, regionWindow, REGIONS, PRESET_VIEWS, fmtSpan,
@@ -68,7 +69,7 @@ export function compact(v: unknown, max = 40_000): string {
   return s.length > max ? `${s.slice(0, max)}\n\n[Cut at ${max.toLocaleString()} characters of ${s.length.toLocaleString()}. Ask for a smaller range, a date, or one item.]` : s
 }
 
-interface Me { id: string; name: string; role: Role; department: string | null; subDepartment: string | null; isDeveloper?: boolean; memberships?: { department: string }[] }
+interface Me { id: string; name: string; role: Role; department: string | null; subDepartment: string | null; isDeveloper?: boolean; memberships?: { department: string }[]; leadsRole?: 'MANAGER' | 'REP' | null }
 
 async function whoAmI(u: User): Promise<Me | null> {
   const r = await apiAs(u, 'GET', '/api/auth/me')
@@ -90,7 +91,13 @@ const AREAS: { title: string; for: (m: Me) => boolean; lines: string[] }[] = [
       '/api/notifications : my notifications',
       '/api/search?q=WORDS : search people, tasks and files',
       'Project tickets: use list_my_tickets, get_ticket, list_projects and the other ticket tools.',
+      ...WORK_GUIDE,
     ],
+  },
+  {
+    title: 'Leads',
+    for: (m) => !!m.leadsRole || m.role === 'SUPER_ADMIN',
+    lines: LEADS_GUIDE,
   },
   {
     title: 'ITAD',

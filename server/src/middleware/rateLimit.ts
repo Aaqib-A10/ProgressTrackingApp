@@ -36,3 +36,6 @@ export const mcpLimiter = rateLimit({ ...base, windowMs: 60 * 1000, limit: 240, 
 
 /** The predictive dialer's link: one message per call, many agents at once. */
 export const dialerHookLimiter = rateLimit({ ...base, windowMs: 60 * 1000, limit: 1200, message: { ok: false, error: 'Too many messages. Wait a minute.' } })
+
+/** Website forms sending leads (public): a person sends one, a bot sends hundreds. */
+export const leadInLimiter = rateLimit({ ...base, windowMs: 10 * 60 * 1000, limit: 60, message: { ok: false, error: 'Too many messages. Try again in a few minutes.' } })
