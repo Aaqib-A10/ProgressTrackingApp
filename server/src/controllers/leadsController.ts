@@ -1,22 +1,24 @@
 import crypto from 'node:crypto'
 import type { Request, Response } from 'express'
 import { z } from 'zod'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
 import { parse } from '../lib/pm/http'
 import { isOn } from '../lib/flags'
 import { runAsCompany } from '../lib/tenancy'
-import { sendCsv } from '../lib/csv'
-import { canManage, isMemberOf, leadFor, leadScope, leadWhere, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
-import { cleanInput, fromFields, hasSubstance, OPEN_STATUSES, receiveLead, sourceText, STATUSES, type LeadInput } from '../lib/leads/intake'
+import { canManage, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
+import { cleanInput, fromFields, hasSubstance, OPEN_STATUSES, receiveLead, type LeadInput } from '../lib/leads/intake'
+import { KINDS, PROMISE_WORDS, pipelineOf, settingsOf, type CmrSettings } from '../lib/leads/pipeline'
 import { leadManagers, tellAboutLead } from '../lib/leads/notify'
 import { encryptSecret, decryptSecret, testInbox } from '../lib/leads/inbox'
 
 /**
- * Lead Management (/api/leads): the leads list, one lead, adding and importing leads, assigning,
- * and (Super Admin) the businesses that receive leads. The public website form is leadIn below.
+ * Lead Management (/api/leads), the setup part: importing a sheet of plain leads, and (Super
+ * Admin) the businesses that receive leads, their people, kind, pipeline, head and settings,
+ * form link and inbox. The public website form is leadIn below. The working part (lists, one
+ * lead, calls, tasks, the CMR flow): leadsWorkController.ts.
  */
 
 const APP_URL = () => (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
@@ -32,264 +34,6 @@ async function ctx(req: AuthedRequest): Promise<{ me: LeadViewer; s: LeadScope }
   const m = me(req)
   if (!(await isOn('lead-management', m.companyId))) throw new HttpError(403, 'Lead Management is not switched on for your company.')
   return { me: m, s: await leadScope(m) }
-}
-
-const PERSON = { select: { id: true, name: true, email: true } } as const
-
-/** Is this lead late? (not given out in time, or given out and nobody got in touch in time) */
-function lateness(l: { status: string; assigneeId: string | null; createdAt: Date; assignedAt: Date | null; firstContactAt: Date | null }, b: { slaAssignMins: number; slaContactMins: number }, now = Date.now()): 'assign' | 'contact' | null {
-  if (l.status !== 'NEW') return null
-  if (!l.assigneeId) return b.slaAssignMins > 0 && now - l.createdAt.getTime() > b.slaAssignMins * 60_000 ? 'assign' : null
-  if (!l.firstContactAt && l.assignedAt && b.slaContactMins > 0 && now - l.assignedAt.getTime() > b.slaContactMins * 60_000) return 'contact'
-  return null
-}
-
-// ------------------------------------------------------------------ meta
-
-/** GET /api/leads/meta — the businesses I work in, their people (for "Assign to"), and what I may do. */
-export async function leadsMeta(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  const businesses = await prisma.leadBusiness.findMany({
-    where: s.admin ? {} : { id: { in: [...s.roles.keys()] }, isActive: true },
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true, color: true, isActive: true, slaAssignMins: true, slaContactMins: true, members: { select: { role: true, user: PERSON }, orderBy: { user: { name: 'asc' } } } },
-  })
-  res.json({
-    me: { id: m.id, admin: s.admin },
-    businesses: businesses.map((b) => ({ ...b, myRole: s.admin ? 'MANAGER' : s.roles.get(b.id) ?? null, members: b.members.map((x) => ({ ...x.user, role: x.role })) })),
-    statuses: STATUSES,
-  })
-}
-
-// ------------------------------------------------------------------ list
-
-const listQuery = z.object({
-  business: z.string().max(60).optional(),
-  status: z.string().max(80).optional(),
-  assignee: z.string().max(60).optional(),
-  source: z.string().max(60).optional(),
-  q: z.string().max(200).optional(),
-  late: z.enum(['1']).optional(),
-  page: z.coerce.number().int().min(1).max(10000).optional(),
-  sort: z.enum(['newest', 'oldest', 'activity']).optional(),
-})
-
-function listWhere(m: LeadViewer, s: LeadScope, q: z.infer<typeof listQuery>): Prisma.LeadWhereInput {
-  const and: Prisma.LeadWhereInput[] = [leadWhere(m, s)]
-  if (q.business) and.push({ businessId: q.business })
-  if (q.status === 'open') and.push({ status: { in: OPEN_STATUSES } })
-  else if (q.status && q.status !== 'all') and.push({ status: { in: q.status.split(',').filter((x) => (STATUSES as readonly string[]).includes(x)) } })
-  else if (!q.status) and.push({ status: { not: 'SPAM' } })
-  if (q.assignee === 'me') and.push({ assigneeId: m.id })
-  else if (q.assignee === 'none') and.push({ assigneeId: null })
-  else if (q.assignee) and.push({ assigneeId: q.assignee })
-  if (q.source) and.push({ source: q.source })
-  if (q.q?.trim()) {
-    const t = q.q.trim()
-    and.push({ OR: [{ name: { contains: t, mode: 'insensitive' } }, { email: { contains: t, mode: 'insensitive' } }, { phone: { contains: t } }, { organization: { contains: t, mode: 'insensitive' } }, { message: { contains: t, mode: 'insensitive' } }] })
-  }
-  return { AND: and }
-}
-
-const LIST_SELECT = {
-  id: true, businessId: true, name: true, email: true, phone: true, organization: true, location: true, source: true, sourceDetail: true, status: true,
-  utmCampaign: true, utmSource: true, repeats: true, createdAt: true, assignedAt: true, firstContactAt: true, lastActivityAt: true, assigneeId: true,
-  assignee: PERSON, message: true,
-} as const
-
-/** GET /api/leads — the leads I can see, newest first, 50 a page, with counts for the tabs. */
-export async function listLeads(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  const q = parse(listQuery, req.query)
-  const page = q.page ?? 1
-  const businesses = new Map((await prisma.leadBusiness.findMany({ select: { id: true, slaAssignMins: true, slaContactMins: true } })).map((b) => [b.id, b]))
-  const orderBy: Prisma.LeadOrderByWithRelationInput = q.sort === 'oldest' ? { createdAt: 'asc' } : q.sort === 'activity' ? { lastActivityAt: 'desc' } : { createdAt: 'desc' }
-  let rows: Awaited<ReturnType<typeof prisma.lead.findMany<{ select: typeof LIST_SELECT }>>>
-  let total: number
-  if (q.late) {
-    // Late leads are worked out here (the time limit is each business's own).
-    const all = await prisma.lead.findMany({ where: { AND: [listWhere(m, s, q), { status: 'NEW' }] }, select: LIST_SELECT, orderBy: { createdAt: 'asc' }, take: 2000 })
-    const late = all.filter((l) => { const b = businesses.get(l.businessId); return b && lateness(l, b) })
-    total = late.length
-    rows = late.slice((page - 1) * 50, page * 50)
-  } else {
-    const where = listWhere(m, s, q)
-    ;[rows, total] = await Promise.all([prisma.lead.findMany({ where, select: LIST_SELECT, orderBy, skip: (page - 1) * 50, take: 50 }), prisma.lead.count({ where })])
-  }
-  // Counts for the tabs, over everything I can see in the chosen business.
-  const base: Prisma.LeadWhereInput = { AND: [leadWhere(m, s), q.business ? { businessId: q.business } : {}] }
-  const [byStatus, unassigned, mine, open] = await Promise.all([
-    prisma.lead.groupBy({ by: ['status'], where: base, _count: { _all: true } }),
-    prisma.lead.count({ where: { AND: [base, { assigneeId: null, status: { in: OPEN_STATUSES } }] } }),
-    prisma.lead.count({ where: { AND: [base, { assigneeId: m.id, status: { in: OPEN_STATUSES } }] } }),
-    prisma.lead.findMany({ where: { AND: [base, { status: 'NEW' }] }, select: { businessId: true, status: true, assigneeId: true, createdAt: true, assignedAt: true, firstContactAt: true }, take: 5000 }),
-  ])
-  const late = open.filter((l) => { const b = businesses.get(l.businessId); return b && lateness(l, b) }).length
-  res.json({
-    leads: rows.map((l) => { const b = businesses.get(l.businessId); return { ...l, message: l.message?.slice(0, 200) ?? null, late: b ? lateness(l, b) : null } }),
-    total, page, pageSize: 50,
-    counts: { byStatus: Object.fromEntries(byStatus.map((x) => [x.status, x._count._all])), unassigned, mine, late },
-  })
-}
-
-/** GET /api/leads/export.csv — the same list as a spreadsheet (managers and Super Admin). */
-export async function exportLeads(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  if (!s.admin && !s.managerOf.length) throw new HttpError(403, 'Only managers can download leads.')
-  const q = parse(listQuery, req.query)
-  const rows = await prisma.lead.findMany({ where: listWhere(m, s, q), orderBy: { createdAt: 'desc' }, take: 20000, include: { business: { select: { name: true } }, assignee: PERSON } })
-  const head = ['Received', 'Business', 'Name', 'Email', 'Phone', 'Company', 'Location', 'Status', 'Assigned to', 'Source', 'From', 'Campaign', 'UTM source', 'UTM medium', 'Keyword', 'gclid', 'Message']
-  sendCsv(res, 'leads.csv', [head, ...rows.map((l) => [l.createdAt.toISOString(), l.business.name, l.name, l.email ?? '', l.phone ?? '', l.organization ?? '', l.location ?? '', l.status, l.assignee?.name ?? '', sourceText(l.source), l.sourceDetail ?? '', l.utmCampaign ?? '', l.utmSource ?? '', l.utmMedium ?? '', l.utmTerm ?? '', l.gclid ?? '', l.message ?? ''])])
-}
-
-// ------------------------------------------------------------------ one lead
-
-/** GET /api/leads/:id — the lead, its timeline and who can take it. */
-export async function getLead(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  const base = await leadFor(m, s, String(req.params.id))
-  const lead = await prisma.lead.findUniqueOrThrow({
-    where: { id: base.id },
-    include: {
-      business: { select: { id: true, name: true, color: true, slaAssignMins: true, slaContactMins: true } },
-      assignee: PERSON, assignedBy: PERSON, createdBy: PERSON,
-      events: { orderBy: { createdAt: 'desc' }, take: 200, include: { user: PERSON } },
-    },
-  })
-  const names = new Map((await prisma.user.findMany({ where: { id: { in: lead.events.map((e) => (e.data as { to?: string } | null)?.to).filter((x): x is string => !!x) } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
-  res.json({
-    lead: {
-      ...lead,
-      late: lateness(lead, lead.business),
-      events: lead.events.map((e) => ({ ...e, toName: (e.data as { to?: string } | null)?.to ? names.get((e.data as { to: string }).to) ?? null : undefined })),
-    },
-    canManage: canManage(s, lead.businessId),
-  })
-}
-
-const editSchema = z.object({
-  name: z.string().max(200).optional(),
-  email: z.string().max(254).nullable().optional(),
-  phone: z.string().max(50).nullable().optional(),
-  organization: z.string().max(200).nullable().optional(),
-  location: z.string().max(120).nullable().optional(),
-  message: z.string().max(8000).nullable().optional(),
-  status: z.enum(STATUSES).optional(),
-  lostReason: z.string().max(300).nullable().optional(),
-  value: z.number().min(0).max(1e12).nullable().optional(),
-}).strict()
-
-/** PATCH /api/leads/:id — change the details or the status. */
-export async function updateLead(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  const lead = await leadFor(m, s, String(req.params.id))
-  const b = parse(editSchema, req.body)
-  const data: Prisma.LeadUpdateInput = { lastActivityAt: new Date() }
-  const events: Prisma.LeadEventCreateManyInput[] = []
-  const fields = ['name', 'email', 'phone', 'organization', 'location', 'message', 'lostReason', 'value'] as const
-  const changed: string[] = []
-  for (const f of fields) {
-    if (b[f] === undefined) continue
-    let v: string | number | null = b[f] ?? null
-    if (typeof v === 'string') v = v.trim() || (f === 'name' ? '' : null)
-    if (f === 'email' && typeof v === 'string') {
-      v = v.toLowerCase()
-      if (!/^[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]{2,}$/.test(v)) throw new HttpError(422, 'That email address does not look right')
-    }
-    if ((lead as Record<string, unknown>)[f] === v) continue
-    ;(data as Record<string, unknown>)[f] = v
-    if (f !== 'lostReason' && f !== 'value') changed.push(f === 'organization' ? 'company' : f)
-  }
-  if (changed.length) events.push({ leadId: lead.id, userId: m.id, kind: 'EDIT', text: `Changed ${changed.join(', ')}` })
-  if (b.status && b.status !== lead.status) {
-    data.status = b.status
-    // Leaving New means someone got in touch.
-    if (lead.status === 'NEW' && !lead.firstContactAt && b.status !== 'SPAM') data.firstContactAt = new Date()
-    events.push({ leadId: lead.id, userId: m.id, kind: 'STATUS', text: b.status === 'LOST' && b.lostReason ? `Lost: ${b.lostReason}` : '', data: { from: lead.status, to: b.status } })
-  }
-  const saved = await prisma.lead.update({ where: { id: lead.id }, data })
-  if (events.length) await prisma.leadEvent.createMany({ data: events })
-  res.json({ lead: saved })
-}
-
-/** POST /api/leads/:id/assign { assigneeId | null } — managers give a lead to someone in the business. */
-export async function assignLead(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  const lead = await leadFor(m, s, String(req.params.id))
-  if (!canManage(s, lead.businessId)) throw new HttpError(403, 'Only a manager of this business can assign its leads.')
-  const { assigneeId } = parse(z.object({ assigneeId: z.string().max(60).nullable() }), req.body)
-  if (assigneeId === lead.assigneeId) { res.json({ lead }); return }
-  if (assigneeId) {
-    const member = await prisma.leadBusinessMember.findUnique({ where: { businessId_userId: { businessId: lead.businessId, userId: assigneeId } }, select: { user: { select: { isActive: true } } } })
-    if (!member || !member.user.isActive) throw new HttpError(422, 'That person does not work leads for this business. Add them under Lead settings first.')
-  }
-  const now = new Date()
-  const saved = await prisma.lead.update({
-    where: { id: lead.id },
-    // A new owner gets a fresh clock to get in touch.
-    data: { assigneeId, assignedAt: assigneeId ? now : null, assignedById: assigneeId ? m.id : null, slaContactAlertAt: null, lastActivityAt: now },
-  })
-  await prisma.leadEvent.create({ data: { leadId: lead.id, userId: m.id, kind: 'ASSIGNED', text: assigneeId ? '' : 'Taken back (no one)', data: assigneeId ? { to: assigneeId } : undefined } })
-  if (assigneeId && assigneeId !== m.id) {
-    const b = await prisma.leadBusiness.findUniqueOrThrow({ where: { id: lead.businessId }, select: { name: true, slaContactMins: true } })
-    await tellAboutLead([assigneeId], { type: 'LEAD_ASSIGNED', title: `New lead for you: ${lead.name || lead.organization || lead.email || lead.phone || 'a lead'}`, body: `${b.name} · ${sourceText(lead.source)}${b.slaContactMins ? ` · get in touch within ${b.slaContactMins >= 60 ? `${Math.round(b.slaContactMins / 60)} h` : `${b.slaContactMins} min`}` : ''}`, leadId: lead.id, actorId: m.id })
-  }
-  res.json({ lead: saved })
-}
-
-/** POST /api/leads/:id/events { kind: NOTE | CALL | EMAIL, text } — a note, or a call or email that happened. */
-export async function addLeadEvent(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  const lead = await leadFor(m, s, String(req.params.id))
-  const b = parse(z.object({ kind: z.enum(['NOTE', 'CALL', 'EMAIL']), text: z.string().trim().max(5000) }), req.body)
-  if (b.kind === 'NOTE' && !b.text) throw new HttpError(422, 'Write the note first')
-  const now = new Date()
-  const ev = await prisma.leadEvent.create({ data: { leadId: lead.id, userId: m.id, kind: b.kind, text: b.text }, include: { user: PERSON } })
-  const contact = b.kind !== 'NOTE'
-  await prisma.lead.update({
-    where: { id: lead.id },
-    data: { lastActivityAt: now, ...(contact && !lead.firstContactAt ? { firstContactAt: now } : {}), ...(contact && lead.status === 'NEW' ? { status: 'CONTACTED' } : {}) },
-  })
-  if (contact && lead.status === 'NEW') await prisma.leadEvent.create({ data: { leadId: lead.id, userId: m.id, kind: 'STATUS', text: '', data: { from: 'NEW', to: 'CONTACTED' } } })
-  res.status(201).json({ event: ev })
-}
-
-// ------------------------------------------------------------------ adding leads
-
-const addSchema = z.object({
-  businessId: z.string().min(1).max(60),
-  name: z.string().max(200).optional(),
-  email: z.string().max(254).optional(),
-  phone: z.string().max(50).optional(),
-  organization: z.string().max(200).optional(),
-  location: z.string().max(120).optional(),
-  message: z.string().max(8000).optional(),
-  /** Who gets it: "me", a person of the business (managers only), or nobody (the managers assign it). */
-  assignTo: z.string().max(60).nullable().optional(),
-})
-
-/** POST /api/leads — a lead from a phone call (or met in person), added by hand. */
-export async function addLead(req: AuthedRequest, res: Response): Promise<void> {
-  const { me: m, s } = await ctx(req)
-  const b = parse(addSchema, req.body)
-  if (!isMemberOf(s, b.businessId)) throw new HttpError(403, 'You do not work leads for that business.')
-  const business = await prisma.leadBusiness.findFirst({ where: { id: b.businessId, isActive: true }, select: { id: true, name: true } })
-  if (!business) throw new HttpError(404, 'Business not found')
-  const input = cleanInput({ ...b })
-  if (b.email?.trim() && !input.email) throw new HttpError(422, 'That email address does not look right')
-  if (!input.name && !input.email && !input.phone) throw new HttpError(422, 'Give at least a name, a phone number or an email')
-  let assigneeId: string | null = null
-  if (b.assignTo === 'me' || (b.assignTo === undefined && !canManage(s, b.businessId))) assigneeId = m.id
-  else if (b.assignTo) {
-    if (!canManage(s, b.businessId)) throw new HttpError(403, 'Only a manager can give a lead to someone else.')
-    const member = await prisma.leadBusinessMember.findUnique({ where: { businessId_userId: { businessId: b.businessId, userId: b.assignTo } } })
-    if (!member) throw new HttpError(422, 'That person does not work leads for this business.')
-    assigneeId = b.assignTo
-  }
-  // The Super Admin adding a lead for themselves only works if they are in the business.
-  if (assigneeId === m.id && !s.roles.has(b.businessId) && s.admin) assigneeId = null
-  const r = await receiveLead(business, input, { source: 'PHONE', createdById: m.id, assigneeId })
-  res.status(201).json({ lead: r.lead })
 }
 
 const importSchema = z.object({
@@ -345,6 +89,18 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
 
 // ------------------------------------------------------------------ businesses (Super Admin)
 
+const settingsSchema = z.object({
+  copyEmail: z.string().trim().max(254),
+  copyName: z.string().trim().max(100),
+  consentStates: z.array(z.string().trim().min(2).max(10)).max(60),
+  segments: z.array(z.string().trim().min(1).max(80)).min(1).max(60),
+  states: z.array(z.string().trim().min(2).max(20)).min(1).max(70),
+  infoSubject: z.string().trim().min(1).max(200),
+  infoBody: z.string().trim().min(1).max(20000),
+  publishedRate: z.number().min(0).max(100),
+  minLoadLbs: z.number().int().min(0).max(1e7),
+  connectedSecs: z.number().int().min(0).max(600),
+}).partial().strict()
 const bizSchema = z.object({
   name: z.string().trim().min(1).max(120),
   website: z.string().trim().max(300).nullable().optional(),
@@ -352,32 +108,60 @@ const bizSchema = z.object({
   isActive: z.boolean().optional(),
   slaAssignMins: z.number().int().min(0).max(10080).optional(),
   slaContactMins: z.number().int().min(0).max(10080).optional(),
+  /** GENERAL or CMR (the CMR flow; needs the "cmr" switch). */
+  kind: z.enum(KINDS as [string, ...string[]]).optional(),
+  /** The head (CMR: Jesse). */
+  headId: z.string().max(60).nullable().optional(),
+  /** The business's own statuses; null = the ones its kind comes with. */
+  pipeline: z.array(z.object({ key: z.string().regex(/^[A-Z][A-Z0-9_]{1,30}$/), label: z.string().trim().min(1).max(40), color: z.string().regex(/^#[0-9a-fA-F]{6}$/), open: z.boolean() })).min(2).max(20).nullable().optional(),
+  settings: settingsSchema.optional(),
 })
 
-function bizOut(b: Prisma.LeadBusinessGetPayload<{ include: { members: { include: { user: { select: { id: true; name: true; email: true; isActive: true } } } } } }> & { _open?: number }) {
-  const { inboxPassEnc, members, ...rest } = b
-  return { ...rest, inboxHasPassword: !!inboxPassEnc, formUrl: formUrl(b.formKey), members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, isActive: x.user.isActive, role: x.role })) }
+async function checkBiz(b: Partial<z.infer<typeof bizSchema>>, companyId: string, cur?: { settings: Prisma.JsonValue; kind: string }): Promise<{ settings?: Prisma.InputJsonValue }> {
+  if (b.kind === 'CMR' && !(await isOn('cmr', companyId))) throw new HttpError(403, 'The CMR flow is not switched on for your company (owner console, Switches).')
+  if (b.headId) {
+    const u = await prisma.user.findFirst({ where: { id: b.headId, isActive: true }, select: { id: true } })
+    if (!u) throw new HttpError(422, 'That person was not found')
+  }
+  if (b.pipeline) {
+    if (!b.pipeline.some((x) => x.key === 'NEW')) throw new HttpError(422, 'The pipeline needs a NEW status (where leads start)')
+    if (new Set(b.pipeline.map((x) => x.key)).size !== b.pipeline.length) throw new HttpError(422, 'Two statuses have the same key')
+    if (!b.pipeline.some((x) => x.open) || !b.pipeline.some((x) => !x.open)) throw new HttpError(422, 'The pipeline needs at least one open and one closed status')
+  }
+  if (!b.settings) return {}
+  const merged: CmrSettings = { ...settingsOf({ settings: cur?.settings ?? null }), ...b.settings }
+  if (merged.copyEmail && !/^[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]{2,}$/.test(merged.copyEmail)) throw new HttpError(422, 'That copy email address does not look right')
+  if (b.settings.infoBody && PROMISE_WORDS.test(b.settings.infoBody.replace(/\{\{rate\}\}/g, ''))) throw new HttpError(422, 'The email text reads like a price, freight or pickup promise beyond the published rate ({{rate}}). Jesse gives those.')
+  return { settings: merged as unknown as Prisma.InputJsonValue }
 }
-const BIZ_INCLUDE = { members: { include: { user: { select: { id: true, name: true, email: true, isActive: true } } }, orderBy: { createdAt: 'asc' as const } } }
+
+function bizOut(b: Prisma.LeadBusinessGetPayload<{ include: { members: { include: { user: { select: { id: true; name: true; email: true; isActive: true } } } }; head: { select: { id: true; name: true; email: true } } } }> & { _open?: number }) {
+  const { inboxPassEnc, members, settings: _s, ...rest } = b
+  return { ...rest, settings: settingsOf(b), pipeline: pipelineOf(b), ownPipeline: !!b.pipeline, inboxHasPassword: !!inboxPassEnc, formUrl: formUrl(b.formKey), members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, isActive: x.user.isActive, role: x.role })) }
+}
+const BIZ_INCLUDE = { members: { include: { user: { select: { id: true, name: true, email: true, isActive: true } } }, orderBy: { createdAt: 'asc' as const } }, head: { select: { id: true, name: true, email: true } } }
 
 /** GET /api/leads/businesses — every business with its people, form link and inbox (Super Admin). */
 export async function listBusinesses(req: AuthedRequest, res: Response): Promise<void> {
-  const { s } = await ctx(req)
+  const { me: m, s } = await ctx(req)
   requireLeadAdmin(s)
   const list = await prisma.leadBusiness.findMany({ include: BIZ_INCLUDE, orderBy: { name: 'asc' } })
   const open = await prisma.lead.groupBy({ by: ['businessId'], where: { status: { in: OPEN_STATUSES } }, _count: { _all: true } })
-  const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, department: { select: { name: true } } }, orderBy: { name: 'asc' } })
+  const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, role: true, department: { select: { name: true, type: true } } }, orderBy: { name: 'asc' } })
   res.json({
     businesses: list.map((b) => ({ ...bizOut(b), openLeads: open.find((o) => o.businessId === b.id)?._count._all ?? 0 })),
-    people: people.map((p) => ({ id: p.id, name: p.name, email: p.email, department: p.department?.name ?? null })),
+    people: people.map((p) => ({ id: p.id, name: p.name, email: p.email, role: p.role, department: p.department?.name ?? null, departmentType: p.department?.type ?? null })),
+    cmrOn: await isOn('cmr', m.companyId),
   })
 }
 
 export async function createBusiness(req: AuthedRequest, res: Response): Promise<void> {
-  const { s } = await ctx(req)
+  const { me: m, s } = await ctx(req)
   requireLeadAdmin(s)
   const b = parse(bizSchema, req.body)
-  const made = await prisma.leadBusiness.create({ data: { ...b, website: b.website || null, formKey: newFormKey() }, include: BIZ_INCLUDE })
+  const extra = await checkBiz(b, m.companyId)
+  const { settings: _st, pipeline, ...rest } = b
+  const made = await prisma.leadBusiness.create({ data: { ...rest, ...extra, pipeline: pipeline === undefined ? undefined : pipeline === null ? Prisma.DbNull : pipeline, website: b.website || null, formKey: newFormKey() }, include: BIZ_INCLUDE })
   res.status(201).json({ business: bizOut(made) })
 }
 
@@ -387,12 +171,20 @@ async function bizById(id: string) {
   return b
 }
 
+/** PATCH /api/leads/businesses/:id — the Super Admin, or (settings, head, pipeline) a manager of the business. */
 export async function updateBusiness(req: AuthedRequest, res: Response): Promise<void> {
-  const { s } = await ctx(req)
-  requireLeadAdmin(s)
+  const { me: m, s } = await ctx(req)
   const cur = await bizById(String(req.params.id))
   const b = parse(bizSchema.partial(), req.body)
-  const saved = await prisma.leadBusiness.update({ where: { id: cur.id }, data: { ...b, ...(b.website !== undefined ? { website: b.website || null } : {}) }, include: BIZ_INCLUDE })
+  if (!s.admin) {
+    if (!canManage(s, cur.id)) throw new HttpError(403, 'Only the Super Admin or a manager of this business can change it.')
+    const allowed = new Set(['settings', 'headId', 'pipeline'])
+    const bad = Object.keys(b).filter((k) => !allowed.has(k))
+    if (bad.length) throw new HttpError(403, 'Only the Super Admin changes the name, kind, people, form link or inbox of a business.')
+  }
+  const extra = await checkBiz(b, m.companyId, cur)
+  const { settings: _st, pipeline, ...rest } = b
+  const saved = await prisma.leadBusiness.update({ where: { id: cur.id }, data: { ...rest, ...extra, ...(pipeline === undefined ? {} : { pipeline: pipeline === null ? Prisma.DbNull : pipeline }), ...(b.website !== undefined ? { website: b.website || null } : {}) }, include: BIZ_INCLUDE })
   res.json({ business: bizOut(saved) })
 }
 

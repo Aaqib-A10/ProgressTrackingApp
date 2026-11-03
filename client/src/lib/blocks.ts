@@ -57,7 +57,7 @@ export const BLOCK_GROUPS: { key: BlockGroup; label: string }[] = [
 
 /** How the kinds of department are called in the Studio. */
 export const KIND_LABEL: Record<DepartmentType, string> = {
-  GENERAL: 'General', ITAD: 'Sales calling', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', ECOMMERCE: 'E-commerce', INVENTORY: 'Inventory', CSR: 'Customer service', TALKLOOP: 'Talkloop',
+  GENERAL: 'General', ITAD: 'Sales calling', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', ECOMMERCE: 'E-commerce', INVENTORY: 'Inventory', CSR: 'Customer service', TALKLOOP: 'Talkloop', CMR: 'CMR',
 }
 
 export const BLOCKS: Block[] = [

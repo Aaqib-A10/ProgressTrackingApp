@@ -17,6 +17,9 @@ interface SendOpts {
   text: string // plain-text alternative — improves inbox placement vs HTML-only
   /** Groups emails in Mailtrap's stats (e.g. "Invite", "Attendance"). */
   category?: string
+  /** Files to attach (a calendar invite, say). content is base64. */
+  attachments?: { filename: string; type: string; content: string }[]
+  replyTo?: string
 }
 
 /** "PulseTrack <noreply@pulsetrack.online>" -> { name, email } */
@@ -26,8 +29,12 @@ export function parseAddress(raw: string): { email: string; name?: string } {
   return { email: raw.trim() }
 }
 
-export async function sendMail({ to, subject, html, text, category }: SendOpts): Promise<void> {
+/** Tests only: every email the server tried to send (nothing goes out in tests). */
+export const mailLog: SendOpts[] = []
+
+export async function sendMail({ to, subject, html, text, category, attachments, replyTo }: SendOpts): Promise<void> {
   if (inAudit()) return // the self check's test requests never send email
+  if (process.env.NODE_ENV === 'test') { mailLog.push({ to, subject, html, text, category, attachments, replyTo }); return }
   if (!MAILTRAP_API_TOKEN) {
     // eslint-disable-next-line no-console
     console.warn('[mail] MAILTRAP_API_TOKEN not set — skipping email')
@@ -40,11 +47,12 @@ export async function sendMail({ to, subject, html, text, category }: SendOpts):
       body: JSON.stringify({
         from: parseAddress(FROM),
         to: (Array.isArray(to) ? to : [to]).map((email) => ({ email })),
-        reply_to: parseAddress(REPLY_TO),
+        reply_to: parseAddress(replyTo || REPLY_TO),
         subject,
         text,
         html,
         category: (category || 'PulseTrack').slice(0, 255),
+        ...(attachments?.length ? { attachments: attachments.map((a) => ({ filename: a.filename, type: a.type, content: a.content, disposition: 'attachment' })) } : {}),
       }),
     })
     const bodyText = await res.text().catch(() => '')

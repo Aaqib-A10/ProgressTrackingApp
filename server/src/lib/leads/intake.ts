@@ -1,5 +1,6 @@
 import { Prisma, type Lead, type LeadBusiness } from '@prisma/client'
 import { prisma } from '../prisma'
+import { keysOf, listMatches } from './lists'
 import { leadManagers, tellAboutLead } from './notify'
 
 /**
@@ -9,9 +10,11 @@ import { leadManagers, tellAboutLead } from './notify'
 
 export const SOURCES = ['FORM', 'PHONE', 'IMPORT', 'EMAIL'] as const
 export type LeadSource = (typeof SOURCES)[number]
+/** The usual pipeline (a GENERAL business). A business's own statuses: lib/leads/pipeline.ts. */
 export const STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'WON', 'LOST', 'SPAM'] as const
 export type LeadStatus = (typeof STATUSES)[number]
-export const OPEN_STATUSES: LeadStatus[] = ['NEW', 'CONTACTED', 'QUALIFIED']
+/** Open in any pipeline (GENERAL and CMR), for filters that span businesses. */
+export const OPEN_STATUSES: string[] = ['NEW', 'CONTACTED', 'QUALIFIED', 'INFO_SENT', 'FOLLOW_UP']
 
 export interface LeadInput {
   name?: string | null
@@ -147,6 +150,8 @@ export async function receiveLead(business: Pick<LeadBusiness, 'id' | 'name'>, i
     }
   }
   const now = new Date()
+  const keys = keysOf(i)
+  const lists = await listMatches(business.id, keys)
   let lead: Lead
   try {
     lead = await prisma.lead.create({
@@ -154,6 +159,7 @@ export async function receiveLead(business: Pick<LeadBusiness, 'id' | 'name'>, i
         businessId: business.id, source: o.source, name: i.name ?? '', email: i.email, phone: i.phone, organization: i.organization, message: i.message, location: i.location,
         sourceDetail: i.sourceDetail, utmSource: i.utmSource, utmMedium: i.utmMedium, utmCampaign: i.utmCampaign, utmTerm: i.utmTerm, utmContent: i.utmContent, gclid: i.gclid,
         externalId: i.externalId, raw: (i.raw ?? undefined) as Prisma.InputJsonValue | undefined, createdById: o.createdById ?? null,
+        orgKey: keys.orgKey, phoneE164: keys.phoneE164, prohibited: lists.prohibited, existingCustomer: lists.existingCustomer,
         assigneeId: o.assigneeId ?? null, assignedAt: o.assigneeId ? now : null, assignedById: o.assigneeId ? (o.createdById ?? null) : null, lastActivityAt: now,
       },
     })

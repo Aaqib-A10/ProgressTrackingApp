@@ -87,7 +87,7 @@ describe('Lead Management', () => {
     const lead = await prisma.lead.findFirstOrThrow({ where: { businessId: bizId, email: 'ada@example.com' } })
     expect(lead).toMatchObject({ name: 'Ada Lovelace', phone: '+1 612 555 0101', source: 'FORM', status: 'NEW', utmCampaign: 'fall-ads', gclid: 'abc123', assigneeId: null })
     expect(lead.message).toContain('service: Laptop pickup')
-    expect((await notes(manager)).at(-1)).toMatchObject({ type: 'LEAD_NEW', link: `/app/leads?lead=${lead.id}` })
+    expect((await notes(manager)).at(-1)).toMatchObject({ type: 'LEAD_NEW', link: `/app/leads/${lead.id}` })
     expect(await notes(rep)).toHaveLength(0)
 
     // An ordinary HTML form, sent back to the site's thank-you page.
@@ -137,7 +137,7 @@ describe('Lead Management', () => {
     const mine = (await api(rep).get('/?assignee=me').expect(200)).body
     expect(mine.leads.map((l: { id: string }) => l.id)).toEqual([ada.id])
     const one = (await api(rep).get(`/${ada.id}`).expect(200)).body
-    expect(one.canManage).toBe(false)
+    expect(one.can.manage).toBe(false)
     expect(one.lead.events.find((e: { kind: string }) => e.kind === 'ASSIGNED').toName).toBe('rafi rep')
   })
 

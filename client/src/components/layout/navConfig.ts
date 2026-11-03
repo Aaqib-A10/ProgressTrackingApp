@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  Flag,
   FileBarChart,
   MessageSquare,
   ClipboardCheck,
@@ -75,6 +76,10 @@ export interface NavItem {
   healthOnly?: boolean
   /** Lead Management: people who work the leads of a business (and the Super Admin). */
   leadsOnly?: boolean
+  /** The CMR flow: people who work a CMR-kind business (and the Super Admin when the company has one). */
+  cmrOnly?: boolean
+  /** Lead Management: managers of a business (and its head, and the Super Admin). */
+  leadsManagerOnly?: boolean
   badge?: { text: string; tone: BadgeTone }
 }
 
@@ -260,7 +265,14 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: Inbox,
     color: '#0EA5E9',
     items: [
+      { label: 'Lead Dashboard', to: '/app/leads/dashboard', icon: LayoutDashboard, flag: 'lead-management', leadsOnly: true },
       { label: 'Leads', to: '/app/leads', icon: Inbox, flag: 'lead-management', leadsOnly: true },
+      { label: 'Agent Tasks', to: '/app/leads/tasks', icon: ListChecks, flag: 'lead-management', leadsOnly: true },
+      { label: 'Calls', to: '/app/leads/calls', icon: PhoneCall, flag: 'lead-management', leadsOnly: true },
+      // The CMR flow (switch "cmr"): only people who work a CMR-kind business.
+      { label: 'Jesse Queue', to: '/app/leads/queue', icon: Flag, flag: 'cmr', cmrOnly: true },
+      { label: 'Daily Report', to: '/app/leads/report', icon: ClipboardPen, flag: 'cmr', cmrOnly: true },
+      { label: 'Jesse Summary', to: '/app/leads/summary', icon: BarChart3, flag: 'cmr', cmrOnly: true, leadsManagerOnly: true, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Lead Settings', to: '/app/leads/settings', icon: SlidersHorizontal, flag: 'lead-management', hideFor: ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD', 'QA', 'QA_LEAD'] },
     ],
   },
@@ -283,7 +295,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company' | 'leadsRole'> & { blocks?: string[] | null; customBlocks?: CurrentUser['customBlocks'] }
+type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company' | 'leadsRole' | 'leadsCmr'> & { blocks?: string[] | null; customBlocks?: CurrentUser['customBlocks'] }
 
 /** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
 function itemVisible(item: NavItem, u: NavUser): boolean {
@@ -293,6 +305,8 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
   if (item.flag && (!flagsLoaded() || !flagOn(item.flag))) return false
   if (item.notHome && inHomeCompany(u)) return false
   if (item.leadsOnly && u.role !== 'SUPER_ADMIN' && !u.leadsRole) return false
+  if (item.cmrOnly && !u.leadsCmr) return false
+  if (item.leadsManagerOnly && u.role !== 'SUPER_ADMIN' && u.leadsRole !== 'MANAGER') return false
   // The finance power wins over everything, including Super Admin.
   if (item.financeOnly) return canViewFinance(u)
   if (item.power) return !!u.permissions?.includes(item.power)

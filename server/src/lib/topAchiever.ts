@@ -24,7 +24,7 @@ export interface TopAchiever {
 }
 
 const LABEL: Record<DepartmentType, string> = {
-  ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', CSR: 'CSR', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', INVENTORY: 'Inventory', GENERAL: 'General',
+  ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', CSR: 'CSR', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', INVENTORY: 'Inventory', CMR: 'CMR', GENERAL: 'General',
 }
 
 function monthRange(month: string) {

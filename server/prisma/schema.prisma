@@ -46,6 +46,8 @@ enum DepartmentType {
   ECOMMERCE
   TALKLOOP
   INVENTORY
+  /// CMR (Critical Materials Recovery): SDRs qualify battery-collector leads for Jesse (99 Technologies). Its leads live in Lead Management.
+  CMR
   /// A department a company made itself (Phase 1, step 4): the shared tools (attendance,
   /// projects, chat, daily report…) but none of the department-specific screens.
   GENERAL
@@ -268,54 +270,60 @@ model User {
   brandProfilesOwned    BrandProfile[]       @relation("BrandProfileOwner")
 
   // Projects + chat
-  pmProjectsOwned     PmProject[]          @relation("PmProjectOwner")
-  pmMemberships       PmProjectMember[]    @relation("PmMemberships")
-  pmTasksCreated      PmTask[]             @relation("PmTaskCreator")
-  pmAssignments       PmTaskAssignee[]     @relation("PmAssignments")
-  pmWatching          PmTaskWatcher[]      @relation("PmWatching")
-  pmComments          PmComment[]          @relation("PmCommentAuthor")
-  pmReviews           PmReview[]           @relation("PmReviewer")
-  chatCallsStarted    ChatCall[]           @relation("ChatCallsStarted")
+  pmProjectsOwned      PmProject[]          @relation("PmProjectOwner")
+  pmMemberships        PmProjectMember[]    @relation("PmMemberships")
+  pmTasksCreated       PmTask[]             @relation("PmTaskCreator")
+  pmAssignments        PmTaskAssignee[]     @relation("PmAssignments")
+  pmWatching           PmTaskWatcher[]      @relation("PmWatching")
+  pmComments           PmComment[]          @relation("PmCommentAuthor")
+  pmReviews            PmReview[]           @relation("PmReviewer")
+  chatCallsStarted     ChatCall[]           @relation("ChatCallsStarted")
   /// Profile picture last changed (file: uploads/avatars/user-<id>.jpg).
-  avatarAt            DateTime?
-  meetingsOrganized   Meeting[]            @relation("MeetingsOrganized")
-  meetingAttendance   MeetingAttendee[]    @relation("MeetingAttendance")
-  pmAttachments       PmAttachment[]       @relation("PmAttachmentUploader")
-  pmActivity          PmActivity[]         @relation("PmActivityActor")
-  pmExtRequested      PmExtensionRequest[] @relation("PmExtRequester")
-  pmExtDecided        PmExtensionRequest[] @relation("PmExtDecider")
-  pmNotifyPref        PmNotifyPref?        @relation("PmNotifyPref")
-  chatMemberships     ChatMember[]         @relation("ChatMemberships")
-  chatMessagesSent    ChatMessage[]        @relation("ChatMessagesSent")
-  pushSubscriptions   PushSubscription[]
-  savedDocs           SavedDoc[]           @relation("SavedDocOwner")
-  wfhRequests         WfhRequest[]         @relation("WfhRequester")
-  wfhDecisions        WfhRequest[]         @relation("WfhDecider")
-  dialerLeads         DialerLead[]         @relation("DialerLeadOwner")
-  dialerImports       DialerImport[]       @relation("DialerImporter")
-  dialerActions       DialerAction[]       @relation("DialerActor")
-  dialerNotes         DialerNote[]         @relation("DialerNoteAuthor")
-  dialerTouches       DialerTouch[]        @relation("DialerTouchBy")
-  leadBusinessRoles   LeadBusinessMember[] @relation("LeadBusinessPerson")
-  leadsAssigned       Lead[]               @relation("LeadAssignee")
-  leadsAssignedBy     Lead[]               @relation("LeadAssigner")
-  leadsCreated        Lead[]               @relation("LeadCreator")
-  leadEvents          LeadEvent[]          @relation("LeadEventBy")
-  dialerPrefs         DialerUserPrefs?     @relation("DialerPrefsOwner")
-  dialerCalls         DialerCall[]         @relation("DialerCallAgent")
-  workLogs            WorkLogEntry[]       @relation("WorkLogOwner")
-  workLogReviews      WorkLogReview[]      @relation("WorkLogReviewOwner")
-  workLogReviewsGiven WorkLogReview[]      @relation("WorkLogReviewer")
-  blockedCheckIns     BlockedCheckIn[]
-  workLogNotes        WorkLogNote[]        @relation("WorkLogNoteAuthor")
-  claudeKeys          ClaudeKey[]
-  reportForms         ReportForm[]         @relation("ReportFormCreator")
-  reportEntries       ReportEntry[]        @relation("ReportEntries")
-  customBlocks        CustomBlock[]        @relation("CustomBlockCreator")
-  customRecords       CustomRecord[]       @relation("CustomRecordCreator")
+  avatarAt             DateTime?
+  meetingsOrganized    Meeting[]            @relation("MeetingsOrganized")
+  meetingAttendance    MeetingAttendee[]    @relation("MeetingAttendance")
+  pmAttachments        PmAttachment[]       @relation("PmAttachmentUploader")
+  pmActivity           PmActivity[]         @relation("PmActivityActor")
+  pmExtRequested       PmExtensionRequest[] @relation("PmExtRequester")
+  pmExtDecided         PmExtensionRequest[] @relation("PmExtDecider")
+  pmNotifyPref         PmNotifyPref?        @relation("PmNotifyPref")
+  chatMemberships      ChatMember[]         @relation("ChatMemberships")
+  chatMessagesSent     ChatMessage[]        @relation("ChatMessagesSent")
+  pushSubscriptions    PushSubscription[]
+  savedDocs            SavedDoc[]           @relation("SavedDocOwner")
+  wfhRequests          WfhRequest[]         @relation("WfhRequester")
+  wfhDecisions         WfhRequest[]         @relation("WfhDecider")
+  dialerLeads          DialerLead[]         @relation("DialerLeadOwner")
+  dialerImports        DialerImport[]       @relation("DialerImporter")
+  dialerActions        DialerAction[]       @relation("DialerActor")
+  dialerNotes          DialerNote[]         @relation("DialerNoteAuthor")
+  dialerTouches        DialerTouch[]        @relation("DialerTouchBy")
+  leadBusinessRoles    LeadBusinessMember[] @relation("LeadBusinessPerson")
+  leadsAssigned        Lead[]               @relation("LeadAssignee")
+  leadsAssignedBy      Lead[]               @relation("LeadAssigner")
+  leadsCreated         Lead[]               @relation("LeadCreator")
+  leadEvents           LeadEvent[]          @relation("LeadEventBy")
+  leadBusinessesHeaded LeadBusiness[]       @relation("LeadBusinessHead")
+  leadCalls            LeadCall[]           @relation("LeadCaller")
+  leadComments         LeadComment[]        @relation("LeadCommentBy")
+  leadTasks            LeadTask[]           @relation("LeadTaskAssignee")
+  leadTasksDone        LeadTask[]           @relation("LeadTaskDoneBy")
+  leadDailyReports     LeadDailyReport[]    @relation("LeadReportBy")
+  dialerPrefs          DialerUserPrefs?     @relation("DialerPrefsOwner")
+  dialerCalls          DialerCall[]         @relation("DialerCallAgent")
+  workLogs             WorkLogEntry[]       @relation("WorkLogOwner")
+  workLogReviews       WorkLogReview[]      @relation("WorkLogReviewOwner")
+  workLogReviewsGiven  WorkLogReview[]      @relation("WorkLogReviewer")
+  blockedCheckIns      BlockedCheckIn[]
+  workLogNotes         WorkLogNote[]        @relation("WorkLogNoteAuthor")
+  claudeKeys           ClaudeKey[]
+  reportForms          ReportForm[]         @relation("ReportFormCreator")
+  reportEntries        ReportEntry[]        @relation("ReportEntries")
+  customBlocks         CustomBlock[]        @relation("CustomBlockCreator")
+  customRecords        CustomRecord[]       @relation("CustomRecordCreator")
   /// Department Studio, part B: how this person arranged their own dashboard
   /// ({ order: string[], hidden: string[] }); empty = as their department has it.
-  dashboardPrefs      Json?
+  dashboardPrefs       Json?
 
   @@index([companyId])
   @@index([departmentId])
@@ -1178,6 +1186,10 @@ enum NotificationType {
   LEAD_NEW
   LEAD_ASSIGNED
   LEAD_SLA
+  LEAD_TASK
+  LEAD_COMMENT
+  LEAD_REVIEW
+  LEAD_DECISION
 }
 
 enum BreakType {
@@ -3630,6 +3642,12 @@ model Company {
   leadBusinessMemberRows   LeadBusinessMember[]
   leadRows                 Lead[]
   leadEventRows            LeadEvent[]
+  leadCmrRows              LeadCmr[]
+  leadCallRows             LeadCall[]
+  leadCommentRows          LeadComment[]
+  leadTaskRows             LeadTask[]
+  leadListRows             LeadListEntry[]
+  leadDailyReportRows      LeadDailyReport[]
   dialerUserPrefsRows      DialerUserPrefs[]
   dialerIntegrationRows    DialerIntegration[]
   dialerCallRows           DialerCall[]
@@ -4029,6 +4047,15 @@ model LeadBusiness {
   website        String?
   color          String               @default("#6366F1")
   isActive       Boolean              @default(true)
+  /// GENERAL (the usual pipeline) or CMR (the CMR flow: five facts, Jesse, meeting; 99 Technologies).
+  kind           String               @default("GENERAL")
+  /// The business's own statuses, in order: [{ key, label, color, open }]. Empty = the ones its kind comes with.
+  pipeline       Json?
+  /// Settings of the kind (CMR: the copy address, consent states, segments, states, the Send-info email, rates…).
+  settings       Json?
+  /// The head of the business (CMR: Jesse). Sees everything, decides on flagged leads, hears every call.
+  headId         String?
+  head           User?                @relation("LeadBusinessHead", fields: [headId], references: [id], onDelete: SetNull)
   /// Public key in the website form's address (/api/lead-in/<key>). Not a secret: it sits in the page.
   formKey        String               @unique
   /// Alert the managers when a new lead is still unassigned after this many minutes (0 = never).
@@ -4050,6 +4077,10 @@ model LeadBusiness {
   updatedAt      DateTime             @updatedAt
   members        LeadBusinessMember[]
   leads          Lead[]
+  calls          LeadCall[]
+  tasks          LeadTask[]
+  listEntries    LeadListEntry[]
+  dailyReports   LeadDailyReport[]
 
   @@index([companyId])
 }
@@ -4073,19 +4104,19 @@ model LeadBusinessMember {
 
 /// One enquiry: from a website form, a phone call, a CSV import or an email.
 model Lead {
-  id                String       @id @default(cuid())
-  companyId         String       @default("")
-  company           Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                String        @id @default(cuid())
+  companyId         String        @default("")
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   businessId        String
-  business          LeadBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  name              String       @default("")
+  business          LeadBusiness  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name              String        @default("")
   email             String?
   phone             String?
   organization      String?
   message           String?
   location          String?
   /// FORM, PHONE, IMPORT, EMAIL
-  source            String       @default("PHONE")
+  source            String        @default("PHONE")
   /// The page, file or email subject it came from.
   sourceDetail      String?
   utmSource         String?
@@ -4094,19 +4125,53 @@ model Lead {
   utmTerm           String?
   utmContent        String?
   gclid             String?
-  /// NEW, CONTACTED, QUALIFIED, WON, LOST, SPAM
-  status            String       @default("NEW")
+  /// One of the business's pipeline statuses (GENERAL: NEW, CONTACTED, QUALIFIED, WON, LOST, SPAM).
+  status            String        @default("NEW")
   lostReason        String?
+  lostNote          String?
   value             Float?
+  // Lead details (LeadWise-style)
+  jobTitle          String?
+  employees         String?
+  /// Industry (CMR calls it Segment).
+  industry          String?
+  website           String?
+  websiteKey        String?
+  mobile            String?
+  ext               String?
+  secondaryEmail    String?
+  secondaryContact  String?
+  recipientName     String?
+  recipientEmail    String?
+  tags              String[]      @default([])
+  street            String?
+  city              String?
+  state             String?
+  zip               String?
+  country           String?
+  productInfo       String?
+  /// The company name as a key for duplicate checks; +1 phone for matching calls.
+  orgKey            String?
+  phoneE164         String?
+  nextStep          String?
+  nextStepDate      DateTime?
+  /// Who the next step is on: REP (SDR), MANAGER, HEAD (Jesse), COPY (Aaqib).
+  owner             String        @default("REP")
+  callsCount        Int           @default(0)
+  firstCallAt       DateTime?
+  lastCallAt        DateTime?
+  /// On the business's Prohibited or existing-customer list (pre-call check).
+  prohibited        Boolean       @default(false)
+  existingCustomer  Boolean       @default(false)
   assigneeId        String?
-  assignee          User?        @relation("LeadAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee          User?         @relation("LeadAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   assignedAt        DateTime?
   assignedById      String?
-  assignedBy        User?        @relation("LeadAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  assignedBy        User?         @relation("LeadAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
   firstContactAt    DateTime?
-  lastActivityAt    DateTime     @default(now())
+  lastActivityAt    DateTime      @default(now())
   /// Times the same person came in again (form or email) while this lead was open.
-  repeats           Int          @default(0)
+  repeats           Int           @default(0)
   /// Email Message-ID (or another source's id), so the same email never makes two leads.
   externalId        String?
   /// Every field the form or file sent, as it came.
@@ -4114,16 +4179,23 @@ model Lead {
   slaAssignAlertAt  DateTime?
   slaContactAlertAt DateTime?
   createdById       String?
-  createdBy         User?        @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdBy         User?         @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
   events            LeadEvent[]
+  cmr               LeadCmr?
+  calls             LeadCall[]
+  comments          LeadComment[]
+  tasks             LeadTask[]
 
   @@unique([businessId, externalId])
   @@index([businessId, status])
   @@index([assigneeId, status])
   @@index([businessId, email])
   @@index([businessId, phone])
+  @@index([businessId, orgKey])
+  @@index([businessId, phoneE164])
+  @@index([businessId, nextStepDate])
   @@index([companyId])
 }
 
@@ -4136,7 +4208,7 @@ model LeadEvent {
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   userId    String?
   user      User?    @relation("LeadEventBy", fields: [userId], references: [id], onDelete: SetNull)
-  /// CREATED, REPEAT, ASSIGNED, STATUS, NOTE, CALL, EMAIL, EDIT
+  /// CREATED, REPEAT, ASSIGNED, STATUS, NOTE, CALL, EMAIL, EDIT, COMMENT, TASK, QUALIFY, FLAG, DECISION, MEETING, IMPORT, EXPORT, LISTEN
   kind      String
   text      String   @default("")
   data      Json?
@@ -4144,4 +4216,191 @@ model LeadEvent {
 
   @@index([leadId, createdAt])
   @@index([companyId])
+}
+
+/// The CMR part of a lead (business kind CMR): the five facts, the flag for Jesse, his decision and the meeting.
+model LeadCmr {
+  id                 String    @id @default(cuid())
+  companyId          String    @default("")
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leadId             String    @unique
+  lead               Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contactRole        String?
+  /// YES, NO, UNKNOWN
+  decisionMaker      String    @default("UNKNOWN")
+  decisionMakerName  String?
+  dmAgreed           String    @default("UNKNOWN")
+  handlesAlkaline    String    @default("UNKNOWN")
+  /// ALKALINE_SORTED, MIXED_DRY_CELL, LITHIUM, NIMH, NICD, LEAD_ACID
+  material           String[]  @default([])
+  /// LOOSE, TAPED, BAGGED
+  materialForm       String[]  @default([])
+  lbsPerMonth        Float?
+  lbsPerShipment     Float?
+  currentVendor      String?
+  /// $/lb they are paid today (sheet: Pays Today)
+  paysToday          Float?
+  /// LB, DRUM, NONE, UNKNOWN
+  paysUnit           String    @default("UNKNOWN")
+  vendorRelatedParty Boolean   @default(false)
+  usesBatteryNetwork Boolean   @default(false)
+  sortsAlkaline      String    @default("UNKNOWN")
+  shipsLtl           String    @default("UNKNOWN")
+  nextShipmentDate   DateTime?
+  pickupCity         String?
+  /// BOOKS, NEEDS_QUOTE, UNKNOWN
+  freight            String    @default("UNKNOWN")
+  jesseInputNeeded   Boolean   @default(false)
+  /// The one line on what Jesse must decide.
+  jesseAsk           String?
+  /// Jesse's latest comment (sheet: Jesse Comment); the thread is LeadComment.
+  jesseComment       String?
+  flaggedAt          DateTime?
+  qualifyRequestedAt DateTime?
+  qualifiedAt        DateTime?
+  qualifiedById      String?
+  /// MEETING, DIRECTION, CLOSE
+  jesseDecision      String?
+  jesseDecidedAt     DateTime?
+  /// Slots the SDR offered (ISO times).
+  meetingSlots       Json?
+  meetingAt          DateTime?
+  meetingTz          String?
+  meetingLink        String?
+  inviteSentAt       DateTime?
+  reconfirmedAt      DateTime?
+  meetingBrief       String?
+  /// QUOTE_SENT, SHIPMENT_BOOKED, NURTURE, CLOSED_LOST
+  meetingOutcome     String?
+  meetingOutcomeAt   DateTime?
+  infoSentAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([companyId, jesseInputNeeded])
+}
+
+/// A call with the lead: logged by the rep today, from TalkLoop's call log later.
+model LeadCall {
+  id            String       @id @default(cuid())
+  companyId     String       @default("")
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessId    String
+  business      LeadBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  leadId        String
+  lead          Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?        @relation("LeadCaller", fields: [userId], references: [id], onDelete: SetNull)
+  at            DateTime     @default(now())
+  /// OUT, IN
+  direction     String       @default("OUT")
+  durationSec   Int          @default(0)
+  /// CONNECTED, VOICEMAIL, NO_ANSWER, BUSY, WRONG_NUMBER, GATEKEEPER
+  disposition   String       @default("CONNECTED")
+  /// The call summary (CMR: 3–5 sentences from the template, facts only).
+  summary       String       @default("")
+  outcome       String?
+  consentGiven  Boolean?
+  recordingUrl  String?
+  recordingKept Boolean      @default(true)
+  externalId    String?
+  createdAt     DateTime     @default(now())
+
+  @@unique([businessId, externalId])
+  @@index([leadId, at])
+  @@index([businessId, userId, at])
+  @@index([companyId])
+}
+
+/// Comments on a lead (CMR: Jesse's comments and the SDRs' replies), with @mentions; a comment can point at a call and a second in it.
+model LeadComment {
+  id        String   @id @default(cuid())
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("LeadCommentBy", fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  mentions  String[] @default([])
+  callId    String?
+  atSec     Int?
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([companyId])
+}
+
+/// Agent Tasks: what to do next on a lead; the flow makes most of them by itself.
+model LeadTask {
+  id         String       @id @default(cuid())
+  companyId  String       @default("")
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessId String
+  business   LeadBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  leadId     String
+  lead       Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assigneeId String?
+  assignee   User?        @relation("LeadTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  /// FOLLOW_UP, NEXT_STEP, APPROVE, HEAD_REVIEW, SEND_INVITE, RELAY, RECONFIRM, OUTCOME, REPLY, CALL, CUSTOM
+  kind       String       @default("CUSTOM")
+  title      String
+  notes      String       @default("")
+  dueAt      DateTime
+  remindedAt DateTime?
+  doneAt     DateTime?
+  doneById   String?
+  doneBy     User?        @relation("LeadTaskDoneBy", fields: [doneById], references: [id], onDelete: SetNull)
+  outcome    String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([businessId, assigneeId, doneAt, dueAt])
+  @@index([leadId])
+  @@index([companyId])
+}
+
+/// A business's Prohibited Leads list and its existing customers (the pre-call check; DNC).
+model LeadListEntry {
+  id         String       @id @default(cuid())
+  companyId  String       @default("")
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessId String
+  business   LeadBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// PROHIBITED, CUSTOMER
+  kind       String
+  name       String
+  nameKey    String       @default("")
+  phone      String?
+  email      String?
+  website    String?
+  note       String?
+  createdAt  DateTime     @default(now())
+
+  @@index([businessId, kind, nameKey])
+  @@index([companyId])
+}
+
+/// The daily calling report of a business (CMR): dials, connected, voicemails, emails, interested, counted from the calls and corrected by the rep.
+model LeadDailyReport {
+  id          String       @id @default(cuid())
+  companyId   String       @default("")
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  businessId  String
+  business    LeadBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User         @relation("LeadReportBy", fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime     @db.Date
+  dials       Int          @default(0)
+  connected   Int          @default(0)
+  voicemails  Int          @default(0)
+  emails      Int          @default(0)
+  interested  Int          @default(0)
+  note        String       @default("")
+  /// What Metriq counted when it was submitted (to see corrections).
+  counted     Json?
+  submittedAt DateTime     @default(now())
+
+  @@unique([businessId, userId, date])
+  @@index([companyId, date])
 }

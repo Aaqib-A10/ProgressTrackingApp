@@ -8,6 +8,7 @@ export const DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'CSR', label: 'CSR' },
   { value: 'ECOMMERCE', label: 'Ecommerce' },
   { value: 'INVENTORY', label: 'Inventory' },
+  { value: 'CMR', label: 'CMR' },
 ]
 
 export const DEPARTMENT_LABEL: Record<Department, string> = {
@@ -18,6 +19,7 @@ export const DEPARTMENT_LABEL: Record<Department, string> = {
   ECOMMERCE: 'Ecommerce',
   TALKLOOP: 'Talkloop',
   INVENTORY: 'Inventory',
+  CMR: 'CMR',
   GENERAL: 'General',
 }
 

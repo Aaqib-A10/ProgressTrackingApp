@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Check, Copy, Globe, Inbox, Mail, Plus, RefreshCw, Send, Trash2, Users } from 'lucide-react'
+import { ArrowLeft, Ban, Check, Copy, Flag, Globe, Inbox, ListOrdered, Mail, Plus, RefreshCw, Send, Settings2, Trash2, Users } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { Modal } from '../../../components/ui/Modal'
 import { Toggle } from '../../../components/ui/Toggle'
 import { EmptyState } from '../../../components/ui/EmptyState'
-import { TextField } from '../../../components/ui/Input'
+import { TextField, TextArea } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { leadsApi, type BusinessRow, type InboxInput, type Person } from '../../../lib/leadsApi'
-import { ago } from './Leads'
+import { ago, leadsApi, type BusinessKind, type BusinessRow, type CmrSettings, type InboxInput, type Person, type PipelineStatus } from '../../../lib/leadsApi'
+import { Label, Select } from './shared'
+import { readFile } from '../itad/dialer/ImportModal'
 
 /**
  * Lead Settings (Super Admin): the businesses that receive leads, who works them (managers assign,
@@ -26,11 +27,12 @@ export default function LeadSettings() {
   const { addToast } = useToast()
   const [list, setList] = useState<BusinessRow[] | null>(null)
   const [people, setPeople] = useState<(Person & { department: string | null })[]>([])
+  const [cmrOn, setCmrOn] = useState(false)
   const [sel, setSel] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [err, setErr] = useState('')
 
-  const load = () => leadsApi.businesses().then((r) => { setList(r.businesses); setPeople(r.people); setSel((s) => s ?? r.businesses[0]?.id ?? null) }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
+  const load = () => leadsApi.businesses().then((r) => { setList(r.businesses); setPeople(r.people); setCmrOn(r.cmrOn); setSel((s) => s ?? r.businesses[0]?.id ?? null) }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
   useEffect(() => { void load() }, [])
   const put = (b: BusinessRow) => setList((l) => (l ?? []).map((x) => (x.id === b.id ? { ...x, ...b } : x)))
   const biz = list?.find((b) => b.id === sel) ?? null
@@ -43,7 +45,7 @@ export default function LeadSettings() {
         <div>
           <Link to="/app/leads" className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><ArrowLeft size={14} />Leads</Link>
           <h1 className="mt-1 text-headline-lg text-ink">Lead Settings</h1>
-          <p className="mt-0.5 text-body-md text-ink-muted">Each business gets its own website form and inbox. Its managers give new leads to reps.</p>
+          <p className="mt-0.5 text-body-md text-ink-muted">Each business gets its own pipeline, people, website form and inbox. A CMR business adds Jesse, the five facts and the flow.</p>
         </div>
         <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setCreating(true)}>Add business</Button>
       </div>
@@ -59,15 +61,15 @@ export default function LeadSettings() {
               <button key={b.id} type="button" onClick={() => setSel(b.id)} className={cn('flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-left transition-colors', sel === b.id ? 'border-primary bg-primary/[0.04]' : 'border-line bg-card hover:border-line-strong')}>
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: b.color }} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-semibold text-ink">{b.name}</span><span className="block text-body-sm text-ink-muted">{b.members.length} people · {b.openLeads} open</span></span>
-                {!b.isActive && <Badge>Off</Badge>}
+                {b.kind === 'CMR' && <Badge tone="accent">CMR</Badge>}{!b.isActive && <Badge>Off</Badge>}
               </button>
             ))}
           </nav>
-          {biz && <BusinessEditor key={biz.id} biz={biz} people={people} onSaved={put} onDeleted={() => { setSel(null); void load() }} toast={addToast} />}
+          {biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} onSaved={put} onDeleted={() => { setSel(null); void load() }} toast={addToast} />}
         </div>
       )}
 
-      {creating && <CreateModal onClose={() => setCreating(false)} onCreated={(b) => { setCreating(false); setList((l) => [...(l ?? []), { ...b, openLeads: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id) }} />}
+      {creating && <CreateModal cmrOn={cmrOn} onClose={() => setCreating(false)} onCreated={(b) => { setCreating(false); setList((l) => [...(l ?? []), { ...b, openLeads: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id) }} />}
     </div>
   )
 }
@@ -89,7 +91,7 @@ function Section({ icon, title, hint, children, action }: { icon: React.ReactNod
   )
 }
 
-function BusinessEditor({ biz, people, onSaved, onDeleted, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; onSaved: (b: BusinessRow) => void; onDeleted: () => void; toast: Toast }) {
+function BusinessEditor({ biz, people, cmrOn, onSaved, onDeleted, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; onSaved: (b: BusinessRow) => void; onDeleted: () => void; toast: Toast }) {
   const [f, setF] = useState({ name: biz.name, website: biz.website ?? '', color: biz.color, slaAssignMins: biz.slaAssignMins, slaContactMins: biz.slaContactMins })
   const [busy, setBusy] = useState(false)
   const dirty = f.name !== biz.name || f.website !== (biz.website ?? '') || f.color !== biz.color || f.slaAssignMins !== biz.slaAssignMins || f.slaContactMins !== biz.slaContactMins
@@ -120,7 +122,11 @@ function BusinessEditor({ biz, people, onSaved, onDeleted, toast }: { biz: Busin
         </div>
       </Section>
 
+      <KindSection biz={biz} people={people} cmrOn={cmrOn} onSaved={onSaved} toast={toast} />
       <PeopleSection biz={biz} people={people} onSaved={onSaved} toast={toast} />
+      <PipelineSection biz={biz} onSaved={onSaved} toast={toast} />
+      {biz.kind === 'CMR' && <CmrSection biz={biz} onSaved={onSaved} toast={toast} />}
+      <ListsSection biz={biz} toast={toast} />
       <FormSection biz={biz} onSaved={onSaved} toast={toast} />
       <InboxSection biz={biz} onSaved={onSaved} toast={toast} />
     </div>
@@ -266,22 +272,141 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
   )
 }
 
-function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (b: BusinessRow) => void }) {
+function CreateModal({ cmrOn, onClose, onCreated }: { cmrOn: boolean; onClose: () => void; onCreated: (b: BusinessRow) => void }) {
   const { addToast } = useToast()
   const [name, setName] = useState('')
   const [website, setWebsite] = useState('')
+  const [kind, setKind] = useState<BusinessKind>('GENERAL')
   const [busy, setBusy] = useState(false)
   const go = async () => {
     setBusy(true)
-    try { const r = await leadsApi.createBusiness({ name: name.trim(), website: website.trim() || null, color: COLORS[Math.floor(Math.random() * COLORS.length)] }); onCreated(r.business) } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not add') }) } finally { setBusy(false) }
+    try { const r = await leadsApi.createBusiness({ name: name.trim(), website: website.trim() || null, color: kind === 'CMR' ? '#059669' : COLORS[Math.floor(Math.random() * COLORS.length)], kind }); onCreated(r.business) } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not add') }) } finally { setBusy(false) }
   }
   return (
     <Modal open onClose={onClose} title="Add a business" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !name.trim()} onClick={go}>Add</Button></>}>
       <div className="space-y-3">
         <TextField label="Name" autoFocus placeholder="Recycle Technologies" value={name} onChange={(e) => setName(e.target.value)} />
         <TextField label="Website (optional)" placeholder="https://example.com" value={website} onChange={(e) => setWebsite(e.target.value)} />
-        <p className="text-body-sm text-ink-muted">Next: add its managers and reps, then put its form address on the website.</p>
+        <div><Label>Kind</Label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {([['GENERAL', 'Usual pipeline', 'New → Contacted → Qualified → Won / Lost'], ['CMR', 'CMR flow', 'Five facts, Jesse’s queue and decisions, meetings, daily report']] as const).map(([k, t, h]) => (
+              <button key={k} type="button" disabled={k === 'CMR' && !cmrOn} onClick={() => setKind(k)} className={cn('rounded-card border p-3 text-left disabled:opacity-50', kind === k ? 'border-primary bg-primary/[0.06]' : 'border-line')}><span className="block text-body-sm font-semibold text-ink">{t}</span><span className="block text-[11.5px] text-ink-muted">{h}{k === 'CMR' && !cmrOn ? ' · switched off for your company' : ''}</span></button>
+            ))}
+          </div>
+        </div>
+        <p className="text-body-sm text-ink-muted">Next: add its managers and reps{kind === 'CMR' ? ', set Jesse as the head' : ''}, then put its form address on the website.</p>
       </div>
     </Modal>
+  )
+}
+
+// ------------------------------------------------------------------ kind, head, pipeline, CMR settings, lists
+
+function KindSection({ biz, people, cmrOn, onSaved, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; onSaved: (b: BusinessRow) => void; toast: Toast }) {
+  const save = (b: Parameters<typeof leadsApi.updateBusiness>[1], ok: string) => leadsApi.updateBusiness(biz.id, b).then((r) => { onSaved(r.business); toast({ type: 'success', message: ok }) }).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
+  return (
+    <Section icon={<Flag size={17} />} title="Kind and head" hint="The kind decides the pipeline and the flow. The head (CMR: Jesse) sees every lead, decides on flagged ones and hears every call.">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label><Label>Kind</Label><Select value={biz.kind} onChange={(e) => { if (window.confirm(`Change ${biz.name} to the ${e.target.value === 'CMR' ? 'CMR flow' : 'usual pipeline'}? Existing leads keep their status.`)) void save({ kind: e.target.value as BusinessKind }, 'Kind changed') }} className="w-full"><option value="GENERAL">Usual pipeline</option><option value="CMR" disabled={!cmrOn}>CMR flow{cmrOn ? '' : ' (switched off for your company)'}</option></Select></label>
+        <label><Label>Head{biz.kind === 'CMR' ? ' (Jesse)' : ''}</Label><Select value={biz.headId ?? ''} onChange={(e) => void save({ headId: e.target.value || null }, e.target.value ? 'Head set' : 'Head removed')} className="w-full"><option value="">Nobody</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name}{p.department ? ` · ${p.department}` : ''}</option>)}</Select></label>
+      </div>
+      {biz.kind === 'CMR' && !biz.headId && <p className="mt-3 rounded-btn bg-warning/10 px-3 py-2 text-body-sm text-amber-800">Set Jesse as the head so flagged leads reach him. If he is not in Metriq yet, invite him under Admin → Users first.</p>}
+    </Section>
+  )
+}
+
+const PIPE_COLORS = ['#4F46E5', '#0EA5E9', '#F59E0B', '#22C55E', '#059669', '#8B5CF6', '#EF4444', '#DC2626', '#64748B', '#14B8A6']
+function PipelineSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: BusinessRow) => void; toast: Toast }) {
+  const [rows, setRows] = useState<PipelineStatus[]>(biz.pipeline)
+  const [edit, setEdit] = useState(false)
+  useEffect(() => setRows(biz.pipeline), [biz.pipeline])
+  const save = (p: PipelineStatus[] | null) => leadsApi.updateBusiness(biz.id, { pipeline: p }).then((r) => { onSaved(r.business); setEdit(false); toast({ type: 'success', message: p ? 'Pipeline saved' : 'Back to the standard pipeline' }) }).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
+  const keyOf = (label: string) => label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30) || 'STATUS'
+  return (
+    <Section icon={<ListOrdered size={17} />} title="Pipeline" hint="The statuses leads move through, in order. Open statuses count as active; the rest close a lead." action={<div className="flex gap-2">{biz.ownPipeline && <Button size="sm" variant="ghost" onClick={() => save(null)}>Use the standard one</Button>}{edit ? <><Button size="sm" variant="ghost" onClick={() => { setRows(biz.pipeline); setEdit(false) }}>Cancel</Button><Button size="sm" onClick={() => save(rows)}>Save</Button></> : <Button size="sm" variant="secondary" onClick={() => setEdit(true)}>Edit</Button>}</div>}>
+      {!edit ? (
+        <div className="flex flex-wrap gap-2">{biz.pipeline.map((s) => <span key={s.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-body-sm font-semibold" style={{ background: `${s.color}1a`, color: s.color }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />{s.label}{!s.open && <span className="font-normal opacity-70">· closes</span>}</span>)}</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((s, i) => (
+            <div key={i} className="grid grid-cols-[1fr_120px_auto_auto_auto] items-center gap-2">
+              <TextField value={s.label} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, label: e.target.value, key: x.key === 'NEW' ? 'NEW' : keyOf(e.target.value) } : x)))} aria-label="Status name" />
+              <Select value={s.color} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))} style={{ color: s.color }}>{PIPE_COLORS.map((c) => <option key={c} value={c} style={{ color: c }}>●  {c}</option>)}</Select>
+              <label className="flex items-center gap-1.5 text-body-sm text-ink"><input type="checkbox" checked={s.open} disabled={s.key === 'NEW'} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, open: e.target.checked } : x)))} />Open</label>
+              <span className="flex gap-0.5"><button type="button" disabled={i === 0} className="rounded p-1 text-ink-faint hover:text-ink disabled:opacity-30" onClick={() => { const r = [...rows]; [r[i - 1], r[i]] = [r[i], r[i - 1]]; setRows(r) }} aria-label="Up">↑</button><button type="button" disabled={i === rows.length - 1} className="rounded p-1 text-ink-faint hover:text-ink disabled:opacity-30" onClick={() => { const r = [...rows]; [r[i + 1], r[i]] = [r[i], r[i + 1]]; setRows(r) }} aria-label="Down">↓</button></span>
+              <button type="button" disabled={s.key === 'NEW' || rows.length <= 2} className="rounded p-1 text-ink-faint hover:text-danger disabled:opacity-30" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label="Remove"><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <Button size="sm" variant="ghost" leadingIcon={<Plus size={14} />} onClick={() => setRows([...rows, { key: `STATUS_${rows.length + 1}`, label: '', color: PIPE_COLORS[rows.length % PIPE_COLORS.length], open: true }])}>Add status</Button>
+          <p className="text-[11.5px] text-ink-muted">NEW stays first (leads start there). Renaming a status keeps the leads in it.</p>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+function CmrSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: BusinessRow) => void; toast: Toast }) {
+  const [f, setF] = useState<CmrSettings>(biz.settings)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => setF(biz.settings), [biz.settings])
+  const list = (v: string[]) => v.join(', ')
+  const parse = (s: string) => s.split(/[,\n;]/).map((x) => x.trim()).filter(Boolean)
+  const save = async () => { setBusy(true); try { const r = await leadsApi.updateBusiness(biz.id, { settings: f }); onSaved(r.business); toast({ type: 'success', message: 'CMR settings saved' }) } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
+  return (
+    <Section icon={<Settings2 size={17} />} title="CMR flow settings" hint="The words the SDRs pick from, the meeting copy address, consent states and the Send-info email." action={<Button size="sm" disabled={busy} onClick={save}>Save</Button>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label="Copy every meeting invite to (email)" type="email" value={f.copyEmail} onChange={(e) => setF({ ...f, copyEmail: e.target.value })} placeholder="aaqib@…" />
+        <TextField label="Their name" value={f.copyName} onChange={(e) => setF({ ...f, copyName: e.target.value })} />
+        <TextField label="Two-party consent states" value={list(f.consentStates)} onChange={(e) => setF({ ...f, consentStates: parse(e.target.value) })} placeholder="CA, WA" />
+        <div className="grid grid-cols-3 gap-2">
+          <TextField label="Published rate ($/lb)" inputMode="decimal" value={String(f.publishedRate)} onChange={(e) => setF({ ...f, publishedRate: Number(e.target.value) || 0 })} />
+          <TextField label="Min load (lb)" inputMode="numeric" value={String(f.minLoadLbs)} onChange={(e) => setF({ ...f, minLoadLbs: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+          <TextField label="Connected ≥ (s)" inputMode="numeric" value={String(f.connectedSecs)} onChange={(e) => setF({ ...f, connectedSecs: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+        </div>
+        <TextArea label="Segments (one per line or comma separated)" rows={3} value={list(f.segments)} onChange={(e) => setF({ ...f, segments: parse(e.target.value) })} />
+        <TextArea label="States" rows={3} value={list(f.states)} onChange={(e) => setF({ ...f, states: parse(e.target.value) })} />
+        <div className="sm:col-span-2"><TextField label="Send-info email subject" value={f.infoSubject} onChange={(e) => setF({ ...f, infoSubject: e.target.value })} /></div>
+        <div className="sm:col-span-2"><TextArea label="Send-info email text" rows={10} value={f.infoBody} onChange={(e) => setF({ ...f, infoBody: e.target.value })} /><p className="mt-1 text-[11.5px] text-ink-muted">Placeholders: {'{{company}} {{contact}} {{sdr}} {{rate}} {{note}}'}. No price beyond the published rate, no freight or pickup promise: Metriq refuses those.</p></div>
+      </div>
+    </Section>
+  )
+}
+
+function ListsSection({ biz, toast }: { biz: BusinessRow; toast: Toast }) {
+  const [kind, setKind] = useState<'PROHIBITED' | 'CUSTOMER'>('PROHIBITED')
+  const [rows, setRows] = useState<{ id: string; name: string; phone: string | null; email: string | null; website: string | null; note: string | null }[] | null>(null)
+  const [text, setText] = useState('')
+  const load = () => leadsApi.listEntries(biz.id, kind).then((r) => setRows(r.entries)).catch(() => setRows([]))
+  useEffect(() => { void load() }, [biz.id, kind]) // eslint-disable-line react-hooks/exhaustive-deps
+  const add = (entries: { name: string; phone?: string | null; email?: string | null; website?: string | null; note?: string | null }[]) => leadsApi.addEntries(biz.id, kind, entries).then((r) => { toast({ type: 'success', message: `${r.added} added${r.already ? `, ${r.already} already there` : ''}${r.flagged ? ` · ${r.flagged} lead${r.flagged === 1 ? '' : 's'} re-flagged` : ''}` }); setText(''); void load() }).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not add') }))
+  const fromFile = async (file: File) => {
+    try {
+      const r = await readFile(file)
+      const low = r.headers.map((h) => h.toLowerCase())
+      const col = (names: string[]) => low.findIndex((h) => names.some((n) => h.includes(n)))
+      const iName = col(['company', 'name', 'account']), iPhone = col(['phone']), iEmail = col(['email']), iSite = col(['website', 'url', 'domain']), iNote = col(['note', 'reason'])
+      const cell = (row: (string | number | null)[], i: number) => (i < 0 ? null : String(row[i] ?? '').trim() || null)
+      const entries = r.rows.map((row) => ({ name: cell(row, iName) ?? '', phone: cell(row, iPhone), email: cell(row, iEmail), website: cell(row, iSite), note: cell(row, iNote) })).filter((e) => e.name)
+      if (!entries.length) { toast({ type: 'error', message: 'No company names found (the first row must be the column names).' }); return }
+      await add(entries)
+    } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not read the file') }) }
+  }
+  return (
+    <Section icon={<Ban size={17} />} title="Prohibited leads and existing customers" hint="The pre-call check: a company on either list is flagged the moment it is added, and the Prohibited list blocks calls. Match by company name, phone, email or website.">
+      <div className="mb-3 inline-flex rounded-btn border border-line bg-card p-0.5">{(['PROHIBITED', 'CUSTOMER'] as const).map((k) => <button key={k} type="button" onClick={() => setKind(k)} className={cn('h-8 rounded-md px-3 text-body-sm font-semibold', kind === k ? 'bg-ink text-card' : 'text-ink-muted')}>{k === 'PROHIBITED' ? 'Prohibited Leads' : 'Existing customers'}{rows && kind === k ? ` (${rows.length})` : ''}</button>)}</div>
+      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
+        <div className="max-h-72 overflow-auto rounded-card border border-line">
+          {rows?.length ? <ul className="divide-y divide-line">{rows.map((r) => <li key={r.id} className="flex items-center gap-3 px-3 py-2 text-body-sm"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-ink">{r.name}</span><span className="block truncate text-[11.5px] text-ink-muted">{[r.phone, r.email, r.website, r.note].filter(Boolean).join(' · ')}</span></span><button type="button" className="text-ink-faint hover:text-danger" aria-label={`Remove ${r.name}`} onClick={() => leadsApi.removeEntry(biz.id, r.id).then(() => load())}><Trash2 size={14} /></button></li>)}</ul> : <p className="p-4 text-body-sm text-ink-muted">{rows ? 'Empty. Add names on the right, or upload the list.' : 'Loading…'}</p>}
+        </div>
+        <div className="space-y-2">
+          <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={'One per line, e.g.\nKBI\nLRI, 602-555-0100\nS&P Global, , , spglobal.com'} />
+          <div className="flex items-center justify-between gap-2">
+            <label className="cursor-pointer text-body-sm text-primary hover:underline">Upload CSV / Excel<input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void fromFile(f); e.target.value = '' }} /></label>
+            <Button size="sm" disabled={!text.trim()} onClick={() => add(text.split('\n').map((line) => { const [name, phone, email, website, note] = line.split(',').map((x) => x.trim()); return { name: name ?? '', phone: phone || null, email: email || null, website: website || null, note: note || null } }).filter((e) => e.name))}>Add</Button>
+          </div>
+          <p className="text-[11.5px] text-ink-muted">Columns in a file: Company, Phone, Email, Website, Note (any order; the first row names them).</p>
+        </div>
+      </div>
+    </Section>
   )
 }

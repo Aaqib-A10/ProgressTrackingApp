@@ -60,7 +60,15 @@ const InventoryTeam = lazy(pageModule(() => import('../pages/app/inventory/Inven
 const RdpRecords = lazy(pageModule(() => import('../pages/app/ecommerce/RdpRecords')))
 const DocsLinks = lazy(pageModule(() => import('../pages/app/itad/DocsLinks')))
 const LeadDialer = lazy(pageModule(() => import('../pages/app/itad/dialer/LeadDialer')))
+const LeadsLayout = lazy(pageModule(() => import('../pages/app/leads/LeadsLayout')))
 const Leads = lazy(pageModule(() => import('../pages/app/leads/Leads')))
+const LeadsDashboard = lazy(pageModule(() => import('../pages/app/leads/LeadsDashboard')))
+const LeadPage = lazy(pageModule(() => import('../pages/app/leads/LeadPage')))
+const LeadTasks = lazy(pageModule(() => import('../pages/app/leads/LeadTasks')))
+const LeadCalls = lazy(pageModule(() => import('../pages/app/leads/LeadCalls')))
+const JesseQueue = lazy(pageModule(() => import('../pages/app/leads/JesseQueue')))
+const LeadReport = lazy(pageModule(() => import('../pages/app/leads/LeadReport')))
+const JesseSummary = lazy(pageModule(() => import('../pages/app/leads/JesseSummary')))
 const LeadSettings = lazy(pageModule(() => import('../pages/app/leads/LeadSettings')))
 const MarketingTaskRedirect = lazy(pageModule(() => import('../pages/app/marketing/MarketingTaskRedirect')))
 const MarketingTeam = lazy(pageModule(() => import('../pages/app/marketing/MarketingTeam')))
@@ -196,8 +204,21 @@ export const router = createBrowserRouter([
       { path: 'itad/bids', element: <BidTracker /> },
       { path: 'itad/docs', element: <DocsLinks /> },
       { path: 'itad/dialer', element: <LeadDialer /> },
-      { path: 'leads', element: <RequireFlag flag="lead-management"><Leads /></RequireFlag> },
-      { path: 'leads/settings', element: <RequireFlag flag="lead-management"><RequireRole roles={['SUPER_ADMIN']}><LeadSettings /></RequireRole></RequireFlag> },
+      {
+        path: 'leads',
+        element: <RequireFlag flag="lead-management"><LeadsLayout /></RequireFlag>,
+        children: [
+          { index: true, element: <Leads /> },
+          { path: 'dashboard', element: <LeadsDashboard /> },
+          { path: 'tasks', element: <LeadTasks /> },
+          { path: 'calls', element: <LeadCalls /> },
+          { path: 'queue', element: <RequireFlag flag="cmr"><JesseQueue /></RequireFlag> },
+          { path: 'report', element: <RequireFlag flag="cmr"><LeadReport /></RequireFlag> },
+          { path: 'summary', element: <RequireFlag flag="cmr"><JesseSummary /></RequireFlag> },
+          { path: 'settings', element: <RequireRole roles={['SUPER_ADMIN']}><LeadSettings /></RequireRole> },
+          { path: ':id', element: <LeadPage /> },
+        ],
+      },
       { path: 'itad/team', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadTeamView /></RequireRole> },
       { path: 'itad/analytics', element: <RequireRole roles={['TEAM_LEAD', 'SUPER_ADMIN']}><ItadAnalytics /></RequireRole> },
 

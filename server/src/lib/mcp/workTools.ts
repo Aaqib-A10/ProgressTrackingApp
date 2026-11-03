@@ -168,9 +168,14 @@ export const WORK_TOOLS: DeptTool[] = [
       if (!f.id) return fail(f.error!)
       const id = encodeURIComponent(f.id)
       const action = str(a.action)
-      if (action === 'call' || action === 'email' || action === 'note') {
+      if (action === 'call') {
+        // A call goes on the lead's call log (connected, with the summary), like one logged in the app.
+        const r = await apiAs(u, 'POST', `/api/leads/${id}/calls`, { body: { disposition: 'CONNECTED', summary: str(a.text).slice(0, 5000) } })
+        return r.status >= 400 ? fail(apiError(r)) : text('Call logged.')
+      }
+      if (action === 'email' || action === 'note') {
         const r = await apiAs(u, 'POST', `/api/leads/${id}/events`, { body: { kind: action.toUpperCase(), text: str(a.text).slice(0, 5000) } })
-        return r.status >= 400 ? fail(apiError(r)) : text(action === 'note' ? 'Note added.' : `${action === 'call' ? 'Call' : 'Email'} logged.`)
+        return r.status >= 400 ? fail(apiError(r)) : text(action === 'note' ? 'Note added.' : 'Email logged.')
       }
       if (action === 'status') {
         const s = str(a.status)

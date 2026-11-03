@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, AtSign, Bell, Settings, CalendarClock, CalendarDays, CheckCheck, CheckCircle2, ClipboardCheck, ClipboardList, MessageSquare, UserPlus } from 'lucide-react'
+import { AlertTriangle, AtSign, Bell, Settings, CalendarClock, CalendarDays, CheckCheck, CheckCircle2, ClipboardCheck, ClipboardList, Flag, Inbox, MessageSquare, UserPlus } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { fmtAgo, fmtDateTime } from '../../components/projects/pmUi'
 import { getNotificationHistory, markAllNotificationsRead, markNotificationRead, type StoredNotification } from '../../lib/notificationsApi'
@@ -19,6 +19,13 @@ const ICON: Record<string, JSX.Element> = {
   TASK_REVIEW: <ClipboardCheck size={16} className="text-accent" />,
   MEETING: <CalendarDays size={16} className="text-primary" />,
   CHAT_MESSAGE: <MessageSquare size={16} className="text-primary" />,
+  LEAD_NEW: <Inbox size={16} className="text-primary" />,
+  LEAD_ASSIGNED: <Inbox size={16} className="text-accent" />,
+  LEAD_SLA: <AlertTriangle size={16} className="text-danger" />,
+  LEAD_TASK: <CalendarClock size={16} className="text-warning" />,
+  LEAD_COMMENT: <MessageSquare size={16} className="text-primary" />,
+  LEAD_REVIEW: <Flag size={16} className="text-warning" />,
+  LEAD_DECISION: <CheckCircle2 size={16} className="text-success" />,
 }
 
 /** /app/notifications — full history of stored notifications (read and unread). */

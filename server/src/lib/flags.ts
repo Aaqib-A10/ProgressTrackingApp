@@ -69,6 +69,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  cmr: {
+    label: 'CMR flow',
+    description: "The CMR kind of lead business (99 Technologies): the five facts, Jesse's queue and decisions, the meeting handoff, the Jesse Summary, the daily report and the sheet import, inside Lead Management. Off until the owner turns it on for 99 Technologies.",
+    default: true,
+    client: true,
+    scope: 'company',
+  },
   'social-sign-in': {
     label: 'Sign in with Google and Microsoft',
     description: 'The Google and Microsoft buttons on the sign-in and sign-up pages work (when their keys are on the server). Off: the buttons show "coming soon" and nobody can sign in or sign up with them.',

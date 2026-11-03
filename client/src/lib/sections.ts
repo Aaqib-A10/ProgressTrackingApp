@@ -30,6 +30,9 @@ export const SECTIONS: Section[] = [
   { key: 'ecom-rdp', kind: 'ECOMMERCE', label: 'Remote desktops', description: 'Which remote desktop each person uses.', app: ['/app/ecommerce/rdp'] },
   { key: 'inv-items', kind: 'INVENTORY', label: 'Stock list', description: 'Every item, where it is and how many.', app: ['/app/inventory$'] },
   { key: 'inv-requests', kind: 'INVENTORY', label: 'Requests', description: 'People ask for items; the team hands them out.', app: ['/app/inventory/requests'] },
+  { key: 'cmr-queue', kind: 'CMR', label: 'Jesse Queue', description: 'Qualified leads waiting for Jesse, his decisions and comments.', app: ['/app/leads/queue'] },
+  { key: 'cmr-report', kind: 'CMR', label: 'Daily report', description: 'Dials, connected, voicemails, emails and interested, counted from the calls.', app: ['/app/leads/report'] },
+  { key: 'cmr-summary', kind: 'CMR', label: 'Jesse Summary', description: 'The key numbers, the pipeline, calls by SDR and by segment.', app: ['/app/leads/summary'] },
 ]
 
 export const KIND_INFO: Record<Department, { label: string; description: string }> = {
@@ -40,6 +43,7 @@ export const KIND_INFO: Record<Department, { label: string; description: string 
   ECOMMERCE: { label: 'E-commerce', description: 'Online store teams: daily log, task board, stock and notes.' },
   INVENTORY: { label: 'Inventory', description: 'Stock, requests and who has what.' },
   CSR: { label: 'Customer service', description: 'Support teams, scored by Quality Assurance.' },
+  CMR: { label: 'CMR', description: 'SDRs who qualify battery-collector leads for Jesse. Their leads live in Lead Management (a CMR-kind business); this kind adds the Jesse Queue, the daily report and the Jesse Summary.' },
   TALKLOOP: { label: 'Talkloop', description: 'Retired.' },
 }
 

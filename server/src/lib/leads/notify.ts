@@ -10,14 +10,14 @@ export async function leadManagers(businessId: string): Promise<string[]> {
   return admins.map((a) => a.id)
 }
 
-export const leadLink = (leadId: string) => `/app/leads?lead=${encodeURIComponent(leadId)}`
+export const leadLink = (leadId: string) => `/app/leads/${encodeURIComponent(leadId)}`
 
 /** Bell notification and a phone/computer pop-up. Never throws (a lead is never lost over an alert). */
-export async function tellAboutLead(userIds: string[], n: { type: NotificationType; title: string; body: string; leadId: string; actorId?: string | null }): Promise<void> {
-  const ids = [...new Set(userIds)].filter((id) => id && id !== n.actorId)
+export async function tellAboutLead(userIds: (string | null | undefined)[], n: { type: NotificationType; title: string; body: string; leadId: string; link?: string; actorId?: string | null }): Promise<void> {
+  const ids = [...new Set(userIds.filter((x): x is string => !!x))].filter((id) => id !== n.actorId)
   if (!ids.length) return
   try {
-    const link = leadLink(n.leadId)
+    const link = n.link ?? leadLink(n.leadId)
     await prisma.notification.createMany({
       data: ids.map((userId) => ({ userId, type: n.type, actorId: n.actorId ?? null, title: n.title.slice(0, 200), body: n.body.slice(0, 500), link, entityType: 'Lead', entityId: n.leadId })),
     })
@@ -25,4 +25,10 @@ export async function tellAboutLead(userIds: string[], n: { type: NotificationTy
   } catch (e) {
     console.warn('[leads] notify failed', (e as Error).message)
   }
+}
+
+/** The managers of a business plus its head (CMR: Jesse); with none of those, the Super Admins. */
+export async function leadManagersAndHead(businessId: string): Promise<{ managers: string[]; headId: string | null }> {
+  const b = await prisma.leadBusiness.findUnique({ where: { id: businessId }, select: { headId: true } })
+  return { managers: await leadManagers(businessId), headId: b?.headId ?? null }
 }

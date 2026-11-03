@@ -1,7 +1,7 @@
 // Shared client-side domain types. Mirrors the server Prisma enums.
 
 export type Role = 'MEMBER' | 'TEAM_LEAD' | 'SUB_DEPT_LEAD' | 'QA' | 'QA_LEAD' | 'SUPER_ADMIN'
-export type Department = 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE' | 'TALKLOOP' | 'INVENTORY' | 'GENERAL'
+export type Department = 'ITAD' | 'LEAD_GEN' | 'MARKETING' | 'CSR' | 'ECOMMERCE' | 'TALKLOOP' | 'INVENTORY' | 'CMR' | 'GENERAL'
 export type UserStatus = 'PENDING' | 'ACTIVE' | 'REJECTED'
 
 /** Canonical role labels (normalization checklist — no "Agent"/"TL" drift). */
@@ -50,6 +50,8 @@ export interface CurrentUser {
   areasOff?: string[]
   /** Lead Management: MANAGER or REP when the person works the leads of at least one business. */
   leadsRole?: 'MANAGER' | 'REP' | null
+  /** Works a CMR-kind business: sees the Jesse Queue, Daily Report and Jesse Summary. */
+  leadsCmr?: boolean
   /** Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind). */
   blocks?: string[] | null
   /** Department Studio, part B: the cards on their dashboard (null: the dashboard of their department's kind). */

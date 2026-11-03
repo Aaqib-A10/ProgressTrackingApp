@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { DepartmentType, Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { activeProvider } from '../lib/billing/providers'
-import { leadsRoleOf } from '../lib/leads/access'
+import { leadsCmrOf, leadsRoleOf } from '../lib/leads/access'
 import { companySectionsOff } from '../lib/sectionsOff'
 import { personBlocks, personDashboard } from '../lib/personBlocks'
 import { cleanPrefs } from '../lib/cards'
@@ -102,6 +102,8 @@ async function publicUser(userId: string) {
     areasOff: [...new Set([...companyAreasOff(user.company), ...(user.customRole?.areasOff ?? [])])],
     // Lead Management: MANAGER or REP when the person works the leads of at least one business.
     leadsRole: await leadsRoleOf(user.id),
+    // The CMR flow (Jesse Queue, Daily Report, Jesse Summary) when the person works a CMR business.
+    leadsCmr: await leadsCmrOf(user.id, user.role === 'SUPER_ADMIN'),
   }
 }
 

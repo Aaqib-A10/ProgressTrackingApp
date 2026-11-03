@@ -107,7 +107,7 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
   res.json({ notifications, unread: notifications.length })
 }
 
-const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', CSR: 'CSR', INVENTORY: 'Inventory' }
+const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', CSR: 'CSR', INVENTORY: 'Inventory', CMR: 'CMR' }
 
 /**
  * GET /api/notifications/not-submitted — members who haven't logged today,

@@ -136,6 +136,8 @@ export function createApp(): Express {
   // Lead Dialer imports carry a whole CRM export (a few thousand rows), so they get a bigger limit.
   app.use('/api/dialer/imports', express.json({ limit: '25mb' }))
   app.use('/api/leads/import', express.json({ limit: '25mb' }))
+  app.use('/api/leads/import-sheet', express.json({ limit: '25mb' }))
+  app.use('/api/leads/businesses', express.json({ limit: '10mb' }))
   // Payment providers sign the exact bytes they send: keep them as they are (Phase 1, step 8).
   app.use('/api/billing/webhook', express.raw({ type: () => true, limit: '1mb' }))
   app.use(express.json({ limit: '1mb' }))
