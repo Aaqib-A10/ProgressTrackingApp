@@ -9,6 +9,7 @@ import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
 import { getQaUnreadCount } from '../../lib/qaApi'
 import { filterNav, type NavGroup } from './navConfig'
+import { useFlags } from '../../lib/flags'
 import { visiblePoll } from '../../lib/chatApi'
 import { projectsApi } from '../../lib/projectsApi'
 import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
@@ -51,6 +52,7 @@ function useIsProjectAdmin(user: CurrentUser): boolean {
 }
 
 export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
+  useFlags() // the menu re-draws once the owner's switches are in
   const isProjectAdmin = useIsProjectAdmin(user)
   const groups = filterNav(user)
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.projectAdminOnly || isProjectAdmin) }))

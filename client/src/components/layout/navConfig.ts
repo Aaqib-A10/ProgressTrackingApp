@@ -50,7 +50,7 @@ import { canOpen } from '../../lib/access'
 import type { BadgeTone } from '../ui/Badge'
 import { canViewFinance } from '../../lib/finance'
 import { areaBlocked } from '../../lib/areas'
-import { flagOn } from '../../lib/flags'
+import { flagOn, flagsLoaded } from '../../lib/flags'
 import { inHomeCompany, type Department } from '../../lib/types'
 import { CUSTOM_BLOCK, blockByKey, blocksOfPath, type BlockGroup } from '../../lib/blocks'
 import { iconOf } from '../../lib/customApi'
@@ -289,7 +289,8 @@ type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'emai
 function itemVisible(item: NavItem, u: NavUser): boolean {
   // System Health is Metriq's own engineering view: 99 Technologies only.
   if (item.healthOnly) return inHomeCompany(u) && (u.role === 'SUPER_ADMIN' || !!u.isDeveloper)
-  if (item.flag && !flagOn(item.flag)) return false
+  // A switched part waits for the switches, so it never shows and then vanishes.
+  if (item.flag && (!flagsLoaded() || !flagOn(item.flag))) return false
   if (item.notHome && inHomeCompany(u)) return false
   if (item.leadsOnly && u.role !== 'SUPER_ADMIN' && !u.leadsRole) return false
   // The finance power wins over everything, including Super Admin.
@@ -406,7 +407,7 @@ export function blockNav(u: NavUser, blocks: string[]): NavGroup[] {
     const b = blockByKey(key)
     const item = navItemOfBlock(key)
     if (!b || !item) continue
-    if (item.flag && !flagOn(item.flag)) continue
+    if (item.flag && (!flagsLoaded() || !flagOn(item.flag))) continue
     if (areaBlocked(u, item.to)) continue
     let g = out.find((x) => x.key === b.group)
     if (!g) { g = { key: b.group, ...navGroupOf(b.group), items: [] }; out.push(g) }
