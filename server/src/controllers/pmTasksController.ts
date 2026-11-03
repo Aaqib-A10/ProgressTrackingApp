@@ -672,8 +672,10 @@ export async function decideExtension(req: AuthedRequest, res: Response): Promis
 export async function myTasks(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
   const scope = req.query.scope === 'created' ? 'created' : 'assigned'
+  // Finished tasks shown for this many days (My Tasks board and list: 7 by default, up to 90).
+  const doneDays = Math.min(90, Math.max(1, Number(req.query.doneDays) || 7))
   const ids = await visibleProjectIds(me)
-  const recent = new Date(Date.now() - 7 * 86400000)
+  const recent = new Date(Date.now() - doneDays * 86400000)
   const where: Prisma.PmTaskWhereInput = {
     projectId: { in: ids },
     deletedAt: null,
@@ -688,9 +690,16 @@ export async function myTasks(req: AuthedRequest, res: Response): Promise<void> 
     orderBy: [{ dueAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
     take: 500,
   })
+  // Each project's columns, so My Tasks can change a task's status and group the board by status.
+  const projectIds = [...new Set(tasks.map((t) => t.projectId))]
+  const cols = projectIds.length ? await prisma.pmColumn.findMany({ where: { projectId: { in: projectIds } }, orderBy: { position: 'asc' }, include: { project: { select: { key: true } } } }) : []
+  const columns: Record<string, { id: string; name: string; category: PmColumnCategory; position: number; color: string | null; wipLimit: number | null; isDefault: boolean }[]> = {}
+  for (const c of cols) (columns[c.project.key] ??= []).push({ id: c.id, name: c.name, category: c.category, position: c.position, color: c.color, wipLimit: c.wipLimit, isDefault: c.isDefault })
   res.json({
     scope,
+    doneDays,
     tasks: tasks.map((t) => ({ ...serializeCard(t), project: t.project })),
+    columns,
   })
 }
 

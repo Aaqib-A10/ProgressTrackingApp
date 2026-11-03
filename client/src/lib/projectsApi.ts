@@ -199,7 +199,7 @@ export const projectsApi = {
   decideExtension: (id: string, decision: 'approve' | 'reject', note?: string) => api.post(`/projects/extension-requests/${id}/decide`, { decision, note }),
   bulk: (key: string, body: { taskIds: string[]; columnId?: string; priority?: PmPriority; assigneeId?: string | null; delete?: boolean }) => api.post<{ updated: number }>(`/projects/${k(key)}/tasks/bulk`, body),
 
-  myTasks: (scope: 'assigned' | 'created') => api.get<{ scope: string; tasks: (TaskCard & { project: { key: string; name: string; color: string } })[] }>(`/projects/me/tasks?scope=${scope}`),
+  myTasks: (scope: 'assigned' | 'created', doneDays = 7) => api.get<{ scope: string; doneDays: number; tasks: (TaskCard & { project: { key: string; name: string; color: string } })[]; columns: Record<string, BoardColumn[]> }>(`/projects/me/tasks?scope=${scope}&doneDays=${doneDays}`),
   prefs: () => api.get<{ prefs: NotifyPrefs }>('/projects/notification-prefs'),
   savePrefs: (p: Partial<NotifyPrefs>) => api.put<{ prefs: NotifyPrefs }>('/projects/notification-prefs', p),
 

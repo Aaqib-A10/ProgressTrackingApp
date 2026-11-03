@@ -549,3 +549,16 @@ describe('voice / video calls', () => {
     expect(r.body.changed.some((m: { call: { id: string; active: boolean } | null }) => !!m.call && m.call.id === b.body.call.id && !m.call.active)).toBe(true)
   })
 })
+
+describe('My Tasks', () => {
+  it('lists my tasks with each project\'s columns (for the board and the status menu); done ones for the days asked', async () => {
+    const r = await request(app).get('/api/projects/me/tasks').query({ scope: 'assigned', doneDays: 30 }).set(...auth(w.itadLead)).expect(200)
+    expect(r.body.doneDays).toBe(30)
+    expect(r.body.tasks.length).toBeGreaterThan(0)
+    const key = r.body.tasks[0].project.key as string
+    const cols = r.body.columns[key] as { id: string; name: string; category: string }[]
+    expect(cols.length).toBeGreaterThan(1)
+    expect(cols.some((c) => c.id === r.body.tasks[0].columnId)).toBe(true)
+    expect((await request(app).get('/api/projects/me/tasks').query({ doneDays: 9999 }).set(...auth(w.itadLead)).expect(200)).body.doneDays).toBe(90)
+  })
+})
