@@ -332,6 +332,31 @@ describe('CMR flow inside Lead Management', () => {
     expect((await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body.queue.map((l: { organization: string }) => l.organization)).toContain('Desert HHW')
     const transit = await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Metro Transit' } })
     expect(transit).toMatchObject({ status: 'NOT_A_FIT', assigneeId: mark.id, state: 'TX', nextStep: null })
+
+    // The same sheet again adds nothing (no second call, no second comment); a row whose SDR was not a member before now gets them.
+    await prisma.leadBusinessMember.create({ data: { businessId: cmrId, userId: stranger.id, role: 'REP' } })
+    const rows2 = rows.map((r) => (r[1] === 'Marvin' ? r.map((c, i) => (i === 1 ? 'Sam' : c)) : r))
+    const again = (await api(lead).post('/import-sheet', { businessId: cmrId, fileName: 'CMR_Lead_Tracker.csv', headers, rows: rows2 }).expect(200)).body
+    expect(again).toMatchObject({ companies: 0, calls: 0, alreadyThere: 5, totalCompanies: r.totalCompanies })
+    const desert2 = await prisma.lead.findFirstOrThrow({ where: { id: desert.id }, include: { calls: true, comments: true } })
+    expect(desert2.calls).toHaveLength(2)
+    expect(desert2.comments).toHaveLength(1)
+    const bad = await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Bad Rows Co' }, include: { calls: true } })
+    expect(bad.assigneeId).toBe(stranger.id)
+    expect(bad.calls[0].userId).toBe(stranger.id)
+    await prisma.leadBusinessMember.delete({ where: { businessId_userId: { businessId: cmrId, userId: stranger.id } } })
+  })
+
+  it('bulk assign: several leads to one rep at once, their open tasks and SDR-less calls follow; reps may not', async () => {
+    const ids = (await prisma.lead.findMany({ where: { businessId: cmrId, organization: { in: ['Desert HHW', 'Metro Transit', 'Integritrade LLC'] } }, select: { id: true } })).map((x) => x.id)
+    await api(mark).post('/bulk-assign', { ids, assigneeId: matthew.id }).expect(403)
+    await api(lead).post('/bulk-assign', { ids, assigneeId: 'nobody-here' }).expect(422)
+    const r = (await api(lead).post('/bulk-assign', { ids, assigneeId: matthew.id }).expect(200)).body
+    expect(r.assigned).toBe(1) // Desert HHW and Integritrade were Matthew's already
+    const after = await prisma.lead.findMany({ where: { id: { in: ids } }, select: { assigneeId: true, tasks: { where: { doneAt: null }, select: { assigneeId: true } } } })
+    expect(after.every((l) => l.assigneeId === matthew.id)).toBe(true)
+    expect(after.flatMap((l) => l.tasks).every((t) => t.assigneeId === matthew.id)).toBe(true)
+    expect((await api(lead).post('/bulk-assign', { ids, assigneeId: null }).expect(200)).body.assigned).toBe(3)
   })
 
   it('a usual business keeps the usual pipeline: a call moves New to Contacted, no CMR actions, LeadWise details still there', async () => {

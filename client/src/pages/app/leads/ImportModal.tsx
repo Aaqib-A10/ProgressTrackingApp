@@ -53,7 +53,7 @@ export function ImportModal({ business, onClose, onDone }: { business: MetaBusin
     try {
       if (mode === 'sheet') {
         const r = await leadsApi.importSheet({ businessId: business.id, fileName: file.name, headers: file.headers, mapping, rows: file.rows, source: 'SHEET' })
-        setResult({ text: `${r.companies} new compan${r.companies === 1 ? 'y' : 'ies'}, ${r.calls} call${r.calls === 1 ? '' : 's'} added under them, ${r.skipped} empty row${r.skipped === 1 ? '' : 's'} skipped. ${business.name} now has ${r.totalCompanies} companies.`, problems: r.problems })
+        setResult({ text: `${r.companies} new compan${r.companies === 1 ? 'y' : 'ies'}, ${r.calls} call${r.calls === 1 ? '' : 's'} added under them${r.alreadyThere ? `, ${r.alreadyThere} row${r.alreadyThere === 1 ? '' : 's'} already here (nothing added, the SDR filled in where it was missing)` : ''}, ${r.skipped} empty row${r.skipped === 1 ? '' : 's'} skipped. ${business.name} now has ${r.totalCompanies} companies.`, problems: r.problems })
       } else {
         const r = await leadsApi.import({ businessId: business.id, fileName: file.name, headers: file.headers, mapping, rows: file.rows, assigneeId: assignee || null })
         setResult({ text: `${r.added} added, ${r.already} already here (skipped), ${r.skipped} empty rows skipped.`, problems: [] })

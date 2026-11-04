@@ -46,6 +46,10 @@ export default function Leads() {
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(() => params.get('import') === '1')
   const [colsOpen, setColsOpen] = useState(false)
+  // Ticked rows, for "assign N leads to…" (managers and admins).
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [bulkTo, setBulkTo] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [moreFilters, setMoreFilters] = useState(false)
   const cmr = !!business && business.kind === 'CMR' && !all
   const [cols, setCols] = useColumns(cmr)
@@ -66,7 +70,7 @@ export default function Leads() {
     setLoading(true)
     leadsApi.list(listParams).then(setData).catch((e) => addToast({ type: 'error', message: apiErrorText(e, 'Could not load leads') })).finally(() => setLoading(false))
   }, [listParams, business, all, addToast])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); setPicked(new Set()) }, [load])
 
   const setParam = (patch: Record<string, string | null>) => setParams((p) => { const n = new URLSearchParams(p); for (const [k, v] of Object.entries(patch)) { if (v == null || v === '') n.delete(k); else n.set(k, v) } if (!('page' in patch)) n.delete('page'); return n })
   const searchTimer = useRef<number>()
@@ -159,17 +163,34 @@ export default function Leads() {
         )}
       </div>
 
+      {/* Assign the ticked leads */}
+      {canManage && picked.size > 0 && (
+        <div className="sticky bottom-3 z-[2] flex flex-wrap items-center gap-2 rounded-card border border-primary/40 bg-card px-4 py-2.5 shadow-md">
+          <span className="text-body-sm font-semibold text-ink">{picked.size} lead{picked.size === 1 ? '' : 's'} picked</span>
+          <Select value={bulkTo} onChange={(e) => setBulkTo(e.target.value)} aria-label="Assign to" className="min-w-[200px]">
+            <option value="">Assign to…</option>
+            {(business ? business.members : [...new Map(businesses.flatMap((b) => b.members).map((m) => [m.id, m])).values()]).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            <option value="__none">Nobody (take back)</option>
+          </Select>
+          <Button size="sm" disabled={!bulkTo || bulkBusy} onClick={async () => {
+            setBulkBusy(true)
+            try { const r = await leadsApi.bulkAssign([...picked], bulkTo === '__none' ? null : bulkTo); addToast({ type: 'success', message: `${r.assigned} lead${r.assigned === 1 ? '' : 's'} ${bulkTo === '__none' ? 'taken back' : 'assigned'}` }); setPicked(new Set()); setBulkTo(''); load() } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not assign') }) } finally { setBulkBusy(false) }
+          }}>{bulkBusy ? 'Saving…' : 'Assign'}</Button>
+          <button type="button" className="ml-auto text-body-sm text-ink-muted hover:text-ink" onClick={() => setPicked(new Set())}>Clear</button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-body-sm">
             <thead className="sticky top-0 z-[1] bg-slate-50 text-[11.5px] uppercase tracking-wide text-ink-muted dark:bg-white/[0.03]">
-              <tr>{cols.map((k) => <th key={k} className="whitespace-nowrap px-3 py-2.5 font-semibold">{COLUMNS.find((c) => c.key === k)?.label}</th>)}<th className="px-3 py-2.5 text-right font-semibold">Actions</th></tr>
+              <tr>{canManage && <th className="w-9 py-2.5 pl-3"><input type="checkbox" aria-label="Pick every lead on this page" checked={!!data?.leads.length && data.leads.every((l) => picked.has(l.id))} onChange={(e) => setPicked(e.target.checked ? new Set(data?.leads.map((l) => l.id)) : new Set())} /></th>}{cols.map((k) => <th key={k} className="whitespace-nowrap px-3 py-2.5 font-semibold">{COLUMNS.find((c) => c.key === k)?.label}</th>)}<th className="px-3 py-2.5 text-right font-semibold">Actions</th></tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {loading && !data && Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={cols.length + 1} className="px-3 py-3"><div className="h-5 animate-pulse rounded bg-slate-100 dark:bg-white/5" /></td></tr>)}
-              {data?.leads.map((l) => <Row key={l.id} l={l} cols={cols} business={businesses.find((b) => b.id === l.businessId) ?? business} canManage={canManage} onOpen={() => nav(`/app/leads/${l.id}`)} onChanged={load} toast={addToast} />)}
-              {data && !data.leads.length && <tr><td colSpan={cols.length + 1} className="px-3 py-12"><EmptyState compact icon={<Inbox />} title="No leads match" hint="Change the filters, or add a lead." /></td></tr>}
+              {loading && !data && Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={cols.length + (canManage ? 2 : 1)} className="px-3 py-3"><div className="h-5 animate-pulse rounded bg-slate-100 dark:bg-white/5" /></td></tr>)}
+              {data?.leads.map((l) => <Row key={l.id} l={l} cols={cols} business={businesses.find((b) => b.id === l.businessId) ?? business} canManage={canManage} picked={picked.has(l.id)} onPick={(v) => setPicked((p) => { const n = new Set(p); if (v) n.add(l.id); else n.delete(l.id); return n })} onOpen={() => nav(`/app/leads/${l.id}`)} onChanged={load} toast={addToast} />)}
+              {data && !data.leads.length && <tr><td colSpan={cols.length + (canManage ? 2 : 1)} className="px-3 py-12"><EmptyState compact icon={<Inbox />} title="No leads match" hint="Change the filters, or add a lead." /></td></tr>}
             </tbody>
           </table>
         </div>
@@ -215,7 +236,7 @@ function ColumnsMenu({ cmr, cols, onChange, onClose }: { cmr: boolean; cols: str
   )
 }
 
-function Row({ l, cols, business, canManage, onOpen, onChanged, toast }: { l: LeadRow; cols: string[]; business: MetaBusiness | null; canManage: boolean; onOpen: () => void; onChanged: () => void; toast: ReturnType<typeof useToast>['addToast'] }) {
+function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, toast }: { l: LeadRow; cols: string[]; business: MetaBusiness | null; canManage: boolean; picked: boolean; onPick: (v: boolean) => void; onOpen: () => void; onChanged: () => void; toast: ReturnType<typeof useToast>['addToast'] }) {
   const [busy, setBusy] = useState(false)
   const pipeline = business?.pipeline ?? []
   const run = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast({ type: 'success', message: ok }); onChanged() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
@@ -259,7 +280,8 @@ function Row({ l, cols, business, canManage, onOpen, onChanged, toast }: { l: Le
     }
   }
   return (
-    <tr onClick={onOpen} className={cn('cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03]', l.jesseInputNeeded && 'bg-orange-50/40 dark:bg-orange-500/5')}>
+    <tr onClick={onOpen} className={cn('cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03]', l.jesseInputNeeded && 'bg-orange-50/40 dark:bg-orange-500/5', picked && 'bg-primary/[0.05]')}>
+      {canManage && <td className="py-2.5 pl-3 align-middle" onClick={stop}><input type="checkbox" checked={picked} onChange={(e) => onPick(e.target.checked)} aria-label={`Pick ${leadTitle(l)}`} /></td>}
       {cols.map((k) => <td key={k} className="px-3 py-2.5 align-middle text-ink">{cell(k)}</td>)}
       <td className="px-3 py-2.5 text-right">
         <span className="inline-flex gap-1" onClick={stop}>

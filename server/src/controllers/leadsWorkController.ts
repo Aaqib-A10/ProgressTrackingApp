@@ -436,6 +436,33 @@ export async function assignLead(req: AuthedRequest, res: Response): Promise<voi
   res.json({ lead: leadOut(saved) })
 }
 
+/** POST /api/leads/bulk-assign { ids, assigneeId } — give several leads to one person (or take them back); every lead must be in a business the caller manages. */
+export async function bulkAssign(req: AuthedRequest, res: Response): Promise<void> {
+  const { me: m, s } = await ctx(req)
+  const b = parse(z.object({ ids: z.array(z.string().max(60)).min(1).max(500), assigneeId: z.string().max(60).nullable() }), req.body)
+  const leads = await prisma.lead.findMany({ where: { id: { in: b.ids } }, select: { id: true, businessId: true, assigneeId: true, organization: true, name: true, email: true, phone: true, status: true, business: { select: { id: true, name: true, kind: true, pipeline: true, slaContactMins: true } } } })
+  if (leads.length !== b.ids.length) throw new HttpError(404, 'Some of those leads were not found')
+  for (const bizId of new Set(leads.map((l) => l.businessId))) requireManager(s, bizId, 'assign its leads')
+  if (b.assigneeId) {
+    const members = await prisma.leadBusinessMember.findMany({ where: { userId: b.assigneeId, businessId: { in: [...new Set(leads.map((l) => l.businessId))] } }, select: { businessId: true, user: { select: { isActive: true } } } })
+    for (const bizId of new Set(leads.map((l) => l.businessId))) { const mem = members.find((x) => x.businessId === bizId); if (!mem || !mem.user.isActive) throw new HttpError(422, 'That person does not work leads for every business picked. Add them under Lead settings first.') }
+  }
+  const now = new Date()
+  const changed = leads.filter((l) => l.assigneeId !== b.assigneeId)
+  if (changed.length) {
+    await prisma.lead.updateMany({ where: { id: { in: changed.map((l) => l.id) } }, data: { assigneeId: b.assigneeId, assignedAt: b.assigneeId ? now : null, assignedById: b.assigneeId ? m.id : null, slaContactAlertAt: null, lastActivityAt: now } })
+    await prisma.leadTask.updateMany({ where: { leadId: { in: changed.map((l) => l.id) }, doneAt: null, kind: { in: ['FOLLOW_UP', 'NEXT_STEP', 'SEND_INVITE', 'RELAY', 'RECONFIRM', 'OUTCOME', 'CALL', 'REPLY'] } }, data: { assigneeId: b.assigneeId } })
+    // Sheet-imported calls that had no SDR yet take the new owner, so "Calls by SDR" counts them.
+    if (b.assigneeId) await prisma.leadCall.updateMany({ where: { leadId: { in: changed.map((l) => l.id) }, userId: null, externalId: null }, data: { userId: b.assigneeId } })
+    for (const l of changed) await event(l.id, m.id, 'ASSIGNED', b.assigneeId ? '' : 'Taken back (no one)', b.assigneeId ? { to: b.assigneeId } : undefined)
+    if (b.assigneeId && b.assigneeId !== m.id) {
+      const first = changed[0]
+      await tellAboutLead([b.assigneeId], { type: 'LEAD_ASSIGNED', title: changed.length === 1 ? `New lead for you: ${first.organization || first.name || first.email || first.phone || 'a lead'}` : `${changed.length} leads for you`, body: `${first.business.name}${changed.length === 1 ? ` · ${statusLabel(first.business, first.status)}` : ' · open Leads to see them'}`, leadId: first.id, link: changed.length === 1 ? undefined : `/app/leads?business=${first.businessId}&assignee=me&status=all`, actorId: m.id })
+    }
+  }
+  res.json({ assigned: changed.length })
+}
+
 /** POST /api/leads/:id/events { kind: NOTE | EMAIL, text } — a note, or an email that happened (calls: /calls). */
 export async function addLeadEvent(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
@@ -1160,7 +1187,7 @@ export async function importSheet(req: AuthedRequest, res: Response): Promise<vo
   const cell = (row: (string | number | null)[], f: string) => (col[f] < 0 ? '' : String(row[col[f]] ?? '').trim())
   const people = (await prisma.leadBusinessMember.findMany({ where: { businessId: biz.id }, select: { user: { select: { id: true, name: true } } } })).map((x) => x.user)
   const byName = (n: string) => people.find((p) => p.name.toLowerCase() === n.toLowerCase() || p.name.toLowerCase().split(' ')[0] === n.toLowerCase())?.id ?? null
-  let companies = 0, calls = 0, skipped = 0
+  let companies = 0, calls = 0, skipped = 0, alreadyThere = 0
   const problems: string[] = []
   const seen = new Map<string, string>()
   const sorted = b.rows.map((r, i) => ({ r, i, d: dateOf(cell(r, 'date')) })).sort((a, c) => (a.d?.getTime() ?? 0) - (c.d?.getTime() ?? 0))
@@ -1219,15 +1246,21 @@ export async function importSheet(req: AuthedRequest, res: Response): Promise<vo
     seen.set(key, leadId)
     const summary = cell(r, 'summary')
     if (summary || cell(r, 'date')) {
-      await prisma.leadCall.create({ data: { leadId, businessId: biz.id, userId: assigneeId, at: when, disposition: 'CONNECTED', summary } })
-      await prisma.lead.update({ where: { id: leadId }, data: { callsCount: { increment: 1 }, lastCallAt: when } })
-      calls++
+      // The same sheet imported again adds nothing: a call on that day with that summary is the one already there
+      // (it only picks up the SDR, now that the person is in the business).
+      const same = await prisma.leadCall.findFirst({ where: { leadId, at: when, summary, externalId: null }, select: { id: true, userId: true } })
+      if (same) { if (!same.userId && assigneeId) await prisma.leadCall.update({ where: { id: same.id }, data: { userId: assigneeId } }); alreadyThere++ }
+      else {
+        await prisma.leadCall.create({ data: { leadId, businessId: biz.id, userId: assigneeId, at: when, disposition: 'CONNECTED', summary } })
+        await prisma.lead.update({ where: { id: leadId }, data: { callsCount: { increment: 1 }, lastCallAt: when } })
+        calls++
+      }
     }
-    if (cmr && cmrData.jesseComment) await prisma.leadComment.create({ data: { leadId, userId: biz.headId ?? m.id, body: cmrData.jesseComment, createdAt: when } })
+    if (cmr && cmrData.jesseComment && !(await prisma.leadComment.findFirst({ where: { leadId, body: cmrData.jesseComment }, select: { id: true } }))) await prisma.leadComment.create({ data: { leadId, userId: biz.headId ?? m.id, body: cmrData.jesseComment, createdAt: when } })
     if (leadData.nextStep && nextStepDate && open) await makeTask({ leadId, businessId: biz.id, assigneeId, kind: 'NEXT_STEP', title: leadData.nextStep, dueAt: atPhoenix(DateTime.fromJSDate(nextStepDate)), actorId: m.id, notify: false })
   }
   const total = await prisma.lead.count({ where: { businessId: biz.id } })
-  res.json({ companies, calls, skipped, problems: problems.slice(0, 50), totalCompanies: total })
+  res.json({ companies, calls, skipped, alreadyThere, problems: problems.slice(0, 50), totalCompanies: total })
 }
 
 /** GET /api/leads/import-sheet/columns — the sheet's columns, for the mapping screen. */
