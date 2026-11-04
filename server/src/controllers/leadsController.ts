@@ -147,9 +147,10 @@ export async function listBusinesses(req: AuthedRequest, res: Response): Promise
   requireLeadAdmin(s)
   const list = await prisma.leadBusiness.findMany({ include: BIZ_INCLUDE, orderBy: { name: 'asc' } })
   const open = await prisma.lead.groupBy({ by: ['businessId'], where: { status: { in: OPEN_STATUSES } }, _count: { _all: true } })
+  const every = await prisma.lead.groupBy({ by: ['businessId'], _count: { _all: true } })
   const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, role: true, department: { select: { name: true, type: true } } }, orderBy: { name: 'asc' } })
   res.json({
-    businesses: list.map((b) => ({ ...bizOut(b), openLeads: open.find((o) => o.businessId === b.id)?._count._all ?? 0 })),
+    businesses: list.map((b) => ({ ...bizOut(b), openLeads: open.find((o) => o.businessId === b.id)?._count._all ?? 0, leadCount: every.find((o) => o.businessId === b.id)?._count._all ?? 0 })),
     people: people.map((p) => ({ id: p.id, name: p.name, email: p.email, role: p.role, department: p.department?.name ?? null, departmentType: p.department?.type ?? null })),
     cmrOn: await isOn('cmr', m.companyId),
   })

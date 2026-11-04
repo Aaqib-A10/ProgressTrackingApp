@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Ban, Check, Copy, Flag, Globe, Inbox, ListOrdered, Mail, Plus, RefreshCw, Send, Settings2, Trash2, Users } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
-import { Modal } from '../../../components/ui/Modal'
 import { Toggle } from '../../../components/ui/Toggle'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { TextField, TextArea } from '../../../components/ui/Input'
@@ -11,8 +10,10 @@ import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
 import { ago, leadsApi, type BusinessKind, type BusinessRow, type CmrSettings, type InboxInput, type Person, type PipelineStatus } from '../../../lib/leadsApi'
-import { Label, Select } from './shared'
+import { Label, Select, useLeadsMeta } from './shared'
+import { useAuth } from '../../../lib/auth'
 import { readFile } from '../itad/dialer/ImportModal'
+import { CreateBusinessWizard, SetupChecklist, SetupSteps, WhoSeesWhat, type SetupPerson } from './SetupGuide'
 
 /**
  * Lead Settings (Super Admin): the businesses that receive leads, who works them (managers assign,
@@ -25,8 +26,10 @@ const slaText = (m: number) => (m === 0 ? 'Never' : m < 60 ? `${m} minutes` : m 
 
 export default function LeadSettings() {
   const { addToast } = useToast()
+  const { reload: reloadMeta } = useLeadsMeta()
+  const { refresh: refreshMe } = useAuth()
   const [list, setList] = useState<BusinessRow[] | null>(null)
-  const [people, setPeople] = useState<(Person & { department: string | null })[]>([])
+  const [people, setPeople] = useState<SetupPerson[]>([])
   const [cmrOn, setCmrOn] = useState(false)
   const [sel, setSel] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -34,7 +37,9 @@ export default function LeadSettings() {
 
   const load = () => leadsApi.businesses().then((r) => { setList(r.businesses); setPeople(r.people); setCmrOn(r.cmrOn); setSel((s) => s ?? r.businesses[0]?.id ?? null) }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
   useEffect(() => { void load() }, [])
-  const put = (b: BusinessRow) => setList((l) => (l ?? []).map((x) => (x.id === b.id ? { ...x, ...b } : x)))
+  /** Every change here also refreshes the Leads screens (which business, who is in it) and the menu (Jesse Queue appears once a CMR business has me). */
+  const sync = () => { reloadMeta(); void refreshMe() }
+  const put = (b: BusinessRow) => { setList((l) => (l ?? []).map((x) => (x.id === b.id ? { ...x, ...b } : x))); sync() }
   const biz = list?.find((b) => b.id === sel) ?? null
 
   if (err) return <div className="mx-auto max-w-xl py-16"><EmptyState icon={<Inbox />} title="Lead Settings are not available" hint={err} /></div>
@@ -51,9 +56,7 @@ export default function LeadSettings() {
       </div>
 
       {list && !list.length ? (
-        <div className="rounded-card border border-line bg-card p-8">
-          <EmptyState icon={<Globe />} title="No businesses yet" hint="Add each brand or company that receives leads, for example RTI or Minnesota Computers." action={<Button size="sm" leadingIcon={<Plus size={15} />} onClick={() => setCreating(true)}>Add business</Button>} />
-        </div>
+        <SetupSteps cmrOn={cmrOn} onCreate={() => setCreating(true)} />
       ) : (
         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
           <nav className="space-y-1.5">
@@ -65,11 +68,11 @@ export default function LeadSettings() {
               </button>
             ))}
           </nav>
-          {biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} onSaved={put} onDeleted={() => { setSel(null); void load() }} toast={addToast} />}
+          {biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} onSaved={put} onDeleted={() => { setSel(null); void load(); sync() }} toast={addToast} />}
         </div>
       )}
 
-      {creating && <CreateModal cmrOn={cmrOn} onClose={() => setCreating(false)} onCreated={(b) => { setCreating(false); setList((l) => [...(l ?? []), { ...b, openLeads: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id) }} />}
+      {creating && <CreateBusinessWizard cmrOn={cmrOn} people={people} onClose={() => setCreating(false)} onCreated={(b, note) => { setCreating(false); setList((l) => [...(l ?? []).filter((x) => x.id !== b.id), { ...b, openLeads: 0, leadCount: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id); sync(); addToast({ type: 'success', message: note }) }} />}
     </div>
   )
 }
@@ -99,8 +102,14 @@ function BusinessEditor({ biz, people, cmrOn, onSaved, onDeleted, toast }: { biz
     setBusy(true)
     try { const r = await fn() as { business?: BusinessRow }; if (r?.business) onSaved(r.business); if (ok) toast({ type: 'success', message: ok }) } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) }
   }
+  const [who, setWho] = useState(false)
   return (
     <div className="space-y-5">
+      <SetupChecklist biz={biz} cmrOn={cmrOn} />
+      <div className="rounded-card border border-line bg-card">
+        <button type="button" onClick={() => setWho((v) => !v)} className="flex w-full items-center justify-between px-5 py-3 text-left text-body-sm font-semibold text-ink"><span>Who sees what in {biz.name}</span><span className="text-ink-faint">{who ? 'Hide' : 'Show'}</span></button>
+        {who && <div className="border-t border-line p-4"><WhoSeesWhat compact /></div>}
+      </div>
       <Section icon={<Globe size={17} />} title="Business" action={<div className="flex items-center gap-3"><Toggle checked={biz.isActive} onChange={(v) => run(() => leadsApi.updateBusiness(biz.id, { isActive: v }), v ? 'Switched on' : 'Switched off: its form and inbox stop')} label={biz.isActive ? 'On' : 'Off'} /></div>}>
         <div className="grid gap-3 sm:grid-cols-2">
           <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
@@ -269,34 +278,6 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
         <Button size="sm" disabled={busy} onClick={() => save()}>Save inbox</Button>
       </div>
     </Section>
-  )
-}
-
-function CreateModal({ cmrOn, onClose, onCreated }: { cmrOn: boolean; onClose: () => void; onCreated: (b: BusinessRow) => void }) {
-  const { addToast } = useToast()
-  const [name, setName] = useState('')
-  const [website, setWebsite] = useState('')
-  const [kind, setKind] = useState<BusinessKind>('GENERAL')
-  const [busy, setBusy] = useState(false)
-  const go = async () => {
-    setBusy(true)
-    try { const r = await leadsApi.createBusiness({ name: name.trim(), website: website.trim() || null, color: kind === 'CMR' ? '#059669' : COLORS[Math.floor(Math.random() * COLORS.length)], kind }); onCreated(r.business) } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not add') }) } finally { setBusy(false) }
-  }
-  return (
-    <Modal open onClose={onClose} title="Add a business" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !name.trim()} onClick={go}>Add</Button></>}>
-      <div className="space-y-3">
-        <TextField label="Name" autoFocus placeholder="Recycle Technologies" value={name} onChange={(e) => setName(e.target.value)} />
-        <TextField label="Website (optional)" placeholder="https://example.com" value={website} onChange={(e) => setWebsite(e.target.value)} />
-        <div><Label>Kind</Label>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {([['GENERAL', 'Usual pipeline', 'New → Contacted → Qualified → Won / Lost'], ['CMR', 'CMR flow', 'Five facts, Jesse’s queue and decisions, meetings, daily report']] as const).map(([k, t, h]) => (
-              <button key={k} type="button" disabled={k === 'CMR' && !cmrOn} onClick={() => setKind(k)} className={cn('rounded-card border p-3 text-left disabled:opacity-50', kind === k ? 'border-primary bg-primary/[0.06]' : 'border-line')}><span className="block text-body-sm font-semibold text-ink">{t}</span><span className="block text-[11.5px] text-ink-muted">{h}{k === 'CMR' && !cmrOn ? ' · switched off for your company' : ''}</span></button>
-            ))}
-          </div>
-        </div>
-        <p className="text-body-sm text-ink-muted">Next: add its managers and reps{kind === 'CMR' ? ', set Jesse as the head' : ''}, then put its form address on the website.</p>
-      </div>
-    </Modal>
   )
 }
 

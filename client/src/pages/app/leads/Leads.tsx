@@ -44,13 +44,15 @@ export default function Leads() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState(params.get('q') ?? '')
   const [adding, setAdding] = useState(false)
-  const [importing, setImporting] = useState(false)
+  const [importing, setImporting] = useState(() => params.get('import') === '1')
   const [colsOpen, setColsOpen] = useState(false)
   const [moreFilters, setMoreFilters] = useState(false)
   const cmr = !!business && business.kind === 'CMR' && !all
   const [cols, setCols] = useColumns(cmr)
   const canManage = !!meta?.me.admin || (all ? (meta?.me.managerOf.length ?? 0) > 0 : business?.myRole === 'MANAGER')
   const page = Number(params.get('page') ?? 1) || 1
+  /** Lead Settings opens the import with ?import=1; drop it once the window closes. */
+  const dropImportParam = () => { if (params.get('import')) setParams((p) => { const q = new URLSearchParams(p); q.delete('import'); return q }, { replace: true }) }
 
   const listParams = useMemo((): ListParams => ({
     business: all ? undefined : business?.id, q: params.get('q') ?? undefined, status: params.get('status') ?? 'open', assignee: params.get('assignee') ?? undefined, source: params.get('source') ?? undefined,
@@ -181,7 +183,7 @@ export default function Leads() {
       </div>
 
       {adding && business && <AddLeadModal business={business} onClose={() => setAdding(false)} onAdded={(id) => { setAdding(false); nav(`/app/leads/${id}`) }} />}
-      {importing && business && <ImportModal business={business} onClose={() => setImporting(false)} onDone={() => { setImporting(false); load() }} />}
+      {importing && business && <ImportModal business={business} onClose={() => { setImporting(false); dropImportParam() }} onDone={() => load()} />}
     </div>
   )
 }

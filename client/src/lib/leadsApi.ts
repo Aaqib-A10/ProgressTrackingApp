@@ -83,6 +83,8 @@ export interface BusinessRow {
   inboxCheckedAt: string | null; inboxError: string | null
   members: (Person & { role: 'MANAGER' | 'REP'; isActive: boolean })[]
   openLeads: number
+  /** Every lead of the business, open or closed (the setup checklist's "leads are in"). */
+  leadCount: number
 }
 export interface InboxInput { inboxOn: boolean; inboxHost: string | null; inboxPort: number; inboxSecure: boolean; inboxUser: string | null; password?: string; inboxFolder: string }
 
@@ -167,7 +169,7 @@ export const leadsApi = {
   sheetColumns: () => api.get<{ columns: { field: string; label: string }[] }>('/leads/import-sheet/columns'),
   importSheet: (b: { businessId: string; fileName?: string; headers: string[]; mapping?: Record<string, string | null>; rows: (string | number | null)[][]; source?: 'SHEET' | 'LEADWISE' }) => api.post<{ companies: number; calls: number; skipped: number; problems: string[]; totalCompanies: number }>('/leads/import-sheet', b),
   businesses: () => api.get<{ businesses: BusinessRow[]; people: (Person & { role: string; department: string | null; departmentType: string | null })[]; cmrOn: boolean }>('/leads/businesses'),
-  createBusiness: (b: { name: string; website?: string | null; color?: string; kind?: BusinessKind }) => api.post<{ business: BusinessRow }>('/leads/businesses', b),
+  createBusiness: (b: { name: string; website?: string | null; color?: string; kind?: BusinessKind; headId?: string | null }) => api.post<{ business: BusinessRow }>('/leads/businesses', b),
   updateBusiness: (id: string, b: Partial<{ name: string; website: string | null; color: string; isActive: boolean; slaAssignMins: number; slaContactMins: number; kind: BusinessKind; headId: string | null; pipeline: PipelineStatus[] | null; settings: Partial<CmrSettings> }>) => api.patch<{ business: BusinessRow }>(`/leads/businesses/${id}`, b),
   deleteBusiness: (id: string) => api.del(`/leads/businesses/${id}`),
   setMember: (id: string, userId: string, role: 'MANAGER' | 'REP') => api.post<{ business: BusinessRow }>(`/leads/businesses/${id}/members`, { userId, role }),

@@ -1111,7 +1111,19 @@ export const SHEET_COLUMNS: { field: string; label: string; match: RegExp }[] = 
   { field: 'tags', label: 'Tags', match: /^tags?$/i },
 ]
 
-const num = (v: string): number | null => { const n = Number(String(v).replace(/[^0-9.]/g, '')); return v.trim() && Number.isFinite(n) ? n : null }
+/** The first number in a sheet cell: "1,500-2,000 (growing)" → 1500, "$2.00 per lb" → 2, "Unknown" → null. */
+const num = (v: string): number | null => { const m = String(v).match(/\d[\d,]*(?:\.\d+)?/); const n = m ? Number(m[0].replace(/,/g, '')) : NaN; return Number.isFinite(n) ? n : null }
+/** "Pays Today" as the sheet writes it: a fee per lb or drum, or nothing at all. */
+const paysOf = (v: string): { paysToday: number | null; paysUnit: string } => {
+  const t = v.trim()
+  if (/^(nothing|none|no charge|free)\b/i.test(t) || /^\$?0(\.0+)?$/.test(t)) return { paysToday: 0, paysUnit: 'NONE' }
+  const n = num(t)
+  return n == null ? { paysToday: null, paysUnit: 'UNKNOWN' } : { paysToday: n, paysUnit: /drum/i.test(t) ? 'DRUM' : 'LB' }
+}
+/** The first email in a cell that may hold two, or a note ("info@x.com (verify)"). */
+const firstEmail = (v: string): string => v.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? ''
+/** The first phone number in a cell like "888-694-4978 / 972-427-7770". */
+const firstPhone = (v: string): string => v.split(/\s*(?:\/|;|,|\bor\b|\n)\s*/).map((x) => x.trim()).find((x) => x.replace(/\D/g, '').length >= 7) ?? v.trim()
 const dateOf = (v: string): Date | null => {
   const t = v.trim()
   if (!t) return null
@@ -1153,7 +1165,10 @@ export async function importSheet(req: AuthedRequest, res: Response): Promise<vo
   const seen = new Map<string, string>()
   const sorted = b.rows.map((r, i) => ({ r, i, d: dateOf(cell(r, 'date')) })).sort((a, c) => (a.d?.getTime() ?? 0) - (c.d?.getTime() ?? 0))
   for (const { r, i } of sorted) {
-    const organization = cell(r, 'organization') || null, name = cell(r, 'name')
+    const organization = cell(r, 'organization') || null
+    // Some rows put the phone number in the Contact column: keep it as the phone, not as a name.
+    const nameCell = cell(r, 'name'), nameIsPhone = /^[\d\s()+.-]{7,}$/.test(nameCell)
+    const name = nameIsPhone ? '' : nameCell
     if (!organization && !name) { skipped++; continue }
     const key = orgKey(organization) ?? `contact:${name.toLowerCase()}`
     const sdrName = cell(r, 'sdr')
@@ -1164,8 +1179,8 @@ export async function importSheet(req: AuthedRequest, res: Response): Promise<vo
     if (statusText && !status) problems.push(`Row ${i + 2}: status "${statusText}" is not one of ${biz.name}'s; left as New`)
     const industry = cell(r, 'industry') || null
     if (cmr && industry && !set.segments.some((x) => x.toLowerCase() === industry.toLowerCase())) problems.push(`Row ${i + 2}: segment "${industry}" is not in the Segment list (kept as typed)`)
-    const phone = normalizePhone(cell(r, 'phone'))
-    const email = emailKey(cell(r, 'email'))
+    const phone = normalizePhone(firstPhone(cell(r, 'phone') || (nameIsPhone ? nameCell : '')))
+    const email = emailKey(firstEmail(cell(r, 'email')))
     const owner = /jesse/i.test(cell(r, 'owner')) ? 'HEAD' : /aaqib/i.test(cell(r, 'owner')) ? 'COPY' : 'REP'
     const when = dateOf(cell(r, 'date')) ?? new Date()
     const nextStepDate = dateOf(cell(r, 'nextStepDate'))
@@ -1177,7 +1192,11 @@ export async function importSheet(req: AuthedRequest, res: Response): Promise<vo
     }
     const cmrData: Prisma.LeadCmrCreateWithoutLeadInput = cmr ? {
       contactRole: cell(r, 'contactRole') || null, decisionMaker: cell(r, 'decisionMaker') ? yesNoFromText(cell(r, 'decisionMaker')) : 'UNKNOWN', handlesAlkaline: cell(r, 'handlesAlkaline') ? yesNoFromText(cell(r, 'handlesAlkaline')) : 'UNKNOWN',
-      lbsPerMonth: num(cell(r, 'lbsPerMonth')), currentVendor: cell(r, 'currentVendor') || null, paysToday: num(cell(r, 'paysToday')), paysUnit: num(cell(r, 'paysToday')) != null ? 'LB' : 'UNKNOWN',
+      // "Decision Maker = Yes" with a named contact: that contact is the decision maker (the fourth fact).
+      decisionMakerName: yesNoFromText(cell(r, 'decisionMaker')) === 'YES' && name ? name : null,
+      // What Jesse is asked: the row's next step when his input is needed (the sheet has no separate column).
+      jesseAsk: /^y/i.test(cell(r, 'jesseInputNeeded')) ? cell(r, 'nextStep') || null : null,
+      lbsPerMonth: num(cell(r, 'lbsPerMonth')), currentVendor: cell(r, 'currentVendor') || null, ...paysOf(cell(r, 'paysToday')),
       jesseInputNeeded: /^y/i.test(cell(r, 'jesseInputNeeded')), jesseComment: cell(r, 'jesseComment') || null, flaggedAt: /^y/i.test(cell(r, 'jesseInputNeeded')) ? when : null, qualifiedAt: status === 'QUALIFIED' ? when : null,
     } : {}
     const existingId = seen.get(key) ?? (organization ? (await prisma.lead.findFirst({ where: { businessId: biz.id, orgKey: key }, select: { id: true } }))?.id : undefined)
