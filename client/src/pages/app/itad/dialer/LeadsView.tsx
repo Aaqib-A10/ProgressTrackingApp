@@ -6,7 +6,8 @@ import { Modal } from '../../../../components/ui/Modal'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerData, type SavedView } from '../../../../lib/dialerApi'
-import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, type LeadFilters } from '../../../../lib/dialer'
+import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, multiLabel, type LeadFilters } from '../../../../lib/dialer'
+import { FilterBar, type FilterDef } from './filters'
 import { DownloadLeads, InfoTip, MultiFilter, Pager, errMsg, usePaged } from './ui'
 import { ColumnPicker, LeadsTable } from './LeadColumns'
 import { BulkBar } from './TaskParts'
@@ -37,7 +38,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
   const lastImport = useMemo(() => (data.lastImport ? { id: data.lastImport.id, at: new Date(data.lastImport.at) } : null), [data.lastImport])
   const leads = data.leads
   const list = useMemo(() => filterLeads(leads, f, now, lastImport, data.settings), [leads, f, now, lastImport, data.settings])
-  const p = usePaged(list)
+  const p = usePaged(list, 25, 'l')
   const counts = useMemo(() => Object.fromEntries(PRESET_VIEWS.map((v) => [v.id, filterLeads(leads, { preset: v.id }, now, lastImport).length])), [leads, now, lastImport])
 
   const opts = (fn: (l: (typeof leads)[number]) => string | null, empty: string) => [...new Set(leads.map((l) => fn(l) ?? empty))].sort((a, b) => a.localeCompare(b))
@@ -71,39 +72,46 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
         <InfoTip side="bottom">Views are filter sets. Pick one, or set filters and press "Save view" to keep it as your own tab. Every list only ever shows your own leads.</InfoTip>
       </div>
 
-      {/* Search and filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="relative">
-          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <input value={f.q ?? ''} onChange={(e) => setF((x) => ({ ...x, q: e.target.value || undefined }))} placeholder="Name, company, phone, email or city" className="h-9 w-72 rounded-btn border border-line bg-card pl-8 pr-2 text-body-sm text-ink focus:border-primary focus:outline-none" />
-        </label>
-        <MultiFilter label="State" value={f.state} onChange={(v) => set('state', v)} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} />
-        <MultiFilter label="Region" value={f.region} onChange={(v) => set('region', v)} options={REGIONS.map((r) => ({ value: r }))} />
-        <MultiFilter label="Industry" value={f.industry} onChange={(v) => set('industry', v)} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} />
-        <MultiFilter label="Status" allLabel="Any" value={f.status} onChange={(v) => set('status', v)} options={opts((l) => l.status, 'Unknown').map((v) => ({ value: v }))} />
-        <MultiFilter label="Stage" value={f.stage} onChange={(v) => set('stage', v)} options={[{ value: '1', label: '1 New / assigned' }, { value: '2', label: '2 Attempted' }, { value: '3', label: '3 Connected' }, { value: '4', label: '4 Positive' }]} />
-        <select value={f.inStatus ?? ''} onChange={(e) => set('inStatus', e.target.value)} className={sel(!!f.inStatus)} aria-label="Days in status"><option value="">Days in status</option>{[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d}+ days</option>)}</select>
-        <select value={f.updated ?? ''} onChange={(e) => set('updated', e.target.value)} className={sel(!!f.updated)} aria-label="Last updated"><option value="">Last updated</option>{[1, 7, 30, 90].map((d) => <option key={d} value={d}>In the last {d === 1 ? 'day' : `${d} days`}</option>)}</select>
-        <select value={f.callAt ? (/^\d/.test(f.callAt) ? 'time' : f.callAt) : ''} onChange={(e) => set('callAt', e.target.value === 'time' ? nextHour(now) : e.target.value)} className={sel(!!f.callAt)} aria-label="Call time">
-          <option value="">Call time</option>
-          <option value="now">Can call now</option>
-          <option value="prime">Prime time now</option>
-          <option value="time">At a time I pick (PKT)</option>
-        </select>
-        {f.callAt && /^\d/.test(f.callAt) && (
-          <label className="inline-flex items-center gap-1.5 text-body-sm text-ink">
-            <span className="text-ink-muted">At</span>
-            <input type="time" value={f.callAt} onChange={(e) => e.target.value && set('callAt', e.target.value)} className="h-8 rounded-full border border-primary bg-primary/5 px-3 text-body-sm font-semibold text-primary focus:outline-none" aria-label="Pakistan time to call" />
-            <span className="text-ink-muted">PKT</span>
-          </label>
-        )}
-        <select value={f.notes ?? ''} onChange={(e) => set('notes', e.target.value)} className={sel(!!f.notes)} aria-label="Notes"><option value="">Notes</option><option value="yes">Has notes</option><option value="no">No notes</option></select>
-        {tags.length > 0 && <MultiFilter label="Tag" value={f.tag} onChange={(v) => set('tag', v)} options={tags.map((t) => ({ value: t }))} />}
-        {lists.length > 1 && <MultiFilter label="List" value={f.list} onChange={(v) => set('list', v)} options={lists.map((t) => ({ value: t, label: t === 'CRM' ? 'CRM (SMB)' : t }))} />}
-        {showOwner && <MultiFilter label="Rep" value={f.rep} onChange={(v) => set('rep', v)} options={[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => ({ value: id, label: n || 'Unknown' }))} />}
-        {(extra > 0 || f.q) && <button type="button" onClick={() => write({ preset: 'all' }, 'all')} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
-        {extra > 0 && !activeView && <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Save size={14} /> Save view</button>}
-      </div>
+      {/* Search and filters: the Filters button, the pinned ones, chips for the rest */}
+      {(() => {
+        const timePick = f.callAt && /^\d/.test(f.callAt)
+        const defs: FilterDef[] = [
+          { key: 'state', label: 'State', group: 'Location', active: !!f.state, summary: multiLabel(f.state), clear: () => set('state', ''), control: <MultiFilter label="State" value={f.state} onChange={(v) => set('state', v)} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} /> },
+          { key: 'region', label: 'Region', group: 'Location', active: !!f.region, summary: multiLabel(f.region), clear: () => set('region', ''), control: <MultiFilter label="Region" value={f.region} onChange={(v) => set('region', v)} options={REGIONS.map((r) => ({ value: r }))} /> },
+          { key: 'industry', label: 'Industry', group: 'Company', active: !!f.industry, summary: multiLabel(f.industry), clear: () => set('industry', ''), control: <MultiFilter label="Industry" value={f.industry} onChange={(v) => set('industry', v)} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} /> },
+          { key: 'status', label: 'Status', group: 'Stage', active: !!f.status, summary: multiLabel(f.status), clear: () => set('status', ''), control: <MultiFilter label="Status" allLabel="Any" value={f.status} onChange={(v) => set('status', v)} options={opts((l) => l.status, 'Unknown').map((v) => ({ value: v }))} /> },
+          { key: 'stage', label: 'Stage', group: 'Stage', active: !!f.stage, summary: multiLabel(f.stage), clear: () => set('stage', ''), control: <MultiFilter label="Stage" value={f.stage} onChange={(v) => set('stage', v)} options={[{ value: '1', label: '1 New / assigned' }, { value: '2', label: '2 Attempted' }, { value: '3', label: '3 Connected' }, { value: '4', label: '4 Positive' }]} /> },
+          { key: 'inStatus', label: 'Days in status', group: 'Activity', active: !!f.inStatus, summary: f.inStatus ? `${f.inStatus}+ days` : '', clear: () => set('inStatus', ''), control: <select value={f.inStatus ?? ''} onChange={(e) => set('inStatus', e.target.value)} className={sel(!!f.inStatus)} aria-label="Days in status"><option value="">Days in status</option>{[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d}+ days</option>)}</select> },
+          { key: 'updated', label: 'Last updated', group: 'Activity', active: !!f.updated, summary: f.updated ? `last ${f.updated === '1' ? 'day' : `${f.updated} days`}` : '', clear: () => set('updated', ''), control: <select value={f.updated ?? ''} onChange={(e) => set('updated', e.target.value)} className={sel(!!f.updated)} aria-label="Last updated"><option value="">Last updated</option>{[1, 7, 30, 90].map((d) => <option key={d} value={d}>In the last {d === 1 ? 'day' : `${d} days`}</option>)}</select> },
+          { key: 'callAt', label: 'Call time', group: 'Activity', active: !!f.callAt, summary: f.callAt === 'now' ? 'can call now' : f.callAt === 'prime' ? 'prime time now' : f.callAt ? `${fmtPkt(f.callAt)} PKT` : '', clear: () => set('callAt', ''), control: (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <select value={f.callAt ? (timePick ? 'time' : f.callAt) : ''} onChange={(e) => set('callAt', e.target.value === 'time' ? nextHour(now) : e.target.value)} className={sel(!!f.callAt)} aria-label="Call time">
+                <option value="">Call time</option>
+                <option value="now">Can call now</option>
+                <option value="prime">Prime time now</option>
+                <option value="time">At a time I pick (PKT)</option>
+              </select>
+              {timePick && (
+                <label className="inline-flex items-center gap-1.5 text-body-sm text-ink">
+                  <span className="text-ink-muted">At</span>
+                  <input type="time" value={f.callAt} onChange={(e) => e.target.value && set('callAt', e.target.value)} className="h-8 rounded-full border border-primary bg-primary/5 px-3 text-body-sm font-semibold text-primary focus:outline-none" aria-label="Pakistan time to call" />
+                  <span className="text-ink-muted">PKT</span>
+                </label>
+              )}
+            </span>
+          ) },
+          { key: 'notes', label: 'Notes', group: 'Activity', active: !!f.notes, summary: f.notes === 'yes' ? 'has notes' : f.notes === 'no' ? 'no notes' : '', clear: () => set('notes', ''), control: <select value={f.notes ?? ''} onChange={(e) => set('notes', e.target.value)} className={sel(!!f.notes)} aria-label="Notes"><option value="">Notes</option><option value="yes">Has notes</option><option value="no">No notes</option></select> },
+          ...(tags.length > 0 ? [{ key: 'tag', label: 'Tag', group: 'Company', active: !!f.tag, summary: multiLabel(f.tag), clear: () => set('tag', ''), control: <MultiFilter label="Tag" value={f.tag} onChange={(v) => set('tag', v)} options={tags.map((t) => ({ value: t }))} /> }] : []),
+          ...(lists.length > 1 ? [{ key: 'list', label: 'List', group: 'Company', active: !!f.list, summary: multiLabel(f.list), clear: () => set('list', ''), control: <MultiFilter label="List" value={f.list} onChange={(v) => set('list', v)} options={lists.map((t) => ({ value: t, label: t === 'CRM' ? 'CRM (SMB)' : t }))} /> }] : []),
+          ...(showOwner ? [{ key: 'rep', label: 'Rep', group: 'Company', active: !!f.rep, summary: multiLabel(f.rep).split(', ').map((id) => leads.find((l) => l.ownerId === id)?.ownerName || 'Unknown').join(', '), clear: () => set('rep', ''), control: <MultiFilter label="Rep" value={f.rep} onChange={(v) => set('rep', v)} options={[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => ({ value: id, label: n || 'Unknown' }))} /> }] : []),
+        ]
+        return (
+          <FilterBar page="leads" defs={defs} prefs={data.prefs}
+            search={<label className="relative"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" /><input value={f.q ?? ''} onChange={(e) => setF((x) => ({ ...x, q: e.target.value || undefined }))} placeholder="Name, company, phone, email or city" className="h-9 w-72 rounded-btn border border-line bg-card pl-8 pr-2 text-body-sm text-ink focus:border-primary focus:outline-none" /></label>}
+            onClearAll={() => write({ preset: 'all' }, 'all')}
+            after={extra > 0 && !activeView ? <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Save size={14} /> Save view</button> : undefined} />
+        )
+      })()}
 
       <div className="rounded-card border border-line bg-card p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

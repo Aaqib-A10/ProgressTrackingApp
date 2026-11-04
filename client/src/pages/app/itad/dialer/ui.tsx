@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { BellOff, Check, ChevronDown, Search, X, ChevronLeft, ChevronRight, Clock3, Download, FileSpreadsheet, FileText, Info, MessageSquarePlus, Phone, Pin } from 'lucide-react'
 import { Modal } from '../../../../components/ui/Modal'
 import { Button } from '../../../../components/ui/Button'
@@ -76,13 +77,24 @@ export function Panel({ title, info, action, children, className }: { title?: Re
 
 // ------------------------------------------------------------------ numbered pages
 
-export function usePaged<T>(items: T[], initialSize = 25) {
-  const [page, setPage] = useState(1)
-  const [size, setSize] = useState(initialSize)
+/**
+ * Numbered pages. With a urlKey the page and size live in the address bar (?<key>p=2&<key>n=50),
+ * so opening a lead, Back and a refresh return to the same page of the same list.
+ */
+export function usePaged<T>(items: T[], initialSize = 25, urlKey?: string) {
+  const [params, setParams] = useSearchParams()
+  const [localPage, setLocalPage] = useState(1)
+  const [localSize, setLocalSize] = useState(initialSize)
+  const page = urlKey ? Number(params.get(`${urlKey}p`)) || 1 : localPage
+  const size = urlKey ? Number(params.get(`${urlKey}n`)) || initialSize : localSize
+  const write = (p: number, n: number) => {
+    if (!urlKey) { setLocalPage(p); setLocalSize(n); return }
+    setParams((prev) => { const q = new URLSearchParams(prev); if (p > 1) q.set(`${urlKey}p`, String(p)); else q.delete(`${urlKey}p`); if (n !== initialSize) q.set(`${urlKey}n`, String(n)); else q.delete(`${urlKey}n`); return q }, { replace: true })
+  }
   const pages = Math.max(1, Math.ceil(items.length / size))
-  useEffect(() => { if (page > pages) setPage(pages) }, [page, pages])
+  useEffect(() => { if (page > pages) write(pages, size) }, [page, pages]) // eslint-disable-line react-hooks/exhaustive-deps
   const cur = Math.min(page, pages)
-  return { rows: items.slice((cur - 1) * size, cur * size), page: cur, pages, size, setPage, setSize: (n: number) => { setSize(n); setPage(1) }, total: items.length }
+  return { rows: items.slice((cur - 1) * size, cur * size), page: cur, pages, size, setPage: (p: number) => write(p, size), setSize: (n: number) => write(1, n), total: items.length }
 }
 
 /** 1 2 3 … pages with a 25 / 50 / 100 choice, used on every list. */

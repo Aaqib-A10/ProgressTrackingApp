@@ -71,12 +71,17 @@ export interface DialerPrefs {
   columns: string[]
   /** Follow-ups: saved views (filters and sort), e.g. "Pipeline, Pacific, quiet 60+ days". */
   fuViews: SavedView[]
+  /** The filters pinned to the bar, per page (dashboard, followups, leads...); a page missing here uses the defaults. */
+  filterPins: Record<string, string[]>
 }
 export function readPrefs(data: unknown): DialerPrefs {
   const d = (data && typeof data === 'object' ? data : {}) as Partial<DialerPrefs>
+  const pins: Record<string, string[]> = {}
+  if (d.filterPins && typeof d.filterPins === 'object') for (const [k, v] of Object.entries(d.filterPins)) if (Array.isArray(v)) pins[k] = v.filter((x) => typeof x === 'string')
   return {
     views: Array.isArray(d.views) ? d.views : [], followUp: d.followUp && typeof d.followUp === 'object' ? d.followUp : {},
     columns: Array.isArray(d.columns) ? d.columns.filter((c) => typeof c === 'string') : [], fuViews: Array.isArray(d.fuViews) ? d.fuViews : [],
+    filterPins: pins,
   }
 }
 
@@ -135,6 +140,10 @@ export function matchKeyOf(r: { leadId: string | null; email: string | null; com
   return null
 }
 
+/** Two CRM values are the same when they differ only in case or spacing. */
+const sameText = (a: unknown, b: unknown): boolean => String(a ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === String(b ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+/** Two dates are the same to the minute (exports round seconds differently). */
+const sameMinute = (a: Date | null, b: Date | null): boolean => (a ? Math.floor(a.getTime() / 60000) : null) === (b ? Math.floor(b.getTime() / 60000) : null)
 // Region and the split-state flag follow from the state, so they are not compared on their own.
 const CRM_FIELDS = ['externalId', 'company', 'contactName', 'email', 'phone', 'city', 'stateRaw', 'state', 'industry', 'status', 'source', 'website', 'companySize', 'listName', 'jobTitle', 'assignedTo'] as const
 
@@ -176,7 +185,9 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
   const recs = new Map<string, Rec>()
   let skipped = 0
   let repeated = 0
-  for (const row of rows) {
+  /** Why each skipped row was skipped (row numbers as in the file, the header being row 1). */
+  const skippedRows: { row: number; reason: string }[] = []
+  for (const [rowIndex, row] of rows.entries()) {
     const raw: Record<string, string | number | null> = {}
     headers.forEach((h, i) => { raw[h] = row[i] ?? null })
     const leadId = clean(get(row, 'leadId'))
@@ -186,7 +197,10 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     const email = clean(get(row, 'email'))?.toLowerCase() ?? null
     const phone = clean(get(row, 'phone'))
     const key = matchKeyOf({ leadId, email, company, contactName, phone })
-    if (!key || (!company && !contactName)) { if (row.some((c) => clean(c))) skipped++; continue }
+    if (!key || (!company && !contactName)) {
+      if (row.some((c) => clean(c))) { skipped++; if (skippedRows.length < 300) skippedRows.push({ row: rowIndex + 2, reason: !company && !contactName ? 'no company or contact name' : 'nothing to recognise the lead by (no lead ID, email, or phone with a name)' }) }
+      continue
+    }
     const stateRaw = clean(get(row, 'state'))
     const st = findState(stateRaw)
     const status = normalizeStatus(clean(get(row, 'status')))
@@ -219,8 +233,14 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     data: { userId: meId, fileName, headerSignature: headers.join('|'), mapping, rowCount: rows.length, summary: {}, funnel: {} },
   })
 
-  let added = 0, changed = 0, unchanged = 0, forward = 0, back = 0, duplicates = 0, keptHere = 0
+  let added = 0, changed = 0, unchanged = 0, forward = 0, back = 0, duplicates = 0, keptHere = 0, reassigned = 0
   const moves = new Map<string, number>()
+  /** Which CRM fields changed, how often: shows what drove the Changed count (a date format, a renamed column...). */
+  const changedFields = new Map<string, number>()
+  const changedIds: string[] = []
+  const act = { connects: 0, voicemails: 0, positives: 0, toLeadGen: 0 }
+  // "Email / Lead Gen": stage 2 statuses other than the two call outcomes (the state table's column).
+  const isLeadGen = (status: string, stage: number) => stage === 2 && status !== 'Contact Attempted' && status !== 'Voicemail Sent'
   const newIndustries = new Map<string, number>()
   const creates: Prisma.DialerLeadCreateManyInput[] = []
   const updates: Prisma.PrismaPromise<unknown>[] = []
@@ -256,14 +276,26 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     }
     const statusChanged = old.status !== r.status
     if (old.inLatestImport) compares.push({ leadId: old.id, oldStatus: old.status, newStatus: r.status, oldUpdated: old.lastActivityAt, newUpdated: r.lastActivityAt })
-    const crmSame = CRM_FIELDS.every((f) => (old as Record<string, unknown>)[f] === (r as unknown as Record<string, unknown>)[f === 'externalId' ? 'externalId' : f])
-      && (old.lastActivityAt?.getTime() ?? null) === (r.lastActivityAt?.getTime() ?? null)
-      && (old.leadDate?.getTime() ?? null) === (r.leadDate?.getTime() ?? null)
+    // Changed means a value a rep would call different: case and spacing do not count, dates are compared by minute.
+    const diff: string[] = CRM_FIELDS.filter((f) => !sameText((old as Record<string, unknown>)[f], (r as unknown as Record<string, unknown>)[f]))
+    if (!sameMinute(old.lastActivityAt, r.lastActivityAt)) diff.push('lastActivityAt')
+    if (!sameMinute(old.leadDate, r.leadDate)) diff.push('leadDate')
+    const crmSame = diff.length === 0
     if (crmSame && old.inLatestImport && !clearHere) { unchanged++; unchangedIds.push(old.id); continue }
-    if (crmSame) { unchanged++ } else { changed++ }
+    if (crmSame) { unchanged++ } else {
+      changed++
+      for (const f of diff) changedFields.set(f, (changedFields.get(f) ?? 0) + 1)
+      if (changedIds.length < 4000) changedIds.push(old.id)
+    }
     if (statusChanged) {
-      if (r.stage > old.stage) forward++
+      // A lead coming back from Lead Gen to Assigned is a hand-back, not a regression.
+      if (isLeadGen(old.status, old.stage) && r.stage <= 1) reassigned++
+      else if (r.stage > old.stage) forward++
       else if (r.stage < old.stage) back++
+      if (r.stage >= 3 && old.stage < 3) act.connects++
+      if (r.status === 'Voicemail Sent') act.voicemails++
+      if (r.stage >= 4 && old.stage < 4) act.positives++
+      if (isLeadGen(r.status, r.stage) && !isLeadGen(old.status, old.stage)) act.toLeadGen++
       const k = `${old.status}\u0000${r.status}`
       moves.set(k, (moves.get(k) ?? 0) + 1)
       changeRows.push({ leadId: old.id, fromStatus: old.status, toStatus: r.status, fromStage: old.stage, toStage: r.stage, importId: imp.id })
@@ -312,9 +344,25 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
   const fPrev = (prevImport?.funnel && typeof prevImport.funnel === 'object' && 'total' in (prevImport.funnel as object)) ? (prevImport.funnel as unknown as FunnelNumbers) : null
   const unknownStatuses = new Map<string, number>()
   for (const r of recs.values()) if (settings.stageMap[r.status] == null) unknownStatuses.set(r.status, (unknownStatuses.get(r.status) ?? 0) + 1)
+  // Leads of this list held back as duplicates (new or older): why Added + Changed + Unchanged can be more than the counted total.
+  const heldAsDuplicate = await prisma.dialerLead.count({ where: { ownerId: meId, inLatestImport: true, duplicate: true, listName } })
+  const touches = touchPlan.create.length + touchPlan.merge.length
+  const prevActivity = (prevImport?.summary as { activity?: Record<string, number | null> } | null)?.activity ?? null
   const summary = {
     listName,
     rows: rows.length, leads: recs.size, added, changed, unchanged, skipped, repeatedInFile: repeated,
+    /** The skipped rows, with the reason (first 300). */
+    skippedRows,
+    /** Which fields drove the Changed count. */
+    changedFields: [...changedFields.entries()].map(([field, count]) => ({ field, count })).sort((a, b) => b.count - a.count),
+    changedIds,
+    /** Leads handed back from Lead Gen to Assigned: shown on their own, not as "moved back". */
+    reassignedFromLeadGen: reassigned,
+    /** Counted leads after this import, and the duplicates left out: Added + Changed + Unchanged = leads in the file = counted + held as duplicate. */
+    counted: fNow.total, heldAsDuplicate,
+    /** What this import's work added up to, and the same numbers from the previous import. */
+    activity: { touches, ...act, connectRateTouched: touches ? act.connects / touches : null },
+    activityBefore: prevActivity,
     notInFile: dropped.length, duplicates, duplicateExamples: dupList,
     /** Statuses changed in Metriq that Earthzone does not show yet: kept as set in Metriq. */
     keptChangedHere: keptHere,
@@ -327,7 +375,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     funnelBefore: fPrev,
     funnelNow: fNow,
     /** Touches found by comparing with the previous import, and dates skipped as bulk updates. */
-    touches: touchPlan.create.length,
+    touches,
     bulkUpdateDays: touchPlan.bulkDays,
   }
   await prisma.dialerImport.update({ where: { id: imp.id }, data: { summary: summary as unknown as Prisma.InputJsonValue, funnel: fNow as unknown as Prisma.InputJsonValue } })
@@ -835,6 +883,7 @@ const prefsSchema = z.object({
   followUp: z.record(z.string().min(1).max(60), z.number().int().min(FOLLOW_UP_MIN, `Follow-up days must be ${FOLLOW_UP_MIN} to ${FOLLOW_UP_MAX}.`).max(FOLLOW_UP_MAX, `Follow-up days must be ${FOLLOW_UP_MIN} to ${FOLLOW_UP_MAX}.`)).optional(),
   columns: z.array(z.string().min(1).max(40)).max(30).optional(),
   fuViews: z.array(viewSchema).max(20).optional(),
+  filterPins: z.record(z.string().min(1).max(30), z.array(z.string().min(1).max(40)).max(40)).optional(),
 })
 
 export async function getPrefs(req: AuthedRequest, res: Response): Promise<void> {
@@ -848,25 +897,67 @@ export async function putPrefs(req: AuthedRequest, res: Response): Promise<void>
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid settings' }); return }
   const row = await prisma.dialerUserPrefs.findUnique({ where: { userId: req.user!.id } })
   const cur = readPrefs(row?.data)
-  const next = { views: parsed.data.views ?? cur.views, followUp: parsed.data.followUp ?? cur.followUp, columns: parsed.data.columns ?? cur.columns, fuViews: parsed.data.fuViews ?? cur.fuViews }
+  const next = { views: parsed.data.views ?? cur.views, followUp: parsed.data.followUp ?? cur.followUp, columns: parsed.data.columns ?? cur.columns, fuViews: parsed.data.fuViews ?? cur.fuViews, filterPins: parsed.data.filterPins ? { ...cur.filterPins, ...parsed.data.filterPins } : cur.filterPins }
   await prisma.dialerUserPrefs.upsert({ where: { userId: req.user!.id }, update: { data: next as unknown as Prisma.InputJsonValue }, create: { userId: req.user!.id, data: next as unknown as Prisma.InputJsonValue } })
   res.json({ prefs: next })
 }
 
 // ---------------------------------------------------------------------------- import history: leads behind a status change
 
-/** GET /api/dialer/imports/:id/changes?from=&to= — the leads that made one "top status change" line. */
+/**
+ * GET /api/dialer/imports/:id/changes — the leads behind one line of the import summary.
+ * ?from=&to= one "top status change" line; or ?kind= added | changed | forward | back | reassigned |
+ * touches | nostate | connects | voicemails | positives | toLeadGen. Each row says what happened to that lead.
+ */
 export async function importChanges(req: AuthedRequest, res: Response): Promise<void> {
   const me = await whoAmI(req)
-  const imp = await prisma.dialerImport.findUnique({ where: { id: req.params.id }, select: { userId: true } })
+  const imp = await prisma.dialerImport.findUnique({ where: { id: req.params.id }, select: { userId: true, summary: true } })
   if (!imp) { res.status(404).json({ error: 'Import not found' }); return }
   if (imp.userId !== me.id && !(me.isManager && (await itadUserIds(me)).includes(imp.userId))) { res.status(404).json({ error: 'Import not found' }); return }
-  const rows = await prisma.dialerStatusChange.findMany({
-    where: { importId: req.params.id, ...(req.query.from ? { fromStatus: String(req.query.from) } : {}), ...(req.query.to ? { toStatus: String(req.query.to) } : {}) },
-    take: 5000,
-    select: { leadId: true, fromStatus: true, toStatus: true, lead: { select: { company: true, contactName: true, phone: true, status: true, state: true, stateOverride: true } } },
-  })
-  res.json({ leads: rows.map((r) => ({ leadId: r.leadId, from: r.fromStatus, to: r.toStatus, company: r.lead.company, contactName: r.lead.contactName, phone: r.lead.phone, status: r.lead.status, state: r.lead.stateOverride ?? r.lead.state })) })
+  const kind = String(req.query.kind ?? '')
+  const leadSel = { select: { company: true, contactName: true, phone: true, status: true, state: true, stateOverride: true } }
+  type Row = { leadId: string; from: string | null; to: string | null; at: string | null; kind: string; company: string; contactName: string | null; phone: string | null; status: string; state: string | null; what?: string }
+  const row = (leadId: string, l: { company: string; contactName: string | null; phone: string | null; status: string; state: string | null; stateOverride: string | null }, extra: Partial<Row> & { kind: string }): Row =>
+    ({ leadId, from: null, to: null, at: null, company: l.company, contactName: l.contactName, phone: l.phone, status: l.status, state: l.stateOverride ?? l.state, ...extra })
+  const isLeadGen = (status: string | null, stage: number | null) => stage === 2 && status !== 'Contact Attempted' && status !== 'Voicemail Sent'
+  let rows: Row[] = []
+  if (kind === 'added') {
+    const ls = await prisma.dialerLead.findMany({ where: { firstImportId: req.params.id }, take: 5000, select: { id: true, createdAt: true, ...leadSel.select } })
+    rows = ls.map((l) => row(l.id, l, { kind: 'added', to: l.status, at: l.createdAt.toISOString() }))
+  } else if (kind === 'changed') {
+    const ids = ((imp.summary as { changedIds?: string[] } | null)?.changedIds ?? []).slice(0, 5000)
+    const ls = await prisma.dialerLead.findMany({ where: { id: { in: ids } }, select: { id: true, ...leadSel.select } })
+    const changes = await prisma.dialerStatusChange.findMany({ where: { importId: req.params.id, leadId: { in: ids } }, select: { leadId: true, fromStatus: true, toStatus: true } })
+    const byLead = new Map(changes.map((c) => [c.leadId, c]))
+    rows = ls.map((l) => { const c = byLead.get(l.id); return row(l.id, l, { kind: c ? 'status change' : 'details changed', from: c?.fromStatus ?? null, to: c?.toStatus ?? null }) })
+  } else if (kind === 'touches') {
+    const ts = await prisma.dialerTouch.findMany({ where: { OR: [{ importId: req.params.id }, { mergedImportId: req.params.id }], dismissedAt: null }, take: 5000, select: { leadId: true, at: true, kind: true, status: true, lead: leadSel } })
+    const changes = await prisma.dialerStatusChange.findMany({ where: { importId: req.params.id, leadId: { in: ts.map((t) => t.leadId) } }, select: { leadId: true, fromStatus: true, toStatus: true } })
+    const byLead = new Map(changes.map((c) => [c.leadId, c]))
+    rows = ts.map((t) => { const c = byLead.get(t.leadId); return row(t.leadId, t.lead, { kind: t.kind === 'STATUS_CHANGE' ? 'status change' : t.kind === 'RE_ATTEMPT' ? 're-attempt' : 'touch', from: c?.fromStatus ?? (t.kind === 'RE_ATTEMPT' ? t.status : null), to: c?.toStatus ?? t.status, at: t.at.toISOString() }) })
+  } else if (kind === 'nostate') {
+    const ls = await prisma.dialerLead.findMany({ where: { ownerId: imp.userId, inLatestImport: true, duplicate: false, state: null, stateOverride: null }, take: 5000, select: { id: true, ...leadSel.select } })
+    rows = ls.map((l) => row(l.id, l, { kind: 'no state' }))
+  } else {
+    const where: Prisma.DialerStatusChangeWhereInput = { importId: req.params.id, ...(req.query.from ? { fromStatus: String(req.query.from) } : {}), ...(req.query.to ? { toStatus: String(req.query.to) } : {}) }
+    const cs = await prisma.dialerStatusChange.findMany({ where, take: 5000, orderBy: { createdAt: 'asc' }, select: { leadId: true, fromStatus: true, toStatus: true, fromStage: true, toStage: true, createdAt: true, lead: leadSel } })
+    const keep = (c: (typeof cs)[number]): boolean => {
+      if (c.fromStatus == null) return kind === '' || kind === 'added'
+      const back = c.toStage < (c.fromStage ?? 0), re = isLeadGen(c.fromStatus, c.fromStage) && c.toStage <= 1
+      switch (kind) {
+        case 'forward': return c.toStage > (c.fromStage ?? 0)
+        case 'back': return back && !re
+        case 'reassigned': return re
+        case 'connects': return c.toStage >= 3 && (c.fromStage ?? 0) < 3
+        case 'voicemails': return c.toStatus === 'Voicemail Sent'
+        case 'positives': return c.toStage >= 4 && (c.fromStage ?? 0) < 4
+        case 'toLeadGen': return isLeadGen(c.toStatus, c.toStage) && !isLeadGen(c.fromStatus, c.fromStage)
+        default: return true
+      }
+    }
+    rows = cs.filter(keep).map((c) => row(c.leadId, c.lead, { kind: c.fromStatus == null ? 'added' : c.toStage > (c.fromStage ?? 0) ? 'moved forward' : isLeadGen(c.fromStatus, c.fromStage) && c.toStage <= 1 ? 'back from Lead Gen' : c.toStage < (c.fromStage ?? 0) ? 'moved back' : 'status change', from: c.fromStatus, to: c.toStatus, at: c.createdAt.toISOString() }))
+  }
+  res.json({ leads: rows })
 }
 
 // ---------------------------------------------------------------------------- bulk fill of extra contacts

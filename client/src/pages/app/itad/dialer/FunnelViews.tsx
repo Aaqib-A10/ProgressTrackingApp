@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { DialerLead, DialerSettings } from '../../../../lib/dialerApi'
 import { funnelOf, leadRegion, leadState, multiLabel, multiOf, num, pct, segments, type Segment } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
@@ -23,8 +24,12 @@ const Label = ({ k }: { k: string }) => <span className="inline-flex items-cente
 type By = 'state' | 'industry' | 'region' | 'rep' | 'status'
 
 export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: DialerLead[]; settings: DialerSettings; now: Date; showReps: boolean; onPick: (by: By, key: string) => void }) {
-  const [ever, setEver] = useState(false)
-  const [by, setBy] = useState<By>('state')
+  // "Count by" and the grouping live in the address bar with the filters, so Back and a refresh keep them.
+  const [params, setParams] = useSearchParams()
+  const ever = params.get('ge') === '1'
+  const by = (params.get('gb') as By) || 'state'
+  const setEver = (v: boolean) => setParams((p) => { const q = new URLSearchParams(p); if (v) q.set('ge', '1'); else q.delete('ge'); return q }, { replace: true })
+  const setBy = (v: By) => setParams((p) => { const q = new URLSearchParams(p); if (v !== 'state') q.set('gb', v); else q.delete('gb'); q.delete('gp'); return q }, { replace: true })
   const live = useMemo(() => leads.filter((l) => !l.duplicate), [leads])
   const f = funnelOf(live, ever)
   const keyOf = (l: DialerLead): string => {
@@ -37,7 +42,7 @@ export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: 
     }
   }
   const segs = segments(live, keyOf, ever)
-  const pg = usePaged(segs)
+  const pg = usePaged(segs, 25, 'g')
   const stage1 = live.filter((l) => (ever ? Math.max(l.maxStage, l.stage) : l.stage) <= 1).length
   const bar = (n: number) => `${f.total ? (n / f.total) * 100 : 0}%`
   const top = (fn: (l: DialerLead) => string | null) => segments(live.filter((l) => fn(l)), (l) => fn(l)!).slice(0, 10)

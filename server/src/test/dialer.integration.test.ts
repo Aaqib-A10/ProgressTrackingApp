@@ -114,6 +114,47 @@ describe('import and dashboard', () => {
     await request(app).get(`/api/dialer/leads/${h.id}`).set(...auth(w.leadgenLead)).expect(403) // not ITAD at all
   })
 
+  it('the import summary explains itself: Lead Gen hand-backs, activity, what changed, skipped rows, drill-downs', async () => {
+    // Third import: a hand-back from Lead Gen, a voicemail, a connect, a case-only change, a skipped row.
+    const r = await imp(w.itadMember, [
+      ['L1', 'HARBOR COLD STORAGE', 'Ann', 'ann@harbor.com', '404-555-0101', 'Atlanta', 'GA', 'Connected', 'Logistics', 'Web', '09/01/2026', '09/12/2026'], // only the case differs: unchanged
+      ['L2', 'Apex Precision Parts', 'Bob', 'bob@apex.com', '216-555-0102', 'Cleveland', 'Ohio', 'Pipeline', 'Manufacturing', 'Web', '09/01/2026', '10/10/2026'],
+      ['L3', 'Mesa Data Hosting', 'Cy', 'cy@mesa.com', '602-555-0103', 'Phoenix', 'AZ', 'Connected', 'Data Centers', 'List', '09/02/2026', '10/12/2026'],
+      ['L4', 'No State Co', 'Di', 'di@nostate.com', '305-555-0104', '', '', 'Voicemail Sent', 'Healthcare', 'List', '09/03/2026', '10/20/2026'], // a voicemail
+      ['L6', 'New One LLC', 'Fa', 'fa@new.com', '503-555-0106', 'Portland', 'OR', 'Report to Lead Gen', 'IT Management Services', 'List', '10/14/2026', '10/16/2026'], // to Lead Gen
+      ['', '', '', '', '', '', '', 'Assigned', '', '', '', ''], // no name: skipped
+    ]).expect(201)
+    let s = r.body.import.summary
+    expect(s).toMatchObject({ added: 0, changed: 2, unchanged: 3, skipped: 1, movedForward: 2, movedBack: 0, reassignedFromLeadGen: 0 })
+    expect(s.skippedRows).toEqual([{ row: 7, reason: 'no company or contact name' }])
+    expect(s.changedFields).toEqual(expect.arrayContaining([{ field: 'status', count: 2 }, { field: 'lastActivityAt', count: 2 }]))
+    expect(s.activity).toMatchObject({ touches: 2, connects: 0, voicemails: 1, positives: 0, toLeadGen: 1 })
+    expect(s.counted + s.heldAsDuplicate).toBe(s.added + s.changed + s.unchanged)
+    // Fourth import: Lead Gen hands the lead back (not a regression), and a connect.
+    const r2 = await imp(w.itadMember, [
+      ['L1', 'Harbor Cold Storage', 'Ann', 'ann@harbor.com', '404-555-0101', 'Atlanta', 'GA', 'Connected', 'Logistics', 'Web', '09/01/2026', '09/12/2026'],
+      ['L2', 'Apex Precision Parts', 'Bob', 'bob@apex.com', '216-555-0102', 'Cleveland', 'Ohio', 'Pipeline', 'Manufacturing', 'Web', '09/01/2026', '10/10/2026'],
+      ['L3', 'Mesa Data Hosting', 'Cy', 'cy@mesa.com', '602-555-0103', 'Phoenix', 'AZ', 'Connected', 'Data Centers', 'List', '09/02/2026', '10/12/2026'],
+      ['L4', 'No State Co', 'Di', 'di@nostate.com', '305-555-0104', '', '', 'Connected', 'Healthcare', 'List', '09/03/2026', '10/21/2026'], // a connect
+      ['L6', 'New One LLC', 'Fa', 'fa@new.com', '503-555-0106', 'Portland', 'OR', 'Assigned', 'IT Management Services', 'List', '10/14/2026', '10/21/2026'], // back from Lead Gen
+    ]).expect(201)
+    s = r2.body.import.summary
+    expect(s).toMatchObject({ movedForward: 1, movedBack: 0, reassignedFromLeadGen: 1 })
+    expect(s.activity).toMatchObject({ touches: 2, connects: 1, voicemails: 0, toLeadGen: 0, connectRateTouched: 0.5 })
+    expect(s.activityBefore).toMatchObject({ touches: 2, voicemails: 1 })
+    const id = r2.body.import.id
+    const drill = (kind: string) => request(app).get(`/api/dialer/imports/${id}/changes?kind=${kind}`).set(...auth(w.itadMember)).expect(200).then((x) => x.body.leads as { company: string; kind: string; from: string | null; to: string | null }[])
+    expect((await drill('reassigned')).map((x) => [x.company, x.kind, x.from, x.to])).toEqual([['New One LLC', 'back from Lead Gen', 'Report to Lead Gen', 'Assigned']])
+    expect((await drill('back'))).toEqual([])
+    expect((await drill('connects')).map((x) => x.company)).toEqual(['No State Co'])
+    expect((await drill('touches')).map((x) => x.company).sort()).toEqual(['New One LLC', 'No State Co'])
+    expect((await drill('changed')).map((x) => x.company).sort()).toEqual(['New One LLC', 'No State Co'])
+    expect((await drill('nostate')).map((x) => x.company)).toEqual([]) // No State Co has a state fixed by hand
+    expect((await drill('added'))).toEqual([])
+    // Someone else's import: not found.
+    await request(app).get(`/api/dialer/imports/${id}/changes?kind=touches`).set(...auth(w.leadgenLead)).expect(403)
+  })
+
   it('the same lead in two reps\' files goes to a manager', async () => {
     // itadLead imports a lead the member already holds.
     const r = await imp(w.itadLead, [['L2', 'Apex Precision Parts', 'Bob', 'bob@apex.com', '216-555-0102', 'Cleveland', 'OH', 'Assigned', 'Manufacturing', 'Web', '', '']]).expect(201)

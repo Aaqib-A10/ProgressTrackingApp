@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, FileUp, PhoneCall, X } from 'lucide-react'
+import { AlertTriangle, FileUp, PhoneCall } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead } from '../../../../lib/dialerApi'
-import { NO_FILTERS, PKT, REGIONS, applyFilters, clock, leadState, multiLabel, taskBucket, toggleMulti, type Filters } from '../../../../lib/dialer'
+import { PKT, REGIONS, applyFilters, clock, leadState, multiLabel, taskBucket, toggleMulti } from '../../../../lib/dialer'
+import { FilterBar, useSharedFilters, type FilterDef } from './filters'
 import { cn } from '../../../../lib/cn'
 import { DashboardView } from './DashboardView'
 import { FollowUpsView } from './FollowUpsView'
@@ -25,6 +26,9 @@ import { DownloadLeads, InfoTip, LeadsListModal, MultiFilter, errMsg } from './u
 
 type View = 'dashboard' | 'leads' | 'followups' | 'funnel' | 'industries' | 'fix' | 'history' | 'duplicates' | 'settings'
 
+/** "a, b" for a multi-value filter, through a label function. */
+const multiOfLabel = (v: string, label: (x: string) => string) => multiLabel(v).split(', ').filter(Boolean).map(label).join(', ')
+
 export default function LeadDialer() {
   const { addToast } = useToast()
   const [params, setParams] = useSearchParams()
@@ -33,7 +37,8 @@ export default function LeadDialer() {
   const [data, setData] = useState<DialerData | null>(null)
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(() => new Date())
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
+  // Filters live in the address bar, shared with Follow-ups: tabs, Back and a refresh keep them.
+  const { filters, set: setFilter, update: updateFilters, clear: clearFilters, on: filtersOn } = useSharedFilters()
   const [importing, setImporting] = useState(false)
   const [listModal, setListModal] = useState<{ title: string; leads: DialerLead[] } | null>(null)
   // The open lead is in the address (?lead=), so the browser's Back closes it and the list stays as it was.
@@ -77,7 +82,6 @@ export default function LeadDialer() {
   const lists = useMemo(() => [...new Set(leads.map((l) => l.listName))], [leads])
 
   const opts = (fn: (l: DialerLead) => string | null, empty: string) => [...new Set(leads.map((l) => fn(l) ?? empty))].sort((a, b) => a.localeCompare(b))
-  const filtersOn = Object.values(filters).some(Boolean)
   const lastAt = data?.lastImport ? new Date(data.lastImport.at) : null
   const stale = lastAt ? now.getTime() - lastAt.getTime() > 18 * 3600000 : false
   const leadParam = params.get('lead')
@@ -156,41 +160,42 @@ export default function LeadDialer() {
         </div>
       ) : (
         <>
-          {(view === 'dashboard' || view === 'funnel' || view === 'industries') && (
-            <div className="flex flex-wrap items-center gap-2">
-              <MultiFilter label="State" value={filters.state} onChange={(v) => setFilters({ ...filters, state: v })} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} />
-              <MultiFilter label="Region" value={filters.region} onChange={(v) => setFilters({ ...filters, region: v })} options={REGIONS.map((r) => ({ value: r }))} />
-              <MultiFilter label="Industry" value={filters.industry} onChange={(v) => setFilters({ ...filters, industry: v })} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} />
-              <MultiFilter label="Status" allLabel="Any" value={filters.status} onChange={(v) => setFilters({ ...filters, status: v })} options={opts((l) => l.status, 'Unknown').map((v) => ({ value: v }))} />
-              {lists.length > 1 && <MultiFilter label="List" value={filters.list} onChange={(v) => setFilters({ ...filters, list: v })} options={lists.map((v) => ({ value: v, label: v === 'CRM' ? 'CRM (SMB)' : v }))} />}
-              {showOwner && <MultiFilter label="Rep" value={filters.rep} onChange={(v) => setFilters({ ...filters, rep: v })} options={[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => ({ value: id, label: n || 'Unknown' }))} />}
-              <select value={filters.date} onChange={(e) => setFilters({ ...filters, date: e.target.value })} className={sel(!!filters.date)} aria-label="Lead date"><option value="">Date: All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
-              {filtersOn && <button type="button" onClick={() => setFilters(NO_FILTERS)} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
-              {filtersOn && <span className="ml-auto text-body-sm text-ink-muted">{filtered.filter((l) => !l.duplicate).length.toLocaleString()} of {data.counts.counted.toLocaleString()} leads</span>}
-              {filtersOn && <DownloadLeads title={['leads', multiLabel(filters.state), multiLabel(filters.region), multiLabel(filters.industry), multiLabel(filters.status), multiLabel(filters.list), filters.date && `last ${filters.date} days`].filter(Boolean).join(' ')} leads={filtered.filter((l) => !l.duplicate)} now={now} showOwner={showOwner} label="Download filtered" />}
-            </div>
-          )}
+          {(view === 'dashboard' || view === 'funnel' || view === 'industries') && (() => {
+            const DATE_LABEL: Record<string, string> = { '7': 'last 7 days', '30': 'last 30 days', '90': 'last 90 days' }
+            const repName = (id: string) => leads.find((l) => l.ownerId === id)?.ownerName || 'Unknown'
+            const defs: FilterDef[] = [
+              { key: 'state', label: 'State', group: 'Location', active: !!filters.state, summary: multiLabel(filters.state), clear: () => setFilter('state', ''), control: <MultiFilter label="State" value={filters.state} onChange={(v) => setFilter('state', v)} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} /> },
+              { key: 'region', label: 'Region', group: 'Location', active: !!filters.region, summary: multiLabel(filters.region), clear: () => setFilter('region', ''), control: <MultiFilter label="Region" value={filters.region} onChange={(v) => setFilter('region', v)} options={REGIONS.map((r) => ({ value: r }))} /> },
+              { key: 'industry', label: 'Industry', group: 'Company', active: !!filters.industry, summary: multiLabel(filters.industry), clear: () => setFilter('industry', ''), control: <MultiFilter label="Industry" value={filters.industry} onChange={(v) => setFilter('industry', v)} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} /> },
+              { key: 'status', label: 'Status', group: 'Stage', active: !!filters.status, summary: multiLabel(filters.status), clear: () => setFilter('status', ''), control: <MultiFilter label="Status" allLabel="Any" value={filters.status} onChange={(v) => setFilter('status', v)} options={opts((l) => l.status, 'Unknown').map((v) => ({ value: v }))} /> },
+              { key: 'date', label: 'Lead date', group: 'Activity', active: !!filters.date, summary: DATE_LABEL[filters.date], clear: () => setFilter('date', ''), control: <select value={filters.date} onChange={(e) => setFilter('date', e.target.value)} className={sel(!!filters.date)} aria-label="Lead date"><option value="">Date: All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select> },
+              ...(lists.length > 1 ? [{ key: 'list', label: 'List', group: 'Company', active: !!filters.list, summary: multiLabel(filters.list), clear: () => setFilter('list', ''), control: <MultiFilter label="List" value={filters.list} onChange={(v) => setFilter('list', v)} options={lists.map((v) => ({ value: v, label: v === 'CRM' ? 'CRM (SMB)' : v }))} /> }] : []),
+              ...(showOwner ? [{ key: 'rep', label: 'Rep', group: 'Company', active: !!filters.rep, summary: multiOfLabel(filters.rep, repName), clear: () => setFilter('rep', ''), control: <MultiFilter label="Rep" value={filters.rep} onChange={(v) => setFilter('rep', v)} options={[...new Map(leads.map((l) => [l.ownerId, l.ownerName])).entries()].map(([id, n]) => ({ value: id, label: n || 'Unknown' }))} /> }] : []),
+            ]
+            return (
+              <FilterBar page="dashboard" defs={defs} prefs={data.prefs} onClearAll={clearFilters} after={filtersOn ? <>
+                <span className="ml-auto text-body-sm text-ink-muted">{filtered.filter((l) => !l.duplicate).length.toLocaleString()} of {data.counts.counted.toLocaleString()} leads</span>
+                <DownloadLeads title={['leads', multiLabel(filters.state), multiLabel(filters.region), multiLabel(filters.industry), multiLabel(filters.status), multiLabel(filters.list), filters.date && `last ${filters.date} days`].filter(Boolean).join(' ')} leads={filtered.filter((l) => !l.duplicate)} now={now} showOwner={showOwner} label="Download filtered" />
+              </> : undefined} />
+            )
+          })()}
 
-          {view === 'dashboard' && <DashboardView data={data} leads={filtered} settings={data.settings} now={now} filters={filters} setFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onOpenLeads={(title, ls) => setListModal({ title, leads: ls })} onOpenLead={openLead} go={go} duplicates={isManager ? dupCount : 0} followUpDays={fuDays} />}
+          {view === 'dashboard' && <DashboardView data={data} leads={filtered} settings={data.settings} now={now} filters={filters} setFilter={setFilter} onOpenLeads={(title, ls) => setListModal({ title, leads: ls })} onOpenLead={openLead} go={go} duplicates={isManager ? dupCount : 0} followUpDays={fuDays} />}
           {view === 'leads' && <LeadsView data={data} now={now} showOwner={showOwner} onOpenLead={openLead} onChanged={load} />}
           {view === 'followups' && <FollowUpsView data={data} leads={leads} settings={data.settings} now={now} onOpenLead={openLead} onChanged={load} showOwner={showOwner} followUpDays={fuDays} />}
-          {view === 'funnel' && <FunnelView leads={filtered} settings={data.settings} now={now} showReps={showOwner} onPick={(by, key) => { if (by === 'state' || by === 'industry' || by === 'status') { setFilters((f) => ({ ...f, [by]: key })); go('dashboard') } }} />}
-          {view === 'industries' && <IndustriesView leads={filtered} settings={data.settings} now={now} showReps={showOwner} picked={filters.industry} onPickIndustry={(k) => setFilters((f) => ({ ...f, industry: toggleMulti(f.industry, k) }))} />}
+          {view === 'funnel' && <FunnelView leads={filtered} settings={data.settings} now={now} showReps={showOwner} onPick={(by, key) => { if (by === 'state' || by === 'industry' || by === 'status') { updateFilters({ [by]: key }); go('dashboard') } }} />}
+          {view === 'industries' && <IndustriesView leads={filtered} settings={data.settings} now={now} showReps={showOwner} picked={filters.industry} onPickIndustry={(k) => setFilter('industry', toggleMulti(filters.industry, k))} />}
           {view === 'fix' && <FixDataView leads={leads} onOpenLead={openLead} onChanged={load} showOwner={showOwner} />}
-          {view === 'history' && <HistoryView rep={rep} refreshKey={`${data.lastImport?.id ?? ''}-${refreshKey}`} onOpenLeads={(title, ids, fallback) => {
-            const found = ids.map((id) => byId.get(id)).filter((l): l is DialerLead => !!l)
-            const gone = fallback.length - found.length
-            setListModal({ title: gone ? `${title} (${gone} no longer in your latest import)` : title, leads: found })
-          }} />}
+          {view === 'history' && <HistoryView rep={rep} refreshKey={`${data.lastImport?.id ?? ''}-${refreshKey}`} onOpenLead={(id) => { if (byId.has(id)) openLead(id); else addToast({ type: 'info', message: 'That lead is not in the latest import any more.' }) }} />}
           {view === 'duplicates' && isManager && <DuplicatesView onChanged={load} />}
           {view === 'settings' && <SettingsView canEdit={isManager} onSaved={load} extraStatuses={unknownStatuses} />}
         </>
       )}
 
       {importing && data && (
-        <ImportModal saved={data.myMapping} lists={lists} needsCrm={needsCrm} onClose={() => setImporting(false)}
+        <ImportModal saved={data.myMapping} lists={lists} needsCrm={needsCrm} onClose={() => setImporting(false)} onOpenLead={(id) => openLead(id)}
           // Refresh everything at once, so the dashboard and funnel match the "Import done" summary.
-          onImported={() => { setFilters(NO_FILTERS); setRefreshKey((k) => k + 1); if (rep !== 'me') setParam('rep', null); load() }} />
+          onImported={() => { clearFilters(); setRefreshKey((k) => k + 1); if (rep !== 'me') setParam('rep', null); load() }} />
       )}
       {listModal && <LeadsListModal title={listModal.title} leads={listModal.leads} now={now} showOwner={showOwner} onClose={() => setListModal(null)} onOpen={(id, ids) => openLead(id, ids)} />}
       {panel && data && <LeadPanel id={panel.id} ids={panel.ids} lookup={(id) => byId.get(id)} leads={leads} now={now} settings={data.settings} meId={data.me.id} onNavigate={(id) => setParam('lead', id)} onClose={closeLead} onChanged={load} />}

@@ -6,11 +6,12 @@ import { Modal } from '../../../../components/ui/Modal'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead, type DialerSettings, type SavedView } from '../../../../lib/dialerApi'
 import {
-  FU_FILTER_KEYS, FU_SORT_FIELDS, DEFAULT_FU_SORT, REGIONS, filterFollowUps, followUpRows, leadState, lastTouched, daysSince,
+  FU_FILTER_KEYS, FU_SORT_FIELDS, DEFAULT_FU_SORT, REGIONS, filterFollowUps, followUpRows, leadState, lastTouched, daysSince, multiLabel, multiOf, toggleMulti,
   sortFollowUps, sortFromParam, sortToParam, taskBucket, type FollowUpDays, type FuFilters, type FuSort, type TaskBucket,
 } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { DownloadLeads, InfoTip, MultiFilter, StatusPill, errMsg } from './ui'
+import { FilterBar, type FilterDef } from './filters'
 import { AddTaskModal, BulkBar, CallNow, LocalTime, OutcomeChips, QuietPill, RowMenu } from './TaskParts'
 import { TaskHistoryView } from './TaskHistoryView'
 
@@ -75,6 +76,8 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
 
   const stages = Object.keys(settings.followUp).sort((a, b) => (settings.followUp[a] ?? 0) - (settings.followUp[b] ?? 0))
   const stageCount = (st: string) => noTask.filter((r) => r.lead.status === st && r.ruleDue).length
+  // The Dashboard's Status filter shares the stage key: a status that is not a follow-up stage still filters the list (the chip shows it).
+  const otherStatuses = multiOf(f.stage).filter((x) => !stages.includes(x))
   const stripCount = (k: TaskBucket) => withStage.reduce((n, r) => n + [...r.tasks, ...r.done].filter((t) => taskBucket(t, now, dayStart) === k).length, 0)
   const activeTask = f.task ?? ''
   const extra = FU_FILTER_KEYS.filter((k) => f[k] && k !== 'stage' && k !== 'task').length
@@ -142,9 +145,9 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
           {/* Stage cards */}
           <div className="grid gap-3 sm:grid-cols-3">
             {stages.map((st) => {
-              const on = f.stage === st
+              const on = multiOf(f.stage).includes(st)
               return (
-                <button key={st} type="button" onClick={() => setF('stage', on ? undefined : st)} aria-pressed={on}
+                <button key={st} type="button" onClick={() => setF('stage', toggleMulti(f.stage, st) || undefined)} aria-pressed={on}
                   className={cn('group rounded-card border bg-card p-4 text-left transition-all', on ? 'border-primary ring-2 ring-primary/20' : 'border-line hover:border-primary/40')}>
                   <span className="flex items-center justify-between"><StatusPill lead={{ status: st, stage: settings.stageMap[st] ?? 3 }} /><span className="text-[11.5px] text-ink-muted">{settings.followUp[st]}-day rule</span></span>
                   <span className="mt-3 block text-[28px] font-semibold leading-none tracking-tight text-ink tabular-nums">{stageCount(st)}</span>
@@ -170,31 +173,38 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
             <InfoTip>Overdue is one number: leads quiet longer than their rule, call backs and tasks past their time. Each row says why.</InfoTip>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="relative">
-              <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
-              <input value={f.q ?? ''} onChange={(e) => setF('q', e.target.value)} placeholder="Search" className="h-8 w-48 rounded-full border border-line bg-card pl-8 pr-2 text-body-sm text-ink focus:border-primary focus:outline-none" />
-            </label>
-            <MultiFilter label="State" value={f.state} onChange={(v) => setF('state', v)} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} />
-            <MultiFilter label="Region" value={f.region} onChange={(v) => setF('region', v)} options={REGIONS.map((r) => ({ value: r }))} />
-            <MultiFilter label="Industry" value={f.industry} onChange={(v) => setF('industry', v)} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} />
-            <MultiFilter label="Attempts" value={f.attempts} onChange={(v) => setF('attempts', v)} options={['0', '1', '2', '3+'].map((v) => ({ value: v }))} />
-            <select value={f.tries ?? ''} onChange={(e) => setF('tries', e.target.value)} className={sel(!!f.tries)} aria-label="Tries with no status change"><option value="">Tries, same status</option>{[2, 3, 4, 5, 8].map((n) => <option key={n} value={n}>{n} or more</option>)}</select>
-            <button type="button" onClick={() => setF('reattempt', f.reattempt ? undefined : 'yes')} className={sel(!!f.reattempt)}>Re-attempted</button>
-            <button type="button" onClick={() => setF('callNow', f.callNow ? undefined : '1')} className={sel(!!f.callNow)}>Can call now</button>
-            <QuietFilter f={f} set={(patch) => update(Object.fromEntries(Object.entries(patch).map(([k, v]) => [URL_KEY[k as keyof FuFilters], v ?? null])))} />
-            <label className={cn('inline-flex h-8 items-center gap-1 rounded-full border px-2 text-body-sm', f.actFrom || f.actTo ? 'border-primary bg-primary/5 text-primary' : 'border-line bg-card text-ink')}>
-              <span className="pl-1 text-ink-muted">Last activity</span>
-              <input type="date" value={f.actFrom ?? ''} onChange={(e) => setF('actFrom', e.target.value)} className="bg-transparent text-body-sm outline-none" aria-label="Last activity from" />
-              <span className="text-ink-faint">–</span>
-              <input type="date" value={f.actTo ?? ''} onChange={(e) => setF('actTo', e.target.value)} className="bg-transparent text-body-sm outline-none" aria-label="Last activity to" />
-            </label>
-            <select value={f.dueIn ?? ''} onChange={(e) => setF('dueIn', e.target.value)} className={sel(!!f.dueIn)} aria-label="Task due within"><option value="">Task due within</option>{[1, 3, 7, 14, 30].map((n) => <option key={n} value={n}>Next {n === 1 ? 'day' : `${n} days`}</option>)}</select>
-            <select value={f.touchedAgo ?? ''} onChange={(e) => setF('touchedAgo', e.target.value)} className={sel(!!f.touchedAgo)} aria-label="Last touched"><option value="">Last touched</option>{[7, 14, 30, 60, 90].map((n) => <option key={n} value={n}>More than {n} days ago</option>)}</select>
-            <label className="inline-flex items-center gap-1.5 text-body-sm text-ink"><input type="checkbox" checked={f.all === '1'} onChange={(e) => setF('all', e.target.checked ? '1' : undefined)} className="h-4 w-4 accent-primary" />Include not due yet</label>
-            {(extra > 0 || f.stage || f.task) && <button type="button" onClick={() => update(Object.fromEntries(FU_FILTER_KEYS.map((k) => [URL_KEY[k], null])))} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><X size={14} /> Clear</button>}
-          </div>
+          {/* Filters: the Filters button, the pinned ones, chips for the rest */}
+          {(() => {
+            const setQuiet = (patch: Partial<Record<keyof FuFilters, string | undefined>>) => update(Object.fromEntries(Object.entries(patch).map(([k, v]) => [URL_KEY[k as keyof FuFilters], v ?? null])))
+            const quietLabel = !f.quietA ? '' : (f.quietOp ?? 'gt') === 'between' ? `${f.quietA}–${f.quietB ?? '?'} days` : `${(f.quietOp ?? 'gt') === 'gt' ? 'over' : 'under'} ${f.quietA} days`
+            const defs: FilterDef[] = [
+              ...(otherStatuses.length ? [{ key: 'status', label: 'Status', group: 'Stage', active: true, summary: otherStatuses.join(', '), clear: () => setF('stage', multiOf(f.stage).filter((x) => stages.includes(x)).join('\u001f') || undefined), control: <span className="text-body-sm text-ink-muted">{otherStatuses.join(', ')} (from the Dashboard)</span> }] : []),
+              { key: 'state', label: 'State', group: 'Location', active: !!f.state, summary: multiLabel(f.state), clear: () => setF('state', undefined), control: <MultiFilter label="State" value={f.state} onChange={(v) => setF('state', v)} options={opts((l) => leadState(l), '(no state)').map((v) => ({ value: v }))} /> },
+              { key: 'region', label: 'Region', group: 'Location', active: !!f.region, summary: multiLabel(f.region), clear: () => setF('region', undefined), control: <MultiFilter label="Region" value={f.region} onChange={(v) => setF('region', v)} options={REGIONS.map((r) => ({ value: r }))} /> },
+              { key: 'industry', label: 'Industry', group: 'Company', active: !!f.industry, summary: multiLabel(f.industry), clear: () => setF('industry', undefined), control: <MultiFilter label="Industry" value={f.industry} onChange={(v) => setF('industry', v)} options={opts((l) => l.industry, '(no industry)').map((v) => ({ value: v }))} /> },
+              { key: 'attempts', label: 'Attempts', group: 'Activity', active: !!f.attempts, summary: multiLabel(f.attempts), clear: () => setF('attempts', undefined), control: <MultiFilter label="Attempts" value={f.attempts} onChange={(v) => setF('attempts', v)} options={['0', '1', '2', '3+'].map((v) => ({ value: v }))} /> },
+              { key: 'tries', label: 'Tries, same status', group: 'Activity', active: !!f.tries, summary: f.tries ? `${f.tries} or more` : '', clear: () => setF('tries', undefined), control: <select value={f.tries ?? ''} onChange={(e) => setF('tries', e.target.value)} className={sel(!!f.tries)} aria-label="Tries with no status change"><option value="">Tries, same status</option>{[2, 3, 4, 5, 8].map((n) => <option key={n} value={n}>{n} or more</option>)}</select> },
+              { key: 'reattempt', label: 'Re-attempted', group: 'Activity', active: !!f.reattempt, clear: () => setF('reattempt', undefined), control: <button type="button" onClick={() => setF('reattempt', f.reattempt ? undefined : 'yes')} className={sel(!!f.reattempt)}>Re-attempted</button> },
+              { key: 'callNow', label: 'Can call now', group: 'Activity', active: !!f.callNow, clear: () => setF('callNow', undefined), control: <button type="button" onClick={() => setF('callNow', f.callNow ? undefined : '1')} className={sel(!!f.callNow)}>Can call now</button> },
+              { key: 'quiet', label: 'Quiet for', group: 'Activity', active: !!f.quietA, summary: quietLabel, clear: () => setQuiet({ quietOp: undefined, quietA: undefined, quietB: undefined }), control: <QuietFilter f={f} set={setQuiet} /> },
+              { key: 'activity', label: 'Last activity', group: 'Activity', active: !!(f.actFrom || f.actTo), summary: [f.actFrom, f.actTo].filter(Boolean).join(' – '), clear: () => update({ [URL_KEY.actFrom]: null, [URL_KEY.actTo]: null }), control: (
+                <label className={cn('inline-flex h-8 items-center gap-1 rounded-full border px-2 text-body-sm', f.actFrom || f.actTo ? 'border-primary bg-primary/5 text-primary' : 'border-line bg-card text-ink')}>
+                  <span className="pl-1 text-ink-muted">Last activity</span>
+                  <input type="date" value={f.actFrom ?? ''} onChange={(e) => setF('actFrom', e.target.value)} className="bg-transparent text-body-sm outline-none" aria-label="Last activity from" />
+                  <span className="text-ink-faint">–</span>
+                  <input type="date" value={f.actTo ?? ''} onChange={(e) => setF('actTo', e.target.value)} className="bg-transparent text-body-sm outline-none" aria-label="Last activity to" />
+                </label>
+              ) },
+              { key: 'touchedAgo', label: 'Last touched', group: 'Activity', active: !!f.touchedAgo, summary: f.touchedAgo ? `more than ${f.touchedAgo} days ago` : '', clear: () => setF('touchedAgo', undefined), control: <select value={f.touchedAgo ?? ''} onChange={(e) => setF('touchedAgo', e.target.value)} className={sel(!!f.touchedAgo)} aria-label="Last touched"><option value="">Last touched</option>{[7, 14, 30, 60, 90].map((n) => <option key={n} value={n}>More than {n} days ago</option>)}</select> },
+              { key: 'dueIn', label: 'Task due within', group: 'Tasks', active: !!f.dueIn, summary: f.dueIn ? `next ${f.dueIn === '1' ? 'day' : `${f.dueIn} days`}` : '', clear: () => setF('dueIn', undefined), control: <select value={f.dueIn ?? ''} onChange={(e) => setF('dueIn', e.target.value)} className={sel(!!f.dueIn)} aria-label="Task due within"><option value="">Task due within</option>{[1, 3, 7, 14, 30].map((n) => <option key={n} value={n}>Next {n === 1 ? 'day' : `${n} days`}</option>)}</select> },
+              { key: 'all', label: 'Include not due yet', group: 'Tasks', active: f.all === '1', clear: () => setF('all', undefined), control: <label className="inline-flex items-center gap-1.5 text-body-sm text-ink"><input type="checkbox" checked={f.all === '1'} onChange={(e) => setF('all', e.target.checked ? '1' : undefined)} className="h-4 w-4 accent-primary" />Include not due yet</label> },
+            ]
+            return (
+              <FilterBar page="followups" defs={defs} prefs={data.prefs}
+                search={<label className="relative"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" /><input value={f.q ?? ''} onChange={(e) => setF('q', e.target.value)} placeholder="Search" className="h-8 w-48 rounded-full border border-line bg-card pl-8 pr-2 text-body-sm text-ink focus:border-primary focus:outline-none" /></label>}
+                onClearAll={() => update(Object.fromEntries(FU_FILTER_KEYS.map((k) => [URL_KEY[k], null])))} />
+            )
+          })()}
 
           {/* The list */}
           <section className="rounded-card border border-line bg-card">

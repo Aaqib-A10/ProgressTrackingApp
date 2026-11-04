@@ -72,14 +72,14 @@ export async function readFile(file: File): Promise<{ headers: string[]; rows: C
   return { headers, rows }
 }
 
-export function ImportModal({ saved, onClose, onImported, lists, needsCrm }: { saved: { headerSignature: string; mapping: Record<string, string | null> } | null; onClose: () => void; onImported: () => void; lists: string[]; needsCrm: number }) {
+export function ImportModal({ saved, onClose, onImported, onOpenLead, lists, needsCrm }: { saved: { headerSignature: string; mapping: Record<string, string | null> } | null; onClose: () => void; onImported: () => void; onOpenLead?: (id: string) => void; lists: string[]; needsCrm: number }) {
   const { addToast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<{ name: string; headers: string[]; rows: Cell[][] } | null>(null)
   const [mapping, setMapping] = useState<Record<ImportField, string | null> | null>(null)
   const [reading, setReading] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<ImportSummary | null>(null)
+  const [result, setResult] = useState<{ id: string; summary: ImportSummary } | null>(null)
   const [dragOver, setDragOver] = useState(false)
   // Which list this file is: the CRM export (SMB leads) or another list kept apart (Vendors...).
   const [list, setList] = useState('CRM')
@@ -112,7 +112,7 @@ export function ImportModal({ saved, onClose, onImported, lists, needsCrm }: { s
     setBusy(true)
     try {
       const r = await dialerApi.importLeads({ fileName: file.name, headers: file.headers, mapping, rows: file.rows, listName: listName || 'CRM' })
-      setResult(r.import.summary)
+      setResult({ id: r.import.id, summary: r.import.summary })
       onImported()
     } catch (e) {
       addToast({ type: 'error', message: errMsg(e, 'Import failed') })
@@ -123,7 +123,7 @@ export function ImportModal({ saved, onClose, onImported, lists, needsCrm }: { s
     return (
       <Modal open onClose={onClose} title="Import done" size="xl" footer={<Button onClick={onClose}>Back to dashboard</Button>}>
         {needsCrm > 0 && <p className="mb-3 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm text-ink">Reminder: <b>{needsCrm}</b> lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an Earthzone update (see Leads, "Needs Earthzone update").</p>}
-        <ImportSummaryView s={result} />
+        <ImportSummaryView s={result.summary} importId={result.id} onOpenLead={onOpenLead ? (id) => { onClose(); onOpenLead(id) } : undefined} />
       </Modal>
     )
   }

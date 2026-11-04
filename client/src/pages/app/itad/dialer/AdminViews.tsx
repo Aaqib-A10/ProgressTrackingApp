@@ -13,13 +13,12 @@ import { ImportSummaryView } from './ImportSummaryView'
 
 /** History (funnel history + every import's summary), Duplicates (manager) and Settings. */
 
-export function HistoryView({ rep, refreshKey, onOpenLeads }: { rep: string; refreshKey: string; onOpenLeads: (title: string, ids: string[], fallback: { id: string; company: string }[]) => void }) {
-  const { addToast } = useToast()
+export function HistoryView({ rep, refreshKey, onOpenLead }: { rep: string; refreshKey: string; onOpenLead: (id: string) => void }) {
   const [rows, setRows] = useState<ImportRecord[] | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [showChart, setShowChart] = useState(true)
   useEffect(() => { dialerApi.imports(rep).then((r) => { setRows(r.imports); setOpen(r.imports[0]?.id ?? null) }).catch(() => setRows([])) }, [rep, refreshKey])
-  const p = usePaged(rows ?? [], 25)
+  const p = usePaged(rows ?? [], 25, 'h')
   if (!rows) return <div className="h-40 animate-pulse rounded-card bg-slate-100" />
   if (rows.length === 0) return <Panel><p className="py-6 text-center text-body-md text-ink-muted">No imports yet. Import your CRM export to start the history.</p></Panel>
   const crm = rows.filter((r) => (r.summary.listName ?? 'CRM') === 'CRM')
@@ -29,12 +28,6 @@ export function HistoryView({ rep, refreshKey, onOpenLeads }: { rep: string; ref
     'Attempt rate': rate(r.funnel.attemptRate), 'Connect rate': rate(r.funnel.connectRate), 'Win rate': rate(r.funnel.winRate), 'Positive rate': rate(r.funnel.positiveRate),
   }))
   const few = crm.length < 5
-  async function openChange(id: string, from: string, to: string) {
-    try {
-      const r = await dialerApi.importChanges(id, from, to)
-      onOpenLeads(`${from} → ${to}`, r.leads.map((x) => x.leadId), r.leads.map((x) => ({ id: x.leadId, company: x.company })))
-    } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not open those leads') }) }
-  }
   const LINES: [string, string][] = [['Attempt rate', '#94A3B8'], ['Connect rate', '#4F46E5'], ['Win rate', '#22C55E'], ['Positive rate', '#F59E0B']]
   return (
     <div className="space-y-4">
@@ -88,7 +81,7 @@ export function HistoryView({ rep, refreshKey, onOpenLeads }: { rep: string; ref
                 <span className="text-ink">{num(r.summary.leads)} leads · +{r.summary.added} new · {r.summary.movedForward} forward</span>
                 <span className="ml-auto text-ink-muted">Connect {pct(r.funnel.connectRate)} · Win {pct(r.funnel.winRate)}</span>
               </button>
-              {open === r.id && <div className="mt-3"><ImportSummaryView s={r.summary} onOpenChange={(from, to) => openChange(r.id, from, to)} /></div>}
+              {open === r.id && <div className="mt-3"><ImportSummaryView s={r.summary} importId={r.id} onOpenLead={onOpenLead} /></div>}
             </li>
           ))}
         </ul>

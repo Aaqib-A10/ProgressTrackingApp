@@ -134,7 +134,22 @@ export interface ImportSummary {
   previousImportAt: string | null
   funnelBefore: FunnelNumbers | null
   funnelNow: FunnelNumbers
+  // ---- since 4 Nov 2026 (older imports: missing)
+  /** The skipped rows and why (row numbers as in the file). */
+  skippedRows?: { row: number; reason: string }[]
+  /** Which CRM fields drove the Changed count. */
+  changedFields?: { field: string; count: number }[]
+  /** Leads handed back from Lead Gen to Assigned (not counted as moved back). */
+  reassignedFromLeadGen?: number
+  /** Counted leads after the import and the duplicates left out: added + changed + unchanged = counted + heldAsDuplicate. */
+  counted?: number
+  heldAsDuplicate?: number
+  activity?: ImportActivity
+  activityBefore?: ImportActivity | null
 }
+export interface ImportActivity { touches: number; connects: number; voicemails: number; positives: number; toLeadGen: number; connectRateTouched: number | null }
+export type ImportDrillKind = 'added' | 'changed' | 'forward' | 'back' | 'reassigned' | 'touches' | 'nostate' | 'connects' | 'voicemails' | 'positives' | 'toLeadGen' | 'change'
+export interface ImportDrillRow { leadId: string; from: string | null; to: string | null; at: string | null; kind: string; company: string; contactName: string | null; phone: string | null; status: string; state: string | null }
 
 export interface SavedView { id: string; name: string; filters: Record<string, string> }
 export interface DialerPrefs {
@@ -143,6 +158,8 @@ export interface DialerPrefs {
   columns?: string[]
   /** Follow-ups: saved views (filters and sort). */
   fuViews?: SavedView[]
+  /** The filters pinned to the bar, per page; a page missing here uses the defaults. */
+  filterPins?: Record<string, string[]>
 }
 export interface ActedToday { leadId: string; userId: string; kind: string; at: string }
 
@@ -237,7 +254,7 @@ export const dialerApi = {
   followUpBulk: (leadIds: string[], action: 'KEEP' | 'SNOOZE30' | 'DROP' | 'UNDROP') => api.post<{ updated: number }>('/dialer/followups/bulk', { leadIds, action }),
   prefs: () => api.get<{ prefs: DialerPrefs; limits: { min: number; max: number } }>('/dialer/prefs'),
   savePrefs: (body: Partial<DialerPrefs>) => api.put<{ prefs: DialerPrefs }>('/dialer/prefs', body),
-  importChanges: (id: string, from: string, to: string) => api.get<{ leads: { leadId: string; from: string | null; to: string; company: string; contactName: string | null; phone: string | null; status: string; state: string | null }[] }>(`/dialer/imports/${id}/changes?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  importChanges: (id: string, q: { kind?: ImportDrillKind; from?: string; to?: string }) => api.get<{ leads: ImportDrillRow[] }>(`/dialer/imports/${id}/changes?${new URLSearchParams(Object.fromEntries(Object.entries(q).filter(([, v]) => v)) as Record<string, string>).toString()}`),
   bulkFill: (body: { rows: FillRow[]; apply: boolean; overwrite?: boolean; needsCrm?: boolean }) => api.post<FillPreview & { updated?: number }>('/dialer/bulk-fill', body),
   settings: () => api.get<{ settings: DialerSettings; defaults: DialerSettings }>('/dialer/settings'),
   saveSettings: (s: DialerSettings) => api.put<{ settings: DialerSettings; restaged: number }>('/dialer/settings', s),
