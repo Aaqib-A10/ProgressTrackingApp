@@ -99,6 +99,7 @@ export function ImportModal({ business, onClose, onDone }: { business: MetaBusin
               {mode === 'plain' && business.myRole === 'MANAGER' && (
                 <label><Label>Give every lead to</Label><Select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="w-full"><option value="">Nobody yet (managers assign)</option>{business.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></label>
               )}
+              {business.myRole !== 'MANAGER' && <p className="rounded-btn bg-primary/[0.06] px-3 py-2 text-body-sm text-ink">Every lead in this file becomes <b>yours</b>; your team lead sees them too. A company that already belongs to someone else is left as it is.</p>}
               <div className="overflow-x-auto rounded-card border border-line">
                 <table className="w-full text-left text-[11.5px]"><thead className="bg-slate-50 dark:bg-white/[0.03]"><tr>{file.headers.map((h) => <th key={h} className="whitespace-nowrap px-2 py-1.5 font-semibold text-ink-muted">{h}</th>)}</tr></thead>
                   <tbody className="divide-y divide-line">{preview.map((r, i) => <tr key={i}>{file.headers.map((_, j) => <td key={j} className="max-w-[180px] truncate px-2 py-1 text-ink">{String(r[j] ?? '')}</td>)}</tr>)}</tbody></table>

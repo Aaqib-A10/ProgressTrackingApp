@@ -96,8 +96,8 @@ export default function Leads() {
       <PageHeader title="Leads" hint={all ? 'Every business you work in' : business ? `${business.name}${cmr ? ' · one record per company, calls underneath' : ''}` : ''}
         actions={<>
           <BusinessPicker allowAll />
-          {canManage && <a href={leadsApi.exportUrl(listParams)} download><Button size="sm" variant="secondary" leadingIcon={<Download size={15} />}>Export</Button></a>}
-          {canManage && !all && <Button size="sm" variant="secondary" leadingIcon={<Upload size={15} />} onClick={() => setImporting(true)}>Import</Button>}
+          {(canManage || business?.myRole) && <a href={leadsApi.exportUrl(listParams)} download title={canManage ? 'Download this list' : 'Download your leads'}><Button size="sm" variant="secondary" leadingIcon={<Download size={15} />}>Export</Button></a>}
+          {(canManage || business?.myRole) && !all && <Button size="sm" variant="secondary" leadingIcon={<Upload size={15} />} onClick={() => setImporting(true)} title={canManage ? 'Import a sheet' : 'Import your own list: the leads become yours'}>Import</Button>}
           {!all && <Button size="sm" leadingIcon={<Plus size={15} />} onClick={() => setAdding(true)}>Add lead</Button>}
         </>} />
 

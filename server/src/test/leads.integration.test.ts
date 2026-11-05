@@ -167,14 +167,15 @@ describe('Lead Management', () => {
       businessId: bizId, fileName: 'expo.csv', headers: ['Full Name', 'E-mail', 'Tel', 'Firm'], mapping: { name: 'Full Name', email: 'E-mail', phone: 'Tel', organization: 'Firm' },
       rows: [['Alan Turing', 'alan@example.com', '', 'Bletchley'], ['', '', '', ''], ['Grace again', 'grace@example.com', '', ''], ['Linus', 'linus@example.com', '555', 'Kernel Inc']],
     }
-    await api(rep).post('/import', body).expect(403)
+    await api(outsider).post('/import', body).expect(403) // not in the business; a rep may import (the leads become theirs)
     const r = (await api(manager).post('/import', body).expect(200)).body
     expect(r).toEqual({ added: 2, skipped: 1, already: 1 })
     expect(await prisma.lead.count({ where: { businessId: bizId, source: 'IMPORT' } })).toBe(2)
     expect((await notes(manager)).some((n) => n.title.includes('imported'))).toBe(false)
     const csv = await api(manager).get('/export.csv').expect(200)
     expect(csv.text).toContain('Alan Turing')
-    await api(rep).get('/export.csv').expect(403)
+    expect((await api(rep).get('/export.csv').expect(200)).text).not.toContain('Alan Turing') // a rep exports only their own leads
+    await api(outsider).get('/export.csv').expect(403)
   })
 
   it('late leads raise one alert each: not assigned in time, then not contacted in time', async () => {

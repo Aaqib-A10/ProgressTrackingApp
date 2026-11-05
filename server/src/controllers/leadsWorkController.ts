@@ -236,12 +236,13 @@ export async function listLeads(req: AuthedRequest, res: Response): Promise<void
   })
 }
 
-/** GET /api/leads/export.csv — the filtered list as a spreadsheet (managers), the sheet's columns first. */
+/** GET /api/leads/export.csv — the filtered list as a spreadsheet (managers: their businesses; reps: their own leads), the sheet's columns first. */
 export async function exportLeads(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
-  if (!s.admin && !s.managerOf.length) throw new HttpError(403, 'Only managers can download leads.')
+  if (!s.admin && !s.roles.size) throw new HttpError(403, 'You do not work leads for any business.')
   const q = parse(listQuery, req.query)
-  const rows = await prisma.lead.findMany({ where: { AND: [listWhere(m, s, q), s.admin ? {} : { businessId: { in: s.managerOf } }] }, include: LEAD_INCLUDE, orderBy: { createdAt: 'desc' }, take: 20000 })
+  // Managers download their businesses; a rep downloads the leads they see (their own).
+  const rows = await prisma.lead.findMany({ where: { AND: [listWhere(m, s, q), s.admin ? {} : { OR: [{ businessId: { in: s.managerOf } }, { assigneeId: m.id }] }] }, include: LEAD_INCLUDE, orderBy: { createdAt: 'desc' }, take: 20000 })
   const last = new Map((await prisma.leadCall.findMany({ where: { leadId: { in: rows.map((r) => r.id) } }, orderBy: { at: 'desc' }, distinct: ['leadId'], select: { leadId: true, summary: true } })).map((c) => [c.leadId, c.summary]))
   const yn = (v: string) => (v === 'YES' ? 'Yes' : v === 'NO' ? 'No' : 'Unknown')
   const head = ['Date', 'Business', 'SDR / Assigned to', 'Company', 'Segment / Industry', 'State', 'Contact', 'Role', 'Decision Maker', 'Phone', 'Email', 'Website', 'Handles Alkaline', 'Est. Volume (lbs/month)', 'Lbs per shipment', 'Current Vendor', 'Pays Today ($/lb)', 'Status', 'Call Summary', 'Next Step', 'Next Step Date', 'Owner', 'Jesse Input Needed', 'Jesse Comment', 'Calls', 'Last call', 'Source', 'From', 'Campaign', 'City', 'Tags', 'Lost reason', 'Message', 'Created']
@@ -1259,7 +1260,9 @@ const sheetSchema = z.object({
 export async function importSheet(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
   const b = parse(sheetSchema, req.body)
-  requireManager(s, b.businessId, 'import a sheet')
+  if (!isMemberOf(s, b.businessId)) throw new HttpError(403, 'You do not work leads for that business.')
+  // A rep imports their own list: every company becomes theirs; a company another rep already has is left alone.
+  const repOnly = !canManage(s, b.businessId)
   const biz = await bizFor(b.businessId)
   const cmr = isCmr(biz), set = settingsOf(biz)
   const col: Record<string, number> = {}
@@ -1283,8 +1286,8 @@ export async function importSheet(req: AuthedRequest, res: Response): Promise<vo
     if (!organization && !name) { skipped++; continue }
     const key = orgKey(organization) ?? `contact:${name.toLowerCase()}`
     const sdrName = cell(r, 'sdr')
-    const assigneeId = sdrName ? byName(sdrName) : null
-    if (sdrName && !assigneeId && !problems.some((p) => p.includes(`"${sdrName}"`))) problems.push(`Row ${i + 2}: "${sdrName}" is not in this business (left unassigned)`)
+    const assigneeId = repOnly ? m.id : sdrName ? byName(sdrName) : null
+    if (!repOnly && sdrName && !assigneeId && !problems.some((p) => p.includes(`"${sdrName}"`))) problems.push(`Row ${i + 2}: "${sdrName}" is not in this business (left unassigned)`)
     const statusText = cell(r, 'status')
     const status = statusText ? statusFromText(biz, statusText) : null
     if (statusText && !status) problems.push(`Row ${i + 2}: status "${statusText}" is not one of ${biz.name}'s; left as New`)
@@ -1310,7 +1313,13 @@ export async function importSheet(req: AuthedRequest, res: Response): Promise<vo
       lbsPerMonth: num(cell(r, 'lbsPerMonth')), currentVendor: cell(r, 'currentVendor') || null, ...paysOf(cell(r, 'paysToday')),
       jesseInputNeeded: /^y/i.test(cell(r, 'jesseInputNeeded')), jesseComment: cell(r, 'jesseComment') || null, flaggedAt: /^y/i.test(cell(r, 'jesseInputNeeded')) ? when : null, qualifiedAt: status === 'QUALIFIED' ? when : null,
     } : {}
-    const existingId = seen.get(key) ?? (organization ? (await prisma.lead.findFirst({ where: { businessId: biz.id, orgKey: key }, select: { id: true } }))?.id : undefined)
+    const existing = seen.get(key) ? { id: seen.get(key)!, assigneeId: m.id } : organization ? await prisma.lead.findFirst({ where: { businessId: biz.id, orgKey: key }, select: { id: true, assigneeId: true } }) : null
+    const existingId = existing?.id
+    if (repOnly && existing && existing.assigneeId && existing.assigneeId !== m.id) {
+      skipped++
+      if (problems.length < 50) problems.push(`Row ${i + 2}: ${organization} already belongs to someone else (left as is)`)
+      continue
+    }
     let leadId: string
     if (existingId) {
       // A later row for the same company: the latest facts win, the call is added under it.

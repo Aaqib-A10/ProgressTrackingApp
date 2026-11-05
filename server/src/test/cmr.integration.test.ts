@@ -264,7 +264,7 @@ describe('CMR flow inside Lead Management', () => {
     const csv = (await api(lead).get(`/export.csv?business=${cmrId}&status=all`).expect(200)).text
     expect(csv.split('\n')[0]).toContain('Jesse Input Needed')
     expect(csv).toContain('Acme Recycling')
-    await api(matthew).get(`/export.csv?business=${cmrId}`).expect(403)
+    await api(stranger).get(`/export.csv?business=${cmrId}`).expect(403) // reps export their own leads now; a stranger still cannot
     const d = (await api(lead).get(`/dashboard?business=${cmrId}&range=all`).expect(200)).body
     expect(d.cards.total).toBeGreaterThanOrEqual(3)
     expect(d.cards.prohibited).toBeGreaterThanOrEqual(1)
@@ -318,7 +318,6 @@ describe('CMR flow inside Lead Management', () => {
       ['10/19/2026', 'Matthew', 'Integritrade LLC \n', 'E-waste recycler', 'CA', 'Ian Ziyer', 'Owner', 'Yes', '888-694-4978 / 972-427-7770 / 903-217-8090', 'info@integritrade.example\nian@integritrade.example', 'integritrade.example', 'Yes', '1,500-2,000 (growing)', 'Unnamed downstream (NDA)', 'Nothing (no charge, no rebate)', 'Follow Up', 'Owner on the call.', 'Get the start date.', '10/24/2026', 'SDR', 'No', ''],
       ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
     ]
-    await api(matthew).post('/import-sheet', { businessId: cmrId, headers, rows }).expect(403)
     const r = (await api(lead).post('/import-sheet', { businessId: cmrId, fileName: 'CMR_Lead_Tracker.csv', headers, rows }).expect(200)).body
     expect(r).toMatchObject({ companies: 4, calls: 5, skipped: 1 })
     const integ = await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Integritrade LLC' }, include: { cmr: true } })
@@ -347,6 +346,33 @@ describe('CMR flow inside Lead Management', () => {
     expect(bad.assigneeId).toBe(stranger.id)
     expect(bad.calls[0].userId).toBe(stranger.id)
     await prisma.leadBusinessMember.delete({ where: { businessId_userId: { businessId: cmrId, userId: stranger.id } } })
+  })
+
+  it('a rep imports their own list: every company becomes theirs, one that belongs to another rep is left alone; a rep exports only their own leads', async () => {
+    const headers = ['Date', 'SDR', 'Company', 'Segment', 'State', 'Contact', 'Phone', 'Status', 'Call Summary', 'Next Step']
+    const rows = [
+      ['11/04/2026', 'Mark', 'Sun Valley Scrap', 'E-waste recycler', 'AZ', 'Sol', '480-555-0177', 'New', 'Left a voicemail.', 'Call back'],   // "Mark" in the SDR column is ignored: Matthew's import, Matthew's lead
+      ['11/04/2026', '', 'Metro Transit', 'Transit', 'TX', 'Tia', '(214) 555-0102', 'Follow Up', 'Tia called back.', 'Send profile'],      // Mark's company from the sheet import: left alone
+    ]
+    const r = (await api(matthew).post('/import-sheet', { businessId: cmrId, fileName: 'mine.csv', headers, rows }).expect(200)).body
+    expect(r.companies).toBe(1)
+    expect(r.skipped).toBe(1)
+    expect(r.problems.some((p: string) => /Metro Transit already belongs to someone else/.test(p))).toBe(true)
+    const sun = (await api(matthew).get('/?q=Sun%20Valley').expect(200)).body.leads[0]
+    expect(sun).toMatchObject({ organization: 'Sun Valley Scrap', assigneeId: matthew.id })
+    const metro = await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Metro Transit' } })
+    expect(metro.assigneeId).toBe(mark.id)
+    expect(metro.status).toBe('NOT_A_FIT') // unchanged
+    // The team lead sees Matthew's new company in the list; Matthew's export holds only his leads.
+    expect((await api(lead).get('/?q=Sun%20Valley').expect(200)).body.leads).toHaveLength(1)
+    const csv = (await request(app).get(`/api/leads/export.csv?business=${cmrId}&status=all`).set(...auth(matthew)).expect(200)).text
+    expect(csv).toMatch(/Sun Valley Scrap/)
+    expect(csv).not.toMatch(/Metro Transit/)
+    // A plain CSV import by a rep is theirs too, whatever assignee the form sent.
+    const plain = (await api(matthew).post('/import', { businessId: cmrId, fileName: 'p.csv', headers: ['Company', 'Email'], mapping: { organization: 'Company', email: 'Email' }, rows: [['Rio Batteries', 'rio@rio.example']], assigneeId: mark.id }).expect(200)).body
+    expect(plain.added).toBe(1)
+    expect((await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Rio Batteries' } })).assigneeId).toBe(matthew.id)
+    await api(stranger).post('/import-sheet', { businessId: cmrId, headers, rows }).expect(403)
   })
 
   it('bulk assign: several leads to one rep at once, their open tasks and SDR-less calls follow; reps may not', async () => {

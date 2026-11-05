@@ -8,7 +8,7 @@ import { HttpError } from '../lib/pm/access'
 import { parse } from '../lib/pm/http'
 import { isOn } from '../lib/flags'
 import { runAsCompany } from '../lib/tenancy'
-import { canManage, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
+import { canManage, isMemberOf, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
 import { cleanInput, fromFields, hasSubstance, OPEN_STATUSES, receiveLead, type LeadInput } from '../lib/leads/intake'
 import { syncCmrMembers } from '../lib/leads/members'
 import { KINDS, PROMISE_WORDS, pipelineOf, settingsOf, type CmrSettings } from '../lib/leads/pipeline'
@@ -51,9 +51,11 @@ export const IMPORT_FIELDS = ['name', 'firstName', 'lastName', 'email', 'phone',
 export async function importLeads(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
   const b = parse(importSchema, req.body)
-  if (!canManage(s, b.businessId)) throw new HttpError(403, 'Only a manager of this business can import leads.')
+  if (!isMemberOf(s, b.businessId)) throw new HttpError(403, 'You do not work leads for that business.')
   const business = await prisma.leadBusiness.findFirst({ where: { id: b.businessId, isActive: true }, select: { id: true, name: true } })
   if (!business) throw new HttpError(404, 'Business not found')
+  // A rep's import is their own list: every lead is theirs, whatever the form said.
+  if (!canManage(s, b.businessId)) b.assigneeId = m.id
   if (b.assigneeId) {
     const member = await prisma.leadBusinessMember.findUnique({ where: { businessId_userId: { businessId: b.businessId, userId: b.assigneeId } } })
     if (!member) throw new HttpError(422, 'That person does not work leads for this business.')
