@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Tag, UserCheck, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Tag, UserCheck, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { Modal } from '../../../components/ui/Modal'
@@ -91,7 +91,7 @@ export default function LeadPage() {
           {cmr && <JessePanel d={d} isHead={isHead} meId={user?.id ?? ''} onAction={setModal} onDecided={load} />}
           {cmr && <FactsCard l={l} settings={d.settings} canEdit={can.edit} onSaved={load} />}
           <NextStepCard l={l} canEdit={can.edit} onSaved={load} />
-          <CallsCard l={l} canEdit={can.edit && !l.prohibited} onLog={() => setModal('call')} />
+          <CallsCard l={l} canEdit={can.edit && !l.prohibited} onLog={() => setModal('call')} onChanged={load} />
           <CommentsCard d={d} meId={user?.id ?? ''} onPosted={load} />
         </div>
         <div className="space-y-4">
@@ -268,21 +268,35 @@ function NextStepCard({ l, canEdit, onSaved }: { l: LeadFull; canEdit: boolean; 
   )
 }
 
-function CallsCard({ l, canEdit, onLog }: { l: LeadFull; canEdit: boolean; onLog: () => void }) {
+function CallsCard({ l, canEdit, onLog, onChanged }: { l: LeadFull; canEdit: boolean; onLog: () => void; onChanged: () => void }) {
+  const { addToast } = useToast()
+  const [openTranscript, setOpenTranscript] = useState<string | null>(null)
+  const consent = (id: string) => leadsApi.callConsent(id, true).then(() => { addToast({ type: 'success', message: 'Consent noted: the recording can be played.' }); onChanged() }).catch((e) => addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
   return (
     <Card title={`Calls (${l.calls.length})`} icon={<PhoneCall size={15} />} action={canEdit && <Button size="sm" variant="secondary" leadingIcon={<Plus size={14} />} onClick={onLog}>Log call</Button>}>
       {l.calls.length ? (
         <ul className="divide-y divide-line">
-          {l.calls.map((c) => (
-            <li key={c.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-              <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', c.disposition === 'CONNECTED' ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}><PhoneOutgoing size={14} /></span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"><span className="font-semibold text-ink">{DISPOSITION_LABEL[c.disposition]}</span>{c.durationSec > 0 && <span className="text-ink-muted">{fmtDur(c.durationSec)}</span>}<span className="text-ink-faint">{fmtWhen(c.at)} · {c.user?.name ?? 'TalkLoop'}</span>{c.consentGiven === true && <Badge tone="success">Consent</Badge>}{c.consentGiven === false && <Badge tone="warning">No consent</Badge>}</div>
-                {c.summary && <p className="mt-1 whitespace-pre-wrap text-body-sm text-ink">{c.summary}</p>}
-                {c.hasRecording && (c.recordingUrl ? <audio controls preload="none" src={c.recordingUrl} className="mt-2 h-8 w-full max-w-md" /> : <span className="mt-1 inline-flex items-center gap-1 text-body-sm text-ink-faint"><Play size={12} />Recording (only the SDR and managers can play it)</span>)}
-              </div>
-            </li>
-          ))}
+          {l.calls.map((c) => {
+            const fromPhone = c.provider === 'TALKLOOP'
+            const locked = fromPhone && !!c.externalId && c.consentGiven === false && !c.recordingKept
+            return (
+              <li key={c.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', c.disposition === 'CONNECTED' ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>{c.direction === 'IN' ? <PhoneIncoming size={14} /> : <PhoneOutgoing size={14} />}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"><span className="font-semibold text-ink">{DISPOSITION_LABEL[c.disposition]}</span>{c.durationSec > 0 && <span className="text-ink-muted">{fmtDur(c.durationSec)}</span>}<span className="text-ink-faint">{fmtWhen(c.at)} · {c.user?.name ?? 'TalkLoop'}{c.phone ? ` · ${c.phone}` : ''}</span>{fromPhone && <Badge tone="accent">TalkLoop</Badge>}{c.consentGiven === true && <Badge tone="success">Consent</Badge>}{c.consentGiven === false && <Badge tone="warning">No consent</Badge>}</div>
+                  {c.summary ? <p className="mt-1 whitespace-pre-wrap text-body-sm text-ink">{c.summary}</p> : fromPhone && canEdit && <p className="mt-1 text-body-sm text-ink-faint">No summary yet: press Log call to add what was said and the facts.</p>}
+                  {c.hasRecording && (c.recordingUrl ? <audio controls preload="none" src={c.recordingUrl} className="mt-2 h-8 w-full max-w-md" /> : <span className="mt-1 inline-flex items-center gap-1 text-body-sm text-ink-faint"><Play size={12} />Recording (only the SDR and managers can play it)</span>)}
+                  {locked && <p className="mt-1.5 flex flex-wrap items-center gap-2 text-body-sm text-amber-800 dark:text-amber-300"><span>Recording kept but locked: {l.state} needs both sides to agree.</span>{canEdit && <Button size="sm" variant="secondary" onClick={() => consent(c.id)}>Both sides agreed</Button>}</p>}
+                  {c.transcript && (
+                    <div className="mt-1.5">
+                      <button type="button" onClick={() => setOpenTranscript(openTranscript === c.id ? null : c.id)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline"><FileText size={13} />{openTranscript === c.id ? 'Hide transcript' : 'Transcript'}</button>
+                      {openTranscript === c.id && <p className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-btn bg-slate-50 p-3 text-body-sm text-ink dark:bg-white/[0.04]">{c.transcript}</p>}
+                    </div>
+                  )}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       ) : <p className="text-body-sm text-ink-muted">No calls yet.</p>}
     </Card>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Ban, Check, Copy, Flag, Globe, Inbox, ListOrdered, Mail, Plus, RefreshCw, Send, Settings2, Trash2, Users } from 'lucide-react'
+import { ArrowLeft, Ban, Check, Copy, Flag, Globe, Inbox, ListOrdered, Mail, PhoneCall, Plus, RefreshCw, Send, Settings2, Trash2, Users } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { Toggle } from '../../../components/ui/Toggle'
@@ -9,8 +9,8 @@ import { TextField, TextArea } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { ago, leadsApi, type BusinessKind, type BusinessRow, type CmrSettings, type InboxInput, type Person, type PipelineStatus } from '../../../lib/leadsApi'
-import { Label, Select, useLeadsMeta } from './shared'
+import { ago, leadsApi, type BusinessKind, type BusinessRow, type CmrSettings, type InboxInput, type Person, type PipelineStatus, type TalkLoopInfo } from '../../../lib/leadsApi'
+import { Label, Select, Tile, useLeadsMeta } from './shared'
 import { useAuth } from '../../../lib/auth'
 import { readFile } from '../itad/dialer/ImportModal'
 import { CreateBusinessWizard, SetupChecklist, SetupSteps, WhoSeesWhat, type SetupPerson } from './SetupGuide'
@@ -71,6 +71,8 @@ export default function LeadSettings() {
           {biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} onSaved={put} onDeleted={() => { setSel(null); void load(); sync() }} toast={addToast} />}
         </div>
       )}
+
+      {list && <TalkLoopSection toast={addToast} />}
 
       {creating && <CreateBusinessWizard cmrOn={cmrOn} people={people} onClose={() => setCreating(false)} onCreated={(b, note) => { setCreating(false); setList((l) => [...(l ?? []).filter((x) => x.id !== b.id), { ...b, openLeads: 0, leadCount: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id); sync(); addToast({ type: 'success', message: note }) }} />}
     </div>
@@ -277,6 +279,56 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
         <Button size="sm" variant="secondary" disabled={busy || !f.inboxHost || !f.inboxUser} onClick={tryIt}>Test connection</Button>
         <Button size="sm" disabled={busy} onClick={() => save()}>Save inbox</Button>
       </div>
+    </Section>
+  )
+}
+
+// ------------------------------------------------------------------ TalkLoop (the phone system)
+
+function TalkLoopSection({ toast }: { toast: Toast }) {
+  const [info, setInfo] = useState<TalkLoopInfo | null>(null)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const load = () => leadsApi.talkloop().then((r) => { setInfo(r); setErr('') }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
+  useEffect(() => { void load() }, [])
+  const run = async (fn: () => Promise<unknown>, ok: (r: unknown) => string) => { setBusy(true); try { const r = await fn(); toast({ type: 'success', message: ok(r) }); await load() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not do that') }) } finally { setBusy(false) } }
+  const when = (iso: string | null) => (iso ? ago(iso) : 'never')
+  if (err) return null
+  if (!info) return <div className="h-24 animate-pulse rounded-card border border-line bg-card" />
+  const st = info.status
+  return (
+    <Section icon={<PhoneCall size={17} />} title="TalkLoop (phone system)" hint="Calls made in TalkLoop land on the matching lead by phone number: who called, how long, answered or voicemail, the recording and the transcript. The SDR only adds the summary and the facts."
+      action={info.configured ? <div className="flex items-center gap-2"><Button size="sm" variant="secondary" disabled={busy} leadingIcon={<RefreshCw size={14} />} onClick={() => run(() => leadsApi.talkloopSync(), (r) => { const s = (r as { status: TalkLoopInfo['status'] }).status; return `Synced: ${s.lastRunSynced} new call${s.lastRunSynced === 1 ? '' : 's'}${s.lastRunUnmatched ? `, ${s.lastRunUnmatched} to numbers no lead has` : ''}` })}>Sync now</Button></div> : <Badge tone="warning">Not connected</Badge>}>
+      {!info.configured ? (
+        <p className="text-body-md text-ink-muted">Not connected yet. The TalkLoop token goes in the server's <code>.env</code> as <code>TALKLOOP_TOKEN</code> (never in Metriq's screens or code); after a restart this section shows the account's users and starts syncing calls every 3 minutes.</p>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Tile label="Connected" value={info.error ? 'No' : 'Yes'} color={info.error ? '#EF4444' : '#059669'} hint={info.error ?? `${info.talkloopUsers.length} TalkLoop user${info.talkloopUsers.length === 1 ? '' : 's'}`} />
+            <Tile label="Last sync" value={when(st.lastRunAt)} color="#4F46E5" hint={st.lastError ? `Failed: ${st.lastError}` : st.lastRunAt ? `${st.lastRunSynced} new, ${st.lastRunUnmatched} unmatched` : 'runs every 3 minutes'} />
+            <Tile label="Calls on leads" value={st.synced} color="#0EA5E9" hint="since the start" />
+            <Tile label="No matching lead" value={st.unmatched} color="#94A3B8" hint="numbers no lead has (not stored)" />
+          </div>
+          <div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-body-sm text-ink-muted">Who is who: each person's TalkLoop user. Only linked people's calls are filed. <button type="button" className="font-semibold text-primary hover:underline" disabled={busy} onClick={() => run(() => leadsApi.talkloopLink({ auto: true }), (r) => `${(r as { linked: number }).linked} linked by email`)}>Match by email</button></p>
+            </div>
+            <ul className="divide-y divide-line rounded-card border border-line">
+              {info.people.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-3 px-3.5 py-2">
+                  <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{p.name}</span><span className="block truncate text-body-sm text-ink-muted">{p.email}</span></span>
+                  <Select value={p.talkloopUserId ?? ''} disabled={busy} onChange={(e) => run(() => leadsApi.talkloopLink({ userId: p.id, talkloopUserId: e.target.value ? Number(e.target.value) : null }), () => (e.target.value ? 'Linked' : 'Unlinked'))} aria-label={`TalkLoop user for ${p.name}`} className="min-w-[240px]">
+                    <option value="">Not on TalkLoop</option>
+                    {info.talkloopUsers.map((u) => <option key={u.id} value={u.id}>{u.name}{u.extension ? ` · ext ${u.extension}` : ''}{u.email ? ` · ${u.email}` : ''}</option>)}
+                  </Select>
+                  {p.talkloopExt && <Badge tone="accent">ext {p.talkloopExt}</Badge>}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-[11.5px] text-ink-muted">Recordings play inside Metriq only (never a TalkLoop link). In two-party consent states the recording stays locked until the SDR confirms both sides agreed on that call. Every play is logged on the lead.</p>
+        </div>
+      )}
     </Section>
   )
 }

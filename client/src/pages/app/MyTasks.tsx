@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, CheckSquare, Columns3, ExternalLink, List as ListIcon, ListChecks, Search, Send, X } from 'lucide-react'
 import { getMyTasks, type MyTasksResponse, type PendingTask } from '../../lib/tasksApi'
 import { projectsApi, type BoardColumn, type BoardData, type ColumnCategory, type PmPriority, type TaskCard } from '../../lib/projectsApi'
@@ -285,16 +285,24 @@ function Board({ rows, statusColumns, onOpen, onMove, showAssignees }: { rows: R
     })
     return m
   }, [rows, statusColumns])
+  // The card being dragged is drawn in an overlay above the page (not inside its scrolling column),
+  // so it is never hidden behind the next column while it moves.
+  const [dragging, setDragging] = useState<Row | null>(null)
+  const onDragStart = (e: DragStartEvent) => setDragging((e.active.data.current?.row as Row | undefined) ?? null)
   const onDragEnd = (e: DragEndEvent) => {
+    setDragging(null)
     const row = e.active.data.current?.row as Row | undefined
     const col = statusColumns.find((c) => `col:${c.name.toLowerCase()}` === e.over?.id)
     if (row?.kind === 'project' && col) onMove(row.card, col)
   }
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       <div className="flex gap-3 overflow-x-auto pb-3">
         {statusColumns.map((c) => <BoardColumnView key={c.name} col={c} rows={byCol.get(c.name.toLowerCase()) ?? []} onOpen={onOpen} showAssignees={showAssignees} />)}
       </div>
+      <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' }}>
+        {dragging ? <div className="w-[300px] rotate-[1.5deg] cursor-grabbing rounded-btn border border-primary/40 bg-card p-3 shadow-overlay"><CardBody row={dragging} showAssignees={showAssignees} /></div> : null}
+      </DragOverlay>
     </DndContext>
   )
 }
@@ -318,8 +326,19 @@ function BoardColumnView({ col, rows, onOpen, showAssignees }: { col: StatusCol;
 
 function BoardCard({ row, onOpen, showAssignees }: { row: Row; onOpen: (r: Row) => void; showAssignees: boolean }) {
   const drag = useDraggable({ id: row.id, data: { row }, disabled: row.kind !== 'project' })
-  const style = drag.transform ? { transform: `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)`, zIndex: 50 } : undefined
-  const body = (
+  const body = <CardBody row={row} showAssignees={showAssignees} />
+  // While it is dragged the overlay shows the card; the one in the column stays put as a faint placeholder.
+  const cls = cn('block w-full cursor-pointer rounded-btn border border-line bg-card p-3 text-left shadow-xs transition-shadow hover:border-line-strong hover:shadow-sm', drag.isDragging && 'opacity-30 shadow-none')
+  if (row.kind === 'other') return <Link to={row.other.link} className={cls}>{body}</Link>
+  return (
+    <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes} role="button" tabIndex={0} onClick={() => onOpen(row)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(row) }} className={cls}>
+      {body}
+    </div>
+  )
+}
+
+function CardBody({ row, showAssignees }: { row: Row; showAssignees: boolean }) {
+  return (
     <>
       <p className="line-clamp-3 text-body-md font-medium leading-snug text-ink">{rowTitle(row)}</p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -341,13 +360,6 @@ function BoardCard({ row, onOpen, showAssignees }: { row: Row; onOpen: (r: Row) 
         )}
       </div>
     </>
-  )
-  const cls = cn('block w-full cursor-pointer rounded-btn border border-line bg-card p-3 text-left shadow-xs transition-shadow hover:border-line-strong hover:shadow-sm', drag.isDragging && 'cursor-grabbing opacity-80 shadow-overlay')
-  if (row.kind === 'other') return <Link to={row.other.link} className={cls}>{body}</Link>
-  return (
-    <div ref={drag.setNodeRef} style={style} {...drag.listeners} {...drag.attributes} role="button" tabIndex={0} onClick={() => onOpen(row)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(row) }} className={cls}>
-      {body}
-    </div>
   )
 }
 

@@ -10,6 +10,7 @@ import { startTaskReminders } from './lib/taskReminders'
 import { startDialerReminders } from './lib/dialer/tasks'
 import { startLeadSla } from './lib/leads/sla'
 import { startLeadTasks } from './lib/leads/tasks'
+import { startTalkLoopSync } from './lib/talkloop/sync'
 import { startLeadInbox } from './lib/leads/inbox'
 import { startPmDeadlines } from './lib/pm/deadlines'
 import { startCallSweeper, setOnCallEnded } from './lib/pm/calls'
@@ -60,6 +61,7 @@ app.listen(PORT, () => {
   startDialerReminders()
   startLeadSla()
   startLeadTasks()
+  startTalkLoopSync()
   startLeadInbox()
   startPmDeadlines()
   startCallSweeper()

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
+import { talkloopClient } from '../lib/talkloop/client'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
 import { parse } from '../lib/pm/http'
@@ -555,9 +556,25 @@ export async function listCalls(req: AuthedRequest, res: Response): Promise<void
 /** GET /api/leads/calls/:id/recording — the recording, only for people who may hear it (managers and the head: all; a rep: their own). */
 export async function callRecording(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
-  const c = await prisma.leadCall.findFirst({ where: { id: String(req.params.id), ...(s.admin ? {} : { OR: [{ userId: m.id }, { businessId: { in: s.managerOf } }] }) }, select: { recordingUrl: true, recordingKept: true, leadId: true } })
+  const c = await prisma.leadCall.findFirst({ where: { id: String(req.params.id), ...(s.admin ? {} : { OR: [{ userId: m.id }, { businessId: { in: s.managerOf } }] }) }, select: { recordingUrl: true, recordingKept: true, leadId: true, externalId: true } })
   if (!c || !c.recordingUrl || !c.recordingKept) throw new HttpError(404, 'No recording')
-  await event(c.leadId, m.id, 'LISTEN', 'Played a recording')
+  // A seek (Range request) is the same listen; log the first play only.
+  if (!req.headers.range || req.headers.range.startsWith('bytes=0-')) await event(c.leadId, m.id, 'LISTEN', 'Played a recording')
+  if (c.recordingUrl.startsWith('talkloop:')) {
+    // Streamed through Metriq with the server's token: the browser never sees TalkLoop or the token.
+    const client = talkloopClient()
+    if (!client) throw new HttpError(503, 'TalkLoop is not connected')
+    const up = await client.recording(c.recordingUrl.slice('talkloop:'.length), typeof req.headers.range === 'string' ? req.headers.range : null)
+    if (!up.ok && up.status !== 206) throw new HttpError(404, 'The recording is not on TalkLoop any more')
+    res.status(up.status)
+    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) { const v = up.headers.get(h); if (v) res.setHeader(h, v) }
+    if (!up.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes')
+    res.setHeader('Cache-Control', 'private, no-store')
+    if (!up.body) { res.end(); return }
+    const { Readable } = await import('node:stream')
+    Readable.fromWeb(up.body as import('node:stream/web').ReadableStream).pipe(res)
+    return
+  }
   res.redirect(c.recordingUrl)
 }
 

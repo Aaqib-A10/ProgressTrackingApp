@@ -59,7 +59,14 @@ export interface LeadRow {
   jesseInputNeeded?: boolean; jesseAsk?: string | null; jesseComment?: string | null; flaggedAt?: string | null; qualifyRequestedAt?: string | null; qualifiedAt?: string | null; jesseDecision?: string | null; jesseDecidedAt?: string | null
   meetingSlots?: string[] | null; meetingAt?: string | null; meetingTz?: string | null; meetingLink?: string | null; inviteSentAt?: string | null; reconfirmedAt?: string | null; meetingBrief?: string | null; meetingOutcome?: string | null; meetingOutcomeAt?: string | null; infoSentAt?: string | null
 }
-export interface LeadCall { id: string; leadId: string; userId: string | null; user: Person | null; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; summary: string; outcome: string | null; consentGiven: boolean | null; recordingUrl: string | null; hasRecording: boolean; recordingKept: boolean }
+export interface LeadCall { id: string; leadId: string; userId: string | null; user: Person | null; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; summary: string; outcome: string | null; consentGiven: boolean | null; recordingUrl: string | null; hasRecording: boolean; recordingKept: boolean; provider?: string | null; phone?: string | null; transcript?: string | null; externalId?: string | null }
+export interface TalkLoopInfo {
+  configured: boolean
+  status: { lastRunAt: string | null; lastCallAt: string | null; synced: number; unmatched: number; lastError: string | null; lastRunSynced: number; lastRunUnmatched: number }
+  people: { id: string; name: string; email: string; talkloopUserId: number | null; talkloopExt: string | null }[]
+  talkloopUsers: { id: number; name: string; email: string | null; extension: string | null; status: string | null }[]
+  error: string | null
+}
 export interface LeadComment { id: string; userId: string; user: Person; body: string; mentions: string[]; mentionNames: string[]; callId: string | null; atSec: number | null; createdAt: string }
 export interface LeadTask { id: string; leadId: string; kind: string; title: string; notes: string; dueAt: string; doneAt: string | null; outcome: string | null; assigneeId: string | null; assignee: Person | null; overdue?: boolean; today?: boolean; lead?: { id: string; name: string; organization: string | null; phone: string | null; state: string | null; status: string; statusLabel: string; industry: string | null; assigneeId: string | null; business: { id: string; name: string } } }
 export interface LeadEvent { id: string; kind: string; text: string; data: Record<string, unknown> | null; createdAt: string; user: Person | null; toName?: string | null }
@@ -143,6 +150,10 @@ export const leadsApi = {
   add: (b: LeadInput & { businessId: string; assignTo?: string | null; force?: boolean }) => api.post<{ lead: LeadRow; listHits: { kind: string; name: string; on: string }[] }>('/leads', b),
   update: (id: string, b: LeadInput & { status?: string }) => api.patch<{ lead: LeadRow }>(`/leads/${id}`, b),
   assign: (id: string, assigneeId: string | null) => api.post<{ lead: LeadRow }>(`/leads/${id}/assign`, { assigneeId }),
+  talkloop: () => api.get<TalkLoopInfo>('/leads/talkloop'),
+  talkloopLink: (b: { userId?: string; talkloopUserId?: number | null; auto?: boolean }) => api.patch<{ ok?: boolean; linked?: number }>('/leads/talkloop/link', b),
+  talkloopSync: () => api.post<{ status: TalkLoopInfo['status'] }>('/leads/talkloop/sync', {}),
+  callConsent: (id: string, consentGiven: boolean) => api.patch<{ call: Pick<LeadCall, 'id' | 'consentGiven' | 'recordingKept' | 'hasRecording' | 'recordingUrl'> }>(`/leads/calls/${id}`, { consentGiven }),
   bulkAssign: (ids: string[], assigneeId: string | null) => api.post<{ assigned: number }>('/leads/bulk-assign', { ids, assigneeId }),
   addEvent: (id: string, kind: 'NOTE' | 'EMAIL', text: string) => api.post<{ event: LeadEvent }>(`/leads/${id}/events`, { kind, text }),
   addCall: (id: string, b: { at?: string; direction?: 'OUT' | 'IN'; durationSec?: number; disposition: Disposition; outcome?: string; summary?: string; consentGiven?: boolean | null; recordingUrl?: string | null; nextStep?: string | null; nextStepDate?: string | null; owner?: Owner; facts?: LeadInput }) => api.post<{ call: LeadCall; lead: LeadRow }>(`/leads/${id}/calls`, b),

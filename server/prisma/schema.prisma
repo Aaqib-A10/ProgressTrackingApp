@@ -185,6 +185,9 @@ model User {
   microsoftId       String?      @unique
   passwordHash      String? // null for SSO-only accounts
   googleId          String?      @unique
+  /// TalkLoop (the phone system): this person's TalkLoop user id and extension, so their calls land on their leads.
+  talkloopUserId    Int?         @unique
+  talkloopExt       String?
   name              String
   role              Role         @default(MEMBER)
   status            UserStatus   @default(ACTIVE)
@@ -4304,6 +4307,14 @@ model LeadCall {
   recordingUrl  String?
   recordingKept Boolean      @default(true)
   externalId    String?
+  /// TALKLOOP for a call the phone system reported; empty for one logged by hand.
+  provider      String?
+  /// The number dialled (or that called), as the phone system saw it.
+  phone         String?
+  /// The phone system's recording file name; the audio is streamed through Metriq, never linked directly.
+  recordingFile String?
+  /// The transcript the phone system produced (fetched a few minutes after the call).
+  transcript    String?
   createdAt     DateTime     @default(now())
 
   @@unique([businessId, externalId])

@@ -5,6 +5,7 @@ import { pmHandler as h } from '../lib/pm/http'
 import { leadInLimiter } from '../middleware/rateLimit'
 import * as L from '../controllers/leadsController'
 import * as W from '../controllers/leadsWorkController'
+import * as T from '../controllers/leadsTalkloopController'
 
 /** Lead Management (signed in). Who sees what is decided in lib/leads/access.ts. */
 export const leadsRouter = Router()
@@ -15,6 +16,10 @@ leadsRouter.get('/summary', h(W.headSummary))
 leadsRouter.get('/queue', h(W.headQueue))
 leadsRouter.get('/calls', h(W.listCalls))
 leadsRouter.get('/calls/:id/recording', h(W.callRecording))
+leadsRouter.patch('/calls/:id', h(T.callConsent))
+leadsRouter.get('/talkloop', h(T.talkloopInfo))
+leadsRouter.patch('/talkloop/link', h(T.talkloopLink))
+leadsRouter.post('/talkloop/sync', h(T.talkloopSyncNow))
 leadsRouter.get('/tasks', h(W.listTasks))
 leadsRouter.post('/tasks', h(W.addTask))
 leadsRouter.patch('/tasks/:id', h(W.updateTask))
