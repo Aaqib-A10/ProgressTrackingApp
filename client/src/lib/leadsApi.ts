@@ -59,7 +59,9 @@ export interface LeadRow {
   jesseInputNeeded?: boolean; jesseAsk?: string | null; jesseComment?: string | null; flaggedAt?: string | null; qualifyRequestedAt?: string | null; qualifiedAt?: string | null; jesseDecision?: string | null; jesseDecidedAt?: string | null
   meetingSlots?: string[] | null; meetingAt?: string | null; meetingTz?: string | null; meetingLink?: string | null; inviteSentAt?: string | null; reconfirmedAt?: string | null; meetingBrief?: string | null; meetingOutcome?: string | null; meetingOutcomeAt?: string | null; infoSentAt?: string | null
 }
-export interface LeadCall { id: string; leadId: string; userId: string | null; user: Person | null; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; summary: string; outcome: string | null; consentGiven: boolean | null; recordingUrl: string | null; hasRecording: boolean; recordingKept: boolean; provider?: string | null; phone?: string | null; transcript?: string | null; externalId?: string | null }
+/** What the AI heard on the call, for the SDR to confirm (keys match the lead's fields; jesseAsk and outcome stay on the call). */
+export interface CallDraftFacts { contactName?: string; contactRole?: string; email?: string; decisionMaker?: YesNo; decisionMakerName?: string; material?: string[]; materialForm?: string[]; lbsPerMonth?: number; lbsPerShipment?: number; currentVendor?: string; paysToday?: number; paysUnit?: string; nextShipmentDate?: string; pickupCity?: string; freight?: string; nextStep?: string; nextStepDate?: string; jesseAsk?: string; outcome?: string; error?: string }
+export interface LeadCall { id: string; leadId: string; userId: string | null; user: Person | null; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; summary: string; outcome: string | null; consentGiven: boolean | null; recordingUrl: string | null; hasRecording: boolean; recordingKept: boolean; provider?: string | null; phone?: string | null; transcript?: string | null; externalId?: string | null; aiSummary?: string | null; aiFacts?: CallDraftFacts | null; aiAt?: string | null; aiAppliedAt?: string | null; pending?: boolean }
 export interface TalkLoopInfo {
   dial?: DialSetting; pbxDomain?: string | null
   configured: boolean
@@ -87,7 +89,7 @@ export interface MetaBusiness {
 export type DialScheme = 'tel' | 'sip' | 'callto' | 'custom'
 /** How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop). */
 export interface DialSetting { scheme: DialScheme; domain: string | null; template: string | null }
-export interface LeadsMeta { me: { id: string; name: string; admin: boolean; headOf: string[]; managerOf: string[] }; dial?: DialSetting; businesses: MetaBusiness[]; cmrOn: boolean }
+export interface LeadsMeta { me: { id: string; name: string; admin: boolean; headOf: string[]; managerOf: string[] }; dial?: DialSetting; talkloopDial?: boolean; businesses: MetaBusiness[]; cmrOn: boolean }
 /** The href a Call button opens for this number, in the form the PC's phone app expects. */
 export function dialHref(phone: string | null | undefined, dial?: DialSetting | null): string | null {
   if (!phone) return null
@@ -172,6 +174,9 @@ export const leadsApi = {
   talkloopLink: (b: { userId?: string; talkloopUserId?: number | null; auto?: boolean }) => api.patch<{ ok?: boolean; linked?: number }>('/leads/talkloop/link', b),
   talkloopSync: () => api.post<{ status: TalkLoopInfo['status'] }>('/leads/talkloop/sync', {}),
   setDial: (b: DialSetting) => api.patch<{ dial: DialSetting }>('/leads/talkloop/dial', b),
+  dial: (leadId: string) => api.post<{ call: { id: string; pending: boolean; externalId: string | null } }>(`/leads/${leadId}/dial`, {}),
+  draftCall: (callId: string) => api.post<{ call: Pick<LeadCall, 'id' | 'aiSummary' | 'aiFacts' | 'aiAt' | 'aiAppliedAt'> }>(`/leads/calls/${callId}/draft`, {}),
+  applyCallDraft: (callId: string, b: { useSummary?: boolean; summary?: string; facts?: string[]; dismiss?: boolean }) => api.post<{ call: Pick<LeadCall, 'id' | 'aiAppliedAt'>; lead: LeadRow }>(`/leads/calls/${callId}/draft/apply`, b),
   unmatched: () => api.get<{ numbers: UnmatchedNumber[]; total: number }>('/leads/unmatched'),
   attachUnmatched: (phone: string, leadId: string) => api.post<{ moved: number; leadId: string }>('/leads/unmatched/attach', { phone, leadId }),
   callConsent: (id: string, consentGiven: boolean) => api.patch<{ call: Pick<LeadCall, 'id' | 'consentGiven' | 'recordingKept' | 'hasRecording' | 'recordingUrl'> }>(`/leads/calls/${id}`, { consentGiven }),

@@ -191,7 +191,7 @@ export default function Leads() {
             </thead>
             <tbody className="divide-y divide-line">
               {loading && !data && Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={cols.length + (canManage ? 2 : 1)} className="px-3 py-3"><div className="h-5 animate-pulse rounded bg-slate-100 dark:bg-white/5" /></td></tr>)}
-              {data?.leads.map((l) => <Row key={l.id} l={l} cols={cols} dial={meta?.dial} business={businesses.find((b) => b.id === l.businessId) ?? business} canManage={canManage} picked={picked.has(l.id)} onPick={(v) => setPicked((p) => { const n = new Set(p); if (v) n.add(l.id); else n.delete(l.id); return n })} onOpen={() => nav(`/app/leads/${l.id}`)} onChanged={load} toast={addToast} />)}
+              {data?.leads.map((l) => <Row key={l.id} l={l} cols={cols} dial={meta?.dial} viaTalkLoop={!!meta?.talkloopDial} business={businesses.find((b) => b.id === l.businessId) ?? business} canManage={canManage} picked={picked.has(l.id)} onPick={(v) => setPicked((p) => { const n = new Set(p); if (v) n.add(l.id); else n.delete(l.id); return n })} onOpen={() => nav(`/app/leads/${l.id}`)} onChanged={load} toast={addToast} />)}
               {data && !data.leads.length && <tr><td colSpan={cols.length + (canManage ? 2 : 1)} className="px-3 py-12"><EmptyState compact icon={<Inbox />} title="No leads match" hint="Change the filters, or add a lead." /></td></tr>}
             </tbody>
           </table>
@@ -241,7 +241,7 @@ function ColumnsMenu({ cmr, cols, onChange, onClose }: { cmr: boolean; cols: str
 /** "Matthew Reyes" → "Matthew R." */
 const shortName = (n: string) => { const p = n.trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : n }
 
-function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, toast, dial }: { l: LeadRow; cols: string[]; business: MetaBusiness | null; canManage: boolean; dial?: DialSetting; picked: boolean; onPick: (v: boolean) => void; onOpen: () => void; onChanged: () => void; toast: ReturnType<typeof useToast>['addToast'] }) {
+function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, toast, dial, viaTalkLoop }: { l: LeadRow; cols: string[]; business: MetaBusiness | null; canManage: boolean; dial?: DialSetting; viaTalkLoop?: boolean; picked: boolean; onPick: (v: boolean) => void; onOpen: () => void; onChanged: () => void; toast: ReturnType<typeof useToast>['addToast'] }) {
   const [busy, setBusy] = useState(false)
   const pipeline = business?.pipeline ?? []
   const run = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast({ type: 'success', message: ok }); onChanged() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
@@ -295,7 +295,9 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
       {cols.map((k) => <td key={k} className="px-2.5 py-2.5 align-middle text-ink">{cell(k)}</td>)}
       <td className="px-2 py-2.5 text-right">
         <span className="inline-flex gap-0.5" onClick={stop}>
-          {l.phone && <a href={dialHref(l.phoneE164 ?? l.phone, dial) ?? '#'} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title={`Call ${l.phone}`} aria-label="Call"><Phone size={15} /></a>}
+          {l.phone && (viaTalkLoop && !l.prohibited
+            ? <button type="button" disabled={busy} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')} className="rounded-btn p-1.5 text-primary hover:bg-primary/10" title={`Call ${l.phone} via TalkLoop`} aria-label="Call via TalkLoop"><Phone size={15} /></button>
+            : <a href={dialHref(l.phoneE164 ?? l.phone, dial) ?? '#'} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title={`Call ${l.phone}`} aria-label="Call"><Phone size={15} /></a>)}
           <button type="button" onClick={onOpen} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title="Open" aria-label={`Open ${leadTitle(l)}`}><ChevronRight size={16} /></button>
         </span>
       </td>

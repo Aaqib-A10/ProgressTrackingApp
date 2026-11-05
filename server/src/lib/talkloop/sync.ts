@@ -5,6 +5,7 @@ import { runTracked } from '../health/jobs'
 import { settingsOf } from '../leads/pipeline'
 import { talkloopClient, type TalkLoopCdr, type TalkLoopClient } from './client'
 import { rematchUnmatched } from './unmatched'
+import { draftPendingCallNotes } from './notes'
 
 /**
  * Calls from TalkLoop land on the leads by themselves (plan: "TalkLoop call log integration").
@@ -112,6 +113,10 @@ async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date, f
       const text = await client.transcription(c.externalId!)
       if (text) await runAsCompany(c.companyId, () => prisma.leadCall.update({ where: { id: c.id }, data: { transcript: text.slice(0, 20000) } }))
     }
+    // Notes drafted from the new transcripts, for the SDR to confirm on the lead.
+    await draftPendingCallNotes().catch((e) => console.error('[talkloop] notes', e))
+    // A click-to-call that never showed up in the call log after two hours did not go through.
+    await prisma.leadCall.deleteMany({ where: { pending: true, at: { lt: new Date(now.getTime() - 2 * 3600_000) } } })
     const waiting = await prisma.leadUnmatchedCall.count()
     const next: SyncStatus = { lastRunAt: now.toISOString(), lastCallAt: newest.toISOString(), synced: status.synced + synced, unmatched: status.unmatched + unmatched, lastError: null, lastRunSynced: synced, lastRunUnmatched: unmatched, lastRunRead: records.length, lastRunFrom: since.toISOString(), waiting }
     await saveStatus(next)
@@ -130,10 +135,27 @@ async function fileCalls(companyId: string, list: TalkLoopCdr[], byTl: Map<numbe
   let synced = 0, unmatched = 0
   const businesses = await prisma.leadBusiness.findMany({ where: { companyId }, select: { id: true, kind: true, pipeline: true, settings: true, headId: true, members: { select: { userId: true } } } })
   if (!businesses.length) return { synced: 0, unmatched: list.length }
-  const known = new Set((await prisma.leadCall.findMany({ where: { externalId: { in: list.map((c) => c.uniqueid) } }, select: { externalId: true } })).map((x) => x.externalId))
+  const knownRows = await prisma.leadCall.findMany({ where: { externalId: { in: list.map((c) => c.uniqueid) } }, select: { id: true, externalId: true, pending: true, leadId: true, businessId: true, userId: true } })
+  const known = new Set(knownRows.filter((x) => !x.pending).map((x) => x.externalId))
+  const pending = new Map(knownRows.filter((x) => x.pending).map((x) => [x.externalId!, x]))
   for (const c of list) {
     if (known.has(c.uniqueid)) continue
     const user = byTl.get(c.user_id!)!
+    const placeholder = pending.get(c.uniqueid)
+    if (placeholder) {
+      // Click-to-call: Metriq already knows the lead; fill the placeholder with what TalkLoop reports.
+      const biz = businesses.find((b) => b.id === placeholder.businessId)
+      const lead = await prisma.lead.findUnique({ where: { id: placeholder.leadId }, select: { id: true, state: true, status: true, firstCallAt: true } })
+      if (!biz || !lead) { unmatched++; continue }
+      const set = settingsOf(biz)
+      const twoParty = biz.kind === 'CMR' && !!lead.state && set.consentStates.map((x) => x.toUpperCase()).includes(lead.state.toUpperCase())
+      const at = new Date(c.calldate), disposition = dispositionOf(c, set.connectedSecs)
+      await prisma.leadCall.update({ where: { id: placeholder.id }, data: { pending: false, at, durationSec: c.billsec ?? 0, disposition, recordingFile: c.recording_file || null, recordingUrl: c.recording_file && (c.billsec ?? 0) > 0 ? `talkloop:${c.uniqueid}` : null, recordingKept: !twoParty, consentGiven: twoParty ? false : null } })
+      await prisma.lead.update({ where: { id: lead.id }, data: { callsCount: { increment: 1 }, lastCallAt: at, lastActivityAt: at, ...(lead.firstCallAt ? {} : { firstCallAt: at, firstContactAt: at }), ...(biz.kind !== 'CMR' && disposition === 'CONNECTED' && lead.status === 'NEW' ? { status: 'CONTACTED' } : {}) } })
+      await prisma.leadEvent.create({ data: { leadId: lead.id, userId: placeholder.userId, kind: 'CALL', text: `Called ${e164Of(c.dst) ?? c.dst} · ${disposition.toLowerCase().replace('_', ' ')}${c.billsec ? ` · ${Math.round(c.billsec / 60)} min` : ''} (TalkLoop)`, data: { provider: 'TALKLOOP', uniqueid: c.uniqueid } } })
+      synced++
+      continue
+    }
     const outgoing = (c.direction || '').toLowerCase() !== 'incoming'
     const phone = e164Of(outgoing ? c.dst : c.src)
     if (!phone) { unmatched++; continue }
@@ -153,7 +175,10 @@ async function fileCalls(companyId: string, list: TalkLoopCdr[], byTl: Map<numbe
     const twoParty = cmr && !!lead.state && set.consentStates.map((x) => x.toUpperCase()).includes(lead.state.toUpperCase())
     const at = new Date(c.calldate)
     const disposition = dispositionOf(c, set.connectedSecs)
-    try {
+    // Click-to-call without a uniqueid from TalkLoop: the placeholder is matched by lead, caller and time.
+    const orphan = await prisma.leadCall.findFirst({ where: { leadId: lead.id, userId: user.id, pending: true, externalId: null, at: { gte: new Date(at.getTime() - 30 * 60_000), lte: new Date(at.getTime() + 30 * 60_000) } }, select: { id: true } })
+    if (orphan) await prisma.leadCall.update({ where: { id: orphan.id }, data: { pending: false, externalId: c.uniqueid, at, durationSec: c.billsec ?? 0, disposition, recordingFile: c.recording_file || null, recordingUrl: c.recording_file && (c.billsec ?? 0) > 0 ? `talkloop:${c.uniqueid}` : null, recordingKept: !twoParty, consentGiven: twoParty ? false : null } })
+    else try {
       await prisma.leadCall.create({ data: {
         leadId: lead.id, businessId: biz.id, userId: user.id, at, direction: outgoing ? 'OUT' : 'IN', durationSec: c.billsec ?? 0, disposition, summary: '',
         // A call nobody answered has no audio worth playing, even when the group leaves a file name.

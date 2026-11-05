@@ -6,7 +6,7 @@ import { HttpError } from '../lib/pm/access'
 import { parse } from '../lib/pm/http'
 import { isOn } from '../lib/flags'
 import { canManage, leadFor, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
-import { talkloopClient, talkloopConfigured } from '../lib/talkloop/client'
+import { talkloopClient, talkloopConfigured, talkloopDialOn } from '../lib/talkloop/client'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
 import { attachUnmatched, unmatchedScope } from '../lib/talkloop/unmatched'
 import { dialSetting, saveDialSetting } from '../lib/leads/dial'
@@ -151,4 +151,20 @@ export async function setDial(req: AuthedRequest, res: Response): Promise<void> 
   const next = { scheme: b.scheme, domain: b.domain ?? null, template: b.template ?? null }
   await saveDialSetting(m.companyId, next)
   res.json({ dial: next })
+}
+
+/** POST /api/leads/:id/dial — click-to-call: TalkLoop rings my extension, then the lead's number. The call record arrives with the next sync and fills the placeholder. */
+export async function dialLead(req: AuthedRequest, res: Response): Promise<void> {
+  const { me: m, s } = await ctx(req)
+  const client = talkloopClient()
+  if (!client?.originate) throw new HttpError(422, 'Click-to-call is not switched on: TalkLoop has not provided the endpoint yet.')
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: m.id }, select: { talkloopUserId: true } })
+  if (me.talkloopUserId == null) throw new HttpError(422, 'Your Metriq account is not linked to a TalkLoop user yet (Lead Settings → TalkLoop).')
+  const lead = await leadFor(m, s, String(req.params.id))
+  if (!lead.phoneE164) throw new HttpError(422, 'This lead has no phone number.')
+  if (lead.prohibited) throw new HttpError(422, 'This company is on the Prohibited list.')
+  const r = await client.originate({ userId: me.talkloopUserId, to: lead.phoneE164 })
+  const call = await prisma.leadCall.create({ data: { leadId: lead.id, businessId: lead.businessId, userId: m.id, at: new Date(), direction: 'OUT', durationSec: 0, disposition: 'NO_ANSWER', summary: '', provider: 'TALKLOOP', externalId: r.uniqueid, phone: lead.phoneE164, pending: true, recordingKept: true } })
+  await prisma.leadEvent.create({ data: { leadId: lead.id, userId: m.id, kind: 'CALL', text: `Calling ${lead.phoneE164} through TalkLoop…`, data: { provider: 'TALKLOOP', uniqueid: r.uniqueid, callId: call.id } } })
+  res.status(201).json({ call: { id: call.id, pending: true, externalId: r.uniqueid } })
 }

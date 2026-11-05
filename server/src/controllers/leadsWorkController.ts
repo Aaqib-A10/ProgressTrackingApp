@@ -4,8 +4,11 @@ import type { Prisma } from '@prisma/client'
 import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
+import { talkloopDialOn } from '../lib/talkloop/client'
 import { unmatchedScope } from '../lib/talkloop/unmatched'
 import { dialSetting } from '../lib/leads/dial'
+import { draftCallNotes, DRAFT_FACT_KEYS, type CallDraft } from '../lib/talkloop/notes'
+import { notesProvider } from '../lib/pm/notes'
 import { syncCmrMembers } from '../lib/leads/members'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
@@ -126,6 +129,8 @@ export async function leadsMeta(req: AuthedRequest, res: Response): Promise<void
     me: { id: m.id, name: m.name, admin: s.admin, headOf: s.headOf, managerOf: s.managerOf },
     // How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop).
     dial: await dialSetting(m.companyId),
+    // Click-to-call through TalkLoop: on when TalkLoop can originate and I am linked to a TalkLoop user.
+    talkloopDial: talkloopDialOn() && !!(await prisma.user.findUnique({ where: { id: m.id }, select: { talkloopUserId: true } }))?.talkloopUserId,
     businesses: businesses.map((b) => {
       const set = settingsOf(b)
       const { settings: _s, ...rest } = b
@@ -569,6 +574,67 @@ export async function callRecording(req: AuthedRequest, res: Response): Promise<
   if (!req.headers.range || req.headers.range.startsWith('bytes=0-')) await event(c.leadId, m.id, 'LISTEN', 'Played a recording')
   if (c.recordingUrl.startsWith('talkloop:')) { await pipeTalkLoopRecording(req, res, c.recordingUrl.slice('talkloop:'.length)); return }
   res.redirect(c.recordingUrl)
+}
+
+// ------------------------------------------------------------------ call notes drafted from the recording
+
+/** A call I may work on: mine, or in a business I manage (admin: any). */
+async function callForEdit(m: LeadViewer, s: LeadScope, id: string) {
+  const c = await prisma.leadCall.findFirst({ where: { id, ...(s.admin ? {} : { OR: [{ userId: m.id }, { businessId: { in: s.managerOf } }] }) }, include: { lead: { include: LEAD_INCLUDE } } })
+  if (!c) throw new HttpError(404, 'Call not found')
+  return c
+}
+const draftOut = (c: { id: string; aiSummary: string | null; aiFacts: Prisma.JsonValue | null; aiAt: Date | null; aiAppliedAt: Date | null }) => ({ id: c.id, aiSummary: c.aiSummary, aiFacts: c.aiFacts, aiAt: c.aiAt, aiAppliedAt: c.aiAppliedAt })
+
+/** POST /api/leads/calls/:id/draft — (re)write the notes from the transcript now ("Draft again"). */
+export async function draftCall(req: AuthedRequest, res: Response): Promise<void> {
+  const { me: m, s } = await ctx(req)
+  const c = await callForEdit(m, s, String(req.params.id))
+  if (!notesProvider()) throw new HttpError(503, 'No AI is set up for notes on this server (GROQ_API_KEY or ANTHROPIC_API_KEY).')
+  if (!c.transcript) throw new HttpError(422, 'No transcript yet: TalkLoop sends it a few minutes after the call.')
+  try { await draftCallNotes(c.id, { force: true }) } catch (e) { throw new HttpError(502, `Could not draft the notes: ${(e as Error).message.slice(0, 200)}`) }
+  res.json({ call: draftOut(await prisma.leadCall.findUniqueOrThrow({ where: { id: c.id } })) })
+}
+
+const applySchema = z.object({ useSummary: z.boolean().optional(), summary: z.string().trim().max(2000).optional(), facts: z.array(z.enum(DRAFT_FACT_KEYS)).max(30).optional(), dismiss: z.boolean().optional() })
+
+/** POST /api/leads/calls/:id/draft/apply { useSummary, summary?, facts[] } — the SDR accepts the draft: summary onto the call, ticked facts onto the lead; or { dismiss: true }. */
+export async function applyCallDraft(req: AuthedRequest, res: Response): Promise<void> {
+  const { me: m, s } = await ctx(req)
+  const b = parse(applySchema, req.body)
+  const c = await callForEdit(m, s, String(req.params.id))
+  const lead = c.lead
+  if (!isMemberOf(s, lead.businessId)) throw new HttpError(403, 'You do not work leads for that business.')
+  if (b.dismiss) {
+    await prisma.leadCall.update({ where: { id: c.id }, data: { aiAppliedAt: new Date() } })
+    res.json({ call: draftOut({ ...c, aiAppliedAt: new Date() }), lead: leadOut(lead) }); return
+  }
+  const facts = (c.aiFacts ?? {}) as Partial<CallDraft>
+  const picked: Record<string, unknown> = {}
+  for (const k of b.facts ?? []) if (facts[k] !== undefined && facts[k] !== null) picked[k] = facts[k]
+  const cmr = isCmr(lead.business)
+  // The draft's names map onto the lead's fields; what the pipeline does not know (jesseAsk, outcome) stays on the call.
+  const fields: Record<string, unknown> = {}
+  if (picked.contactName && !lead.name) fields.name = picked.contactName
+  if (picked.email && !lead.email) fields.email = picked.email
+  for (const k of ['contactRole', 'decisionMaker', 'decisionMakerName', 'material', 'materialForm', 'lbsPerMonth', 'lbsPerShipment', 'currentVendor', 'paysToday', 'paysUnit', 'nextShipmentDate', 'pickupCity', 'freight'] as const) if (picked[k] !== undefined) fields[k] = picked[k]
+  if (picked.nextStep) fields.nextStep = picked.nextStep
+  if (picked.nextStepDate) fields.nextStepDate = picked.nextStepDate
+  const parsedFields = leadFields.safeParse(fields)
+  if (!parsedFields.success) throw new HttpError(422, `The draft has a value the lead cannot take: ${parsedFields.error.issues[0]?.path.join('.')}`)
+  const { lead: data, cmr: part } = cleanFields(parsedFields.data, cmr)
+  const summary = b.useSummary ? (b.summary?.trim() || c.aiSummary || '').slice(0, 2000) : null
+  const now = new Date()
+  await prisma.$transaction([
+    prisma.leadCall.update({ where: { id: c.id }, data: { aiAppliedAt: now, ...(summary ? { summary } : {}) } }),
+    prisma.lead.update({ where: { id: lead.id }, data: { ...data, lastActivityAt: now, ...(cmr && Object.keys(part).length ? { cmr: { upsert: { create: part as Prisma.LeadCmrCreateWithoutLeadInput, update: part } } } : {}) } }),
+  ])
+  const used = Object.keys(picked)
+  await event(lead.id, m.id, 'NOTE', `Call notes from the recording accepted${used.length ? `: ${used.map(prettyField).join(', ')}` : ''}${summary ? ' · summary saved on the call' : ''}.`, { callId: c.id, facts: used })
+  if (picked.jesseAsk && cmr) await event(lead.id, m.id, 'NOTE', `Heard on the call, for Jesse: ${String(picked.jesseAsk)}`)
+  const saved = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id }, include: LEAD_INCLUDE })
+  if (saved.nextStep && saved.nextStepDate && picked.nextStepDate) await makeTask({ leadId: lead.id, businessId: lead.businessId, assigneeId: saved.assigneeId ?? m.id, kind: 'NEXT_STEP', title: saved.nextStep, dueAt: atPhoenix(DateTime.fromJSDate(saved.nextStepDate)), actorId: m.id, notify: false })
+  res.json({ call: draftOut({ ...c, aiAppliedAt: now }), lead: leadOut(saved) })
 }
 
 // ------------------------------------------------------------------ the CMR flow
@@ -1015,12 +1081,15 @@ export async function headSummary(req: AuthedRequest, res: Response): Promise<vo
 async function countDay(businessId: string, userId: string, date: string, connectedSecs: number) {
   const zone = companyTz()
   const from = DateTime.fromISO(date, { zone }).startOf('day').toJSDate(), to = DateTime.fromISO(date, { zone }).endOf('day').toJSDate()
-  const [calls, emails, interested] = await Promise.all([
-    prisma.leadCall.findMany({ where: { businessId, userId, at: { gte: from, lte: to } }, select: { disposition: true, durationSec: true } }),
+  const [onLeads, kept, emails, interested] = await Promise.all([
+    prisma.leadCall.findMany({ where: { businessId, userId, at: { gte: from, lte: to }, pending: false }, select: { disposition: true, durationSec: true } }),
+    // Phone-system calls to numbers that are not a lead yet are dials too (Calls → No lead yet).
+    prisma.leadUnmatchedCall.findMany({ where: { userId, at: { gte: from, lte: to } }, select: { disposition: true, durationSec: true } }),
     prisma.leadEvent.count({ where: { userId, kind: 'EMAIL', createdAt: { gte: from, lte: to }, lead: { businessId } } }),
     prisma.leadEvent.findMany({ where: { userId, kind: 'STATUS', createdAt: { gte: from, lte: to }, lead: { businessId } }, select: { data: true, leadId: true } }),
   ])
   const interestedLeads = new Set(interested.filter((e) => ['INFO_SENT', 'FOLLOW_UP', 'QUALIFIED', 'CONTACTED'].includes((e.data as { to?: string } | null)?.to ?? '')).map((e) => e.leadId))
+  const calls = [...onLeads, ...kept]
   return {
     dials: calls.length,
     connected: calls.filter((c) => c.disposition === 'CONNECTED' && c.durationSec >= connectedSecs).length,

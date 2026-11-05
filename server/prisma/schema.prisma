@@ -4317,6 +4317,14 @@ model LeadCall {
   recordingFile String?
   /// The transcript the phone system produced (fetched a few minutes after the call).
   transcript    String?
+  /// Drafted from the transcript by the AI for the SDR to confirm: the call summary and the facts heard.
+  aiSummary     String?
+  aiFacts       Json?
+  aiAt          DateTime?
+  /// When the SDR accepted or dismissed the draft.
+  aiAppliedAt   DateTime?
+  /// A call Metriq asked TalkLoop to place (click-to-call): filled in by the sync when the call record arrives.
+  pending       Boolean      @default(false)
   createdAt     DateTime     @default(now())
 
   @@unique([businessId, externalId])

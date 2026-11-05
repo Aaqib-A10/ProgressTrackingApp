@@ -149,6 +149,14 @@ export function parseNotes(text: string): MeetingNotes {
   }
 }
 
+/** One JSON answer from whichever AI is set up (Groq first, else Claude); throws 'no-provider' when none is. Shared by the call-notes drafts. */
+export async function askModelJson(system: string, user: string, maxTokens = 2000): Promise<string> {
+  const p = notesProvider()
+  if (p === 'groq') return chatJson(system, user, maxTokens)
+  if (p === 'anthropic') return askClaude(user, system)
+  throw new Error('no-provider')
+}
+
 async function askClaude(prompt: string, system: string): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new Error('no-key')

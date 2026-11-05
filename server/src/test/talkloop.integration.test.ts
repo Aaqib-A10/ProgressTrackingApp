@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+
+// The AI that drafts call notes is faked: no network, a fixed answer shaped like the real one.
+vi.mock('../lib/pm/notes', async (orig) => ({
+  ...(await orig<typeof import('../lib/pm/notes')>()),
+  notesProvider: () => 'groq' as const,
+  askModelJson: async () => JSON.stringify({ summary: 'Spoke with Ada, operations manager. They sort alkaline into drums, about 2,000 lb a month, and Call2Recycle takes it today for nothing. She will send photos and asked whether CMR can beat ten cents a pound.', contactName: 'Ada', contactRole: 'Operations manager', decisionMaker: 'YES', material: ['ALKALINE_SORTED'], materialForm: ['LOOSE'], lbsPerMonth: 2000, currentVendor: 'Call2Recycle', paysToday: 0, paysUnit: 'NONE', nextStep: 'Send the CMR profile and rates', nextStepDate: '2026-11-07', jesseAsk: 'Can CMR beat $0.10/lb?', outcome: 'INTERESTED', email: null, decisionMakerName: null, lbsPerShipment: null, nextShipmentDate: null, pickupCity: null, freight: null }),
+}))
 import request from 'supertest'
 import type { Role } from '@prisma/client'
 import { app, auth, prisma, seedWorld } from './helpers'
@@ -208,10 +215,63 @@ describe('TalkLoop call sync', () => {
     await api(admin).patch('/talkloop/dial', { scheme: 'tel' }).expect(200)
   })
 
+  it('notes drafted from the transcript wait on the call; the SDR accepts the summary and the facts they tick, or dismisses', async () => {
+    // u1 (Acme, connected) got its transcript in the first run; the draft was written in that same run.
+    const before = (await api(mark).get(`/${acmeId}`).expect(200)).body.lead
+    const call = before.calls.find((c: { externalId: string }) => c.externalId === 'u1')
+    expect(call.aiSummary).toMatch(/Spoke with Ada/)
+    expect(call.aiFacts).toMatchObject({ material: ['ALKALINE_SORTED'], lbsPerMonth: 2000, currentVendor: 'Call2Recycle', paysUnit: 'NONE', jesseAsk: 'Can CMR beat $0.10/lb?' })
+    expect(call.aiAppliedAt).toBeNull()
+    // Accept: the summary onto the call, four facts onto the lead (not the vendor), the Jesse question as a note.
+    const r = (await api(mark).post(`/calls/${call.id}/draft/apply`, { useSummary: true, facts: ['material', 'lbsPerMonth', 'paysUnit', 'nextStep', 'nextStepDate', 'jesseAsk', 'contactRole'] }).expect(200)).body
+    expect(r.call.aiAppliedAt).toBeTruthy()
+    const after = (await api(mark).get(`/${acmeId}`).expect(200)).body.lead
+    expect(after.calls.find((c: { id: string }) => c.id === call.id).summary).toMatch(/Spoke with Ada/)
+    expect(after).toMatchObject({ material: ['ALKALINE_SORTED'], lbsPerMonth: 2000, paysUnit: 'NONE', contactRole: 'Operations manager', nextStep: 'Send the CMR profile and rates' })
+    expect(after.currentVendor).toBeNull()
+    expect(after.events.some((e: { text: string }) => /for Jesse: Can CMR beat/.test(e.text))).toBe(true)
+    expect(after.events.some((e: { text: string }) => /Call notes from the recording accepted/.test(e.text))).toBe(true)
+    // A call with no transcript cannot be drafted; a stranger to the call cannot touch it.
+    const u4 = before.calls.find((c: { externalId: string }) => c.externalId === 'u4') // answered, but TalkLoop sent no transcript
+    transcripts = {}
+    await api(mark).post(`/calls/${u4.id}/draft`).expect(422)
+    await api(admin).post(`/calls/${call.id}/draft/apply`, { dismiss: true }).expect(200)
+  })
+
+  it('the daily report counts calls to numbers with no lead as dials too', async () => {
+    records = [cdr({ uniqueid: 'u11', dst: '7025550333', disposition: 'NO ANSWER', billsec: 0, recording_file: null }), cdr({ uniqueid: 'u12', dst: '7025550333', billsec: 70 })]
+    expect((await runTalkLoopSync(stub)).lastRunUnmatched).toBe(2)
+    const rep = (await api(mark).get(`/report?business=${bizId}`).expect(200)).body
+    expect(rep.counted.dials).toBeGreaterThanOrEqual(2)
+    expect(rep.counted.connected).toBeGreaterThanOrEqual(1)
+    records = []
+  })
+
+  it('click-to-call: Metriq asks TalkLoop to dial, shows the call as in progress, and the call log fills it in', async () => {
+    expect((await api(mark).get('/meta').expect(200)).body.talkloopDial).toBe(false) // TalkLoop has no originate yet
+    await api(mark).post(`/${acmeId}/dial`).expect(422)
+    stub.originate = async (q) => { expect(q).toMatchObject({ userId: 335, to: '+16025550199' }); return { uniqueid: 'o1' } }
+    expect((await api(mark).get('/meta').expect(200)).body.talkloopDial).toBe(true)
+    expect((await api(lead).get('/meta').expect(200)).body.talkloopDial).toBe(false) // not linked to a TalkLoop user
+    const placed = (await api(mark).post(`/${acmeId}/dial`).expect(201)).body.call
+    expect(placed).toMatchObject({ pending: true, externalId: 'o1' })
+    const during = (await api(mark).get(`/${acmeId}`).expect(200)).body.lead
+    expect(during.calls.find((c: { id: string }) => c.id === placed.id)).toMatchObject({ pending: true, durationSec: 0 })
+    const countBefore = during.callsCount
+    records = [cdr({ uniqueid: 'o1', dst: '6025550199', billsec: 95 })]
+    expect((await runTalkLoopSync(stub)).lastRunSynced).toBe(1)
+    const afterCall = (await api(mark).get(`/${acmeId}`).expect(200)).body.lead
+    expect(afterCall.calls.find((c: { id: string }) => c.id === placed.id)).toMatchObject({ pending: false, durationSec: 95, disposition: 'CONNECTED', recordingUrl: `/api/leads/calls/${placed.id}/recording` })
+    expect(afterCall.callsCount).toBe(countBefore + 1)
+    expect(await prisma.leadCall.count({ where: { externalId: 'o1' } })).toBe(1) // not filed twice
+    delete stub.originate
+    records = []
+  })
+
   it('sync now and the status (admin only)', async () => {
     await api(lead).post('/talkloop/sync').expect(403)
     const r = (await api(admin).get('/talkloop').expect(200)).body
-    expect(r.status.synced).toBe(5) // 3 + the late-linked one + the one that found its lead by itself
+    expect(r.status.synced).toBe(6) // 3 + the late-linked one + the one that found its lead by itself + the click-to-call
     expect(r.people.find((p: { id: string }) => p.id === mark.id)).toMatchObject({ talkloopUserId: 335, talkloopExt: '1001' })
     records = [cdr({ uniqueid: 'u7', dst: '6025550199' })]
     expect((await api(admin).post('/talkloop/sync').expect(200)).body.status.lastRunSynced).toBe(1)

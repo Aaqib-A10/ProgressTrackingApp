@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Tag, UserCheck, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Sparkles, Tag, UserCheck, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { Modal } from '../../../components/ui/Modal'
@@ -12,7 +12,7 @@ import { cn } from '../../../lib/cn'
 import { useAuth } from '../../../lib/auth'
 import {
   CLOSE_REASON_LABEL, CLOSE_REASONS, DISPOSITION_LABEL, DISPOSITIONS, fmtDate, fmtDur, fmtWhen, FREIGHT, FREIGHT_LABEL, inZone, leadsApi, leadTitle, MATERIAL_FORMS, MATERIAL_LABEL, MATERIALS, MEETING_OUTCOMES, OUTCOME_LABEL, OWNER_LABEL, PAYS_LABEL, PAYS_UNITS, plusBusinessDays, SOURCE_LABEL, TASK_KIND_LABEL, toYmd, YES_NO_LABEL,
-  type Disposition, type LeadDetail, type LeadFull, type LeadInput, type Owner, type YesNo,
+  type Disposition, type LeadCall, type LeadDetail, type LeadFull, type LeadInput, type Owner, type YesNo,
   dialHref,
 } from '../../../lib/leadsApi'
 import { Avatar, Done, FactsMeter, Label, Select, StatusPill, WarningList, useLeadsMeta } from './shared'
@@ -66,6 +66,7 @@ export default function LeadPage() {
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm">
                 {l.phone && <a href={dialHref(l.phoneE164 ?? l.phone, meta?.dial) ?? '#'} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"><Phone size={14} />{l.phone}{l.ext ? ` x${l.ext}` : ''}</a>}
+                {l.phone && meta?.talkloopDial && can.edit && !l.prohibited && <Button size="sm" leadingIcon={<PhoneCall size={14} />} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')}>Call via TalkLoop</Button>}
                 {l.email && <a href={`mailto:${l.email}`} className="inline-flex items-center gap-1.5 text-ink hover:underline"><Mail size={14} />{l.email}</a>}
                 {l.website && <a href={/^https?:/.test(l.website) ? l.website : `https://${l.website}`} target="_blank" rel="noreferrer" className="text-ink-muted hover:underline">{l.website}</a>}
                 <span className="text-ink-faint">{SOURCE_LABEL[l.source]} · added {fmtDate(l.createdAt)}{l.createdBy ? ` by ${l.createdBy.name}` : ''}</span>
@@ -275,6 +276,8 @@ function NextStepCard({ l, canEdit, onSaved }: { l: LeadFull; canEdit: boolean; 
 function CallsCard({ l, canEdit, onLog, onChanged }: { l: LeadFull; canEdit: boolean; onLog: () => void; onChanged: () => void }) {
   const { addToast } = useToast()
   const [openTranscript, setOpenTranscript] = useState<string | null>(null)
+  const [drafting, setDrafting] = useState<string | null>(null)
+  const draftNow = (id: string) => { setDrafting(id); leadsApi.draftCall(id).then(() => { addToast({ type: 'success', message: 'Notes drafted from the recording: check them below.' }); onChanged() }).catch((e) => addToast({ type: 'error', message: apiErrorText(e, 'Could not draft the notes') })).finally(() => setDrafting(null)) }
   const consent = (id: string) => leadsApi.callConsent(id, true).then(() => { addToast({ type: 'success', message: 'Consent noted: the recording can be played.' }); onChanged() }).catch((e) => addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
   return (
     <Card title={`Calls (${l.calls.length})`} icon={<PhoneCall size={15} />} action={canEdit && <Button size="sm" variant="secondary" leadingIcon={<Plus size={14} />} onClick={onLog}>Log call</Button>}>
@@ -288,7 +291,9 @@ function CallsCard({ l, canEdit, onLog, onChanged }: { l: LeadFull; canEdit: boo
                 <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', c.disposition === 'CONNECTED' ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>{c.direction === 'IN' ? <PhoneIncoming size={14} /> : <PhoneOutgoing size={14} />}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"><span className="font-semibold text-ink">{DISPOSITION_LABEL[c.disposition]}</span>{c.durationSec > 0 && <span className="text-ink-muted">{fmtDur(c.durationSec)}</span>}<span className="text-ink-faint">{fmtWhen(c.at)} · {c.user?.name ?? 'TalkLoop'}{c.phone ? ` · ${c.phone}` : ''}</span>{fromPhone && <Badge tone="accent">TalkLoop</Badge>}{c.consentGiven === true && <Badge tone="success">Consent</Badge>}{c.consentGiven === false && <Badge tone="warning">No consent</Badge>}</div>
-                  {c.summary ? <p className="mt-1 whitespace-pre-wrap text-body-sm text-ink">{c.summary}</p> : fromPhone && canEdit && <p className="mt-1 text-body-sm text-ink-faint">No summary yet: press Log call to add what was said and the facts.</p>}
+                  {c.pending && <p className="mt-1 inline-flex items-center gap-1.5 text-body-sm font-medium text-primary"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />Calling through TalkLoop… the result and the recording arrive here within a few minutes.</p>}
+                  {c.summary ? <p className="mt-1 whitespace-pre-wrap text-body-sm text-ink">{c.summary}</p> : fromPhone && canEdit && !c.pending && !(c.aiSummary && !c.aiAppliedAt) && <p className="mt-1 text-body-sm text-ink-faint">No summary yet: {c.transcript ? <button type="button" className="font-semibold text-primary hover:underline" disabled={drafting === c.id} onClick={() => draftNow(c.id)}>{drafting === c.id ? 'drafting…' : 'draft it from the recording'}</button> : 'press Log call to add what was said and the facts'}.</p>}
+                  {canEdit && c.aiSummary && !c.aiAppliedAt && <DraftPanel call={c} lead={l} onDone={onChanged} onRedraft={() => draftNow(c.id)} busy={drafting === c.id} />}
                   {c.hasRecording && (c.recordingUrl ? <audio controls preload="none" src={c.recordingUrl} className="mt-2 h-8 w-full max-w-md" /> : <span className="mt-1 inline-flex items-center gap-1 text-body-sm text-ink-faint"><Play size={12} />Recording (only the SDR and managers can play it)</span>)}
                   {locked && <p className="mt-1.5 flex flex-wrap items-center gap-2 text-body-sm text-amber-800 dark:text-amber-300"><span>Recording kept but locked: {l.state} needs both sides to agree.</span>{canEdit && <Button size="sm" variant="secondary" onClick={() => consent(c.id)}>Both sides agreed</Button>}</p>}
                   {c.transcript && (
@@ -304,6 +309,65 @@ function CallsCard({ l, canEdit, onLog, onChanged }: { l: LeadFull; canEdit: boo
         </ul>
       ) : <p className="text-body-sm text-ink-muted">No calls yet.</p>}
     </Card>
+  )
+}
+
+/** Labels for what the AI heard, in the SDR's words. */
+const DRAFT_LABEL: Record<string, string> = { contactName: 'Contact', contactRole: 'Role', email: 'Email', decisionMaker: 'Decision maker', decisionMakerName: 'Decision maker name', material: 'Material', materialForm: 'Form', lbsPerMonth: 'Pounds per month', lbsPerShipment: 'Pounds per shipment', currentVendor: 'Current outlet', paysToday: 'Paid today', paysUnit: 'Paid per', nextShipmentDate: 'Next shipment', pickupCity: 'Pickup city', freight: 'Freight', nextStep: 'Next step', nextStepDate: 'Next step date', jesseAsk: 'For Jesse', outcome: 'Outcome' }
+const ENUM_KEYS = new Set(['material', 'materialForm', 'paysUnit', 'freight', 'decisionMaker', 'outcome'])
+const draftValue = (k: string, v: unknown): string => {
+  if (Array.isArray(v)) return v.map((x) => String(x).replace(/_/g, ' ').toLowerCase()).join(', ')
+  if (k === 'paysToday') return `$${v}`
+  if (k === 'paysUnit') return ({ LB: 'pound', DRUM: 'drum', NONE: 'nothing (they pay or get nothing)', UNKNOWN: 'unknown' } as Record<string, string>)[String(v)] ?? String(v)
+  if (typeof v === 'number') return v.toLocaleString()
+  if (ENUM_KEYS.has(k)) return String(v).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (ch) => ch.toUpperCase())
+  return String(v) // free text and dates stay as the AI wrote them
+}
+
+/** The AI's draft from the recording: the SDR edits the summary, ticks the facts that are right, and presses Use this. */
+function DraftPanel({ call, lead, onDone, onRedraft, busy }: { call: LeadCall; lead: LeadFull; onDone: () => void; onRedraft: () => void; busy: boolean }) {
+  const { addToast } = useToast()
+  const facts = Object.entries(call.aiFacts ?? {}).filter(([k, v]) => k !== 'error' && k !== 'outcome' && v !== null && v !== undefined && v !== '') as [string, unknown][]
+  const [summary, setSummary] = useState(call.aiSummary ?? '')
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(facts.map(([k]) => k)))
+  const [saving, setSaving] = useState(false)
+  const current = (k: string): unknown => (lead as unknown as Record<string, unknown>)[k === 'contactName' ? 'name' : k]
+  const apply = async (dismiss = false) => {
+    setSaving(true)
+    try {
+      await leadsApi.applyCallDraft(call.id, dismiss ? { dismiss: true } : { useSummary: !!summary.trim(), summary: summary.trim(), facts: [...picked] })
+      addToast({ type: 'success', message: dismiss ? 'Draft dismissed' : `Saved: the summary${picked.size ? ` and ${picked.size} fact${picked.size === 1 ? '' : 's'}` : ''}` })
+      onDone()
+    } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setSaving(false) }
+  }
+  return (
+    <div className="mt-2 rounded-card border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-3 dark:border-violet-500/30 dark:from-violet-500/10 dark:to-indigo-500/10">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink"><Sparkles size={14} className="text-violet-600" />Drafted from the recording — check it, then Use this</span>
+        <button type="button" onClick={onRedraft} disabled={busy} className="text-body-sm font-medium text-ink-muted hover:text-ink">{busy ? 'Drafting…' : 'Draft again'}</button>
+      </div>
+      <TextArea rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} className="mt-2" aria-label="Call summary" />
+      {facts.length > 0 && (
+        <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+          {facts.map(([k, v]) => {
+            const cur = current(k)
+            const unset = cur === null || cur === undefined || cur === '' || cur === 'UNKNOWN' || (Array.isArray(cur) && !cur.length)
+            const differs = !unset && JSON.stringify(cur) !== JSON.stringify(v)
+            return (
+              <li key={k}><label className="flex cursor-pointer items-start gap-2 rounded-btn px-1.5 py-1 text-body-sm hover:bg-white/60 dark:hover:bg-white/5">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-line" checked={picked.has(k)} onChange={(e) => setPicked((p) => { const n = new Set(p); if (e.target.checked) n.add(k); else n.delete(k); return n })} />
+                <span className="min-w-0"><span className="text-ink-muted">{DRAFT_LABEL[k] ?? k}: </span><span className="font-medium text-ink">{draftValue(k, v)}</span>{differs && <span className="block text-[11.5px] text-amber-700 dark:text-amber-300">now: {draftValue(k, cur)}</span>}</span>
+              </label></li>
+            )
+          })}
+        </ul>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={saving} leadingIcon={<CheckCircle2 size={14} />} onClick={() => apply(false)}>Use this</Button>
+        <Button size="sm" variant="ghost" disabled={saving} onClick={() => apply(true)}>Dismiss</Button>
+        <span className="text-[11.5px] text-ink-faint">Only what was said on the call; untick anything the AI got wrong.</span>
+      </div>
+    </div>
   )
 }
 
