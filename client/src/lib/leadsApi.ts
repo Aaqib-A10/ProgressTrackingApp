@@ -61,6 +61,7 @@ export interface LeadRow {
 }
 export interface LeadCall { id: string; leadId: string; userId: string | null; user: Person | null; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; summary: string; outcome: string | null; consentGiven: boolean | null; recordingUrl: string | null; hasRecording: boolean; recordingKept: boolean; provider?: string | null; phone?: string | null; transcript?: string | null; externalId?: string | null }
 export interface TalkLoopInfo {
+  dial?: DialSetting; pbxDomain?: string | null
   configured: boolean
   status: { lastRunAt: string | null; lastCallAt: string | null; synced: number; unmatched: number; lastError: string | null; lastRunSynced: number; lastRunUnmatched: number; lastRunRead?: number; lastRunFrom?: string | null; waiting?: number }
   people: { id: string; name: string; email: string; talkloopUserId: number | null; talkloopExt: string | null }[]
@@ -83,7 +84,21 @@ export interface MetaBusiness {
   members: (Person & { role: 'MANAGER' | 'REP' })[]
   settings: Pick<CmrSettings, 'segments' | 'states' | 'consentStates' | 'minLoadLbs' | 'publishedRate' | 'copyName' | 'connectedSecs'>
 }
-export interface LeadsMeta { me: { id: string; name: string; admin: boolean; headOf: string[]; managerOf: string[] }; businesses: MetaBusiness[]; cmrOn: boolean }
+export type DialScheme = 'tel' | 'sip' | 'callto' | 'custom'
+/** How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop). */
+export interface DialSetting { scheme: DialScheme; domain: string | null; template: string | null }
+export interface LeadsMeta { me: { id: string; name: string; admin: boolean; headOf: string[]; managerOf: string[] }; dial?: DialSetting; businesses: MetaBusiness[]; cmrOn: boolean }
+/** The href a Call button opens for this number, in the form the PC's phone app expects. */
+export function dialHref(phone: string | null | undefined, dial?: DialSetting | null): string | null {
+  if (!phone) return null
+  const digits = phone.replace(/\D/g, '')
+  const number = phone.startsWith('+') ? `+${digits}` : digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith('1') ? `+${digits}` : phone.trim()
+  const d = dial ?? { scheme: 'tel', domain: null, template: null }
+  if (d.scheme === 'sip' && d.domain) return `sip:${number}@${d.domain}`
+  if (d.scheme === 'callto') return `callto:${number}`
+  if (d.scheme === 'custom' && d.template) return d.template.replace(/\{number\}/g, encodeURIComponent(number)).replace(/\{digits\}/g, number.replace(/\D/g, ''))
+  return `tel:${number}`
+}
 
 export interface BusinessRow {
   id: string; name: string; website: string | null; color: string; isActive: boolean; formKey: string; formUrl: string; kind: BusinessKind; headId: string | null; head: Person | null
@@ -156,6 +171,7 @@ export const leadsApi = {
   talkloop: () => api.get<TalkLoopInfo>('/leads/talkloop'),
   talkloopLink: (b: { userId?: string; talkloopUserId?: number | null; auto?: boolean }) => api.patch<{ ok?: boolean; linked?: number }>('/leads/talkloop/link', b),
   talkloopSync: () => api.post<{ status: TalkLoopInfo['status'] }>('/leads/talkloop/sync', {}),
+  setDial: (b: DialSetting) => api.patch<{ dial: DialSetting }>('/leads/talkloop/dial', b),
   unmatched: () => api.get<{ numbers: UnmatchedNumber[]; total: number }>('/leads/unmatched'),
   attachUnmatched: (phone: string, leadId: string) => api.post<{ moved: number; leadId: string }>('/leads/unmatched/attach', { phone, leadId }),
   callConsent: (id: string, consentGiven: boolean) => api.patch<{ call: Pick<LeadCall, 'id' | 'consentGiven' | 'recordingKept' | 'hasRecording' | 'recordingUrl'> }>(`/leads/calls/${id}`, { consentGiven }),

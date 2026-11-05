@@ -9,7 +9,7 @@ import { TextField, TextArea } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { ago, leadsApi, type BusinessKind, type BusinessRow, type CmrSettings, type InboxInput, type Person, type PipelineStatus, type TalkLoopInfo } from '../../../lib/leadsApi'
+import { ago, dialHref, leadsApi, type BusinessKind, type BusinessRow, type CmrSettings, type DialSetting, type InboxInput, type Person, type PipelineStatus, type TalkLoopInfo } from '../../../lib/leadsApi'
 import { Label, Select, Tile, useLeadsMeta } from './shared'
 import { useAuth } from '../../../lib/auth'
 import { readFile } from '../itad/dialer/ImportModal'
@@ -286,6 +286,7 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
 // ------------------------------------------------------------------ TalkLoop (the phone system)
 
 function TalkLoopSection({ toast }: { toast: Toast }) {
+  const { reload: reloadMeta } = useLeadsMeta()
   const [info, setInfo] = useState<TalkLoopInfo | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -299,6 +300,7 @@ function TalkLoopSection({ toast }: { toast: Toast }) {
   return (
     <Section icon={<PhoneCall size={17} />} title="TalkLoop (phone system)" hint="Calls made in TalkLoop land on the matching lead by phone number: who called, how long, answered or voicemail, the recording and the transcript. The SDR only adds the summary and the facts."
       action={info.configured ? <div className="flex items-center gap-2"><Button size="sm" variant="secondary" disabled={busy} leadingIcon={<RefreshCw size={14} />} onClick={() => run(() => leadsApi.talkloopSync(), (r) => { const s = (r as { status: TalkLoopInfo['status'] }).status; return `Synced: ${s.lastRunSynced} new call${s.lastRunSynced === 1 ? '' : 's'}${s.lastRunUnmatched ? `, ${s.lastRunUnmatched} to numbers no lead has` : ''}` })}>Sync now</Button></div> : <Badge tone="warning">Not connected</Badge>}>
+      <div className="mb-4"><DialCard dial={info.dial ?? { scheme: 'tel', domain: null, template: null }} pbxDomain={info.pbxDomain ?? null} onSaved={() => { void load(); reloadMeta() }} toast={toast} /></div>
       {!info.configured ? (
         <p className="text-body-md text-ink-muted">Not connected yet. The TalkLoop token goes in the server's <code>.env</code> as <code>TALKLOOP_TOKEN</code> (never in Metriq's screens or code); after a restart this section shows the account's users and starts syncing calls every 3 minutes.</p>
       ) : (
@@ -441,5 +443,42 @@ function ListsSection({ biz, toast }: { biz: BusinessRow; toast: Toast }) {
         </div>
       </div>
     </Section>
+  )
+}
+
+/** How the Call buttons dial: the link the SDR's phone app on the PC opens. */
+function DialCard({ dial, pbxDomain, onSaved, toast }: { dial: DialSetting; pbxDomain: string | null; onSaved: () => void; toast: Toast }) {
+  const [f, setF] = useState<DialSetting>(dial)
+  const [test, setTest] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => setF(dial), [dial])
+  const changed = f.scheme !== dial.scheme || (f.domain ?? '') !== (dial.domain ?? '') || (f.template ?? '') !== (dial.template ?? '')
+  const example = dialHref('(602) 555-0199', f)
+  const save = async () => { setBusy(true); try { await leadsApi.setDial({ scheme: f.scheme, domain: f.domain || null, template: f.template || null }); toast({ type: 'success', message: 'Call buttons updated for everyone' }); onSaved() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
+  return (
+    <div className="rounded-card border border-line bg-slate-50/60 p-4 dark:bg-white/[0.03]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[14px] font-semibold text-ink">Call buttons</h3>
+          <p className="mt-0.5 max-w-2xl text-body-sm text-ink-muted">Metriq cannot place the call itself yet, so a Call button opens the phone app on the SDR's PC with the number filled in. Pick the link that app understands; Windows must have that app set as the handler (Settings → Apps → Default apps → by link type).</p>
+        </div>
+        {changed && <Button size="sm" disabled={busy} onClick={save}>Save</Button>}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <label><Label>Link type</Label>
+          <Select value={f.scheme} onChange={(e) => setF({ ...f, scheme: e.target.value as DialSetting['scheme'], domain: e.target.value === 'sip' ? f.domain || pbxDomain : f.domain })} className="w-full">
+            <option value="tel">tel: — most softphones and the TalkLoop app</option>
+            <option value="sip">sip: — a softphone registered to the PBX</option>
+            <option value="callto">callto: — older softphones</option>
+            <option value="custom">Custom link</option>
+          </Select></label>
+        {f.scheme === 'sip' && <TextField label="PBX domain" value={f.domain ?? ''} onChange={(e) => setF({ ...f, domain: e.target.value })} placeholder={pbxDomain ?? 'cmr.talkloop.ai'} />}
+        {f.scheme === 'custom' && <div className="sm:col-span-2"><TextField label="Link with {number} (or {digits})" value={f.template ?? ''} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder="talkloop://call?to={number}" /></div>}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-body-sm">
+        <span className="text-ink-muted">A Call button will open:</span><code className="rounded bg-card px-2 py-1 text-[12px] text-ink">{example}</code>
+        <span className="ml-auto flex items-center gap-2"><TextField value={test} onChange={(e) => setTest(e.target.value)} placeholder="Your own number to test" className="w-48" />{test && <a href={dialHref(test, f) ?? '#'} className="inline-flex h-9 items-center rounded-btn border border-line bg-card px-3 font-semibold text-primary hover:border-primary">Test call</a>}</span>
+      </div>
+    </div>
   )
 }

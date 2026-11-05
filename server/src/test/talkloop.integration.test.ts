@@ -197,6 +197,17 @@ describe('TalkLoop call sync', () => {
     records = []
   })
 
+  it('the Call buttons dial the way the admin set (tel: by default, sip: with the PBX domain, or a custom link); everyone reads it from meta', async () => {
+    expect((await api(mark).get('/meta').expect(200)).body.dial).toEqual({ scheme: 'tel', domain: null, template: null })
+    await api(mark).patch('/talkloop/dial', { scheme: 'sip', domain: 'cmr.talkloop.ai' }).expect(403)
+    await api(admin).patch('/talkloop/dial', { scheme: 'sip' }).expect(422) // sip needs the domain
+    await api(admin).patch('/talkloop/dial', { scheme: 'custom', template: 'talkloop://call' }).expect(422) // custom needs {number}
+    expect((await api(admin).patch('/talkloop/dial', { scheme: 'sip', domain: 'cmr.talkloop.ai' }).expect(200)).body.dial).toEqual({ scheme: 'sip', domain: 'cmr.talkloop.ai', template: null })
+    expect((await api(mark).get('/meta').expect(200)).body.dial.scheme).toBe('sip')
+    expect((await api(admin).get('/talkloop').expect(200)).body).toMatchObject({ dial: { scheme: 'sip' }, pbxDomain: 'cmr.talkloop.ai' })
+    await api(admin).patch('/talkloop/dial', { scheme: 'tel' }).expect(200)
+  })
+
   it('sync now and the status (admin only)', async () => {
     await api(lead).post('/talkloop/sync').expect(403)
     const r = (await api(admin).get('/talkloop').expect(200)).body

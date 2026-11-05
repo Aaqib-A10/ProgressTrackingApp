@@ -13,8 +13,9 @@ import { useAuth } from '../../../lib/auth'
 import {
   CLOSE_REASON_LABEL, CLOSE_REASONS, DISPOSITION_LABEL, DISPOSITIONS, fmtDate, fmtDur, fmtWhen, FREIGHT, FREIGHT_LABEL, inZone, leadsApi, leadTitle, MATERIAL_FORMS, MATERIAL_LABEL, MATERIALS, MEETING_OUTCOMES, OUTCOME_LABEL, OWNER_LABEL, PAYS_LABEL, PAYS_UNITS, plusBusinessDays, SOURCE_LABEL, TASK_KIND_LABEL, toYmd, YES_NO_LABEL,
   type Disposition, type LeadDetail, type LeadFull, type LeadInput, type Owner, type YesNo,
+  dialHref,
 } from '../../../lib/leadsApi'
-import { Avatar, Done, FactsMeter, Label, Select, StatusPill, WarningList } from './shared'
+import { Avatar, Done, FactsMeter, Label, Select, StatusPill, WarningList, useLeadsMeta } from './shared'
 
 /**
  * One lead: the details (contact, address, product), the five facts and the flow for a CMR
@@ -25,6 +26,7 @@ export default function LeadPage() {
   const { id = '' } = useParams()
   const nav = useNavigate()
   const { user } = useAuth()
+  const { meta } = useLeadsMeta()
   const { addToast } = useToast()
   const [d, setD] = useState<LeadDetail | null>(null)
   const [err, setErr] = useState('')
@@ -63,7 +65,7 @@ export default function LeadPage() {
                 {[l.industry, l.state, l.city].filter(Boolean).join(' · ')}{l.industry || l.state ? ' · ' : ''}<span className="inline-flex items-center gap-1" style={{ color: l.business.color }}><Building2 size={13} />{l.business.name}</span>
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm">
-                {l.phone && <a href={`tel:${l.phoneE164 ?? l.phone}`} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"><Phone size={14} />{l.phone}{l.ext ? ` x${l.ext}` : ''}</a>}
+                {l.phone && <a href={dialHref(l.phoneE164 ?? l.phone, meta?.dial) ?? '#'} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"><Phone size={14} />{l.phone}{l.ext ? ` x${l.ext}` : ''}</a>}
                 {l.email && <a href={`mailto:${l.email}`} className="inline-flex items-center gap-1.5 text-ink hover:underline"><Mail size={14} />{l.email}</a>}
                 {l.website && <a href={/^https?:/.test(l.website) ? l.website : `https://${l.website}`} target="_blank" rel="noreferrer" className="text-ink-muted hover:underline">{l.website}</a>}
                 <span className="text-ink-faint">{SOURCE_LABEL[l.source]} · added {fmtDate(l.createdAt)}{l.createdBy ? ` by ${l.createdBy.name}` : ''}</span>

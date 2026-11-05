@@ -9,6 +9,7 @@ import { canManage, leadFor, leadScope, requireLeadAdmin, type LeadScope, type L
 import { talkloopClient, talkloopConfigured } from '../lib/talkloop/client'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
 import { attachUnmatched, unmatchedScope } from '../lib/talkloop/unmatched'
+import { dialSetting, saveDialSetting } from '../lib/leads/dial'
 import { runTalkLoopSync, syncStatus } from '../lib/talkloop/sync'
 
 /**
@@ -25,16 +26,22 @@ async function ctx(req: AuthedRequest): Promise<{ me: LeadViewer; s: LeadScope }
 
 /** GET /api/leads/talkloop — status, this company's people with their TalkLoop link, and TalkLoop's users (name, email, extension only). */
 export async function talkloopInfo(req: AuthedRequest, res: Response): Promise<void> {
-  const { s } = await ctx(req)
+  const { me: m, s } = await ctx(req)
   requireLeadAdmin(s)
   const configured = talkloopConfigured()
   const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, talkloopUserId: true, talkloopExt: true }, orderBy: { name: 'asc' } })
   let talkloopUsers: { id: number; name: string; email: string | null; extension: string | null; status: string | null }[] = []
   let error: string | null = null
+  let pbxDomain: string | null = null
   if (configured) {
-    try { talkloopUsers = (await talkloopClient()!.users()).map((u) => ({ id: u.id, name: u.name, email: u.email, extension: u.extension_id ? u.extension_id.split('-')[0] : null, status: u.registration_status })) } catch (e) { error = e instanceof Error ? e.message : 'Could not reach TalkLoop' }
+    try {
+      const raw = await talkloopClient()!.users()
+      talkloopUsers = raw.map((u) => ({ id: u.id, name: u.name, email: u.email, extension: u.extension_id ? u.extension_id.split('-')[0] : null, status: u.registration_status }))
+      // The PBX domain, read off an extension id like "1000-cmr.talkloop.ai", for sip: links.
+      pbxDomain = raw.find((u) => u.extension_id?.includes('-'))?.extension_id?.split('-').slice(1).join('-') ?? null
+    } catch (e) { error = e instanceof Error ? e.message : 'Could not reach TalkLoop' }
   }
-  res.json({ configured, status: await syncStatus(), people, talkloopUsers, error })
+  res.json({ configured, status: await syncStatus(), people, talkloopUsers, error, dial: await dialSetting(m.companyId), pbxDomain })
 }
 
 const linkSchema = z.object({ userId: z.string().max(60).optional(), talkloopUserId: z.number().int().nullable().optional(), auto: z.boolean().optional() })
@@ -132,4 +139,16 @@ export async function attachUnmatchedCalls(req: AuthedRequest, res: Response): P
   if (!mine) throw new HttpError(404, 'No kept calls for that number')
   const moved = await attachUnmatched(m.companyId, b.phone, lead.id, m.id)
   res.json({ moved, leadId: lead.id })
+}
+
+/** PATCH /api/leads/talkloop/dial { scheme, domain?, template? } — how the Call buttons dial on this company's PCs. */
+export async function setDial(req: AuthedRequest, res: Response): Promise<void> {
+  const { me: m, s } = await ctx(req)
+  requireLeadAdmin(s)
+  const b = parse(z.object({ scheme: z.enum(['tel', 'sip', 'callto', 'custom']), domain: z.string().trim().max(120).nullable().optional(), template: z.string().trim().max(300).nullable().optional() }), req.body)
+  if (b.scheme === 'sip' && !b.domain) throw new HttpError(422, 'sip: links need the PBX domain (e.g. cmr.talkloop.ai)')
+  if (b.scheme === 'custom' && !(b.template && b.template.includes('{number}') || b.template?.includes('{digits}'))) throw new HttpError(422, 'The custom link must contain {number} or {digits}')
+  const next = { scheme: b.scheme, domain: b.domain ?? null, template: b.template ?? null }
+  await saveDialSetting(m.companyId, next)
+  res.json({ dial: next })
 }

@@ -9,7 +9,7 @@ import { TextField, TextArea } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { fmtWhen, leadsApi, plusBusinessDays, TASK_KIND_LABEL, toYmd, type LeadTask } from '../../../lib/leadsApi'
+import { dialHref, fmtWhen, leadsApi, plusBusinessDays, TASK_KIND_LABEL, toYmd, type LeadTask } from '../../../lib/leadsApi'
 import { BusinessPicker, PageHeader, Select, StatusPill, useBusiness, useLeadsMeta } from './shared'
 
 const TABS = [['today', 'Today'], ['overdue', 'Overdue'], ['upcoming', 'Upcoming'], ['all', 'All open'], ['done', 'Done']] as const
@@ -58,7 +58,7 @@ export default function LeadTasks() {
                   <td className="px-3 py-2.5 text-ink">{t.assignee?.name ?? '—'}</td>
                   <td className="px-3 py-2.5 text-right">
                     {!t.doneAt && <span className="inline-flex gap-1">
-                      {t.lead?.phone && <a href={`tel:${t.lead.phone}`}><Button size="sm" variant="secondary" leadingIcon={<Phone size={13} />}>Call</Button></a>}
+                      {t.lead?.phone && <a href={dialHref(t.lead.phone, meta?.dial) ?? '#'}><Button size="sm" variant="secondary" leadingIcon={<Phone size={13} />}>Call</Button></a>}
                       <Button size="sm" variant="ghost" leadingIcon={<CalendarClock size={13} />} onClick={() => setAct({ kind: 'schedule', task: t })}>Schedule</Button>
                       <Button size="sm" leadingIcon={<CheckCircle2 size={13} />} onClick={() => setAct({ kind: 'complete', task: t })}>Complete</Button>
                     </span>}

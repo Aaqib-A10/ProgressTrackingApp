@@ -5,6 +5,7 @@ import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
 import { unmatchedScope } from '../lib/talkloop/unmatched'
+import { dialSetting } from '../lib/leads/dial'
 import { syncCmrMembers } from '../lib/leads/members'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
@@ -123,6 +124,8 @@ export async function leadsMeta(req: AuthedRequest, res: Response): Promise<void
   const cmr = await isOn('cmr', m.companyId)
   res.json({
     me: { id: m.id, name: m.name, admin: s.admin, headOf: s.headOf, managerOf: s.managerOf },
+    // How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop).
+    dial: await dialSetting(m.companyId),
     businesses: businesses.map((b) => {
       const set = settingsOf(b)
       const { settings: _s, ...rest } = b
