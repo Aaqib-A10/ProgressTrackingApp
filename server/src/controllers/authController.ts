@@ -4,6 +4,7 @@ import { DepartmentType, Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { activeProvider } from '../lib/billing/providers'
 import { leadsCmrOf, leadsRoleOf } from '../lib/leads/access'
+import { syncCmrMembers } from '../lib/leads/members'
 import { companySectionsOff } from '../lib/sectionsOff'
 import { personBlocks, personDashboard } from '../lib/personBlocks'
 import { cleanPrefs } from '../lib/cards'
@@ -100,8 +101,9 @@ async function publicUser(userId: string) {
     permissions: powersOf(user),
     // Switched off for the company's plan (or by the owner) and for the person's company role.
     areasOff: [...new Set([...companyAreasOff(user.company), ...(user.customRole?.areasOff ?? [])])],
-    // Lead Management: MANAGER or REP when the person works the leads of at least one business.
-    leadsRole: await leadsRoleOf(user.id),
+    // Lead Management: MANAGER or REP when the person works the leads of at least one business
+    // (someone in a CMR department joins the CMR business by themselves).
+    leadsRole: await (user.department?.type === 'CMR' ? syncCmrMembers().catch(() => 0) : Promise.resolve(0)).then(() => leadsRoleOf(user.id)),
     // The CMR flow (Jesse Queue, Daily Report, Jesse Summary) when the person works a CMR business.
     leadsCmr: await leadsCmrOf(user.id, user.role === 'SUPER_ADMIN'),
   }

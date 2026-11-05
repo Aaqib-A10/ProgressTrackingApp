@@ -10,6 +10,7 @@ import { isOn } from '../lib/flags'
 import { runAsCompany } from '../lib/tenancy'
 import { canManage, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
 import { cleanInput, fromFields, hasSubstance, OPEN_STATUSES, receiveLead, type LeadInput } from '../lib/leads/intake'
+import { syncCmrMembers } from '../lib/leads/members'
 import { KINDS, PROMISE_WORDS, pipelineOf, settingsOf, type CmrSettings } from '../lib/leads/pipeline'
 import { leadManagers, tellAboutLead } from '../lib/leads/notify'
 import { encryptSecret, decryptSecret, testInbox } from '../lib/leads/inbox'
@@ -145,6 +146,7 @@ const BIZ_INCLUDE = { members: { include: { user: { select: { id: true, name: tr
 export async function listBusinesses(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
   requireLeadAdmin(s)
+  await syncCmrMembers().catch(() => 0)
   const list = await prisma.leadBusiness.findMany({ include: BIZ_INCLUDE, orderBy: { name: 'asc' } })
   const open = await prisma.lead.groupBy({ by: ['businessId'], where: { status: { in: OPEN_STATUSES } }, _count: { _all: true } })
   const every = await prisma.lead.groupBy({ by: ['businessId'], _count: { _all: true } })

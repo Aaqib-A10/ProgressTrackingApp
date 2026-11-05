@@ -27,14 +27,16 @@ beforeAll(async () => {
   await prisma.company.deleteMany({ where: { id: C } })
   await prisma.company.create({ data: { id: C, name: 'CMR Co', slug: C, plan: 'business', setupDoneAt: new Date(), timeZone: 'America/Phoenix' } })
   const dept = await prisma.department.create({ data: { companyId: C, name: 'CMR', type: 'CMR' } })
+  // People in the CMR department join the CMR business by themselves, so the stranger sits elsewhere.
+  const other = await prisma.department.create({ data: { companyId: C, name: 'Office', type: 'GENERAL' } })
   const passwordHash = await hashPassword('Pass-for-tests-9')
-  const mk = async (name: string, role: Role) => { const u = await prisma.user.create({ data: { companyId: C, name, email: `${name.replace(/\s/g, '.').toLowerCase()}@cmr.local.test`, role, status: 'ACTIVE', isActive: true, passwordHash, departmentId: dept.id } }); return { id: u.id, role: u.role } }
+  const mk = async (name: string, role: Role, d = dept) => { const u = await prisma.user.create({ data: { companyId: C, name, email: `${name.replace(/\s/g, '.').toLowerCase()}@cmr.local.test`, role, status: 'ACTIVE', isActive: true, passwordHash, departmentId: d.id } }); return { id: u.id, role: u.role } }
   admin = await mk('Cara Admin', 'SUPER_ADMIN')
   lead = await mk('Lena Lead', 'TEAM_LEAD')
   jesse = await mk('Jesse McCullough', 'TEAM_LEAD')
   matthew = await mk('Matthew', 'MEMBER')
   mark = await mk('Mark', 'MEMBER')
-  stranger = await mk('Sam Stranger', 'MEMBER')
+  stranger = await mk('Sam Stranger', 'MEMBER', other)
   await setCompanyFlag('cmr', C, true, 'test')
   await setCompanyFlag('lead-management', C, true, 'test')
 })

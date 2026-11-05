@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client'
 import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import { talkloopClient } from '../lib/talkloop/client'
+import { syncCmrMembers } from '../lib/leads/members'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
 import { parse } from '../lib/pm/http'
@@ -110,6 +111,8 @@ async function fullLead(me: LeadViewer, s: LeadScope, id: string): Promise<LeadR
 
 /** GET /api/leads/meta — the businesses I work in (with their pipelines and people) and what I may do. */
 export async function leadsMeta(req: AuthedRequest, res: Response): Promise<void> {
+  // People in a CMR department join the CMR business by themselves, before we read who I am.
+  await syncCmrMembers().catch(() => 0)
   const { me: m, s } = await ctx(req)
   const businesses = await prisma.leadBusiness.findMany({
     where: s.admin ? {} : { id: { in: [...s.roles.keys()] }, isActive: true },
