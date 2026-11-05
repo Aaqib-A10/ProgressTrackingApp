@@ -12,6 +12,8 @@ export async function syncCmrMembers(): Promise<number> {
   if (!people.length) return 0
   let added = 0
   for (const b of bizs) {
+    // The head decides from the queue and works no leads: a membership row (from before they were made head) goes.
+    if (b.headId && b.members.some((m) => m.userId === b.headId)) await prisma.leadBusinessMember.deleteMany({ where: { businessId: b.id, userId: b.headId } })
     const have = new Set(b.members.map((m) => m.userId))
     for (const p of people) {
       if (have.has(p.id) || p.id === b.headId) continue

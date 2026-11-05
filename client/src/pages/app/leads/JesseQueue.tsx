@@ -16,7 +16,7 @@ export default function JesseQueue() {
   const cmrBiz = businesses.filter((b) => b.kind === 'CMR')
   const biz = business?.kind === 'CMR' ? business : cmrBiz[0] ?? null
   const { meta } = useLeadsMeta()
-  const [d, setD] = useState<{ queue: (LeadRow & { lastCall: LeadCall | null; comments: LeadComment[] })[]; decided: LeadRow[]; canDecide: boolean } | null>(null)
+  const [d, setD] = useState<{ queue: (LeadRow & { lastCall: LeadCall | null; comments: LeadComment[]; flaggedBy: { id: string; name: string } | null })[]; decided: LeadRow[]; canDecide: boolean } | null>(null)
   const [ready, setReady] = useState<LeadRow[] | null>(null)
   const [err, setErr] = useState('')
   const load = useCallback(() => { if (!biz) return; leadsApi.queue(biz.id).then((r) => { setD(r); setErr('') }).catch((e) => setErr(apiErrorText(e, 'Could not load'))) }, [biz])
@@ -46,7 +46,8 @@ export default function JesseQueue() {
                   {l.belowMin && <Badge tone="accent">Below minimum</Badge>}
                   <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold', (l.waitingDays ?? 0) > 1 ? 'bg-danger/10 text-danger' : (l.waitingDays ?? 0) === 1 ? 'bg-warning/15 text-amber-700' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>waiting {l.waitingDays ?? 0} business day{l.waitingDays === 1 ? '' : 's'}</span>
                 </div>
-                <p className="mt-0.5 text-body-sm text-ink-muted">{[l.industry, l.state, l.assignee ? `SDR ${l.assignee.name}` : 'Unassigned', `flagged ${ago(l.flaggedAt)}`].filter(Boolean).join(' · ')}</p>
+                <p className="mt-0.5 text-body-sm text-ink-muted">{[l.industry, l.state, l.assignee ? `SDR ${l.assignee.name}` : 'Unassigned', `flagged ${ago(l.flaggedAt)}${l.flaggedBy && l.flaggedBy.id !== l.assigneeId ? ` by ${l.flaggedBy.name}` : ''}`].filter(Boolean).join(' · ')}</p>
+                <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-2.5 py-0.5 text-[12px] font-semibold text-primary">From {l.flaggedBy?.name ?? l.assignee?.name ?? 'the team'}</p>
               </div>
               <div className="flex items-center gap-2">
                 <FactsMeter facts={l.facts} />

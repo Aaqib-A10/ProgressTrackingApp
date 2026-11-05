@@ -52,6 +52,8 @@ export interface CurrentUser {
   leadsRole?: 'MANAGER' | 'REP' | null
   /** Works a CMR-kind business: sees the Jesse Queue, Daily Report and Jesse Summary. */
   leadsCmr?: boolean
+  /** The head of a business who works no leads (Jesse): the menu is only the queue and the summary. */
+  leadsHead?: boolean
   /** Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind). */
   blocks?: string[] | null
   /** Department Studio, part B: the cards on their dashboard (null: the dashboard of their department's kind). */

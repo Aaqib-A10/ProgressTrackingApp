@@ -18,7 +18,7 @@ import { sendCsv } from '../lib/csv'
 import { sendMail } from '../lib/mail'
 import { notifyMentions } from '../lib/notify'
 import { companyTz } from '../lib/time'
-import { canDecide, canManage, isMemberOf, leadFor, leadScope, leadWhere, requireManager, type LeadScope, type LeadViewer } from '../lib/leads/access'
+import { canDecide, canManage, isMemberOf, leadFor, leadScope, leadWhere, leadsHeadOnlyOf, requireManager, type LeadScope, type LeadViewer } from '../lib/leads/access'
 import { OPEN_STATUSES, receiveLead, sourceText, type LeadInput as IntakeInput } from '../lib/leads/intake'
 import { keysOf, listMatches, reflagLeads } from '../lib/leads/lists'
 import {
@@ -126,7 +126,7 @@ export async function leadsMeta(req: AuthedRequest, res: Response): Promise<void
   })
   const cmr = await isOn('cmr', m.companyId)
   res.json({
-    me: { id: m.id, name: m.name, admin: s.admin, headOf: s.headOf, managerOf: s.managerOf },
+    me: { id: m.id, name: m.name, admin: s.admin, headOf: s.headOf, managerOf: s.managerOf, headOnly: !s.admin && (await leadsHeadOnlyOf(m.id)) },
     // How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop).
     dial: await dialSetting(m.companyId),
     // Click-to-call through TalkLoop: on when TalkLoop can originate and I am linked to a TalkLoop user.
@@ -391,7 +391,7 @@ export async function getLead(req: AuthedRequest, res: Response): Promise<void> 
       events: events.map((e) => ({ ...e, toName: (e.data as { to?: string } | null)?.to ? names.get((e.data as { to: string }).to) ?? null : undefined })),
     },
     listHits: (await listMatches(b.id, lead)).hits,
-    can: { manage, decide: canDecide(s, b.id), approve: manage, edit: manage || lead.assigneeId === m.id, cmr: isCmr(b) && (await isOn('cmr', m.companyId)) },
+    can: { manage, decide: canDecide(s, b.id), approve: manage, edit: manage || lead.assigneeId === m.id, cmr: isCmr(b) && (await isOn('cmr', m.companyId)), headOnly: !s.admin && b.headId === m.id && !s.repOf.includes(b.id) && !(await prisma.leadBusinessMember.count({ where: { businessId: b.id, userId: m.id } })) },
     head, mentionable, pipeline: pipelineOf(b), settings: isCmr(b) ? settingsOf(b) : null,
   })
 }
@@ -905,8 +905,11 @@ export async function headQueue(req: AuthedRequest, res: Response): Promise<void
   const where: Prisma.LeadWhereInput = { AND: [leadWhere(m, s), business ? { businessId: business } : { business: { kind: 'CMR' } }] }
   const rows = await prisma.lead.findMany({ where: { AND: [where, { cmr: { is: { jesseInputNeeded: true } } }] }, include: { ...LEAD_INCLUDE, calls: { orderBy: { at: 'desc' }, take: 1, include: { user: PERSON } }, comments: { orderBy: { createdAt: 'desc' }, take: 3, include: { user: PERSON } } }, orderBy: { cmr: { flaggedAt: 'asc' } } })
   const decided = await prisma.lead.findMany({ where: { AND: [where, { cmr: { is: { jesseDecidedAt: { gte: DateTime.now().minus({ days: 14 }).toJSDate() } } } }] }, include: LEAD_INCLUDE, orderBy: { cmr: { jesseDecidedAt: 'desc' } }, take: 20 })
+  // Who flagged each lead (the SDR who pressed Qualify, or the manager who approved it), so Jesse sees where it came from.
+  const byIds = [...new Set(rows.map((l) => l.cmr?.qualifiedById).filter((x): x is string => !!x))]
+  const flaggers = new Map((await prisma.user.findMany({ where: { id: { in: byIds } }, select: { id: true, name: true } })).map((u) => [u.id, u]))
   res.json({
-    queue: rows.map((l) => { const { calls, comments, ...rest } = l; return { ...leadOut(rest), lastCall: calls[0] ? { ...calls[0], recordingUrl: calls[0].recordingUrl && calls[0].recordingKept ? `/api/leads/calls/${calls[0].id}/recording` : null } : null, comments } }),
+    queue: rows.map((l) => { const { calls, comments, ...rest } = l; return { ...leadOut(rest), flaggedBy: l.cmr?.qualifiedById ? flaggers.get(l.cmr.qualifiedById) ?? null : null, lastCall: calls[0] ? { ...calls[0], recordingUrl: calls[0].recordingUrl && calls[0].recordingKept ? `/api/leads/calls/${calls[0].id}/recording` : null } : null, comments } }),
     decided: decided.map((l) => leadOut(l)),
     canDecide: s.admin || (business ? s.headOf.includes(business) : s.headOf.length > 0),
   })

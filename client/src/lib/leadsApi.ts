@@ -77,7 +77,7 @@ export interface UnmatchedCall { id: string; at: string; direction: 'OUT' | 'IN'
 /** A phone number TalkLoop reached that no lead has yet, with its calls. */
 export interface UnmatchedNumber { phone: string; calls: number; connected: number; lastAt: string; firstAt: string; people: { id: string; name: string }[]; items: UnmatchedCall[] }
 export interface LeadFull extends LeadRow { calls: LeadCall[]; comments: LeadComment[]; tasks: LeadTask[]; events: LeadEvent[]; assignedBy: Person | null; createdBy: Person | null; raw: Record<string, unknown> | null }
-export interface LeadDetail { lead: LeadFull; listHits: { kind: string; name: string; on: string }[]; can: { manage: boolean; decide: boolean; approve: boolean; edit: boolean; cmr: boolean }; head: Person | null; mentionable: (Person & { role: string })[]; pipeline: PipelineStatus[]; settings: CmrSettings | null }
+export interface LeadDetail { lead: LeadFull; listHits: { kind: string; name: string; on: string }[]; can: { manage: boolean; decide: boolean; approve: boolean; edit: boolean; cmr: boolean; headOnly?: boolean }; head: Person | null; mentionable: (Person & { role: string })[]; pipeline: PipelineStatus[]; settings: CmrSettings | null }
 
 export interface CmrSettings { copyEmail: string; copyName: string; consentStates: string[]; segments: string[]; states: string[]; infoSubject: string; infoBody: string; publishedRate: number; minLoadLbs: number; connectedSecs: number }
 export interface MetaBusiness {
@@ -89,7 +89,7 @@ export interface MetaBusiness {
 export type DialScheme = 'tel' | 'sip' | 'callto' | 'custom'
 /** How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop). */
 export interface DialSetting { scheme: DialScheme; domain: string | null; template: string | null }
-export interface LeadsMeta { me: { id: string; name: string; admin: boolean; headOf: string[]; managerOf: string[] }; dial?: DialSetting; talkloopDial?: boolean; businesses: MetaBusiness[]; cmrOn: boolean }
+export interface LeadsMeta { me: { id: string; name: string; admin: boolean; headOf: string[]; managerOf: string[]; headOnly?: boolean }; dial?: DialSetting; talkloopDial?: boolean; businesses: MetaBusiness[]; cmrOn: boolean }
 /** The href a Call button opens for this number, in the form the PC's phone app expects. */
 export function dialHref(phone: string | null | undefined, dial?: DialSetting | null): string | null {
   if (!phone) return null
@@ -194,7 +194,7 @@ export const leadsApi = {
   outcome: (id: string, b: { outcome: string; note?: string; nextStepDate?: string | null }) => api.post<{ lead: LeadRow }>(`/leads/${id}/outcome`, b),
   close: (id: string, b: { status: string; reason?: string; note?: string }) => api.post<{ lead: LeadRow }>(`/leads/${id}/close`, b),
   reopen: (id: string) => api.post<{ lead: LeadRow }>(`/leads/${id}/reopen`),
-  queue: (business?: string) => api.get<{ queue: (LeadRow & { lastCall: LeadCall | null; comments: LeadComment[] })[]; decided: LeadRow[]; canDecide: boolean }>(`/leads/queue${qs({ business })}`),
+  queue: (business?: string) => api.get<{ queue: (LeadRow & { lastCall: LeadCall | null; comments: LeadComment[]; flaggedBy: Person | null })[]; decided: LeadRow[]; canDecide: boolean }>(`/leads/queue${qs({ business })}`),
   tasks: (p: { tab?: string; assignee?: string; business?: string; lead?: string }) => api.get<{ tasks: LeadTask[]; counts: { today: number; overdue: number; upcoming: number } }>(`/leads/tasks${qs(p)}`),
   addTask: (b: { leadId: string; title: string; notes?: string; dueAt: string; assigneeId?: string | null; kind?: 'CALL' | 'CUSTOM' }) => api.post<{ task: LeadTask }>('/leads/tasks', b),
   updateTask: (id: string, b: { dueAt?: string; notes?: string; title?: string; assigneeId?: string | null }) => api.patch<{ task: LeadTask }>(`/leads/tasks/${id}`, b),

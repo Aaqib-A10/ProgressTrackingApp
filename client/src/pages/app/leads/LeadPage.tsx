@@ -79,11 +79,16 @@ export default function LeadPage() {
                 <option value="">Unassigned</option>{mentionable.filter((m) => m.role !== 'HEAD' || m.id === l.assigneeId).map((m) => <option key={m.id} value={m.id}>{m.name}{m.role === 'MANAGER' ? ' (manager)' : m.role === 'HEAD' ? ' (head)' : ''}</option>)}{l.assignee && !mentionable.some((m) => m.id === l.assigneeId) && <option value={l.assignee.id}>{l.assignee.name}</option>}
               </Select>
             ) : <span className="inline-flex items-center gap-1.5 text-body-sm text-ink-muted"><UserCheck size={14} />{l.assignee?.name ?? 'Unassigned'}</span>}
-            {can.edit && !l.prohibited && <Button size="sm" leadingIcon={<PhoneOutgoing size={15} />} onClick={() => setModal('call')}>Log call</Button>}
-            {can.edit && cmr && l.open && !l.prohibited && <Button size="sm" variant="secondary" leadingIcon={<Send size={15} />} onClick={() => setModal('info')} disabled={!l.email} title={l.email ? '' : 'Add an email first'}>Send info</Button>}
-            {can.edit && cmr && l.open && !l.jesseInputNeeded && !(l.jesseDecision === 'MEETING' && !l.meetingOutcome) && <Button size="sm" variant="secondary" leadingIcon={<Flag size={15} />} onClick={() => setModal('qualify')}>{l.qualifyRequestedAt && can.approve ? 'Approve for Jesse' : 'Qualify'}</Button>}
-            {can.edit && <Button size="sm" variant="ghost" leadingIcon={<Pencil size={15} />} onClick={() => setModal('edit')}>Edit</Button>}
-            {can.edit && l.open && <Button size="sm" variant="ghost" onClick={() => setModal('close')}>Close out</Button>}
+            {can.headOnly && pipeline.length > 0 && (
+              <Select value={l.status} onChange={(e) => run(() => leadsApi.update(l.id, { status: e.target.value }), `Status: ${pipeline.find((s) => s.key === e.target.value)?.label}`)} aria-label="Status" style={{ color: pipeline.find((s) => s.key === l.status)?.color }} className="font-semibold">
+                {pipeline.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </Select>
+            )}
+            {can.edit && !can.headOnly && !l.prohibited && <Button size="sm" leadingIcon={<PhoneOutgoing size={15} />} onClick={() => setModal('call')}>Log call</Button>}
+            {can.edit && !can.headOnly && cmr && l.open && !l.prohibited && <Button size="sm" variant="secondary" leadingIcon={<Send size={15} />} onClick={() => setModal('info')} disabled={!l.email} title={l.email ? '' : 'Add an email first'}>Send info</Button>}
+            {can.edit && !can.headOnly && cmr && l.open && !l.jesseInputNeeded && !(l.jesseDecision === 'MEETING' && !l.meetingOutcome) && <Button size="sm" variant="secondary" leadingIcon={<Flag size={15} />} onClick={() => setModal('qualify')}>{l.qualifyRequestedAt && can.approve ? 'Approve for Jesse' : 'Qualify'}</Button>}
+            {can.edit && !can.headOnly && <Button size="sm" variant="ghost" leadingIcon={<Pencil size={15} />} onClick={() => setModal('edit')}>Edit</Button>}
+            {can.edit && !can.headOnly && l.open && <Button size="sm" variant="ghost" onClick={() => setModal('close')}>Close out</Button>}
             {can.manage && !l.open && <Button size="sm" variant="ghost" onClick={() => run(() => leadsApi.reopen(l.id), 'Reopened')}>Reopen</Button>}
           </div>
         </div>
@@ -94,15 +99,15 @@ export default function LeadPage() {
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">
           {cmr && <JessePanel d={d} isHead={isHead} meId={user?.id ?? ''} onAction={setModal} onDecided={load} />}
-          {cmr && <FactsCard l={l} settings={d.settings} canEdit={can.edit} onSaved={load} />}
+          {cmr && <FactsCard l={l} settings={d.settings} canEdit={can.edit && !can.headOnly} onSaved={load} />}
           <NextStepCard l={l} canEdit={can.edit} onSaved={load} />
-          <CallsCard l={l} canEdit={can.edit && !l.prohibited} onLog={() => setModal('call')} onChanged={load} />
+          <CallsCard l={l} canEdit={can.edit && !can.headOnly && !l.prohibited} onLog={() => setModal('call')} onChanged={load} />
           <CommentsCard d={d} meId={user?.id ?? ''} onPosted={load} />
         </div>
         <div className="space-y-4">
           <TasksCard l={l} canEdit={can.edit} onAdd={() => setModal('task')} onChanged={load} />
-          <DetailsCard l={l} cmr={cmr} onEdit={() => setModal('edit')} />
-          <TimelineCard l={l} />
+          <DetailsCard l={l} cmr={cmr} onEdit={can.edit && !can.headOnly ? () => setModal('edit') : null} />
+          <TimelineCard l={l} canNote={can.edit} onNoted={load} />
         </div>
       </div>
 
@@ -420,7 +425,7 @@ function TasksCard({ l, canEdit, onAdd, onChanged }: { l: LeadFull; canEdit: boo
   )
 }
 
-function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: () => void }) {
+function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: (() => void) | null }) {
   const [open, setOpen] = useState<Record<string, boolean>>({ contact: true, address: false, product: false })
   const Row = ({ k, v }: { k: string; v: ReactNode }) => v ? <div className="flex justify-between gap-3 py-1 text-body-sm"><dt className="text-ink-muted">{k}</dt><dd className="text-right text-ink">{v}</dd></div> : null
   const Sec = ({ id, icon, title, children }: { id: string; icon: ReactNode; title: string; children: ReactNode }) => (
@@ -430,7 +435,7 @@ function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: ()
     </div>
   )
   return (
-    <Card title="Lead details" icon={<Tag size={15} />} action={<Button size="sm" variant="ghost" leadingIcon={<Pencil size={14} />} onClick={onEdit}>Edit</Button>}>
+    <Card title="Lead details" icon={<Tag size={15} />} action={onEdit ? <Button size="sm" variant="ghost" leadingIcon={<Pencil size={14} />} onClick={onEdit}>Edit</Button> : undefined}>
       <Sec id="contact" icon={<UserCheck size={14} />} title="Contact information">
         <Row k="Contact" v={l.name} /><Row k={cmr ? 'Role' : 'Job title'} v={cmr ? l.contactRole : l.jobTitle} /><Row k="No. of employees" v={l.employees} /><Row k={cmr ? 'Segment' : 'Industry'} v={l.industry} />
         <Row k="Phone" v={l.phone} /><Row k="Ext" v={l.ext} /><Row k="Mobile" v={l.mobile} /><Row k="Email" v={l.email} /><Row k="Secondary email" v={l.secondaryEmail} /><Row k="Secondary contact" v={l.secondaryContact} />
@@ -449,8 +454,12 @@ function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: ()
   )
 }
 
-function TimelineCard({ l }: { l: LeadFull }) {
+function TimelineCard({ l, canNote, onNoted }: { l: LeadFull; canNote: boolean; onNoted: () => void }) {
+  const { addToast } = useToast()
   const [all, setAll] = useState(false)
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const addNote = async () => { if (!note.trim()) return; setSaving(true); try { await leadsApi.addEvent(l.id, 'NOTE', note.trim()); setNote(''); onNoted() } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not add the note') }) } finally { setSaving(false) } }
   const rows = all ? l.events : l.events.slice(0, 12)
   const text = (e: LeadFull['events'][number]) => {
     const data = e.data as { from?: string; to?: string } | null
@@ -465,6 +474,12 @@ function TimelineCard({ l }: { l: LeadFull }) {
   }
   return (
     <Card title="Timeline" icon={<Clock size={15} />}>
+      {canNote && (
+        <form className="mb-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); void addNote() }}>
+          <TextField value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note…" className="flex-1" aria-label="Note" />
+          <Button size="sm" type="submit" variant="secondary" disabled={saving || !note.trim()}>Add</Button>
+        </form>
+      )}
       <ul className="space-y-2.5">
         {rows.map((e) => <li key={e.id} className="flex gap-2 text-[12px]"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-line-strong" /><span className="min-w-0"><span className="block text-ink">{text(e)}</span><span className="text-ink-faint">{fmtWhen(e.createdAt)}{e.user ? ` · ${e.user.name}` : ''}</span></span></li>)}
       </ul>

@@ -48,6 +48,15 @@ export async function leadsRoleOf(userId: string): Promise<LeadRole | null> {
   return headed || rows.some((r) => r.role === 'MANAGER') ? 'MANAGER' : 'REP'
 }
 
+/** Head only: this person heads a business (Jesse) and works no leads themselves. Their Metriq is the queue and the summary. */
+export async function leadsHeadOnlyOf(userId: string): Promise<boolean> {
+  const [headed, rows] = await Promise.all([
+    prisma.leadBusiness.count({ where: { headId: userId, isActive: true } }),
+    prisma.leadBusinessMember.count({ where: { userId, business: { isActive: true } } }),
+  ])
+  return headed > 0 && rows === 0
+}
+
 /** Does this person work (or head, or administer) a CMR-kind business? Shows the CMR menu items. */
 export async function leadsCmrOf(userId: string, admin: boolean): Promise<boolean> {
   if (admin) return (await prisma.leadBusiness.count({ where: { kind: 'CMR', isActive: true } })) > 0

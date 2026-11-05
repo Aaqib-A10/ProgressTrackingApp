@@ -295,7 +295,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company' | 'leadsRole' | 'leadsCmr'> & { blocks?: string[] | null; customBlocks?: CurrentUser['customBlocks'] }
+type NavUser = Pick<CurrentUser, 'role' | 'department' | 'subDepartment' | 'email' | 'isDeveloper' | 'permissions' | 'areasOff' | 'company' | 'leadsRole' | 'leadsCmr' | 'leadsHead'> & { blocks?: string[] | null; customBlocks?: CurrentUser['customBlocks'] }
 
 /** Who sees a menu item comes from lib/access.ts (the same list that guards the pages). */
 function itemVisible(item: NavItem, u: NavUser): boolean {
@@ -321,7 +321,12 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
 const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/admin/users', '/app/admin/targets', '/app/admin/tags', '/app/admin/leave', '/app/admin/activity', '/app/admin/networks', '/app/daily-report/team', '/app/reports/monthly', '/app/projects/dashboard', '/app/feedback'])
 
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
+/** The head of a business who works no leads (Jesse): only what he decides from. */
+const HEAD_ITEMS = new Set(['/app/leads/queue', '/app/leads/summary'])
+
 export function filterNav(u: NavUser): NavGroup[] {
+  // Jesse's desk: the queue and the summary, nothing else to learn.
+  if (u.leadsHead && u.role !== 'SUPER_ADMIN') return NAV_GROUPS.filter((g) => g.title === 'Leads').map((g) => ({ ...g, title: undefined, items: g.items.filter((i) => HEAD_ITEMS.has(i.to) && itemVisible(i, u)).map((i) => ({ ...i, badge: undefined })) })).filter((g) => g.items.length)
   // Department Studio: the department has its own menu for this person's role.
   if (u.blocks && u.role !== 'SUPER_ADMIN') return blockNav(u, u.blocks)
   if (u.company?.kind === 'PERSONAL') {

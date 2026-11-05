@@ -75,9 +75,14 @@ describe('CMR flow inside Lead Management', () => {
     // The head is a manager without being a member; a stranger sees nothing.
     const metaJ = (await api(jesse).get('/meta').expect(200)).body
     expect(metaJ.businesses.find((x: { id: string }) => x.id === cmrId)).toMatchObject({ myRole: 'MANAGER', isHead: true })
+    expect(metaJ.me.headOnly).toBe(true) // Jesse's desk: the queue and the summary
     expect((await api(stranger).get('/meta').expect(200)).body.businesses).toHaveLength(0)
     const me = (await request(app).get('/api/auth/me').set(...auth(matthew)).expect(200)).body.user
     expect(me.leadsRole).toBe('REP')
+    expect(me.leadsHead).toBe(false)
+    const meJ = (await request(app).get('/api/auth/me').set(...auth(jesse)).expect(200)).body.user
+    expect(meJ).toMatchObject({ leadsRole: 'MANAGER', leadsHead: true, leadsCmr: true })
+    expect(await prisma.leadBusinessMember.count({ where: { businessId: cmrId, userId: jesse.id } })).toBe(0) // the head's auto-membership was taken away
     expect(me.leadsCmr).toBe(true)
     genId = (await api(admin).post('/businesses', { name: 'Plain Co' }).expect(201)).body.business.id
     await api(admin).post(`/businesses/${genId}/members`, { userId: mark.id, role: 'REP' }).expect(200)
@@ -175,7 +180,13 @@ describe('CMR flow inside Lead Management', () => {
     expect((await openTasks(acmeId)).map((t) => t.kind)).toEqual(['HEAD_REVIEW'])
     // The queue shows it to Jesse (and to Matthew, his own) but not to Mark.
     expect((await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body).toMatchObject({ canDecide: true })
-    expect((await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body.queue.map((l: { id: string }) => l.id)).toEqual([acmeId])
+    const q = (await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body.queue
+    expect(q.map((l: { id: string }) => l.id)).toEqual([acmeId])
+    expect(q[0].flaggedBy).toBeTruthy() // Jesse sees who sent it
+    const asHead = (await api(jesse).get(`/${acmeId}`).expect(200)).body
+    expect(asHead.can).toMatchObject({ headOnly: true, decide: true, manage: true })
+    expect((await api(matthew).get(`/${acmeId}`).expect(200)).body.can.headOnly).toBe(false)
+    await api(jesse).post(`/${acmeId}/events`, { kind: 'NOTE', text: 'Ask about drums vs gaylords.' }).expect(201) // a note from the head
     expect((await api(mark).get(`/queue?business=${cmrId}`).expect(200)).body.queue).toHaveLength(0)
     expect((await api(matthew).get(`/queue?business=${cmrId}`).expect(200)).body).toMatchObject({ canDecide: false })
   })

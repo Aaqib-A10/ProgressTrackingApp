@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { DepartmentType, Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { activeProvider } from '../lib/billing/providers'
-import { leadsCmrOf, leadsRoleOf } from '../lib/leads/access'
+import { leadsCmrOf, leadsHeadOnlyOf, leadsRoleOf } from '../lib/leads/access'
 import { syncCmrMembers } from '../lib/leads/members'
 import { companySectionsOff } from '../lib/sectionsOff'
 import { personBlocks, personDashboard } from '../lib/personBlocks'
@@ -106,6 +106,8 @@ async function publicUser(userId: string) {
     leadsRole: await (user.department?.type === 'CMR' ? syncCmrMembers().catch(() => 0) : Promise.resolve(0)).then(() => leadsRoleOf(user.id)),
     // The CMR flow (Jesse Queue, Daily Report, Jesse Summary) when the person works a CMR business.
     leadsCmr: await leadsCmrOf(user.id, user.role === 'SUPER_ADMIN'),
+    // The head of a business who works no leads (Jesse): the menu is just the queue and the summary.
+    leadsHead: user.role !== 'SUPER_ADMIN' && (await leadsHeadOnlyOf(user.id)),
   }
 }
 
