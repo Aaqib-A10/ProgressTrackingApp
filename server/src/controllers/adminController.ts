@@ -120,8 +120,8 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
       ...(dept ? { memberships: { create: { departmentId: dept.id, subDepartmentId, role: v.role } } } : {}),
     },
   })
-  // Email the invitee a "set password & join" link (best-effort).
-  await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword: v.password ? undefined : tempPassword })
+  // Email the invitee a "set password & join" link (best-effort: the account exists either way, and the temp password is shown on screen).
+  try { await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword: v.password ? undefined : tempPassword }) } catch (e) { console.warn('[admin] invite email failed:', e instanceof Error ? e.message : e) }
   res.status(201).json({
     user: { id: user.id, name: user.name, email: user.email, role: user.role, department: dept?.type ?? null, subDepartment: v.subDepartmentSlug ?? null, status: user.status, isActive: user.isActive },
     tempPassword: v.password ? undefined : tempPassword,

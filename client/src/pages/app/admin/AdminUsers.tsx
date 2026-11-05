@@ -8,6 +8,7 @@ import { TextField } from '../../../components/ui/Input'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { ListToolbar } from '../../../components/ListToolbar'
 import { useToast } from '../../../components/ui/Toast'
+import { apiErrorText } from '../../../lib/api'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
 import { DEPARTMENTS } from '../../../lib/departments'
 import { useDeptOptions, type DeptOption } from '../../../lib/companyApi'
@@ -382,8 +383,9 @@ function InviteModal({ open, onClose, onCreated, depts }: { open: boolean; onClo
       addToast({ type: 'success', message: res.tempPassword ? `Created. Temp password: ${res.tempPassword}` : 'User created.', duration: 9000 })
       setName(''); setEmail(''); setRole('MEMBER'); setDepartment(''); setSubDept('')
       onClose()
-    } catch {
-      addToast({ type: 'error', message: 'Could not create user (email may be in use).' })
+    } catch (e) {
+      // Say what the server said: "Email already in use", the plan's people limit, an unknown department…
+      addToast({ type: 'error', message: apiErrorText(e, 'Could not create the user.'), duration: 9000 })
     } finally {
       setSubmitting(false)
     }
