@@ -33,6 +33,7 @@ export const DEPARTMENT_KINDS: { type: DepartmentType; label: string; descriptio
   { type: 'ECOMMERCE', label: 'E-commerce', description: 'Listings board, daily log, stock and notes.' },
   { type: 'INVENTORY', label: 'Inventory', description: 'Stock, requests and movements.' },
   { type: 'CSR', label: 'Customer service (CSR)', description: 'Scored by Quality Assurance.' },
+  { type: 'CMR', label: 'CMR (SDRs for Jesse)', description: 'SDRs who qualify battery-collector leads: Jesse Queue, Daily Report and Jesse Summary, with their leads in Lead Management.' },
 ]
 
 class Refused extends Error { constructor(public status: number, message: string) { super(message) } }
