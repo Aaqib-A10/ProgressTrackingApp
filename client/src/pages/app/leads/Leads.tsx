@@ -20,13 +20,15 @@ import { ImportModal } from './ImportModal'
  */
 
 type Col = { key: string; label: string; cmr?: boolean; manager?: boolean; default?: boolean }
+/** Short headers for the table itself (the Columns menu shows the long names). */
+const HEAD: Record<string, string> = { lead: 'Lead', company: 'Company', industry: 'Segment', assignee: 'Assigned', nextStep: 'Next step', nextStepDate: 'Step date', updated: 'Updated', facts: 'Facts', calls: 'Calls' }
 const COLUMNS: Col[] = [
-  { key: 'lead', label: 'Lead', default: true }, { key: 'company', label: 'Company', default: true }, { key: 'industry', label: 'Segment / Industry', default: true }, { key: 'state', label: 'State', default: true },
+  { key: 'lead', label: 'Company / contact', default: true }, { key: 'company', label: 'Company only' }, { key: 'industry', label: 'Segment / Industry', default: true }, { key: 'state', label: 'State', default: true },
   { key: 'status', label: 'Status', default: true }, { key: 'assignee', label: 'Assigned To', default: true }, { key: 'owner', label: 'Owner', cmr: true }, { key: 'facts', label: 'Five facts', cmr: true, default: true },
-  { key: 'nextStep', label: 'Next Step', default: true }, { key: 'nextStepDate', label: 'Next Step Date', default: true }, { key: 'volume', label: 'Volume (lb)', cmr: true }, { key: 'vendor', label: 'Current Vendor', cmr: true }, { key: 'pays', label: 'Pays Today', cmr: true },
-  { key: 'calls', label: 'Calls' }, { key: 'lastCall', label: 'Last Call' }, { key: 'tasks', label: 'Tasks', default: true }, { key: 'source', label: 'Source' }, { key: 'tags', label: 'Tags' }, { key: 'updated', label: 'Last Updated', default: true }, { key: 'created', label: 'Created' },
+  { key: 'nextStep', label: 'Next step · when', default: true }, { key: 'nextStepDate', label: 'Next step date (own column)' }, { key: 'volume', label: 'Volume (lb)', cmr: true }, { key: 'vendor', label: 'Current Vendor', cmr: true }, { key: 'pays', label: 'Pays Today', cmr: true },
+  { key: 'calls', label: 'Calls', default: true }, { key: 'lastCall', label: 'Last Call' }, { key: 'tasks', label: 'Tasks' }, { key: 'source', label: 'Source' }, { key: 'tags', label: 'Tags' }, { key: 'updated', label: 'Last Updated' }, { key: 'created', label: 'Created' },
 ]
-const COL_KEY = 'leads.columns.v2'
+const COL_KEY = 'leads.columns.v3'
 
 function useColumns(cmr: boolean): [string[], (c: string[]) => void] {
   const [cols, setCols] = useState<string[]>(() => { try { const s = localStorage.getItem(COL_KEY); if (s) return JSON.parse(s) as string[] } catch { /* ignore */ } return COLUMNS.filter((c) => c.default).map((c) => c.key) })
@@ -183,9 +185,9 @@ export default function Leads() {
       {/* Table */}
       <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-body-sm">
+          <table className="w-full text-left text-body-sm">
             <thead className="sticky top-0 z-[1] bg-slate-50 text-[11.5px] uppercase tracking-wide text-ink-muted dark:bg-white/[0.03]">
-              <tr>{canManage && <th className="w-9 py-2.5 pl-3"><input type="checkbox" aria-label="Pick every lead on this page" checked={!!data?.leads.length && data.leads.every((l) => picked.has(l.id))} onChange={(e) => setPicked(e.target.checked ? new Set(data?.leads.map((l) => l.id)) : new Set())} /></th>}{cols.map((k) => <th key={k} className="whitespace-nowrap px-3 py-2.5 font-semibold">{COLUMNS.find((c) => c.key === k)?.label}</th>)}<th className="px-3 py-2.5 text-right font-semibold">Actions</th></tr>
+              <tr>{canManage && <th className="w-9 py-2.5 pl-3"><input type="checkbox" aria-label="Pick every lead on this page" checked={!!data?.leads.length && data.leads.every((l) => picked.has(l.id))} onChange={(e) => setPicked(e.target.checked ? new Set(data?.leads.map((l) => l.id)) : new Set())} /></th>}{cols.map((k) => <th key={k} className="whitespace-nowrap px-2.5 py-2.5 font-semibold">{HEAD[k] ?? COLUMNS.find((c) => c.key === k)?.label}</th>)}<th className="w-16 px-2 py-2.5 text-right font-semibold"><span className="sr-only">Actions</span></th></tr>
             </thead>
             <tbody className="divide-y divide-line">
               {loading && !data && Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={cols.length + (canManage ? 2 : 1)} className="px-3 py-3"><div className="h-5 animate-pulse rounded bg-slate-100 dark:bg-white/5" /></td></tr>)}
@@ -236,6 +238,9 @@ function ColumnsMenu({ cmr, cols, onChange, onClose }: { cmr: boolean; cols: str
   )
 }
 
+/** "Matthew Reyes" → "Matthew R." */
+const shortName = (n: string) => { const p = n.trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : n }
+
 function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, toast }: { l: LeadRow; cols: string[]; business: MetaBusiness | null; canManage: boolean; picked: boolean; onPick: (v: boolean) => void; onOpen: () => void; onChanged: () => void; toast: ReturnType<typeof useToast>['addToast'] }) {
   const [busy, setBusy] = useState(false)
   const pipeline = business?.pipeline ?? []
@@ -244,27 +249,32 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
   const cell = (k: string) => {
     switch (k) {
       case 'lead': return (
-        <div className="flex min-w-[180px] items-center gap-2.5">
-          <Avatar name={l.name || l.organization || '?'} />
+        // The company is the record (one per company); the contact and how to reach them sit under it.
+        <div className="flex min-w-[170px] max-w-[250px] items-center gap-2.5">
+          <Avatar name={l.organization || l.name || '?'} />
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 truncate font-semibold text-ink">{l.name || <span className="text-ink-faint">No contact name</span>}{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="text-orange-500" /></span>}</div>
-            <div className="truncate text-[11.5px] text-ink-muted">{[l.email, l.phone].filter(Boolean).join(' · ') || '—'}</div>
+            <div className="flex items-center gap-1.5 truncate font-semibold text-ink">{l.organization || l.name || <span className="text-ink-faint">No name</span>}{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="text-orange-500" /></span>}</div>
+            <div className="truncate text-[11.5px] text-ink-muted">{[l.organization ? l.name : null, l.phone, !l.phone ? l.email : null].filter(Boolean).join(' · ') || l.email || <span className="text-ink-faint">No contact yet</span>}</div>
           </div>
         </div>)
       case 'company': return <span className="font-medium text-ink">{l.organization ?? '—'}</span>
       case 'industry': return l.industry ?? '—'
       case 'state': return l.state ?? '—'
       case 'status': return pipeline.length ? (
-        <select value={l.status} disabled={busy || !l.open && !canManage} onClick={stop} onChange={(e) => { e.stopPropagation(); run(() => leadsApi.update(l.id, { status: e.target.value }), `Status: ${pipeline.find((s) => s.key === e.target.value)?.label}`) }} className="h-7 rounded-full border-0 bg-transparent pr-6 text-[12px] font-semibold focus:outline-none" style={{ color: pipeline.find((s) => s.key === l.status)?.color }} aria-label="Status">
+        <select value={l.status} disabled={busy || !l.open && !canManage} onClick={stop} onChange={(e) => { e.stopPropagation(); run(() => leadsApi.update(l.id, { status: e.target.value }), `Status: ${pipeline.find((s) => s.key === e.target.value)?.label}`) }} className="h-7 w-[118px] rounded-full border-0 bg-transparent pr-6 text-[12px] font-semibold focus:outline-none" style={{ color: pipeline.find((s) => s.key === l.status)?.color }} aria-label="Status">
           {pipeline.filter((s) => s.key !== 'QUALIFIED' || business?.kind !== 'CMR' || l.status === 'QUALIFIED').map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>) : <StatusPill status={l.status} label={l.statusLabel} />
       case 'assignee': return canManage && business ? (
         <select value={l.assigneeId ?? ''} disabled={busy} onClick={stop} onChange={(e) => { e.stopPropagation(); run(() => leadsApi.assign(l.id, e.target.value || null), e.target.value ? 'Assigned' : 'Unassigned') }} className="h-7 max-w-[160px] rounded-btn border border-line bg-card px-1.5 text-[12px]" aria-label="Assigned to">
           <option value="">Unassigned</option>{business.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}{l.assignee && !business.members.some((m) => m.id === l.assigneeId) && <option value={l.assignee.id}>{l.assignee.name}</option>}
-        </select>) : (l.assignee?.name ?? <span className="text-ink-faint">Unassigned</span>)
+        </select>) : (l.assignee ? <span className="whitespace-nowrap" title={l.assignee.name}>{shortName(l.assignee.name)}</span> : <span className="text-ink-faint">Unassigned</span>)
       case 'owner': return OWNER_LABEL[l.owner] ?? l.owner
       case 'facts': return <FactsMeter facts={l.facts} size="sm" />
-      case 'nextStep': return <span className="block max-w-[220px] truncate" title={l.nextStep ?? ''}>{l.nextStep ?? '—'}</span>
+      case 'nextStep': return (
+        <div className="min-w-[130px] max-w-[210px]">
+          <span className="block truncate" title={l.nextStep ?? ''}>{l.nextStep ?? <span className="text-ink-faint">No next step</span>}</span>
+          <span className={cn('mt-0.5 flex items-center gap-1.5 text-[11.5px]', l.overdue ? 'font-semibold text-danger' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} />}{l.nextStepDate ? fmtDate(l.nextStepDate) : l.nextStep ? 'no date' : ''}{l.openTasks ? <Badge tone="primary">{l.openTasks} task{l.openTasks === 1 ? '' : 's'}</Badge> : null}</span>
+        </div>)
       case 'nextStepDate': return l.nextStepDate ? <span className={cn('inline-flex items-center gap-1 whitespace-nowrap', l.overdue && 'font-semibold text-danger')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}</span> : '—'
       case 'volume': return l.lbsPerShipment || l.lbsPerMonth ? <span className={cn('tabular-nums', l.belowMin && 'text-purple-600')}>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()}/load` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()}/mo` : ''}</span> : '—'
       case 'vendor': return l.currentVendor ?? '—'
@@ -282,11 +292,11 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
   return (
     <tr onClick={onOpen} className={cn('cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03]', l.jesseInputNeeded && 'bg-orange-50/40 dark:bg-orange-500/5', picked && 'bg-primary/[0.05]')}>
       {canManage && <td className="py-2.5 pl-3 align-middle" onClick={stop}><input type="checkbox" checked={picked} onChange={(e) => onPick(e.target.checked)} aria-label={`Pick ${leadTitle(l)}`} /></td>}
-      {cols.map((k) => <td key={k} className="px-3 py-2.5 align-middle text-ink">{cell(k)}</td>)}
-      <td className="px-3 py-2.5 text-right">
-        <span className="inline-flex gap-1" onClick={stop}>
+      {cols.map((k) => <td key={k} className="px-2.5 py-2.5 align-middle text-ink">{cell(k)}</td>)}
+      <td className="px-2 py-2.5 text-right">
+        <span className="inline-flex gap-0.5" onClick={stop}>
           {l.phone && <a href={`tel:${l.phoneE164 ?? l.phone}`} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title="Call" aria-label="Call"><Phone size={15} /></a>}
-          <Button size="sm" variant="ghost" onClick={onOpen}>Open</Button>
+          <button type="button" onClick={onOpen} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title="Open" aria-label={`Open ${leadTitle(l)}`}><ChevronRight size={16} /></button>
         </span>
       </td>
     </tr>

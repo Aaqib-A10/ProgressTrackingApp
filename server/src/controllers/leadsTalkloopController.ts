@@ -8,7 +8,7 @@ import { isOn } from '../lib/flags'
 import { canManage, leadFor, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
 import { talkloopClient, talkloopConfigured } from '../lib/talkloop/client'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
-import { attachUnmatched } from '../lib/talkloop/unmatched'
+import { attachUnmatched, unmatchedScope } from '../lib/talkloop/unmatched'
 import { runTalkLoopSync, syncStatus } from '../lib/talkloop/sync'
 
 /**
@@ -95,17 +95,10 @@ export async function callConsent(req: AuthedRequest, res: Response): Promise<vo
 
 // ------------------------------------------------------------------ calls to numbers no lead has yet
 
-/** Whose kept calls I may see: admin all; a manager their businesses' people and themselves; a rep their own. */
-async function unmatchedWhere(m: LeadViewer, s: LeadScope): Promise<{ userId?: { in: string[] } }> {
-  if (s.admin) return {}
-  const members = s.managerOf.length ? await prisma.leadBusinessMember.findMany({ where: { businessId: { in: s.managerOf } }, select: { userId: true } }) : []
-  return { userId: { in: [...new Set([m.id, ...members.map((x) => x.userId)])] } }
-}
-
 /** GET /api/leads/unmatched — TalkLoop calls to numbers no lead has, one row per number, newest first. */
 export async function listUnmatched(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
-  const rows = await prisma.leadUnmatchedCall.findMany({ where: await unmatchedWhere(m, s), orderBy: { at: 'desc' }, take: 3000, include: { user: { select: { id: true, name: true } } } })
+  const rows = await prisma.leadUnmatchedCall.findMany({ where: await unmatchedScope(m, s), orderBy: { at: 'desc' }, take: 3000, include: { user: { select: { id: true, name: true } } } })
   const byPhone = new Map<string, typeof rows>()
   for (const r of rows) { const l = byPhone.get(r.phone) ?? []; l.push(r); byPhone.set(r.phone, l) }
   const numbers = [...byPhone.entries()].map(([phone, calls]) => {
@@ -123,7 +116,7 @@ export async function listUnmatched(req: AuthedRequest, res: Response): Promise<
 /** GET /api/leads/unmatched/:id/recording — streamed through Metriq like a lead's recording. */
 export async function unmatchedRecording(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
-  const c = await prisma.leadUnmatchedCall.findFirst({ where: { id: String(req.params.id), ...(await unmatchedWhere(m, s)) }, select: { externalId: true, recordingFile: true, durationSec: true } })
+  const c = await prisma.leadUnmatchedCall.findFirst({ where: { id: String(req.params.id), ...(await unmatchedScope(m, s)) }, select: { externalId: true, recordingFile: true, durationSec: true } })
   if (!c || !c.recordingFile || !c.durationSec) throw new HttpError(404, 'No recording')
   await pipeTalkLoopRecording(req, res, c.externalId)
 }
@@ -135,7 +128,7 @@ export async function attachUnmatchedCalls(req: AuthedRequest, res: Response): P
   const lead = await leadFor(m, s, b.leadId)
   // A rep attaches to their own leads; a manager to any lead of their businesses.
   if (!canManage(s, lead.businessId) && lead.assigneeId !== m.id && lead.createdById !== m.id) throw new HttpError(403, 'That lead is not yours to change.')
-  const mine = await prisma.leadUnmatchedCall.count({ where: { phone: b.phone, ...(await unmatchedWhere(m, s)) } })
+  const mine = await prisma.leadUnmatchedCall.count({ where: { phone: b.phone, ...(await unmatchedScope(m, s)) } })
   if (!mine) throw new HttpError(404, 'No kept calls for that number')
   const moved = await attachUnmatched(m.companyId, b.phone, lead.id, m.id)
   res.json({ moved, leadId: lead.id })

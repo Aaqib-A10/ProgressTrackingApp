@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client'
 import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
+import { unmatchedScope } from '../lib/talkloop/unmatched'
 import { syncCmrMembers } from '../lib/leads/members'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
@@ -953,9 +954,14 @@ export async function dashboard(req: AuthedRequest, res: Response): Promise<void
     prisma.leadCall.count({ where: callWhere }),
     prisma.lead.findMany({ where: { AND: [mine, { status: 'NEW' }] }, select: { status: true, assigneeId: true, createdAt: true, assignedAt: true, firstContactAt: true, business: { select: { slaAssignMins: true, slaContactMins: true } } }, take: 5000 }),
   ])
+  const [connected, kept] = await Promise.all([
+    prisma.leadCall.count({ where: { AND: [callWhere, { disposition: 'CONNECTED' }] } }),
+    // Phone-system calls to numbers that are not a lead yet (Calls → No lead yet).
+    prisma.leadUnmatchedCall.count({ where: await unmatchedScope(m, s) }),
+  ])
   res.json({
     range: r.label,
-    cards: { total, newThisWeek, recentlyUpdated, noStatus, assigned, unassigned, waiting, overdue: overdueN, prohibited, belowMin, calls, late: late.filter((l) => lateness(l, l.business)).length },
+    cards: { total, newThisWeek, recentlyUpdated, noStatus, assigned, unassigned, waiting, overdue: overdueN, prohibited, belowMin, calls, connected, kept, late: late.filter((l) => lateness(l, l.business)).length },
     tasks: { today: tasksToday, overdue: tasksOverdue, total: tasksToday + tasksOverdue },
     byStatus: Object.fromEntries(byStatus.map((x) => [x.status, x._count._all])),
   })

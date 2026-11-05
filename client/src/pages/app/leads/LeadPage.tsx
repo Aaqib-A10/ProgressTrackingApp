@@ -31,6 +31,8 @@ export default function LeadPage() {
   const [modal, setModal] = useState<'call' | 'close' | 'qualify' | 'decide' | 'invite' | 'slots' | 'reconfirm' | 'outcome' | 'task' | 'info' | 'edit' | null>(null)
   const load = useCallback(() => leadsApi.get(id).then((r) => { setD(r); setErr('') }).catch((e) => setErr(apiErrorText(e, 'Lead not found'))), [id])
   useEffect(() => { void load() }, [load])
+  // "?qualify=1" (from the Jesse Queue's ready list) opens the Qualify step straight away.
+  useEffect(() => { if (d && new URLSearchParams(window.location.search).get('qualify') === '1' && d.can.edit && d.can.cmr && d.lead.open && !d.lead.jesseInputNeeded) { setModal('qualify'); window.history.replaceState(null, '', window.location.pathname) } }, [d])
   const run = async (fn: () => Promise<unknown>, ok?: string) => { try { await fn(); if (ok) addToast({ type: 'success', message: ok }); await load() } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } }
 
   if (err) return <div className="mx-auto max-w-xl py-16 text-center"><p className="text-body-md text-ink-muted">{err}</p><Link to="/app/leads" className="mt-3 inline-block text-primary">Back to leads</Link></div>

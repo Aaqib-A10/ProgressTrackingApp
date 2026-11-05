@@ -1,5 +1,6 @@
 import { prisma } from '../prisma'
 import { settingsOf } from '../leads/pipeline'
+import type { LeadScope, LeadViewer } from '../leads/access'
 
 /**
  * Calls to numbers no lead has yet. The sync keeps them (one row per call) instead of throwing them
@@ -60,4 +61,11 @@ export async function rematchUnmatched(companyId: string): Promise<number> {
     moved += await attachUnmatched(companyId, l.phoneE164, l.id, null)
   }
   return moved
+}
+
+/** Whose kept calls I may see: admin all; a manager their businesses' people and themselves; a rep their own. */
+export async function unmatchedScope(m: LeadViewer, s: LeadScope): Promise<{ userId?: { in: string[] } }> {
+  if (s.admin) return {}
+  const members = s.managerOf.length ? await prisma.leadBusinessMember.findMany({ where: { businessId: { in: s.managerOf } }, select: { userId: true } }) : []
+  return { userId: { in: [...new Set([m.id, ...members.map((x) => x.userId)])] } }
 }

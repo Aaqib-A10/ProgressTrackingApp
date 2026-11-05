@@ -112,7 +112,7 @@ export type LeadInput = Partial<Pick<LeadRow, 'name' | 'email' | 'phone' | 'orga
 
 export interface Dashboard {
   range: string
-  cards: Record<'total' | 'newThisWeek' | 'recentlyUpdated' | 'noStatus' | 'assigned' | 'unassigned' | 'waiting' | 'overdue' | 'prohibited' | 'belowMin' | 'calls' | 'late', number>
+  cards: Record<'total' | 'newThisWeek' | 'recentlyUpdated' | 'noStatus' | 'assigned' | 'unassigned' | 'waiting' | 'overdue' | 'prohibited' | 'belowMin' | 'calls' | 'late', number> & { connected?: number; kept?: number }
   tasks: { today: number; overdue: number; total: number }
   byStatus: Record<string, number>
 }

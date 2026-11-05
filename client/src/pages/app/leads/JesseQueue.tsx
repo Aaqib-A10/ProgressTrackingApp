@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Flag, MessageSquare, PhoneCall } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Flag, MessageSquare, PhoneCall } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
 import { ago, DISPOSITION_LABEL, fmtDur, fmtWhen, inZone, leadsApi, leadTitle, type LeadCall, type LeadComment, type LeadRow } from '../../../lib/leadsApi'
-import { BusinessPicker, FactsMeter, PageHeader, StatusPill, useBusiness } from './shared'
+import { BusinessPicker, FactsMeter, PageHeader, StatusPill, useBusiness, useLeadsMeta } from './shared'
 
 /** Jesse Queue: every flagged lead, oldest first, with the timer, the five facts, the last call and the recording. Jesse decides from the lead. */
 export default function JesseQueue() {
@@ -15,10 +15,18 @@ export default function JesseQueue() {
   const { business, businesses } = useBusiness()
   const cmrBiz = businesses.filter((b) => b.kind === 'CMR')
   const biz = business?.kind === 'CMR' ? business : cmrBiz[0] ?? null
+  const { meta } = useLeadsMeta()
   const [d, setD] = useState<{ queue: (LeadRow & { lastCall: LeadCall | null; comments: LeadComment[] })[]; decided: LeadRow[]; canDecide: boolean } | null>(null)
+  const [ready, setReady] = useState<LeadRow[] | null>(null)
   const [err, setErr] = useState('')
   const load = useCallback(() => { if (!biz) return; leadsApi.queue(biz.id).then((r) => { setD(r); setErr('') }).catch((e) => setErr(apiErrorText(e, 'Could not load'))) }, [biz])
   useEffect(() => { load() }, [load])
+  // For the SDR: their open leads that are not flagged yet, the ones with the most facts first.
+  const sdr = !!d && !d.canDecide && !meta?.me.admin
+  useEffect(() => {
+    if (!biz || !sdr) { setReady(null); return }
+    leadsApi.list({ business: biz.id, assignee: 'me', pageSize: 50 }).then((r) => setReady(r.leads.filter((l) => l.open && !l.jesseInputNeeded && l.status !== 'QUALIFIED').sort((a, b) => b.factsDone - a.factsDone || +new Date(b.lastActivityAt) - +new Date(a.lastActivityAt)).slice(0, 6))).catch(() => setReady([]))
+  }, [biz, sdr])
 
   if (!cmrBiz.length) return <div className="mx-auto max-w-xl py-16"><EmptyState icon={<Flag />} title="No CMR business yet" hint="Make one under Lead Settings (kind: CMR) and set Jesse as its head." /></div>
 
@@ -26,7 +34,7 @@ export default function JesseQueue() {
     <div className="mx-auto w-full max-w-[1300px] space-y-4">
       <PageHeader title="Jesse Queue" hint={`${biz?.name ?? ''} · flagged leads waiting for a decision. Jesse checks flags within 1 business day.`} actions={cmrBiz.length > 1 ? <BusinessPicker /> : undefined} />
       {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
-      {d && !d.queue.length && <div className="rounded-card border border-line bg-card p-10"><EmptyState icon={<Flag />} title="Nothing waiting on Jesse" hint="Qualified leads appear here the moment they are flagged." /></div>}
+      {d && !d.queue.length && <div className="rounded-card border border-line bg-card p-8"><EmptyState icon={<Flag />} title="Nothing waiting on Jesse" hint={d.canDecide ? 'When an SDR presses Qualify on a lead, it appears here with the five facts, the last call and the recording.' : 'Press Qualify on a lead once the facts are in; it appears here for Jesse within the minute.'} /></div>}
       <div className="space-y-3">
         {d?.queue.map((l) => (
           <article key={l.id} className={cn('rounded-card border bg-card p-4 shadow-xs', (l.waitingDays ?? 0) > 1 ? 'border-danger/40' : (l.waitingDays ?? 0) === 1 ? 'border-warning/50' : 'border-line')}>
@@ -63,6 +71,35 @@ export default function JesseQueue() {
           </article>
         ))}
       </div>
+      {sdr && (
+        <section className="grid gap-3 lg:grid-cols-3">
+          <div className="rounded-card border border-line bg-gradient-to-br from-orange-50 to-amber-50 p-5 shadow-xs dark:from-orange-500/10 dark:to-amber-500/5">
+            <h2 className="text-[15px] font-semibold text-ink">How a lead reaches Jesse</h2>
+            <ol className="mt-3 space-y-2 text-body-sm text-ink">
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span>Log the call and fill the <b>five facts</b> (material, volume, current outlet, decision maker, timing).</span></li>
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span><b>Send info</b> from the lead, follow up in two business days.</span></li>
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span>Open the lead and press <b>Qualify</b>: one line on what Jesse must decide (price, freight, pickup, a meeting). That puts it in this queue.</span></li>
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span>Jesse answers within a business day: a meeting slot, a direction, or close. You see it on the lead and in your tasks.</span></li>
+            </ol>
+          </div>
+          <div className="rounded-card border border-line bg-card p-5 shadow-xs lg:col-span-2">
+            <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold text-ink">Your leads closest to ready</h2><Link to={`/app/leads?business=${biz?.id}&assignee=me`} className="text-body-sm font-semibold text-primary hover:underline">All mine →</Link></div>
+            {ready === null ? <p className="mt-3 text-body-sm text-ink-faint">Loading…</p> : !ready.length ? <p className="mt-3 text-body-sm text-ink-muted">No open leads assigned to you yet.</p> : (
+              <ul className="mt-3 divide-y divide-line">
+                {ready.map((l) => (
+                  <li key={l.id} className="flex flex-wrap items-center gap-3 py-2.5 text-body-sm">
+                    <Link to={`/app/leads/${l.id}`} className="min-w-[160px] flex-1 font-semibold text-ink hover:underline">{leadTitle(l)}</Link>
+                    <StatusPill status={l.status} pipeline={biz?.pipeline} label={l.statusLabel} size="sm" />
+                    <FactsMeter facts={l.facts} size="sm" />
+                    <span className="hidden text-ink-muted sm:inline">{l.nextStep ? l.nextStep.slice(0, 40) + (l.nextStep.length > 40 ? '…' : '') : 'no next step'}</span>
+                    <Button size="sm" variant={l.factsDone >= 4 ? 'primary' : 'secondary'} className="ml-auto" trailingIcon={<ArrowRight size={14} />} onClick={() => nav(`/app/leads/${l.id}?qualify=1`)}>{l.factsDone >= 4 ? 'Qualify' : 'Fill facts'}</Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
       {d && d.decided.length > 0 && (
         <section className="rounded-card border border-line bg-card shadow-xs">
           <header className="border-b border-line px-4 py-2.5 text-[14px] font-semibold text-ink">Decided in the last 14 days</header>
