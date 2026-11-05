@@ -118,7 +118,7 @@ export function PageHeader({ title, hint, back, actions, children }: { title: st
   )
 }
 
-export function Tile({ label, value, color, hint, active, onClick, icon }: { label: string; value: number | string; color: string; hint?: string; active?: boolean; onClick?: () => void; icon?: ReactNode }) {
+export function Tile({ label, value, color, hint, active, onClick, icon }: { label: string; value: number | string; color: string; hint?: ReactNode; active?: boolean; onClick?: () => void; icon?: ReactNode }) {
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag type={onClick ? 'button' : undefined} onClick={onClick} className={cn('group relative overflow-hidden rounded-card border bg-card p-4 text-left shadow-xs transition-all', onClick && 'hover:-translate-y-0.5 hover:shadow-md', active ? 'border-primary ring-2 ring-primary/20' : 'border-line')}>

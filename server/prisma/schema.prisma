@@ -308,6 +308,7 @@ model User {
   leadEvents           LeadEvent[]          @relation("LeadEventBy")
   leadBusinessesHeaded LeadBusiness[]       @relation("LeadBusinessHead")
   leadCalls            LeadCall[]           @relation("LeadCaller")
+  leadUnmatchedCalls   LeadUnmatchedCall[]  @relation("LeadUnmatchedCaller")
   leadComments         LeadComment[]        @relation("LeadCommentBy")
   leadTasks            LeadTask[]           @relation("LeadTaskAssignee")
   leadTasksDone        LeadTask[]           @relation("LeadTaskDoneBy")
@@ -3647,6 +3648,7 @@ model Company {
   leadEventRows            LeadEvent[]
   leadCmrRows              LeadCmr[]
   leadCallRows             LeadCall[]
+  leadUnmatchedCallRows    LeadUnmatchedCall[]
   leadCommentRows          LeadComment[]
   leadTaskRows             LeadTask[]
   leadListRows             LeadListEntry[]
@@ -4321,6 +4323,31 @@ model LeadCall {
   @@index([leadId, at])
   @@index([businessId, userId, at])
   @@index([companyId])
+}
+
+/// A phone-system call to a number no lead has yet. Kept so the SDR can turn it into a lead or attach it to one;
+/// it then becomes a LeadCall and this row goes.
+model LeadUnmatchedCall {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation("LeadUnmatchedCaller", fields: [userId], references: [id], onDelete: Cascade)
+  at            DateTime
+  /// OUT, IN
+  direction     String   @default("OUT")
+  /// E.164
+  phone         String
+  durationSec   Int      @default(0)
+  disposition   String   @default("NO_ANSWER")
+  provider      String   @default("TALKLOOP")
+  externalId    String
+  recordingFile String?
+  createdAt     DateTime @default(now())
+
+  @@unique([companyId, externalId])
+  @@index([companyId, phone])
+  @@index([companyId, userId, at])
 }
 
 /// Comments on a lead (CMR: Jesse's comments and the SDRs' replies), with @mentions; a comment can point at a call and a second in it.

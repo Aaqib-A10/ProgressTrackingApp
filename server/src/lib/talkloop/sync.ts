@@ -4,6 +4,7 @@ import { runAsCompany } from '../tenancy'
 import { runTracked } from '../health/jobs'
 import { settingsOf } from '../leads/pipeline'
 import { talkloopClient, type TalkLoopCdr, type TalkLoopClient } from './client'
+import { rematchUnmatched } from './unmatched'
 
 /**
  * Calls from TalkLoop land on the leads by themselves (plan: "TalkLoop call log integration").
@@ -12,14 +13,15 @@ import { talkloopClient, type TalkLoopCdr, type TalkLoopClient } from './client'
  * taken by a person linked to a TalkLoop user, finds the lead with that phone number and adds the
  * call under it: when, how long, answered or not, who called, the recording (streamed through
  * Metriq, so Jesse and the managers can listen) and, a little later, the transcript. The SDR then
- * only adds the summary and the facts. A call to a number no lead has is counted but not stored.
+ * only adds the summary and the facts. A call to a number no lead has is kept aside (LeadUnmatchedCall)
+ * until the SDR makes or picks the lead; then it moves under the lead like any other call.
  *
  * Two-party consent states (CA, WA…): the recording is kept on file but not playable until the
  * SDR ticks "consent given" on that call.
  */
 
 const SETTING = 'talkloop-sync'
-export interface SyncStatus { lastRunAt: string | null; lastCallAt: string | null; synced: number; unmatched: number; lastError: string | null; lastRunSynced: number; lastRunUnmatched: number }
+export interface SyncStatus { lastRunAt: string | null; lastCallAt: string | null; synced: number; unmatched: number; lastError: string | null; lastRunSynced: number; lastRunUnmatched: number; lastRunRead?: number; lastRunFrom?: string | null; waiting?: number }
 const EMPTY: SyncStatus = { lastRunAt: null, lastCallAt: null, synced: 0, unmatched: 0, lastError: null, lastRunSynced: 0, lastRunUnmatched: 0 }
 
 export async function syncStatus(): Promise<SyncStatus> {
@@ -101,6 +103,8 @@ async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date, f
     for (const [companyId, list] of byCompany) {
       const r = await runAsCompany(companyId, () => fileCalls(companyId, list, byTl))
       synced += r.synced; unmatched += r.unmatched
+      // A number that became a lead since (added, imported, attached) takes its kept calls with it.
+      synced += await runAsCompany(companyId, () => rematchUnmatched(companyId))
     }
     // Transcripts arrive a few minutes after the call: pick up the ones still missing (newest first, a handful per run).
     const want = await prisma.leadCall.findMany({ where: { provider: 'TALKLOOP', transcript: null, recordingFile: { not: null }, at: { lte: new Date(now.getTime() - 3 * 60_000), gte: new Date(now.getTime() - 3 * 86400_000) } }, select: { id: true, externalId: true, companyId: true }, orderBy: { at: 'desc' }, take: 25 })
@@ -108,7 +112,8 @@ async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date, f
       const text = await client.transcription(c.externalId!)
       if (text) await runAsCompany(c.companyId, () => prisma.leadCall.update({ where: { id: c.id }, data: { transcript: text.slice(0, 20000) } }))
     }
-    const next: SyncStatus = { lastRunAt: now.toISOString(), lastCallAt: newest.toISOString(), synced: status.synced + synced, unmatched: status.unmatched + unmatched, lastError: null, lastRunSynced: synced, lastRunUnmatched: unmatched }
+    const waiting = await prisma.leadUnmatchedCall.count()
+    const next: SyncStatus = { lastRunAt: now.toISOString(), lastCallAt: newest.toISOString(), synced: status.synced + synced, unmatched: status.unmatched + unmatched, lastError: null, lastRunSynced: synced, lastRunUnmatched: unmatched, lastRunRead: records.length, lastRunFrom: since.toISOString(), waiting }
     await saveStatus(next)
     return next
   } catch (e) {
@@ -117,6 +122,9 @@ async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date, f
     return next
   }
 }
+
+/** A call kept aside belongs to no business yet: judge "connected" by the company's shortest threshold. */
+function connectedSecsOf(businesses: { settings: unknown; kind: string; pipeline: unknown }[]): number { return Math.min(...businesses.map((b) => settingsOf(b as Parameters<typeof settingsOf>[0]).connectedSecs)) }
 
 async function fileCalls(companyId: string, list: TalkLoopCdr[], byTl: Map<number, { id: string; companyId: string }>): Promise<{ synced: number; unmatched: number }> {
   let synced = 0, unmatched = 0
@@ -130,7 +138,12 @@ async function fileCalls(companyId: string, list: TalkLoopCdr[], byTl: Map<numbe
     const phone = e164Of(outgoing ? c.dst : c.src)
     if (!phone) { unmatched++; continue }
     const leads = await prisma.lead.findMany({ where: { phoneE164: phone, businessId: { in: businesses.map((b) => b.id) } }, select: { id: true, businessId: true, state: true, status: true, firstCallAt: true, assigneeId: true }, orderBy: { lastActivityAt: 'desc' } })
-    if (!leads.length) { unmatched++; continue }
+    if (!leads.length) {
+      // Kept aside for the SDR to turn into a lead (once per call; the unique key makes a second run a no-op).
+      const kept = await prisma.leadUnmatchedCall.createMany({ data: [{ companyId, userId: user.id, at: new Date(c.calldate), direction: outgoing ? 'OUT' : 'IN', phone, durationSec: c.billsec ?? 0, disposition: dispositionOf(c, connectedSecsOf(businesses)), externalId: c.uniqueid, recordingFile: c.recording_file || null }], skipDuplicates: true })
+      unmatched += kept.count
+      continue
+    }
     // Prefer the caller's own lead, then one in a business they work, then the most recent.
     const mine = (b: { id: string; headId: string | null; members: { userId: string }[] }) => b.headId === user.id || b.members.some((m) => m.userId === user.id)
     const lead = leads.find((l) => l.assigneeId === user.id) ?? leads.find((l) => mine(businesses.find((b) => b.id === l.businessId)!)) ?? leads[0]

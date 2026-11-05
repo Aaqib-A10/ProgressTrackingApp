@@ -307,7 +307,7 @@ function TalkLoopSection({ toast }: { toast: Toast }) {
             <Tile label="Connected" value={info.error ? 'No' : 'Yes'} color={info.error ? '#EF4444' : '#059669'} hint={info.error ?? `${info.talkloopUsers.length} TalkLoop user${info.talkloopUsers.length === 1 ? '' : 's'}`} />
             <Tile label="Last sync" value={when(st.lastRunAt)} color="#4F46E5" hint={st.lastError ? `Failed: ${st.lastError}` : st.lastRunAt ? `${st.lastRunSynced} new, ${st.lastRunUnmatched} unmatched` : 'runs every 3 minutes'} />
             <Tile label="Calls on leads" value={st.synced} color="#0EA5E9" hint="since the start" />
-            <Tile label="No matching lead" value={st.unmatched} color="#94A3B8" hint="numbers no lead has (not stored)" />
+            <Tile label="No lead yet" value={st.waiting ?? st.unmatched} color="#F59E0B" hint={<Link to="/app/leads/calls?view=unmatched" className="font-semibold text-primary hover:underline">calls kept aside: add as lead →</Link>} />
           </div>
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

@@ -62,7 +62,7 @@ export interface LeadRow {
 export interface LeadCall { id: string; leadId: string; userId: string | null; user: Person | null; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; summary: string; outcome: string | null; consentGiven: boolean | null; recordingUrl: string | null; hasRecording: boolean; recordingKept: boolean; provider?: string | null; phone?: string | null; transcript?: string | null; externalId?: string | null }
 export interface TalkLoopInfo {
   configured: boolean
-  status: { lastRunAt: string | null; lastCallAt: string | null; synced: number; unmatched: number; lastError: string | null; lastRunSynced: number; lastRunUnmatched: number }
+  status: { lastRunAt: string | null; lastCallAt: string | null; synced: number; unmatched: number; lastError: string | null; lastRunSynced: number; lastRunUnmatched: number; lastRunRead?: number; lastRunFrom?: string | null; waiting?: number }
   people: { id: string; name: string; email: string; talkloopUserId: number | null; talkloopExt: string | null }[]
   talkloopUsers: { id: number; name: string; email: string | null; extension: string | null; status: string | null }[]
   error: string | null
@@ -70,6 +70,9 @@ export interface TalkLoopInfo {
 export interface LeadComment { id: string; userId: string; user: Person; body: string; mentions: string[]; mentionNames: string[]; callId: string | null; atSec: number | null; createdAt: string }
 export interface LeadTask { id: string; leadId: string; kind: string; title: string; notes: string; dueAt: string; doneAt: string | null; outcome: string | null; assigneeId: string | null; assignee: Person | null; overdue?: boolean; today?: boolean; lead?: { id: string; name: string; organization: string | null; phone: string | null; state: string | null; status: string; statusLabel: string; industry: string | null; assigneeId: string | null; business: { id: string; name: string } } }
 export interface LeadEvent { id: string; kind: string; text: string; data: Record<string, unknown> | null; createdAt: string; user: Person | null; toName?: string | null }
+export interface UnmatchedCall { id: string; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; user: { id: string; name: string }; recordingUrl: string | null }
+/** A phone number TalkLoop reached that no lead has yet, with its calls. */
+export interface UnmatchedNumber { phone: string; calls: number; connected: number; lastAt: string; firstAt: string; people: { id: string; name: string }[]; items: UnmatchedCall[] }
 export interface LeadFull extends LeadRow { calls: LeadCall[]; comments: LeadComment[]; tasks: LeadTask[]; events: LeadEvent[]; assignedBy: Person | null; createdBy: Person | null; raw: Record<string, unknown> | null }
 export interface LeadDetail { lead: LeadFull; listHits: { kind: string; name: string; on: string }[]; can: { manage: boolean; decide: boolean; approve: boolean; edit: boolean; cmr: boolean }; head: Person | null; mentionable: (Person & { role: string })[]; pipeline: PipelineStatus[]; settings: CmrSettings | null }
 
@@ -153,6 +156,8 @@ export const leadsApi = {
   talkloop: () => api.get<TalkLoopInfo>('/leads/talkloop'),
   talkloopLink: (b: { userId?: string; talkloopUserId?: number | null; auto?: boolean }) => api.patch<{ ok?: boolean; linked?: number }>('/leads/talkloop/link', b),
   talkloopSync: () => api.post<{ status: TalkLoopInfo['status'] }>('/leads/talkloop/sync', {}),
+  unmatched: () => api.get<{ numbers: UnmatchedNumber[]; total: number }>('/leads/unmatched'),
+  attachUnmatched: (phone: string, leadId: string) => api.post<{ moved: number; leadId: string }>('/leads/unmatched/attach', { phone, leadId }),
   callConsent: (id: string, consentGiven: boolean) => api.patch<{ call: Pick<LeadCall, 'id' | 'consentGiven' | 'recordingKept' | 'hasRecording' | 'recordingUrl'> }>(`/leads/calls/${id}`, { consentGiven }),
   bulkAssign: (ids: string[], assigneeId: string | null) => api.post<{ assigned: number }>('/leads/bulk-assign', { ids, assigneeId }),
   addEvent: (id: string, kind: 'NOTE' | 'EMAIL', text: string) => api.post<{ event: LeadEvent }>(`/leads/${id}/events`, { kind, text }),

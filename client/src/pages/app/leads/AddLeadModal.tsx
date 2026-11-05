@@ -9,11 +9,11 @@ import { leadsApi, type MetaBusiness } from '../../../lib/leadsApi'
 import { Label, Select } from './shared'
 
 /** Add a lead by hand. While typing, the pre-call check runs: the same company already here, or on a list. */
-export function AddLeadModal({ business, onClose, onAdded }: { business: MetaBusiness; onClose: () => void; onAdded: (id: string) => void }) {
+export function AddLeadModal({ business, onClose, onAdded, initial }: { business: MetaBusiness; onClose: () => void; onAdded: (id: string) => void; initial?: { phone?: string } }) {
   const { addToast } = useToast()
   const cmr = business.kind === 'CMR'
   const canManage = business.myRole === 'MANAGER'
-  const [f, setF] = useState({ organization: '', name: '', contactRole: '', phone: '', email: '', website: '', industry: '', state: '', message: '', assignTo: canManage ? '' : 'me' })
+  const [f, setF] = useState({ organization: '', name: '', contactRole: '', phone: initial?.phone ?? '', email: '', website: '', industry: '', state: '', message: '', assignTo: canManage ? '' : 'me' })
   const [busy, setBusy] = useState(false)
   const [check, setCheck] = useState<Awaited<ReturnType<typeof leadsApi.check>> | null>(null)
   const timer = useRef<number>()

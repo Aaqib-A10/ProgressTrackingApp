@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
 import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
-import { talkloopClient } from '../lib/talkloop/client'
+import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
 import { syncCmrMembers } from '../lib/leads/members'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
@@ -563,21 +563,7 @@ export async function callRecording(req: AuthedRequest, res: Response): Promise<
   if (!c || !c.recordingUrl || !c.recordingKept) throw new HttpError(404, 'No recording')
   // A seek (Range request) is the same listen; log the first play only.
   if (!req.headers.range || req.headers.range.startsWith('bytes=0-')) await event(c.leadId, m.id, 'LISTEN', 'Played a recording')
-  if (c.recordingUrl.startsWith('talkloop:')) {
-    // Streamed through Metriq with the server's token: the browser never sees TalkLoop or the token.
-    const client = talkloopClient()
-    if (!client) throw new HttpError(503, 'TalkLoop is not connected')
-    const up = await client.recording(c.recordingUrl.slice('talkloop:'.length), typeof req.headers.range === 'string' ? req.headers.range : null)
-    if (!up.ok && up.status !== 206) throw new HttpError(404, 'The recording is not on TalkLoop any more')
-    res.status(up.status)
-    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) { const v = up.headers.get(h); if (v) res.setHeader(h, v) }
-    if (!up.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes')
-    res.setHeader('Cache-Control', 'private, no-store')
-    if (!up.body) { res.end(); return }
-    const { Readable } = await import('node:stream')
-    Readable.fromWeb(up.body as import('node:stream/web').ReadableStream).pipe(res)
-    return
-  }
+  if (c.recordingUrl.startsWith('talkloop:')) { await pipeTalkLoopRecording(req, res, c.recordingUrl.slice('talkloop:'.length)); return }
   res.redirect(c.recordingUrl)
 }
 

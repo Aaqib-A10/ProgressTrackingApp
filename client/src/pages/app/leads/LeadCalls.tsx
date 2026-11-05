@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { PhoneCall } from 'lucide-react'
+import { PhoneCall, PhoneMissed } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { EmptyState } from '../../../components/ui/EmptyState'
@@ -9,25 +9,35 @@ import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
 import { DISPOSITION_LABEL, DISPOSITIONS, fmtDur, fmtWhen, leadsApi } from '../../../lib/leadsApi'
 import { BusinessPicker, PageHeader, Select, StatusPill, useBusiness, useLeadsMeta } from './shared'
+import { UnmatchedCalls } from './UnmatchedCalls'
 
 type CallRow = Awaited<ReturnType<typeof leadsApi.calls>>['calls'][number]
 
 /** Calls: every call with its recording. Managers and the head hear all; a rep hears their own. */
 export default function LeadCalls() {
   const { meta } = useLeadsMeta()
-  const { business, all } = useBusiness()
+  const { business, businesses, all } = useBusiness()
   const [params, setParams] = useSearchParams()
   const [d, setD] = useState<{ calls: CallRow[]; total: number; page: number; pageSize: number } | null>(null)
   const [err, setErr] = useState('')
   const page = Number(params.get('page') ?? 1) || 1
+  const view = params.get('view') === 'unmatched' ? 'unmatched' : 'calls'
+  const [waiting, setWaiting] = useState<number | null>(null)
+  useEffect(() => { leadsApi.unmatched().then((r) => setWaiting(r.numbers.length)).catch(() => setWaiting(null)) }, [view])
   const canManage = !!meta?.me.admin || business?.myRole === 'MANAGER'
   const setP = (k: string, v: string | null) => setParams((p) => { const n = new URLSearchParams(p); if (v) n.set(k, v); else n.delete(k); if (k !== 'page') n.delete('page'); return n })
   const load = useCallback(() => leadsApi.calls({ business: all ? undefined : business?.id, user: params.get('user') ?? undefined, from: params.get('from') ?? undefined, to: params.get('to') ?? undefined, disposition: params.get('disposition') ?? undefined, minSecs: params.get('minSecs') ? Number(params.get('minSecs')) : undefined, recorded: params.get('recorded') ?? undefined, page }).then((r) => { setD(r); setErr('') }).catch((e) => setErr(apiErrorText(e, 'Could not load'))), [business, all, params, page])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (view === 'calls') load() }, [load, view])
 
   return (
     <div className="mx-auto w-full max-w-[1500px] space-y-4">
-      <PageHeader title="Calls" hint={canManage ? 'Every call of the team, with recordings. Leave a comment on a call from the lead.' : 'Your calls and recordings.'} actions={<BusinessPicker allowAll />} />
+      <PageHeader title="Calls" hint={canManage ? 'Every call of the team, with recordings. Leave a comment on a call from the lead.' : 'Your calls and recordings.'} actions={<BusinessPicker allowAll />}>
+        <div className="flex gap-1 rounded-btn border border-line bg-card p-0.5 text-body-sm">
+          <button type="button" onClick={() => setP('view', null)} className={cn('flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 font-medium', view === 'calls' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><PhoneCall size={14} />On leads</button>
+          <button type="button" onClick={() => setP('view', 'unmatched')} className={cn('flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 font-medium', view === 'unmatched' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><PhoneMissed size={14} />No lead yet{waiting ? <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', view === 'unmatched' ? 'bg-white/20' : 'bg-warning/15 text-amber-700')}>{waiting}</span> : null}</button>
+        </div>
+      </PageHeader>
+      {view === 'unmatched' ? <UnmatchedCalls business={all ? null : business} businesses={businesses} /> : <>
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-card p-3 shadow-xs">
         {canManage && <Select value={params.get('user') ?? ''} onChange={(e) => setP('user', e.target.value || null)} aria-label="Agent"><option value="">All agents</option><option value="me">Me</option>{(business?.members ?? []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select>}
         <Select value={params.get('disposition') ?? ''} onChange={(e) => setP('disposition', e.target.value || null)} aria-label="Disposition"><option value="">Any result</option>{DISPOSITIONS.map((x) => <option key={x} value={x}>{DISPOSITION_LABEL[x]}</option>)}</Select>
@@ -57,6 +67,7 @@ export default function LeadCalls() {
         </table>
         {d && d.total > d.pageSize && <div className="flex items-center justify-between border-t border-line px-4 py-2.5 text-body-sm text-ink-muted"><span>Page {page}</span><span className="flex gap-1"><Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setP('page', String(page - 1))}>Prev</Button><Button size="sm" variant="ghost" disabled={page * d.pageSize >= d.total} onClick={() => setP('page', String(page + 1))}>Next</Button></span></div>}
       </div>
+      </>}
     </div>
   )
 }

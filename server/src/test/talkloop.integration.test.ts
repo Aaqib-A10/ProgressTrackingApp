@@ -154,10 +154,53 @@ describe('TalkLoop call sync', () => {
     await request(app).get(call.recordingUrl).set(...auth({ id: (await prisma.user.findFirstOrThrow({ where: { companyId: C, name: 'Tia Admin' } })).id, role: 'SUPER_ADMIN' })).expect(200)
   })
 
+  it('a call to a number no lead has is kept aside; "Add as lead" or "Attach" moves it under the lead, and a lead added later takes its calls on the next run', async () => {
+    // u3 (214-555-0000, nobody answered) was kept by the first run: Mark sees his own, the manager and the admin too.
+    const mine = (await api(mark).get('/unmatched').expect(200)).body
+    expect(mine.numbers).toHaveLength(1)
+    expect(mine.numbers[0]).toMatchObject({ phone: '+12145550000', calls: 1, connected: 0 })
+    expect(mine.numbers[0].items[0]).toMatchObject({ disposition: 'NO_ANSWER', recordingUrl: null, user: { id: mark.id } })
+    expect((await api(lead).get('/unmatched').expect(200)).body.total).toBe(1)
+    expect((await api(admin).get('/unmatched').expect(200)).body.total).toBe(1)
+    // Add as lead: the SDR adds the company with that number, then the kept call moves under it.
+    const dallas = (await api(mark).post('/', { businessId: bizId, organization: 'Dallas Metals', phone: '214-555-0000', state: 'TX', force: true }).expect(201)).body.lead.id
+    const moved = (await api(mark).post('/unmatched/attach', { phone: '+12145550000', leadId: dallas }).expect(200)).body
+    expect(moved.moved).toBe(1)
+    const d = await prisma.lead.findUniqueOrThrow({ where: { id: dallas }, include: { calls: true, events: true } })
+    expect(d.callsCount).toBe(1)
+    expect(d.calls[0]).toMatchObject({ provider: 'TALKLOOP', externalId: 'u3', disposition: 'NO_ANSWER', userId: mark.id })
+    expect(d.events.some((e) => /earlier TalkLoop call/.test(e.text))).toBe(true)
+    expect((await api(mark).get('/unmatched').expect(200)).body.total).toBe(0)
+    await api(mark).post('/unmatched/attach', { phone: '+12145550000', leadId: dallas }).expect(404) // nothing left to move
+    // Two more calls to a new number, with a recording on the answered one; the manager attaches them to a lead already here.
+    records = [cdr({ uniqueid: 'u8', dst: '4805550111', billsec: 90 }), cdr({ uniqueid: 'u9', dst: '4805550111', disposition: 'NO ANSWER', billsec: 0, recording_file: null, calldate: new Date(Date.now() - 5 * 60_000).toISOString() })]
+    expect((await runTalkLoopSync(stub)).lastRunUnmatched).toBe(2)
+    const kept = (await api(lead).get('/unmatched').expect(200)).body.numbers[0]
+    expect(kept).toMatchObject({ phone: '+14805550111', calls: 2, connected: 1 })
+    const rec = kept.items.find((c: { id: string; recordingUrl: string | null }) => c.recordingUrl)
+    expect(rec.recordingUrl).toBe(`/api/leads/unmatched/${rec.id}/recording`)
+    const audio = await request(app).get(rec.recordingUrl).set(...auth(lead)).buffer(true).parse((res, cb) => { const chunks: Buffer[] = []; res.on('data', (c: Buffer) => chunks.push(c)); res.on('end', () => cb(null, Buffer.concat(chunks))) }).expect(200)
+    expect(audio.body.toString()).toBe('AUDIO-u8')
+    await request(app).get(rec.recordingUrl).set(...auth(mark)).expect(200) // his own call
+    expect((await api(lead).post('/unmatched/attach', { phone: '+14805550111', leadId: acmeId }).expect(200)).body.moved).toBe(2)
+    const acme = await prisma.lead.findUniqueOrThrow({ where: { id: acmeId }, include: { calls: { where: { externalId: { in: ['u8', 'u9'] } } } } })
+    expect(acme.calls.map((c) => [c.externalId, c.disposition, c.recordingUrl]).sort()).toEqual([['u8', 'CONNECTED', 'talkloop:u8'], ['u9', 'NO_ANSWER', null]])
+    expect(acme.phoneE164).toBe('+16025550199') // the lead keeps its own number
+    // A lead added after the call (an import, say) takes the kept calls on the next run, with nobody clicking.
+    records = [cdr({ uniqueid: 'u10', dst: '5205550222', billsec: 40 })]
+    expect((await runTalkLoopSync(stub)).lastRunUnmatched).toBe(1)
+    const tucson = (await api(lead).post('/', { businessId: bizId, organization: 'Tucson Scrap', phone: '520-555-0222', assignTo: mark.id, force: true }).expect(201)).body.lead.id
+    const run = await runTalkLoopSync(stub)
+    expect(run.lastRunSynced).toBe(1)
+    expect(run.waiting).toBe(0)
+    expect(await prisma.leadCall.count({ where: { leadId: tucson, externalId: 'u10' } })).toBe(1)
+    records = []
+  })
+
   it('sync now and the status (admin only)', async () => {
     await api(lead).post('/talkloop/sync').expect(403)
     const r = (await api(admin).get('/talkloop').expect(200)).body
-    expect(r.status.synced).toBe(4)
+    expect(r.status.synced).toBe(5) // 3 + the late-linked one + the one that found its lead by itself
     expect(r.people.find((p: { id: string }) => p.id === mark.id)).toMatchObject({ talkloopUserId: 335, talkloopExt: '1001' })
     records = [cdr({ uniqueid: 'u7', dst: '6025550199' })]
     expect((await api(admin).post('/talkloop/sync').expect(200)).body.status.lastRunSynced).toBe(1)
