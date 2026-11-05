@@ -25,7 +25,7 @@ let records: TalkLoopCdr[] = []
 let transcripts: Record<string, string> = {}
 const stub: TalkLoopClient = {
   users: async () => TL_USERS,
-  cdrs: async () => ({ records, totalPages: 1 }),
+  cdrs: async (q) => ({ records: records.filter((c) => c.calldate >= q.startDate && c.calldate <= q.endDate), totalPages: 1 }), // like the real API: only the window asked for
   transcription: async (id) => transcripts[id] ?? null,
   recording: async (id, range) => new Response(`AUDIO-${id}`.slice(0, range ? 4 : undefined), { status: range ? 206 : 200, headers: { 'content-type': 'audio/wav', ...(range ? { 'content-range': 'bytes 0-3/11' } : {}) } }),
 }
@@ -116,6 +116,13 @@ describe('TalkLoop call sync', () => {
     const again = await runTalkLoopSync(stub)
     expect(again.lastRunSynced).toBe(0)
     expect(await prisma.leadCall.count({ where: { provider: 'TALKLOOP' } })).toBe(3)
+    // Someone linked later still gets their week: "Sync now" re-reads it and files u5 (made two days ago).
+    records = records.map((c) => (c.uniqueid === 'u5' ? { ...c, calldate: new Date(Date.now() - 2 * 86400_000).toISOString() } : c))
+    await api(admin).patch('/talkloop/link', { userId: lead.id, talkloopUserId: 336 }).expect(200)
+    expect((await runTalkLoopSync(stub)).lastRunSynced).toBe(0) // the cron only reads what is new
+    expect((await api(admin).post('/talkloop/sync').expect(200)).body.status.lastRunSynced).toBe(1)
+    expect(await prisma.leadCall.count({ where: { provider: 'TALKLOOP', userId: lead.id } })).toBe(1)
+    await api(admin).patch('/talkloop/link', { userId: lead.id, talkloopUserId: null }).expect(200)
   })
 
   it('the recording streams through Metriq (with Range) for the SDR, the manager and the admin; a CA recording opens once consent is ticked', async () => {
@@ -150,7 +157,7 @@ describe('TalkLoop call sync', () => {
   it('sync now and the status (admin only)', async () => {
     await api(lead).post('/talkloop/sync').expect(403)
     const r = (await api(admin).get('/talkloop').expect(200)).body
-    expect(r.status.synced).toBe(3)
+    expect(r.status.synced).toBe(4)
     expect(r.people.find((p: { id: string }) => p.id === mark.id)).toMatchObject({ talkloopUserId: 335, talkloopExt: '1001' })
     records = [cdr({ uniqueid: 'u7', dst: '6025550199' })]
     expect((await api(admin).post('/talkloop/sync').expect(200)).body.status.lastRunSynced).toBe(1)

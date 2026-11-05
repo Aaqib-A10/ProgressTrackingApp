@@ -49,18 +49,19 @@ export function dispositionOf(c: TalkLoopCdr, connectedSecs: number): string {
 
 /** The run: fetch once, then file each call under the right company's lead. Exported for the tests (with a stub client). */
 let running = false
-export async function runTalkLoopSync(client: TalkLoopClient | null = talkloopClient(), now = new Date()): Promise<SyncStatus> {
+/** `fromScratch` (the "Sync now" button) re-reads the whole last week, e.g. right after someone was linked; the cron only reads what is new. */
+export async function runTalkLoopSync(client: TalkLoopClient | null = talkloopClient(), now = new Date(), fromScratch = false): Promise<SyncStatus> {
   const status = await syncStatus()
   if (!client || running) return status
   running = true
-  try { return await syncOnce(client, status, now) } finally { running = false }
+  try { return await syncOnce(client, status, now, fromScratch) } finally { running = false }
 }
 
-async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date): Promise<SyncStatus> {
+async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date, fromScratch: boolean): Promise<SyncStatus> {
   const linked = await prisma.user.findMany({ where: { talkloopUserId: { not: null }, isActive: true }, select: { id: true, companyId: true, talkloopUserId: true } })
   const byTl = new Map(linked.map((u) => [u.talkloopUserId!, u]))
   // Overlap the last run by ten minutes: a call that ends late still arrives once (externalId is unique).
-  const since = status.lastCallAt ? new Date(new Date(status.lastCallAt).getTime() - 10 * 60_000) : new Date(now.getTime() - 7 * 86400_000)
+  const since = status.lastCallAt && !fromScratch ? new Date(new Date(status.lastCallAt).getTime() - 10 * 60_000) : new Date(now.getTime() - 7 * 86400_000)
   let synced = 0, unmatched = 0, newest = status.lastCallAt ? new Date(status.lastCallAt) : since
   try {
     const records: TalkLoopCdr[] = []
@@ -87,11 +88,12 @@ async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date): 
     // Group by company so each company's calls are written inside its own walls.
     const byCompany = new Map<string, TalkLoopCdr[]>()
     for (const c of unique) {
-      const at = new Date(c.calldate)
-      if (at > newest) newest = at
       if (c.user_id == null) continue // ring groups and IVR legs: the leg that reached a person has the user
       const u = byTl.get(c.user_id)
       if (!u) continue
+      // The marker only moves on linked people's calls: someone linked later still gets their week.
+      const at = new Date(c.calldate)
+      if (at > newest) newest = at
       const list = byCompany.get(u.companyId) ?? []
       list.push(c)
       byCompany.set(u.companyId, list)

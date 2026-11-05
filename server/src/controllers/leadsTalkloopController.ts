@@ -72,12 +72,12 @@ export async function talkloopLink(req: AuthedRequest, res: Response): Promise<v
   res.json({ ok: true })
 }
 
-/** POST /api/leads/talkloop/sync — run the call sync now (it also runs every 3 minutes). */
+/** POST /api/leads/talkloop/sync — read the whole last week now (the 3-minute sync only reads what is new). */
 export async function talkloopSyncNow(req: AuthedRequest, res: Response): Promise<void> {
   const { s } = await ctx(req)
   requireLeadAdmin(s)
   if (!talkloopConfigured()) throw new HttpError(422, 'TalkLoop is not connected: set TALKLOOP_TOKEN on the server first.')
-  res.json({ status: await runTalkLoopSync() })
+  res.json({ status: await runTalkLoopSync(talkloopClient(), new Date(), true) })
 }
 
 /** PATCH /api/leads/calls/:id { consentGiven } — the SDR confirms both sides agreed to the recording; it becomes playable. */
