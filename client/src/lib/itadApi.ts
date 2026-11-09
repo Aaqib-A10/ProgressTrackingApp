@@ -24,6 +24,7 @@ export interface ItadEntry extends ItadTotals {
   date: string
   status: ItadStatus
   notes: string
+  updatedAt?: string
 }
 
 export interface ItadEntryResponse {
@@ -66,6 +67,8 @@ export interface UpsertItadInput extends Partial<ItadTotals> {
   status: ItadStatus
   notes?: string
   date?: string
+  /** Quick Log: add to today's numbers on the server instead of replacing them. */
+  add?: Partial<ItadTotals>
 }
 
 export function getMyItadEntry(date?: string) {

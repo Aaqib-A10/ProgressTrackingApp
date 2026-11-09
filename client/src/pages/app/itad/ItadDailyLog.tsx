@@ -17,6 +17,7 @@ import {
   type ItadMetricKey,
   type ItadTotals,
 } from '../../../lib/itadApi'
+import { onQuickLogSaved } from '../../../components/itad/QuickLog'
 
 const ICONS: Record<ItadMetricKey, React.ReactNode> = {
   callsDialed: <Phone size={14} />,
@@ -50,11 +51,15 @@ export default function ItadDailyLog() {
     const key = draftKeyRef.current
     if (!key) return
     try {
-      localStorage.setItem(key, JSON.stringify({ metrics: m, notes: n, onLeave: leave }))
+      localStorage.setItem(key, JSON.stringify({ metrics: m, notes: n, onLeave: leave, at: Date.now() }))
     } catch {
       /* storage unavailable (private mode / quota) — drafts just won't persist */
     }
   }
+
+  // Reload when the Quick Log (floating panel or its window) saves something for today.
+  const [reloadKey, setReloadKey] = useState(0)
+  useEffect(() => onQuickLogSaved(() => setReloadKey((k) => k + 1)), [])
 
   useEffect(() => {
     getMyItadEntry()
@@ -71,7 +76,10 @@ export default function ItadDailyLog() {
         try {
           const raw = localStorage.getItem(key)
           if (raw) {
-            const d = JSON.parse(raw) as { metrics?: Partial<ItadTotals>; notes?: string; onLeave?: boolean }
+            const d = JSON.parse(raw) as { metrics?: Partial<ItadTotals>; notes?: string; onLeave?: boolean; at?: number }
+            // A draft older than the saved entry (the Quick Log saved since) would undo those counts: drop it.
+            const stale = !!res.entry?.updatedAt && (!d.at || d.at < new Date(res.entry.updatedAt).getTime())
+            if (stale) { localStorage.removeItem(key); throw new Error('stale draft') }
             if (d.metrics) baseMetrics = { ...baseMetrics, ...d.metrics }
             if (typeof d.notes === 'string') baseNotes = d.notes
             if (typeof d.onLeave === 'boolean') baseLeave = d.onLeave
@@ -85,7 +93,7 @@ export default function ItadDailyLog() {
       })
       .catch(() => addToast({ type: 'error', message: 'Could not load today’s entry.' }))
       .finally(() => setLoading(false))
-  }, [addToast, user?.id])
+  }, [addToast, user?.id, reloadKey])
 
   function clearEntry() {
     const zeros = zeroTotals()

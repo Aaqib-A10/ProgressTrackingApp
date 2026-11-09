@@ -26,6 +26,7 @@ function serializeEntry(e: ItadDailyEntry) {
     workingOn: e.workingOn,
     closed: e.closed,
     rfqs: e.rfqs,
+    updatedAt: e.updatedAt.toISOString(),
     notes: e.notes ?? '',
   }
 }
@@ -75,11 +76,17 @@ const metricFields = Object.fromEntries(
   ITAD_METRIC_KEYS.map((k) => [k, z.number().int().min(0).max(100000).optional()]),
 ) as Record<(typeof ITAD_METRIC_KEYS)[number], z.ZodOptional<z.ZodNumber>>
 
+const deltaFields = Object.fromEntries(
+  ITAD_METRIC_KEYS.map((k) => [k, z.number().int().min(-100000).max(100000).optional()]),
+) as Record<(typeof ITAD_METRIC_KEYS)[number], z.ZodOptional<z.ZodNumber>>
+
 const upsertSchema = z.object({
   date: z.string().optional(),
   status: z.enum(['SUBMITTED', 'ON_LEAVE', 'HOLIDAY', 'OFF']).default('SUBMITTED'),
   notes: z.string().max(2000).optional(),
   ...metricFields,
+  /** Quick Log: add to (or take from) today's numbers instead of replacing them, so two windows never overwrite each other. */
+  add: z.object(deltaFields).optional(),
 })
 
 /** PUT /api/itad/entries — upsert the caller's entry (one per user per day). */
@@ -102,22 +109,45 @@ export async function upsertMyEntry(req: AuthedRequest, res: Response): Promise<
     return
   }
 
-  // Leave/off/holiday days carry no metrics (leave-aware rule).
-  const metrics = emptyTotals()
-  if (status === 'SUBMITTED') {
-    for (const k of ITAD_METRIC_KEYS) metrics[k] = parsed.data[k] ?? 0
-  }
-
   const dateValue = dbDateFromString(dateStr)
   const existing = await prisma.itadDailyEntry.findUnique({
     where: { userId_date: { userId: me.id, date: dateValue } },
   })
 
-  const entry = await prisma.itadDailyEntry.upsert({
-    where: { userId_date: { userId: me.id, date: dateValue } },
-    update: { status, notes: notes ?? null, ...metrics },
-    create: { userId: me.id, date: dateValue, status, notes: notes ?? null, ...metrics },
-  })
+  let entry
+  if (parsed.data.add) {
+    // Quick Log: counts are added on the server, never below zero; notes replace only when sent.
+    if (existing && existing.status !== 'SUBMITTED') {
+      res.status(409).json({ error: 'Today is marked as leave or off. Open the Daily Log to change that first.' })
+      return
+    }
+    const inc: Record<string, { increment: number }> = {}
+    const made = emptyTotals()
+    for (const k of ITAD_METRIC_KEYS) {
+      const d = parsed.data.add[k] ?? 0
+      if (!d) continue
+      const base = existing ? existing[k] : 0
+      const applied = Math.max(d, -base)
+      inc[k] = { increment: applied }
+      made[k] = Math.max(0, applied)
+    }
+    entry = await prisma.itadDailyEntry.upsert({
+      where: { userId_date: { userId: me.id, date: dateValue } },
+      update: { status: 'SUBMITTED', ...inc, ...(notes !== undefined ? { notes } : {}) },
+      create: { userId: me.id, date: dateValue, status: 'SUBMITTED', notes: notes ?? null, ...made },
+    })
+  } else {
+    // Leave/off/holiday days carry no metrics (leave-aware rule).
+    const metrics = emptyTotals()
+    if (status === 'SUBMITTED') {
+      for (const k of ITAD_METRIC_KEYS) metrics[k] = parsed.data[k] ?? 0
+    }
+    entry = await prisma.itadDailyEntry.upsert({
+      where: { userId_date: { userId: me.id, date: dateValue } },
+      update: { status, notes: notes ?? null, ...metrics },
+      create: { userId: me.id, date: dateValue, status, notes: notes ?? null, ...metrics },
+    })
+  }
 
   // Audit trail — edits to submitted numbers are logged (plan §9).
   await prisma.auditLog.create({

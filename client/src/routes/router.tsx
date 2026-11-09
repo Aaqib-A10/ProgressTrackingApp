@@ -121,6 +121,7 @@ const ChatPage = lazy(pageModule(() => import('../pages/app/chat/ChatPage')))
 const CalendarPage = lazy(pageModule(() => import('../pages/app/meetings/CalendarPage')))
 const MeetingPage = lazy(pageModule(() => import('../pages/app/meetings/MeetingPage')))
 const GuestJoin = lazy(pageModule(() => import('../pages/GuestJoin')))
+const QuickLogWindow = lazy(pageModule(() => import('../pages/QuickLogWindow')))
 const Notifications = lazy(pageModule(() => import('../pages/app/Notifications')))
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
@@ -149,6 +150,9 @@ export const router = createBrowserRouter([
 
   // People outside Metriq joining a call by link (no login)
   { path: '/join/:token', element: <Suspense fallback={null}><GuestJoin /></Suspense> },
+
+  // The ITAD Quick Log in its own small window (signed in, no shell)
+  { path: '/quicklog', errorElement: <RouteError />, element: <RequireAuth><Suspense fallback={null}><QuickLogWindow /></Suspense></RequireAuth> },
 
   // Authenticated app shell
   {

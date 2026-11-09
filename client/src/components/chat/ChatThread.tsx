@@ -18,7 +18,11 @@ import { VoiceRecorder } from './VoiceRecorder'
 import { EmojiPicker, ReactionPicker } from '../ui/EmojiPicker'
 import { VoiceBubble } from './VoiceBubble'
 
-const API = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase } from '../../lib/session'
+
+const API = apiBase()
+/** A phone or tablet: no hover, so a tap on a message shows its buttons under it (like WhatsApp). */
+const TOUCH = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(hover: none)').matches
 const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
 
 /**
@@ -64,6 +68,10 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const [dragOver, setDragOver] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  // Touch screens: the message whose buttons are open (tap the bubble to toggle).
+  const [tapped, setTapped] = useState<string | null>(null)
+  // The buttons sit under the bubble: bring them into view when a long message is tapped.
+  useEffect(() => { if (tapped) document.getElementById(`msg-tools-${tapped}`)?.scrollIntoView({ block: 'nearest' }) }, [tapped])
   const [reactAt, setReactAt] = useState<{ id: string; el: HTMLElement; mine: boolean } | null>(null)
   const emojiBtn = useRef<HTMLButtonElement>(null)
   const [notesFor, setNotesFor] = useState<string | null>(null)
@@ -374,12 +382,13 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                     <span className="text-[11px] tabular-nums text-ink-faint" title={fmtDateTime(m.createdAt)}>{new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
                   </div>
                 )}
-                <div className={cn('flex max-w-full items-center gap-1', mine && 'flex-row-reverse')}>
+                <div className={cn('flex max-w-full flex-wrap items-end gap-1', mine && 'flex-row-reverse')}>
                 <div className={cn(
                   'min-w-0 max-w-full rounded-[14px] px-3 py-[7px]',
                   mine ? 'bg-primary/[0.11]' : 'bg-card shadow-xs ring-1 ring-line/80',
                   !grouped && (mine ? 'rounded-tr-[5px]' : 'rounded-tl-[5px]'),
-                )}>
+                  TOUCH && !m.deleted && 'cursor-pointer select-none',
+                )} onClick={TOUCH && !m.deleted ? (e) => { if ((e.target as HTMLElement).closest('button,a,audio,input,textarea')) return; setTapped((t) => (t === m.id ? null : m.id)) } : undefined}>
                   {m.replyTo && !m.deleted && (
                     <div className="mb-1.5 line-clamp-2 rounded-md border-l-2 border-primary/50 bg-black/[0.03] py-0.5 pl-2 pr-1 text-body-sm text-ink-muted"><span className="font-medium text-ink">{m.replyTo.userName}</span> {m.replyTo.body}</div>
                   )}
@@ -391,9 +400,12 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                     </>
                   )}
                 </div>
-                {/* Next to the bubble: react (opens the emoji row), reply, and edit / delete for my own. */}
+                {/* Next to the bubble (bottom-aligned and sticky, so a long message keeps them in view): react, reply, and edit / delete for my own.
+                    On a phone they appear under the bubble when it is tapped. */}
                 {!m.deleted && (
-                  <div className={cn('flex shrink-0 items-center gap-px rounded-lg border border-line bg-card p-0.5 shadow-raised transition-opacity [@media(hover:none)]:opacity-100', reactAt?.id === m.id || menuFor === m.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100', mine && 'flex-row-reverse')}>
+                  <div id={`msg-tools-${m.id}`} className={cn('flex shrink-0 items-center gap-px rounded-lg border border-line bg-card p-0.5 shadow-raised transition-opacity',
+                    TOUCH ? (tapped === m.id ? 'order-last mt-1 basis-full justify-start' : 'hidden') : cn('sticky bottom-2 self-end', reactAt?.id === m.id || menuFor === m.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'),
+                    mine && 'flex-row-reverse')}>
                     <button type="button" onClick={(e) => { const el = e.currentTarget; setReactAt((cur) => (cur?.id === m.id ? null : { id: m.id, el, mine })) }} className={cn('flex h-7 w-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-slate-100 hover:text-ink', reactAt?.id === m.id && 'bg-slate-100 text-ink')} aria-label="React" title="React"><SmilePlus size={15} /></button>
                     <button type="button" onClick={() => { setReplyTo(m); setEditing(null); inputRef.current?.focus() }} className="flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Reply" title="Reply"><CornerUpLeft size={15} /></button>
                     {mine && !m.call && (
@@ -427,7 +439,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         )
       })}
     </>
-  ), [msgs, conv, meId, compact, menuFor, reactAt, isDirect, lastMine?.id, otherReadSeq, seenBy, conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  ), [msgs, conv, meId, compact, menuFor, reactAt, tapped, isDirect, lastMine?.id, otherReadSeq, seenBy, conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return (

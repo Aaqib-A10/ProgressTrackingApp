@@ -147,7 +147,7 @@ export function VoiceBubble({ href, name, mine }: { href: string; name: string |
   const bars = peaks ?? fakeWave(src)
   const done = duration ? pos / duration : 0
   return (
-    <div className="flex w-[min(300px,72vw)] items-center gap-2.5 py-0.5">
+    <div className="flex w-[300px] max-w-full items-center gap-2.5 py-0.5">
       <button
         type="button"
         onClick={toggle}

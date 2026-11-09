@@ -295,9 +295,21 @@ function Board({ rows, statusColumns, onOpen, onMove, showAssignees }: { rows: R
     const col = statusColumns.find((c) => `col:${c.name.toLowerCase()}` === e.over?.id)
     if (row?.kind === 'project' && col) onMove(row.card, col)
   }
+  // Phones: one column at a time (pick it above), and "Move to" under each card instead of dragging.
+  const [phoneCol, setPhoneCol] = useState(0)
+  const pc = statusColumns[Math.min(phoneCol, statusColumns.length - 1)]
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
-      <div className="flex gap-3 overflow-x-auto pb-3">
+      <div className="md:hidden">
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {statusColumns.map((c, i) => {
+            const n = byCol.get(c.name.toLowerCase())?.length ?? 0
+            return <button key={c.name} type="button" onClick={() => setPhoneCol(i)} className={cn('inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-body-sm font-semibold', i === phoneCol ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted')}><StatusIcon name={c.name} category={c.category} color={c.color} />{c.name}<span className={cn('tabular-nums', i === phoneCol ? 'text-card/70' : 'text-ink-faint')}>{n}</span></button>
+          })}
+        </div>
+        {pc && <BoardColumnView col={pc} rows={byCol.get(pc.name.toLowerCase()) ?? []} onOpen={onOpen} showAssignees={showAssignees} moveTo={{ columns: statusColumns, onMove }} />}
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-3 max-md:hidden">
         {statusColumns.map((c) => <BoardColumnView key={c.name} col={c} rows={byCol.get(c.name.toLowerCase()) ?? []} onOpen={onOpen} showAssignees={showAssignees} />)}
       </div>
       <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1)' }}>
@@ -307,17 +319,28 @@ function Board({ rows, statusColumns, onOpen, onMove, showAssignees }: { rows: R
   )
 }
 
-function BoardColumnView({ col, rows, onOpen, showAssignees }: { col: StatusCol; rows: Row[]; onOpen: (r: Row) => void; showAssignees: boolean }) {
+function BoardColumnView({ col, rows, onOpen, showAssignees, moveTo }: { col: StatusCol; rows: Row[]; onOpen: (r: Row) => void; showAssignees: boolean; moveTo?: { columns: StatusCol[]; onMove: (c: Card, to: StatusCol) => void } }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${col.name.toLowerCase()}` })
   return (
-    <section ref={setNodeRef} className={cn('flex max-h-[calc(100vh-300px)] min-h-[260px] min-w-[260px] max-w-[340px] flex-1 shrink-0 flex-col rounded-card border bg-slate-100/70 transition-colors dark:bg-white/[0.03]', isOver ? 'border-primary bg-primary/[0.06]' : 'border-transparent')}>
+    <section ref={setNodeRef} className={cn('flex max-h-[calc(100vh-300px)] min-h-[260px] flex-1 shrink-0 flex-col rounded-card border bg-slate-100/70 transition-colors dark:bg-white/[0.03]', moveTo ? 'w-full' : 'min-w-[260px] max-w-[340px]', isOver ? 'border-primary bg-primary/[0.06]' : 'border-transparent')}>
       <header className="flex items-center gap-2 px-3 pb-2 pt-3">
         <StatusIcon name={col.name} category={col.category} color={col.color} />
         <h3 className="text-label-md uppercase text-ink-muted">{col.name}</h3>
         <span className="text-body-sm tabular-nums text-ink-faint">{rows.length}</span>
       </header>
       <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
-        {rows.map((r) => <BoardCard key={r.id} row={r} onOpen={onOpen} showAssignees={showAssignees} />)}
+        {rows.map((r) => (
+          <div key={r.id}>
+            <BoardCard row={r} onOpen={onOpen} showAssignees={showAssignees} />
+            {moveTo && r.kind === 'project' && (
+              <label className="-mt-1 flex items-center gap-2 rounded-b-btn border border-t-0 border-line bg-card px-3 py-1.5 text-[11.5px] text-ink-muted">Move to
+                <select value={col.name} onChange={(e) => { const to = moveTo.columns.find((c) => c.name === e.target.value); if (to && to.name !== col.name) moveTo.onMove(r.card, to) }} className="h-7 flex-1 rounded-btn border border-line bg-card px-1.5 text-[12px] text-ink" aria-label="Move to">
+                  {moveTo.columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+        ))}
         {!rows.length && <p className="rounded-btn border border-dashed border-line px-3 py-6 text-center text-body-sm text-ink-faint">Nothing here</p>}
       </div>
     </section>

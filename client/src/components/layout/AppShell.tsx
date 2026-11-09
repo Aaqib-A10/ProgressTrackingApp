@@ -15,6 +15,7 @@ import { CommandPalette } from './GlobalSearch'
 import { endPreview, usePreview } from '../../lib/preview'
 import { BottomTabs } from '../../mobile/BottomTabs'
 import { InstallBanner } from '../../mobile/InstallBanner'
+import { QuickLogWidget } from '../itad/QuickLogWidget'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -138,6 +139,7 @@ export function AppShell({ user, children }: AppShellProps) {
           </div>
         </div>
         <BottomTabs user={user} onMore={() => setNavOpen(true)} />
+        <QuickLogWidget user={user} />
         <CommandPalette />
         <FloatingChat meId={user.id} />
         <SilentUpdater />

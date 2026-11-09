@@ -126,7 +126,7 @@ export async function pushChatMessage(input: { conversationId: string; messageId
     url: `/app/chat?c=${encodeURIComponent(input.conversationId)}`,
     conversationId: input.conversationId,
     messageId: input.messageId,
-  })
+  }, { urgency: 'high' }) // high: Android delivers it at once even with the screen off (normal waits for the next wake)
 }
 
 /** Incoming call: ring the people who are not in it yet. */
