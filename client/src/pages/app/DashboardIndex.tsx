@@ -21,7 +21,7 @@ export default function DashboardIndex() {
   // Inventory staff work from their Inventory tab; their team lead gets the team dashboard.
   if (user.department === 'INVENTORY' && user.role === 'MEMBER' && (!user.blocks || user.blocks.includes('inv-items'))) return <Navigate to="/app/inventory" replace />
   // The head of a lead business who works no leads (Jesse): home is the queue of what waits on him.
-  if (user.leadsHead && user.role !== 'SUPER_ADMIN') return <Navigate to="/app/leads/queue" replace />
+  if (user.leadsHead && user.role !== 'SUPER_ADMIN') return <Navigate to="/app/leads/inbox" replace />
   // A CMR department (SDRs and Jesse) works from Lead Management: its home is the Lead Dashboard.
   if (user.department === 'CMR' && user.role !== 'SUPER_ADMIN') return <Navigate to="/app/leads/dashboard" replace />
   // Department Studio, part B: the department's own dashboard of cards.

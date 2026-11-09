@@ -12,7 +12,7 @@ export default function QuickLogWindow() {
     return () => { document.title = was }
   }, [])
   return (
-    <div className="min-h-dvh bg-card">
+    <div className="flex h-dvh flex-col bg-card">
       <QuickLogPanel standalone />
     </div>
   )

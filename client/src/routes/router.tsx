@@ -67,6 +67,8 @@ const LeadPage = lazy(pageModule(() => import('../pages/app/leads/LeadPage')))
 const LeadTasks = lazy(pageModule(() => import('../pages/app/leads/LeadTasks')))
 const LeadCalls = lazy(pageModule(() => import('../pages/app/leads/LeadCalls')))
 const JesseQueue = lazy(pageModule(() => import('../pages/app/leads/JesseQueue')))
+const JesseInbox = lazy(pageModule(() => import('../pages/app/leads/JesseInbox')))
+const JesseReview = lazy(pageModule(() => import('../pages/app/leads/JesseReview')))
 const LeadReport = lazy(pageModule(() => import('../pages/app/leads/LeadReport')))
 const JesseSummary = lazy(pageModule(() => import('../pages/app/leads/JesseSummary')))
 const LeadSettings = lazy(pageModule(() => import('../pages/app/leads/LeadSettings')))
@@ -217,6 +219,8 @@ export const router = createBrowserRouter([
           { path: 'tasks', element: <LeadTasks /> },
           { path: 'calls', element: <LeadCalls /> },
           { path: 'queue', element: <RequireFlag flag="cmr"><JesseQueue /></RequireFlag> },
+          { path: 'inbox', element: <RequireFlag flag="cmr"><JesseInbox /></RequireFlag> },
+          { path: 'inbox/:id', element: <RequireFlag flag="cmr"><JesseReview /></RequireFlag> },
           { path: 'report', element: <RequireFlag flag="cmr"><LeadReport /></RequireFlag> },
           { path: 'summary', element: <RequireFlag flag="cmr"><JesseSummary /></RequireFlag> },
           { path: 'settings', element: <RequireRole roles={['SUPER_ADMIN']}><LeadSettings /></RequireRole> },

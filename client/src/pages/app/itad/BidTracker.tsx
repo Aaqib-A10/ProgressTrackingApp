@@ -37,8 +37,41 @@ function errMsg(e: unknown, fallback: string): string {
   if (!m) return fallback
   try { return (JSON.parse(m) as { error?: string }).error || fallback } catch { return m }
 }
-const money = (v: number | null | undefined): string =>
-  v == null ? '—' : v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+/** Prices: whole dollars as $1,250; a buyback rate under a dollar as cents (12¢, 12.5¢), never a misleading "$0". */
+const money = (v: number | null | undefined): string => {
+  if (v == null) return '—'
+  if (v > 0 && v < 1) { const c = Math.round(v * 1000) / 10; return `${c}¢` }
+  return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: Number.isInteger(v) ? 0 : 2 })
+}
+
+type PriceUnit = 'usd' | 'cents'
+const UNIT_KEY = 'itad-price-unit'
+const readUnit = (): PriceUnit => { try { return localStorage.getItem(UNIT_KEY) === 'cents' ? 'cents' : 'usd' } catch { return 'usd' } }
+/** Dollars (as stored) → what the input shows in the chosen unit. */
+const toUnit = (v: number | null | undefined, u: PriceUnit): string => (v == null ? '' : u === 'cents' ? String(Math.round(v * 10000) / 100) : String(v))
+/** What the input shows → dollars (as stored). */
+const fromUnit = (s: string, u: PriceUnit): number | null => { const n = Number(s); if (!s || !Number.isFinite(n)) return null; return u === 'cents' ? Math.round(n * 100) / 10000 : n }
+
+/** A price box with a $ / ¢ switch: the ITAD team quotes buyback rates in cents, deals in dollars. Stored in dollars either way. */
+function PriceInput({ value, onChange, unit, onUnit, autoFocus, className, placeholder }: { value: string; onChange: (v: string) => void; unit: PriceUnit; onUnit: (u: PriceUnit) => void; autoFocus?: boolean; className?: string; placeholder?: string }) {
+  const switchTo = (u: PriceUnit) => {
+    if (u === unit) return
+    // Keep the same price when switching: 12¢ ↔ 0.12
+    const d = fromUnit(value, unit)
+    onChange(toUnit(d, u))
+    onUnit(u)
+    try { localStorage.setItem(UNIT_KEY, u) } catch { /* fine */ }
+  }
+  return (
+    <div className="flex items-stretch gap-2">
+      <input type="number" min="0" step={unit === 'cents' ? '0.1' : '0.01'} inputMode="decimal" autoFocus={autoFocus} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder ?? (unit === 'cents' ? '12' : '0.00')} className={className} aria-label={unit === 'cents' ? 'Price in cents' : 'Price in dollars'} />
+      <div className="inline-flex shrink-0 rounded-btn border border-line bg-card p-0.5 text-body-sm" role="group" aria-label="Price unit">
+        <button type="button" onClick={() => switchTo('usd')} className={'h-full rounded-md px-2.5 font-semibold ' + (unit === 'usd' ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')} title="Dollars">$</button>
+        <button type="button" onClick={() => switchTo('cents')} className={'h-full rounded-md px-2.5 font-semibold ' + (unit === 'cents' ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')} title="Cents (per lb)">¢</button>
+      </div>
+    </div>
+  )
+}
 function fmtDue(iso: string): string {
   return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
@@ -317,8 +350,9 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
   const [dueDate, setDueDate] = useState(bid ? toLocalInput(bid.dueDate) : '')
   const [reminderSet, setReminderSet] = useState(bid?.reminderSet ?? true)
   const [submissionType, setSubmissionType] = useState<BidSubmissionType | null>(bid?.submissionType ?? null)
-  const [priceQuoted, setPriceQuoted] = useState(bid?.priceQuoted != null ? String(bid.priceQuoted) : '')
-  const [awardedPrice, setAwardedPrice] = useState(bid?.awardedPrice != null ? String(bid.awardedPrice) : '')
+  const [unit, setUnit] = useState<PriceUnit>(readUnit)
+  const [priceQuoted, setPriceQuoted] = useState(() => toUnit(bid?.priceQuoted, readUnit()))
+  const [awardedPrice, setAwardedPrice] = useState(() => toUnit(bid?.awardedPrice, readUnit()))
   const [bidBond, setBidBond] = useState(bid?.bidBond ?? false)
   const [bidBondAmount, setBidBondAmount] = useState(bid?.bidBondAmount != null ? String(bid.bidBondAmount) : '')
   const [closedDate, setClosedDate] = useState(bid?.closedDate ? bid.closedDate.slice(0, 10) : '')
@@ -347,8 +381,8 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
       dueDate: new Date(dueDate).toISOString(),
       reminderSet,
       submissionType,
-      priceQuoted: priceQuoted ? Number(priceQuoted) : null,
-      awardedPrice: (status === 'WON' || status === 'LOST') && awardedPrice ? Number(awardedPrice) : null,
+      priceQuoted: fromUnit(priceQuoted, unit),
+      awardedPrice: (status === 'WON' || status === 'LOST') ? fromUnit(awardedPrice, unit) : null,
       bidBond,
       bidBondAmount: bidBond && bidBondAmount ? Number(bidBondAmount) : null,
       // Only send a closed date for decided deals; empty lets the server default it to now.
@@ -420,16 +454,12 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
         </Field>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label={priceProminent ? 'Price quoted (buyback rate)' : 'Price quoted (optional at this stage)'}>
-            <input
-              type="number" min="0" step="0.01" inputMode="decimal"
-              value={priceQuoted} onChange={(e) => setPriceQuoted(e.target.value)} placeholder="0.00"
-              className={inputCls + (priceProminent ? ' border-primary ring-2 ring-primary/20' : '')}
-            />
+          <Field label={(priceProminent ? 'Price quoted (buyback rate)' : 'Price quoted (optional at this stage)') + (unit === 'cents' ? ' · in cents' : '')}>
+            <PriceInput value={priceQuoted} onChange={setPriceQuoted} unit={unit} onUnit={setUnit} className={inputCls + (priceProminent ? ' border-primary ring-2 ring-primary/20' : '')} />
           </Field>
           {(status === 'WON' || status === 'LOST') && (
-            <Field label={status === 'LOST' ? 'Awarded price (winning bid)' : 'Awarded price'} required>
-              <input type="number" min="0" step="0.01" inputMode="decimal" value={awardedPrice} onChange={(e) => setAwardedPrice(e.target.value)} placeholder="0.00" className={inputCls} />
+            <Field label={(status === 'LOST' ? 'Awarded price (winning bid)' : 'Awarded price') + (unit === 'cents' ? ' · in cents' : '')} required>
+              <PriceInput value={awardedPrice} onChange={setAwardedPrice} unit={unit} onUnit={setUnit} className={inputCls} />
             </Field>
           )}
           {(status === 'WON' || status === 'LOST') && (
@@ -489,12 +519,13 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
 function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'WON' | 'LOST'; onClose: () => void; onSaved: () => void }) {
   const { addToast } = useToast()
   const isLost = status === 'LOST'
-  const [price, setPrice] = useState(bid.awardedPrice != null ? String(bid.awardedPrice) : bid.priceQuoted != null ? String(bid.priceQuoted) : '')
+  const [unit, setUnit] = useState<PriceUnit>(readUnit)
+  const [price, setPrice] = useState(() => toUnit(bid.awardedPrice ?? bid.priceQuoted, readUnit()))
   const [company, setCompany] = useState(bid.company)
   const [saving, setSaving] = useState(false)
 
   async function save() {
-    if (!price || Number(price) <= 0) {
+    if (!price || (fromUnit(price, unit) ?? 0) <= 0) {
       addToast({ type: 'error', message: 'Enter the awarded price.' })
       return
     }
@@ -504,7 +535,7 @@ function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'W
     }
     setSaving(true)
     try {
-      await updateBid(bid.id, { status, awardedPrice: Number(price), ...(isLost ? { company: company.trim() } : {}) })
+      await updateBid(bid.id, { status, awardedPrice: fromUnit(price, unit) ?? 0, ...(isLost ? { company: company.trim() } : {}) })
       addToast({ type: 'success', message: isLost ? 'Bid marked Lost.' : 'Bid marked Won.' })
       onSaved()
     } catch (e) {
@@ -528,8 +559,8 @@ function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'W
           : <>Enter the final accepted price for <b className="text-ink">{bid.title}</b> before saving.</>}
       </p>
       <div className="space-y-4">
-        <Field label={isLost ? 'Awarded price (winning bid)' : 'Awarded price'} required>
-          <input type="number" min="0" step="0.01" inputMode="decimal" autoFocus value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className={inputCls} />
+        <Field label={(isLost ? 'Awarded price (winning bid)' : 'Awarded price') + (unit === 'cents' ? ' · in cents' : '')} required>
+          <PriceInput value={price} onChange={setPrice} unit={unit} onUnit={setUnit} autoFocus className={inputCls} />
         </Field>
         {isLost && (
           <Field label="Awarded to (company)" required>

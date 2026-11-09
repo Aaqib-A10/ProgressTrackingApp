@@ -18,7 +18,7 @@ export const QUICKLOG_WINDOW = 'metriq-quicklog'
 
 /** Open (or focus) the pop-out window. Returns false when the browser blocked it. */
 export function openQuickLogWindow(): boolean {
-  const w = window.open('/quicklog', QUICKLOG_WINDOW, 'popup=yes,width=400,height=720,resizable=yes,scrollbars=yes')
+  const w = window.open('/quicklog', QUICKLOG_WINDOW, 'popup=yes,width=340,height=560,resizable=yes,scrollbars=yes')
   if (!w) return false
   try { w.focus() } catch { /* fine */ }
   return true
@@ -42,14 +42,14 @@ export function QuickLogWidget({ user }: { user: CurrentUser }) {
   return (
     <>
       {open && (
-        <div className="fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 flex max-h-[min(640px,calc(100dvh-6rem))] flex-col overflow-hidden rounded-card border border-line bg-card shadow-overlay md:inset-x-auto md:bottom-[4.75rem] md:right-20 md:w-[360px]" role="dialog" aria-label="Quick Log">
+        <div className="fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 flex max-h-[min(560px,calc(100dvh-6rem))] flex-col overflow-hidden rounded-card border border-line bg-card shadow-overlay md:inset-x-auto md:bottom-[4.75rem] md:right-20 md:w-[300px]" role="dialog" aria-label="Quick Log">
           {blocked && (
             <div className="flex items-center gap-2 border-b border-warning/40 bg-warning/10 px-3 py-1.5 text-[12px] text-ink">
               Pop-ups are blocked here. <a href="/quicklog" target="_blank" rel="noopener" className="font-semibold text-primary underline" onClick={() => setBlocked(false)}>Open in a tab</a>
               <button type="button" onClick={() => setBlocked(false)} className="ml-auto text-ink-muted" aria-label="Dismiss"><X size={13} /></button>
             </div>
           )}
-          <div className="min-h-0 flex-1"><QuickLogPanel onClose={() => setOpen(false)} onMinimize={() => setOpen(false)} onDetach={detach} /></div>
+          <div className="flex min-h-0 flex-1 flex-col"><QuickLogPanel onClose={() => setOpen(false)} onMinimize={() => setOpen(false)} onDetach={detach} /></div>
         </div>
       )}
       <button

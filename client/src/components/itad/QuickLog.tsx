@@ -23,15 +23,16 @@ type SaveState = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved'; at: Da
 
 /** Tell the other windows (and the full Daily Log page) that today's entry changed. */
 export function announceQuickLogSave(date: string): void {
-  try { new BroadcastChannel(CHANNEL).postMessage({ type: 'saved', date }) } catch { /* no BroadcastChannel: the next focus refreshes */ }
+  try { new BroadcastChannel(CHANNEL).postMessage({ type: 'saved', date }) } catch { /* no BroadcastChannel: the storage event below still fires */ }
+  try { localStorage.setItem('pt-quicklog-saved', `${date}:${Date.now()}`) } catch { /* fine */ }
 }
-/** Hear about saves made in other windows. */
+/** Hear about saves made in other windows (BroadcastChannel, with the storage event as a second wire). */
 export function onQuickLogSaved(fn: (date: string) => void): () => void {
-  try {
-    const ch = new BroadcastChannel(CHANNEL)
-    ch.onmessage = (e) => { if (e.data?.type === 'saved') fn(String(e.data.date)) }
-    return () => ch.close()
-  } catch { return () => undefined }
+  let ch: BroadcastChannel | null = null
+  try { ch = new BroadcastChannel(CHANNEL); ch.onmessage = (e) => { if (e.data?.type === 'saved') fn(String(e.data.date)) } } catch { ch = null }
+  const onStorage = (e: StorageEvent) => { if (e.key === 'pt-quicklog-saved' && e.newValue) fn(e.newValue.split(':')[0]) }
+  window.addEventListener('storage', onStorage)
+  return () => { ch?.close(); window.removeEventListener('storage', onStorage) }
 }
 
 export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { standalone?: boolean; onClose?: () => void; onDetach?: () => void; onMinimize?: () => void }) {
@@ -70,7 +71,7 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
     const onVis = () => { if (document.visibilityState === 'visible' && !inFlight.current) void load() }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onVis)
-    const t = window.setInterval(onVis, 60_000)
+    const t = window.setInterval(onVis, 20_000)
     return () => { off(); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', onVis); window.clearInterval(t) }
   }, [load])
 
@@ -131,29 +132,30 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
   const dials = (data?.entry?.callsDialed ?? 0) + pending.callsDialed
 
   return (
-    <div className={cn('flex flex-col bg-card text-ink', standalone ? 'min-h-dvh' : 'h-full')}>
-      <header className="flex items-center gap-2 border-b border-line px-3 py-2">
+    <div className={cn('flex min-h-0 flex-1 flex-col bg-card text-ink', standalone && 'h-dvh')}>
+      {/* The header stays put; only the counters scroll. */}
+      <header className="flex shrink-0 items-center gap-1 border-b border-line px-2.5 py-1.5">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[14px] font-semibold"><span>Quick Log</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-ink-muted dark:bg-white/10">{dateLabel || 'Today'}</span></div>
-          <div className="truncate text-[11.5px] text-ink-muted"><SaveLine save={save} hasPending={hasPending} /></div>
+          <div className="flex items-center gap-1.5 text-[13px] font-semibold leading-tight"><span>Quick Log</span><span className="rounded-full bg-slate-100 px-1.5 py-px text-[10.5px] font-medium text-ink-muted dark:bg-white/10">{dateLabel || 'Today'}</span></div>
+          <div className="truncate text-[11px] leading-tight text-ink-muted"><SaveLine save={save} hasPending={hasPending} /></div>
         </div>
-        <button type="button" onClick={() => void load()} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Refresh" title="Refresh from the server"><RefreshCw size={15} /></button>
-        {onDetach && <button type="button" onClick={onDetach} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink max-md:hidden" aria-label="Open in its own window" title="Open in its own window"><ExternalLink size={15} /></button>}
-        {onMinimize && <button type="button" onClick={onMinimize} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Minimize" title="Minimize (keeps what you typed)"><ChevronDown size={16} /></button>}
-        {onClose && <button type="button" onClick={onClose} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Close" title="Close"><X size={16} /></button>}
+        <button type="button" onClick={() => void load()} className="rounded-btn p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Refresh" title="Refresh from the server"><RefreshCw size={14} /></button>
+        {onDetach && <button type="button" onClick={onDetach} className="rounded-btn p-1 text-ink-muted hover:bg-slate-100 hover:text-ink max-md:hidden" aria-label="Open in its own window" title="Open in its own window"><ExternalLink size={14} /></button>}
+        {onMinimize && <button type="button" onClick={onMinimize} className="rounded-btn p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Minimize" title="Minimize (keeps what you typed)"><ChevronDown size={15} /></button>}
+        {onClose && <button type="button" onClick={onClose} className="rounded-btn p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Close" title="Close"><X size={15} /></button>}
       </header>
 
       {loadError && <p className="m-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{loadError} <button type="button" className="font-semibold underline" onClick={() => void load()}>Try again</button></p>}
       {!data && !loadError && <div className="flex flex-1 items-center justify-center p-8 text-ink-muted"><Loader2 size={20} className="animate-spin" /></div>}
 
       {data && onLeave && (
-        <div className="m-3 rounded-btn border border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-ink">Today is marked <b>{data.entry!.status === 'ON_LEAVE' ? 'On Leave' : data.entry!.status === 'HOLIDAY' ? 'Holiday' : 'Off'}</b>. Open the <a href="/app/itad/log" target={standalone ? '_blank' : undefined} className="font-semibold text-primary underline">Daily Log</a> to change that; the counters are off until then.</div>
+        <div className="m-2.5 rounded-btn border border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-ink">Today is marked <b>{data.entry!.status === 'ON_LEAVE' ? 'On Leave' : data.entry!.status === 'HOLIDAY' ? 'Holiday' : 'Off'}</b>. Open the <a href="/app/itad/log" target={standalone ? '_blank' : undefined} className="font-semibold text-primary underline">Daily Log</a> to change that; the counters are off until then.</div>
       )}
 
       {data && (
-        <div className={cn('flex-1 overflow-y-auto px-3 py-2', onLeave && 'pointer-events-none opacity-50')}>
+        <div className={cn('min-h-0 flex-1 overflow-y-auto px-2.5 py-1.5', onLeave && 'pointer-events-none opacity-50')}>
           {target > 0 && (
-            <div className="mb-2 flex items-center gap-2 text-[11.5px] text-ink-muted">
+            <div className="mb-1 flex items-center gap-2 text-[11px] text-ink-muted">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div className={cn('h-full rounded-full transition-[width]', dials >= target ? 'bg-success' : 'bg-primary')} style={{ width: `${Math.min(100, (dials / target) * 100)}%` }} /></div>
               <span className="tabular-nums">{dials}/{target} dials</span>
             </div>
@@ -164,29 +166,29 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
               const shown = base + pending[m.key]
               const p = pending[m.key]
               return (
-                <li key={m.key} className="flex items-center gap-2 py-1.5">
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">{m.label}</span>
-                  {p !== 0 && <span className={cn('rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums', p > 0 ? 'bg-primary/10 text-primary' : 'bg-warning/15 text-amber-700')}>{p > 0 ? `+${p}` : p}</span>}
+                <li key={m.key} className="flex items-center gap-2 py-[3px]">
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{m.label}</span>
+                  {p !== 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-semibold tabular-nums', p > 0 ? 'bg-primary/10 text-primary' : 'bg-warning/15 text-amber-700')}>{p > 0 ? `+${p}` : p}</span>}
                   <div className="inline-flex items-center rounded-btn border border-line">
-                    <button type="button" onClick={() => bump(m.key, -1)} disabled={shown <= 0} className="flex h-9 w-9 items-center justify-center rounded-l-btn text-ink-muted hover:bg-slate-100 hover:text-ink disabled:opacity-30 active:bg-slate-200" aria-label={`${m.label}: one less`}><Minus size={15} /></button>
-                    <span className="w-10 text-center text-[15px] font-semibold tabular-nums">{shown}</span>
-                    <button type="button" onClick={() => bump(m.key, 1)} className="flex h-9 w-9 items-center justify-center rounded-r-btn text-primary hover:bg-primary/10 active:bg-primary/20" aria-label={`${m.label}: one more`}><Plus size={16} /></button>
+                    <button type="button" onClick={() => bump(m.key, -1)} disabled={shown <= 0} className="flex h-8 w-8 items-center justify-center rounded-l-btn text-ink-muted hover:bg-slate-100 hover:text-ink disabled:opacity-30 active:bg-slate-200" aria-label={`${m.label}: one less`}><Minus size={14} /></button>
+                    <span className="w-8 text-center text-[14px] font-semibold tabular-nums">{shown}</span>
+                    <button type="button" onClick={() => bump(m.key, 1)} className="flex h-8 w-8 items-center justify-center rounded-r-btn text-primary hover:bg-primary/10 active:bg-primary/20" aria-label={`${m.label}: one more`}><Plus size={15} /></button>
                   </div>
                 </li>
               )
             })}
           </ul>
-          <div className="mt-2 border-t border-line pt-2">
-            <button type="button" onClick={() => setNotesOpen((o) => !o)} className="flex w-full items-center gap-1.5 text-[12.5px] font-semibold text-ink-muted hover:text-ink">{notesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}Notes / Comments{!notesOpen && notes.trim() && <span className="truncate font-normal text-ink-faint">· {notes.trim().slice(0, 40)}</span>}</button>
-            {notesOpen && <textarea value={notes} onChange={(e) => { setNotes(e.target.value); setNotesDirty(true) }} rows={3} maxLength={2000} placeholder="What happened today, anything the lead should know…" className="mt-2 w-full resize-y rounded-btn border border-line bg-card px-2.5 py-2 text-[13px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10" />}
+          <div className="mt-1.5 border-t border-line pt-1.5">
+            <button type="button" onClick={() => setNotesOpen((o) => !o)} className="flex w-full items-center gap-1.5 text-[12px] font-semibold text-ink-muted hover:text-ink">{notesOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}Notes / Comments{!notesOpen && notes.trim() && <span className="truncate font-normal text-ink-faint">· {notes.trim().slice(0, 40)}</span>}</button>
+            {notesOpen && <textarea value={notes} onChange={(e) => { setNotes(e.target.value); setNotesDirty(true) }} rows={2} maxLength={2000} placeholder="What happened today, anything the lead should know…" className="mt-2 w-full resize-y rounded-btn border border-line bg-card px-2.5 py-2 text-[13px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10" />}
           </div>
         </div>
       )}
 
       {data && (
-        <footer className="flex items-center gap-2 border-t border-line px-3 py-2">
-          <a href="/app/itad/log" target={standalone ? '_blank' : undefined} onClick={!standalone ? onClose : undefined} className="text-[12px] font-medium text-ink-muted hover:text-ink">Full Daily Log</a>
-          <button type="button" onClick={() => { window.clearTimeout(timer.current); void flushRef.current() }} disabled={!hasPending || save.kind === 'saving' || onLeave} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-btn bg-primary px-3 text-body-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
+        <footer className="flex shrink-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
+          <a href="/app/itad/log" target={standalone ? '_blank' : undefined} onClick={!standalone ? onClose : undefined} className="text-[11.5px] font-medium text-ink-muted hover:text-ink">Full Daily Log</a>
+          <button type="button" onClick={() => { window.clearTimeout(timer.current); void flushRef.current() }} disabled={!hasPending || save.kind === 'saving' || onLeave} className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-btn bg-primary px-2.5 text-[12.5px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
             {save.kind === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}{hasPending ? 'Save now' : 'Saved'}
           </button>
         </footer>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Sparkles, Tag, UserCheck, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
@@ -39,6 +39,8 @@ export default function LeadPage() {
 
   if (err) return <div className="mx-auto max-w-xl py-16 text-center"><p className="text-body-md text-ink-muted">{err}</p><Link to="/app/leads" className="mt-3 inline-block text-primary">Back to leads</Link></div>
   if (!d) return <div className="h-64 animate-pulse rounded-card border border-line bg-card" />
+  // Jesse's desk: a lead opens as the submission to review (form + chat), never the working page.
+  if (d.can.headOnly) return <Navigate to={`/app/leads/inbox/${id}`} replace />
   const { lead: l, can, pipeline, head, mentionable } = d
   const cmr = can.cmr
   const title = leadTitle(l)
@@ -198,7 +200,7 @@ function JessePanel({ d, isHead, meId, onAction, onDecided }: { d: LeadDetail; i
 const yesNoSel = (v: YesNo | undefined, on: (v: YesNo) => void) => <Select value={v ?? 'UNKNOWN'} onChange={(e) => on(e.target.value as YesNo)} className="w-full">{(['YES', 'NO', 'UNKNOWN'] as YesNo[]).map((k) => <option key={k} value={k}>{YES_NO_LABEL[k]}</option>)}</Select>
 
 /** The five facts, edited in place. */
-function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; settings: LeadDetail['settings']; canEdit: boolean; onSaved: () => void }) {
+export function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; settings: LeadDetail['settings']; canEdit: boolean; onSaved: () => void }) {
   const { addToast } = useToast()
   const [edit, setEdit] = useState(false)
   const [f, setF] = useState<LeadInput>({})
@@ -278,7 +280,7 @@ function NextStepCard({ l, canEdit, onSaved }: { l: LeadFull; canEdit: boolean; 
   )
 }
 
-function CallsCard({ l, canEdit, onLog, onChanged }: { l: LeadFull; canEdit: boolean; onLog: () => void; onChanged: () => void }) {
+export function CallsCard({ l, canEdit, onLog, onChanged }: { l: LeadFull; canEdit: boolean; onLog: () => void; onChanged: () => void }) {
   const { addToast } = useToast()
   const [openTranscript, setOpenTranscript] = useState<string | null>(null)
   const [drafting, setDrafting] = useState<string | null>(null)
@@ -376,7 +378,7 @@ function DraftPanel({ call, lead, onDone, onRedraft, busy }: { call: LeadCall; l
   )
 }
 
-function CommentsCard({ d, meId, onPosted }: { d: LeadDetail; meId: string; onPosted: () => void }) {
+export function CommentsCard({ d, meId, onPosted }: { d: LeadDetail; meId: string; onPosted: () => void }) {
   const { addToast } = useToast()
   const { lead: l, head, mentionable } = d
   const members = mentionable.map((m) => ({ id: m.id, name: m.name }))
@@ -401,7 +403,7 @@ function CommentsCard({ d, meId, onPosted }: { d: LeadDetail; meId: string; onPo
   )
 }
 
-function TasksCard({ l, canEdit, onAdd, onChanged }: { l: LeadFull; canEdit: boolean; onAdd: () => void; onChanged: () => void }) {
+export function TasksCard({ l, canEdit, onAdd, onChanged }: { l: LeadFull; canEdit: boolean; onAdd: () => void; onChanged: () => void }) {
   const { addToast } = useToast()
   const open = l.tasks.filter((t) => !t.doneAt), done = l.tasks.filter((t) => t.doneAt)
   const [showDone, setShowDone] = useState(false)
@@ -425,7 +427,7 @@ function TasksCard({ l, canEdit, onAdd, onChanged }: { l: LeadFull; canEdit: boo
   )
 }
 
-function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: (() => void) | null }) {
+export function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: (() => void) | null }) {
   const [open, setOpen] = useState<Record<string, boolean>>({ contact: true, address: false, product: false })
   const Row = ({ k, v }: { k: string; v: ReactNode }) => v ? <div className="flex justify-between gap-3 py-1 text-body-sm"><dt className="text-ink-muted">{k}</dt><dd className="text-right text-ink">{v}</dd></div> : null
   const Sec = ({ id, icon, title, children }: { id: string; icon: ReactNode; title: string; children: ReactNode }) => (
@@ -454,7 +456,7 @@ function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: ((
   )
 }
 
-function TimelineCard({ l, canNote, onNoted }: { l: LeadFull; canNote: boolean; onNoted: () => void }) {
+export function TimelineCard({ l, canNote, onNoted }: { l: LeadFull; canNote: boolean; onNoted: () => void }) {
   const { addToast } = useToast()
   const [all, setAll] = useState(false)
   const [note, setNote] = useState('')

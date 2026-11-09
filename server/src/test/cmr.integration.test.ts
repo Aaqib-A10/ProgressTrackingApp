@@ -191,14 +191,34 @@ describe('CMR flow inside Lead Management', () => {
     expect((await api(matthew).get(`/queue?business=${cmrId}`).expect(200)).body).toMatchObject({ canDecide: false })
   })
 
-  it('Jesse comments with an @mention: the SDR is notified and gets a reply task; the SDR offers slots', async () => {
-    const c = (await api(jesse).post(`/${acmeId}/comments`, { body: '@Matthew ask them whether the alkaline is sorted by chemistry.', mentions: [matthew.id] }).expect(201)).body.comment
-    expect(c.mentionNames).toEqual(['Matthew'])
-    expect((await notes(matthew, ['MENTION'])).at(-1)).toMatchObject({ title: 'Jesse McCullough mentioned you' })
-    expect((await prisma.lead.findUniqueOrThrow({ where: { id: acmeId }, include: { cmr: true } })).cmr?.jesseComment).toContain('sorted by chemistry')
-    expect((await openTasks(acmeId)).map((t) => t.kind).sort()).toEqual(['HEAD_REVIEW', 'REPLY'])
+  it('Jesse answers in the chat: the flag clears, the SDR gets the instructions as a task; @Jesse from the SDR sends it back to his inbox; the SDR offers slots', async () => {
+    const r = (await api(jesse).post(`/${acmeId}/comments`, { body: '@Matthew ask them whether the alkaline is sorted by chemistry.', mentions: [matthew.id] }).expect(201)).body
+    expect(r.comment.mentionNames).toEqual(['Matthew'])
+    expect(r.replied).toBe(true)
+    expect((await notes(matthew, ['LEAD_DECISION'])).at(-1)).toMatchObject({ title: 'Jesse replied on Acme Recycling' })
+    const after = await prisma.lead.findUniqueOrThrow({ where: { id: acmeId }, include: { cmr: true } })
+    expect(after.cmr?.jesseComment).toContain('sorted by chemistry')
+    expect(after.cmr).toMatchObject({ jesseInputNeeded: false, jesseDecision: 'DIRECTION' })
+    expect(after).toMatchObject({ owner: 'REP', nextStep: 'Act on Jesse’s instructions' })
+    // Jesse's review task is done; Matthew carries it (one task, his).
+    const open = await openTasks(acmeId)
+    expect(open.map((t) => t.kind)).toEqual(['RELAY'])
+    expect(open[0].assigneeId).toBe(matthew.id)
+    // Jesse's inbox: nothing waiting, Acme under answered; the SDR's plain comment does not re-flag it.
+    let q = (await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body
+    expect(q.queue).toHaveLength(0)
+    expect(q.decided.map((l: { id: string }) => l.id)).toContain(acmeId)
+    expect(Array.isArray(q.closed)).toBe(true)
     await api(matthew).post(`/${acmeId}/comments`, { body: 'Yes, sorted and taped.' }).expect(201)
     expect((await notes(jesse, ['LEAD_COMMENT'])).at(-1)).toMatchObject({ title: 'Matthew on Acme Recycling' })
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: acmeId }, include: { cmr: true } })).cmr?.jesseInputNeeded).toBe(false)
+    // @Jesse sends it back to him, with that message as the ask.
+    const back = (await api(matthew).post(`/${acmeId}/comments`, { body: '@Jesse they can do 4,000 lb a month. Meeting?', mentions: [jesse.id] }).expect(201)).body
+    expect(back.backToHead).toBe(true)
+    q = (await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body
+    expect(q.queue.map((l: { id: string }) => l.id)).toEqual([acmeId])
+    expect(q.queue[0].jesseAsk).toContain('4,000 lb')
+    expect((await openTasks(acmeId)).map((t) => t.kind).sort()).toEqual(['HEAD_REVIEW', 'RELAY'])
     // Only Jesse decides.
     await api(lead).post(`/${acmeId}/decide`, { action: 'DIRECTION', text: 'x' }).expect(403)
     await api(matthew).post(`/${acmeId}/slots`, { slots: ['2030-02-04T18:00:00.000Z', '2030-02-05T17:00:00.000Z'] }).expect(200)
@@ -211,7 +231,7 @@ describe('CMR flow inside Lead Management', () => {
     expect(r.jesseComment).toContain('Meeting approved')
     expect(r.jesseComment).toContain('(Phoenix)')
     expect((await notes(matthew, ['LEAD_DECISION'])).at(-1)?.title).toBe('Jesse approved a meeting with Acme Recycling')
-    expect((await openTasks(acmeId)).map((t) => t.kind).sort()).toEqual(['REPLY', 'SEND_INVITE'])
+    expect((await openTasks(acmeId)).map((t) => t.kind).sort()).toEqual(['RELAY', 'SEND_INVITE'])
     await api(matthew).post(`/${acmeId}/invite`, { link: 'not a link' }).expect(422)
     const before = mailLog.length
     const inv = (await api(matthew).post(`/${acmeId}/invite`, { link: 'https://teams.microsoft.com/l/meetup-join/abc', minutes: 30 }).expect(200)).body
@@ -228,7 +248,7 @@ describe('CMR flow inside Lead Management', () => {
     expect(ics).toContain('ATTENDEE;CN=Aaqib')
     expect(inv.lead).toMatchObject({ nextStep: 'Meeting', inviteSentAt: expect.any(String), meetingLink: 'https://teams.microsoft.com/l/meetup-join/abc' })
     const kinds = (await openTasks(acmeId)).map((t) => t.kind).sort()
-    expect(kinds).toEqual(['OUTCOME', 'RECONFIRM', 'REPLY'])
+    expect(kinds).toEqual(['OUTCOME', 'RECONFIRM', 'RELAY'])
   })
 
   it('the day before: reconfirm with the 3-line brief (to Jesse); within 2 days: the outcome', async () => {
@@ -238,7 +258,7 @@ describe('CMR flow inside Lead Management', () => {
     expect((await notes(jesse, ['LEAD_COMMENT'])).at(-1)?.title).toBe('Brief for Acme Recycling')
     const o = (await api(matthew).post(`/${acmeId}/outcome`, { outcome: 'QUOTE_SENT', note: 'Quote at $0.22/lb sent by Jesse' }).expect(200)).body.lead
     expect(o).toMatchObject({ status: 'FOLLOW_UP', meetingOutcome: 'QUOTE_SENT', nextStep: 'Follow up on the quote' })
-    expect((await openTasks(acmeId)).map((t) => t.kind).sort()).toEqual(['NEXT_STEP', 'REPLY'])
+    expect((await openTasks(acmeId)).map((t) => t.kind).sort()).toEqual(['NEXT_STEP', 'RELAY'])
   })
 
   it('agent tasks: today / overdue / done, Complete with a next step, Schedule moves the date; the tick tells people once', async () => {
@@ -260,7 +280,7 @@ describe('CMR flow inside Lead Management', () => {
     await api(matthew).post(`/tasks/${t.id}/complete`, {}).expect(409)
     const l = (await api(matthew).get(`/${acmeId}`).expect(200)).body.lead
     expect(l.nextStep).toBe('Send the drum labels')
-    expect(l.tasks.filter((x: { doneAt: string | null }) => !x.doneAt).map((x: { kind: string }) => x.kind).sort()).toEqual(['NEXT_STEP', 'REPLY'])
+    expect(l.tasks.filter((x: { doneAt: string | null }) => !x.doneAt).map((x: { kind: string }) => x.kind).sort()).toEqual(['NEXT_STEP', 'RELAY'])
   })
 
   it('the list has LeadWise-style filters and the export; the dashboard and the Jesse Summary count', async () => {

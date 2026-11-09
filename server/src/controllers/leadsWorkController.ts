@@ -885,15 +885,35 @@ export async function addComment(req: AuthedRequest, res: Response): Promise<voi
   const head = canDecide(s, lead.businessId) && !!lead.business.headId
   const c = await prisma.leadComment.create({ data: { leadId: lead.id, userId: m.id, body: b.body, mentions, callId: b.callId ?? null, atSec: b.atSec ?? null }, include: { user: PERSON } })
   const now = new Date()
-  await prisma.lead.update({ where: { id: lead.id }, data: { lastActivityAt: now, ...(head && lead.cmr ? { cmr: { update: { jesseComment: b.body } } } : {}) } })
-  await event(lead.id, m.id, 'COMMENT', b.body.slice(0, 300), { commentId: c.id, callId: b.callId ?? null, atSec: b.atSec ?? null })
+  // Jesse's first message on a lead waiting for him IS his answer: the flag clears, the SDR gets the
+  // instructions as a task due next business day and carries the lead from there (statuses stay with the SDR).
+  const replied = head && !!lead.cmr?.jesseInputNeeded
+  await prisma.lead.update({ where: { id: lead.id }, data: {
+    lastActivityAt: now,
+    ...(replied ? { owner: 'REP', nextStep: 'Act on Jesse’s instructions', nextStepDate: DateTime.fromJSDate(addBusinessDays(now, 1), { zone: PHOENIX }).startOf('day').toJSDate() } : {}),
+    ...(head && lead.cmr ? { cmr: { update: { jesseComment: b.body, ...(replied ? { jesseInputNeeded: false, jesseDecision: 'DIRECTION', jesseDecidedAt: now } : {}) } } } : {}),
+  } })
+  await event(lead.id, m.id, replied ? 'DECISION' : 'COMMENT', b.body.slice(0, 300), { commentId: c.id, callId: b.callId ?? null, atSec: b.atSec ?? null, ...(replied ? { action: 'DIRECTION' } : {}) })
+  if (replied) {
+    await closeTasks(lead.id, ['HEAD_REVIEW'], m.id, 'jesse replied')
+    if (lead.assigneeId) await makeTask({ leadId: lead.id, businessId: lead.businessId, assigneeId: lead.assigneeId, kind: 'RELAY', title: `Act on Jesse’s instructions for ${lead.organization || lead.name}`, notes: b.body.slice(0, 500), dueAt: atPhoenix(DateTime.fromJSDate(addBusinessDays(now, 1))), actorId: m.id, notify: false })
+  }
   const inThread = new Set<string>([lead.assigneeId ?? '', lead.business.headId ?? '', ...(await prisma.leadComment.findMany({ where: { leadId: lead.id }, select: { userId: true }, distinct: ['userId'] })).map((x) => x.userId)].filter(Boolean))
-  for (const id of mentions) inThread.delete(id)
+  // Mentioned people hear "mentioned you" instead; the SDR hears "Jesse replied" when that is what happened.
+  const mentionNotify = replied ? mentions.filter((id) => id !== lead.assigneeId) : mentions
+  for (const id of mentionNotify) inThread.delete(id)
   const company = lead.organization || lead.name
-  await notifyMentions({ mentionIds: mentions, actorId: m.id, actorName: m.name, taskTitle: `${company}: ${b.body.slice(0, 60)}`, link: `/app/leads/${lead.id}#comments`, entityType: 'Lead', entityId: lead.id })
-  await tellAboutLead([...inThread], { type: 'LEAD_COMMENT', title: `${m.name} on ${company}`, body: b.body.slice(0, 300), leadId: lead.id, link: `/app/leads/${lead.id}#comments`, actorId: m.id })
-  if (head) for (const id of mentions) if (id !== m.id) await makeTask({ leadId: lead.id, businessId: lead.businessId, assigneeId: id, kind: 'REPLY', title: `Reply to Jesse on ${company}`, notes: b.body.slice(0, 500), dueAt: atPhoenix(DateTime.fromJSDate(addBusinessDays(now, 1))), actorId: m.id, notify: false })
-  res.status(201).json({ comment: { ...c, mentionNames: mentions.map((id) => people.find((p) => p.id === id)?.name ?? '') } })
+  await notifyMentions({ mentionIds: mentionNotify, actorId: m.id, actorName: m.name, taskTitle: `${company}: ${b.body.slice(0, 60)}`, link: `/app/leads/${lead.id}#comments`, entityType: 'Lead', entityId: lead.id })
+  await tellAboutLead([...inThread], { type: replied ? 'LEAD_DECISION' : 'LEAD_COMMENT', title: replied ? `Jesse replied on ${company}` : `${m.name} on ${company}`, body: b.body.slice(0, 300), leadId: lead.id, link: `/app/leads/${lead.id}#comments`, actorId: m.id })
+  // Jesse @mentions someone on a lead that is not waiting on him: they owe him a reply.
+  if (head && !replied) for (const id of mentions) if (id !== m.id) await makeTask({ leadId: lead.id, businessId: lead.businessId, assigneeId: id, kind: 'REPLY', title: `Reply to Jesse on ${company}`, notes: b.body.slice(0, 500), dueAt: atPhoenix(DateTime.fromJSDate(addBusinessDays(now, 1))), actorId: m.id, notify: false })
+  // An SDR @mentions Jesse on an answered lead: it goes back into his inbox with this message as the ask.
+  let backToHead = false
+  if (!head && lead.business.headId && mentions.includes(lead.business.headId) && !lead.cmr?.jesseInputNeeded && openStatusesOf(lead.business).includes(lead.status)) {
+    await flagForHead(lead, b.body.slice(0, 300), m.id)
+    backToHead = true
+  }
+  res.status(201).json({ comment: { ...c, mentionNames: mentions.map((id) => people.find((p) => p.id === id)?.name ?? '') }, replied, backToHead })
 }
 
 // ------------------------------------------------------------------ Jesse Queue
@@ -904,13 +924,19 @@ export async function headQueue(req: AuthedRequest, res: Response): Promise<void
   const { business } = parse(z.object({ business: z.string().max(60).optional() }), req.query)
   const where: Prisma.LeadWhereInput = { AND: [leadWhere(m, s), business ? { businessId: business } : { business: { kind: 'CMR' } }] }
   const rows = await prisma.lead.findMany({ where: { AND: [where, { cmr: { is: { jesseInputNeeded: true } } }] }, include: { ...LEAD_INCLUDE, calls: { orderBy: { at: 'desc' }, take: 1, include: { user: PERSON } }, comments: { orderBy: { createdAt: 'desc' }, take: 3, include: { user: PERSON } } }, orderBy: { cmr: { flaggedAt: 'asc' } } })
-  const decided = await prisma.lead.findMany({ where: { AND: [where, { cmr: { is: { jesseDecidedAt: { gte: DateTime.now().minus({ days: 14 }).toJSDate() } } } }] }, include: LEAD_INCLUDE, orderBy: { cmr: { jesseDecidedAt: 'desc' } }, take: 20 })
+  const decided = await prisma.lead.findMany({ where: { AND: [where, { cmr: { is: { jesseDecidedAt: { gte: DateTime.now().minus({ days: 30 }).toJSDate() } } } }] }, include: LEAD_INCLUDE, orderBy: { cmr: { jesseDecidedAt: 'desc' } }, take: 50 })
+  // Closed leads (won, lost, not a fit…) of the last 90 days, so Jesse sees how each one ended.
+  const bizIds = business ? [business] : (await prisma.leadBusiness.findMany({ where: { kind: 'CMR' }, select: { id: true } })).map((b) => b.id)
+  const openByBiz = new Map<string, string[]>()
+  for (const id of bizIds) { const bz = await prisma.leadBusiness.findUnique({ where: { id }, select: { id: true, kind: true, pipeline: true, settings: true } }); if (bz) openByBiz.set(id, openStatusesOf(bz)) }
+  const closed = await prisma.lead.findMany({ where: { AND: [where, { OR: [...openByBiz].map(([businessId, open]) => ({ businessId, status: { notIn: open } })) }, { lastActivityAt: { gte: DateTime.now().minus({ days: 90 }).toJSDate() } }] }, include: LEAD_INCLUDE, orderBy: { lastActivityAt: 'desc' }, take: 100 })
   // Who flagged each lead (the SDR who pressed Qualify, or the manager who approved it), so Jesse sees where it came from.
   const byIds = [...new Set(rows.map((l) => l.cmr?.qualifiedById).filter((x): x is string => !!x))]
   const flaggers = new Map((await prisma.user.findMany({ where: { id: { in: byIds } }, select: { id: true, name: true } })).map((u) => [u.id, u]))
   res.json({
     queue: rows.map((l) => { const { calls, comments, ...rest } = l; return { ...leadOut(rest), flaggedBy: l.cmr?.qualifiedById ? flaggers.get(l.cmr.qualifiedById) ?? null : null, lastCall: calls[0] ? { ...calls[0], recordingUrl: calls[0].recordingUrl && calls[0].recordingKept ? `/api/leads/calls/${calls[0].id}/recording` : null } : null, comments } }),
     decided: decided.map((l) => leadOut(l)),
+    closed: closed.map((l) => leadOut(l)),
     canDecide: s.admin || (business ? s.headOf.includes(business) : s.headOf.length > 0),
   })
 }

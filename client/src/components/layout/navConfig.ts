@@ -271,6 +271,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Calls', to: '/app/leads/calls', icon: PhoneCall, flag: 'lead-management', leadsOnly: true },
       // The CMR flow (switch "cmr"): only people who work a CMR-kind business.
       { label: 'Jesse Queue', to: '/app/leads/queue', icon: Flag, flag: 'cmr', cmrOnly: true },
+      // Jesse's own desk: what the SDRs sent him, answered by chat. Managers can look in too.
+      { label: 'Jesse Inbox', to: '/app/leads/inbox', icon: Inbox, flag: 'cmr', cmrOnly: true, leadsManagerOnly: true },
       { label: 'Daily Report', to: '/app/leads/report', icon: ClipboardPen, flag: 'cmr', cmrOnly: true },
       { label: 'Jesse Summary', to: '/app/leads/summary', icon: BarChart3, flag: 'cmr', cmrOnly: true, leadsManagerOnly: true, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Lead Settings', to: '/app/leads/settings', icon: SlidersHorizontal, flag: 'lead-management', hideFor: ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD', 'QA', 'QA_LEAD'] },
@@ -321,8 +323,8 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
 const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/admin/users', '/app/admin/targets', '/app/admin/tags', '/app/admin/leave', '/app/admin/activity', '/app/admin/networks', '/app/daily-report/team', '/app/reports/monthly', '/app/projects/dashboard', '/app/feedback'])
 
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
-/** The head of a business who works no leads (Jesse): only what he decides from. */
-const HEAD_ITEMS = new Set(['/app/leads/queue', '/app/leads/summary'])
+/** The head of a business who works no leads (Jesse): one inbox, nothing else to learn. */
+const HEAD_ITEMS = new Set(['/app/leads/inbox'])
 
 export function filterNav(u: NavUser): NavGroup[] {
   // Jesse's desk: the queue and the summary, nothing else to learn.
