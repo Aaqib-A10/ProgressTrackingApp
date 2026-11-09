@@ -2,14 +2,15 @@ import type { RangeKey, CustomRange } from '../components/layout/RangeSelector'
 import type { Department } from './types'
 import { rangeQuery } from './range'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase, sessionHeaders } from './session'
+const BASE_URL = apiBase()
 
 /** Fetches the team report CSV (cookie-authed) and triggers a browser download. */
 export async function downloadTeamCsv(range: RangeKey, department?: Department, custom?: CustomRange | null): Promise<void> {
   const qs = new URLSearchParams(rangeQuery(range, custom))
   if (department) qs.set('department', department)
 
-  const res = await fetch(`${BASE_URL}/reports/team.csv?${qs.toString()}`, { credentials: 'include' })
+  const res = await fetch(`${BASE_URL}/reports/team.csv?${qs.toString()}`, { credentials: 'include', headers: sessionHeaders() })
   if (!res.ok) throw new Error('Export failed')
 
   await triggerDownload(res, 'team-report.csv')
@@ -20,7 +21,7 @@ export async function downloadAttendanceCsv(range: RangeKey, custom?: CustomRang
   const qs = new URLSearchParams(rangeQuery(range, custom))
   if (department) qs.set('department', department)
 
-  const res = await fetch(`${BASE_URL}/attendance/team.csv?${qs.toString()}`, { credentials: 'include' })
+  const res = await fetch(`${BASE_URL}/attendance/team.csv?${qs.toString()}`, { credentials: 'include', headers: sessionHeaders() })
   if (!res.ok) throw new Error('Export failed')
   await triggerDownload(res, 'attendance-report.csv')
 }

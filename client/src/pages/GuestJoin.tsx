@@ -89,7 +89,7 @@ export default function GuestJoin() {
       <div className="w-full max-w-md animate-scale-in rounded-card bg-card p-6 text-ink shadow-overlay">
         <div className="mb-4 flex items-center gap-2">
           <img src="/favicon.svg" alt="" className="h-8 w-8" />
-          <span className="text-body-lg font-bold">PulseTrack</span>
+          <span className="text-body-lg font-bold">Metriq</span>
           <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-ink-muted">Guest</span>
         </div>
         {step.kind === 'loading' ? <p className="flex items-center gap-2 text-body-md text-ink-muted"><Loader2 size={16} className="animate-spin" /> Opening the meeting…</p>

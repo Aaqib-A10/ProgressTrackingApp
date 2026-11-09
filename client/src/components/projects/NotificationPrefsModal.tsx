@@ -29,7 +29,7 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
     setDp(desktop.getPrefs())
     if (p === 'granted') {
       addToast({ type: 'success', message: 'Pop-up alerts are on for this computer' })
-      desktop.popup({ kind: 'tasks', title: 'PulseTrack alerts are on', body: 'You will see task and chat alerts here while PulseTrack is open.', force: true })
+      desktop.popup({ kind: 'tasks', title: 'Metriq alerts are on', body: 'You will see task and chat alerts here while Metriq is open.', force: true })
     } else if (p === 'denied') {
       addToast({ type: 'error', message: 'Your browser blocked notifications. See the steps below to allow them.' })
     }
@@ -44,7 +44,7 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal open onClose={onClose} title="Notification settings" footer={<Button onClick={onClose}>Done</Button>}>
-      {/* Pop-ups when PulseTrack is closed (Web Push) */}
+      {/* Pop-ups when Metriq is closed (Web Push) */}
       <section className="mb-5">
         <PushSetting />
       </section>
@@ -52,7 +52,7 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
       {/* Desktop pop-ups */}
       <section>
         <h3 className="flex items-center gap-2 text-body-md font-semibold text-ink"><MonitorSmartphone size={16} /> Pop-up alerts on this computer</h3>
-        <p className="mt-0.5 text-body-sm text-ink-muted">Shows a Windows or Mac notification when something happens, even if PulseTrack is in a background tab. Keep one PulseTrack tab open.</p>
+        <p className="mt-0.5 text-body-sm text-ink-muted">Shows a Windows or Mac notification when something happens, even if Metriq is in a background tab. Keep one Metriq tab open.</p>
         {perm === 'unsupported' ? (
           <p className="mt-3 rounded-btn bg-slate-50 p-3 text-body-sm text-ink-muted">This browser does not support pop-up alerts. Use Chrome or Edge on a computer.</p>
         ) : (
@@ -95,7 +95,7 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
                 </li>
                 <li className="py-3 pl-4">
                   <Button size="sm" variant="secondary" leadingIcon={<BellRing size={14} />} onClick={() => {
-                    const ok = desktop.popup({ kind: 'tasks', title: 'Test alert from PulseTrack', body: 'If you can see this, pop-up alerts are working.', force: true })
+                    const ok = desktop.popup({ kind: 'tasks', title: 'Test alert from Metriq', body: 'If you can see this, pop-up alerts are working.', force: true })
                     if (!ok) addToast({ type: 'error', message: 'Could not show a pop-up. Check that Task alerts is on and your system allows notifications.' })
                   }}>Send a test alert</Button>
                 </li>

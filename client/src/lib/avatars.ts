@@ -7,7 +7,8 @@ import { api } from './api'
  * so the app never asks the server for pictures that do not exist.
  */
 
-const BASE = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase } from './session'
+const BASE = apiBase()
 
 interface Index { users: Record<string, number>; projects: Record<string, number>; chats: Record<string, number> }
 let index: Index = { users: {}, projects: {}, chats: {} }

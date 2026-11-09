@@ -2,8 +2,10 @@
 // Base URL comes from VITE_API_URL; in dev, Vite also proxies /api to the server.
 import { isMobileOrTablet } from './device'
 import { holdUpdates } from './silentUpdate'
+import { apiBase, noteAuthResponse, sessionHeaders } from './session'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+// On the website this is /api on the same host; the phone app points it at the server (lib/session).
+const BASE_URL = apiBase()
 
 type JsonBody = unknown
 
@@ -55,6 +57,7 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
       // Is this tab in front? (the server then skips pushing pop-ups to this person)
       'X-PT-Visible': typeof document !== 'undefined' && document.visibilityState === 'visible' ? '1' : '0',
       ...(guestMode ? { 'X-PT-Guest': '1' } : {}),
+      ...sessionHeaders(),
     },
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
@@ -66,7 +69,10 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
     throw new ApiError(message || `Request failed (${res.status})`, res.status)
   }
 
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
+  if (res.status === 204) { if (path.startsWith('/auth/')) noteAuthResponse(path, null); return undefined as T }
+  const data = (await res.json()) as T
+  if (path.startsWith('/auth/')) noteAuthResponse(path, data)
+  return data
 }
 
 // Raw (non-JSON) POST — e.g. a file/CSV body the server reads with express.raw().
@@ -79,7 +85,7 @@ async function requestRaw<T>(path: string, body: BodyInit, contentType = 'applic
 async function sendRaw<T>(path: string, body: BodyInit, contentType: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': contentType },
+    headers: { 'Content-Type': contentType, ...sessionHeaders() },
     credentials: 'include',
     body,
   })

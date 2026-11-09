@@ -42,7 +42,7 @@ export default function ProjectSettings() {
         <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: data.project.color }} />
         <h1 className="text-headline-lg text-ink">{data.project.name} settings</h1>
       </div>
-      <div className="flex gap-1 overflow-x-auto border-b border-line">
+      <div className="flex gap-1 overflow-x-auto border-b border-line max-md:flex-wrap">
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => setParams({ tab: t.id })} className={cn('-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-body-md font-medium', tab === t.id ? 'border-primary text-ink' : 'border-transparent text-ink-muted hover:text-ink')}>{t.label}</button>
         ))}

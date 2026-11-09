@@ -6,7 +6,8 @@ import { ApiError } from './api'
  * page load, at most 10 per page load, and known browser noise is skipped.
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase, sessionHeaders } from './session'
+const BASE_URL = apiBase()
 const NOISE = [
   /ResizeObserver loop/i,
   /^Script error\.?$/i,
@@ -54,7 +55,7 @@ export function reportError(e: { message: string; stack?: string | null; kind?: 
     total++
     void fetch(`${BASE_URL}/system-health/client-error`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...sessionHeaders() },
       credentials: 'include',
       keepalive: true,
       body: JSON.stringify({ message, stack: e.stack?.slice(0, 8000) ?? null, url: window.location.href.slice(0, 1000), kind: e.kind ?? 'error' }),

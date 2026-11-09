@@ -1,10 +1,12 @@
 {
-  "name": "PulseTrack",
-  "short_name": "PulseTrack",
-  "description": "Team chat, calls, projects and daily progress.",
+  "name": "Metriq",
+  "short_name": "Metriq",
+  "description": "Leads, calls, tasks, chat, attendance and daily reports for your team.",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
+  "id": "/app",
+  "categories": ["business", "productivity"],
   "background_color": "#F8FAFC",
   "theme_color": "#4338CA",
   "icons": [

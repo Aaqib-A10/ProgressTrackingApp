@@ -37,11 +37,36 @@ export default function LeadTasks() {
         <BusinessPicker allowAll />
       </>} />
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-btn border border-line bg-card p-0.5">
-          {TABS.map(([k, l]) => <button key={k} type="button" onClick={() => setP('tab', k === 'today' ? null : k)} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-body-sm font-semibold', tab === k ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>{l}{d && k !== 'done' && k !== 'all' && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', tab === k ? 'bg-card/20' : k === 'overdue' && d.counts.overdue ? 'bg-danger/10 text-danger' : 'bg-slate-100 dark:bg-white/10')}>{d.counts[k as 'today' | 'overdue' | 'upcoming']}</span>}</button>)}
+        <div className="inline-flex max-w-full flex-wrap rounded-btn border border-line bg-card p-0.5">
+          {TABS.map(([k, l]) => <button key={k} type="button" onClick={() => setP('tab', k === 'today' ? null : k)} className={cn('inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-body-sm font-semibold', tab === k ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>{l}{d && k !== 'done' && k !== 'all' && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', tab === k ? 'bg-card/20' : k === 'overdue' && d.counts.overdue ? 'bg-danger/10 text-danger' : 'bg-slate-100 dark:bg-white/10')}>{d.counts[k as 'today' | 'overdue' | 'upcoming']}</span>}</button>)}
         </div>
       </div>
-      <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs">
+      {/* Phones: one card per task. */}
+      <div className="space-y-2 md:hidden">
+        {d?.tasks.map((t) => (
+          <div key={t.id} className={cn('rounded-card border border-line bg-card p-3 shadow-xs', focus === t.id && 'border-primary/50 bg-primary/[0.04]', t.overdue && !t.doneAt && 'border-danger/30')}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <Link to={`/app/leads/${t.lead?.id}`} className="block truncate font-semibold text-ink hover:underline">{t.lead?.organization || t.lead?.name || 'Lead'}</Link>
+                <div className="truncate text-[11.5px] text-ink-muted">{[t.lead?.organization ? t.lead?.name : null, t.lead?.phone].filter(Boolean).join(' · ') || t.lead?.business.name}</div>
+              </div>
+              {t.doneAt ? <Badge tone="success">Done</Badge> : t.overdue ? <Badge tone="danger" dot>Overdue</Badge> : t.today ? <Badge tone="warning" dot>Due today</Badge> : <Badge>Upcoming</Badge>}
+            </div>
+            <div className="mt-2 font-medium text-ink">{t.title}</div>
+            <div className="text-[11.5px] text-ink-muted">{TASK_KIND_LABEL[t.kind] ?? t.kind} · {fmtWhen(t.dueAt)}{t.assignee && canManage ? ` · ${t.assignee.name}` : ''}</div>
+            {(t.notes || t.outcome) && <p className="mt-1 line-clamp-2 text-body-sm text-ink-muted">{t.notes || t.outcome}</p>}
+            {!t.doneAt && (
+              <div className="mt-2.5 flex gap-1.5">
+                {t.lead?.phone && <a href={dialHref(t.lead.phone, meta?.dial) ?? '#'} className="flex-1"><Button size="sm" variant="secondary" className="w-full" leadingIcon={<Phone size={13} />}>Call</Button></a>}
+                <Button size="sm" variant="ghost" className="flex-1" leadingIcon={<CalendarClock size={13} />} onClick={() => setAct({ kind: 'schedule', task: t })}>Schedule</Button>
+                <Button size="sm" className="flex-1" leadingIcon={<CheckCircle2 size={13} />} onClick={() => setAct({ kind: 'complete', task: t })}>Complete</Button>
+              </div>
+            )}
+          </div>
+        ))}
+        {d && !d.tasks.length && <div className="rounded-card border border-line bg-card px-3 py-10"><EmptyState compact icon={<ListChecks />} title={tab === 'overdue' ? 'Nothing overdue' : tab === 'done' ? 'Nothing done yet' : 'No tasks here'} hint={tab === 'today' ? 'Tasks come from calls, next steps and the flow.' : undefined} /></div>}
+      </div>
+      <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-body-sm">
             <thead className="bg-slate-50 text-[11.5px] uppercase tracking-wide text-ink-muted dark:bg-white/[0.03]"><tr>{['Lead', 'Company', 'Phone', 'Task', 'Status', 'Scheduled', 'Notes', 'For', 'Actions'].map((h) => <th key={h} className={cn('px-3 py-2.5 font-semibold', h === 'Actions' && 'text-right')}>{h}</th>)}</tr></thead>

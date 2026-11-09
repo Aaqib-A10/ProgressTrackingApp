@@ -22,7 +22,7 @@ function isNetworkError(e: unknown): boolean {
 }
 
 function errMsg(e: unknown, fallback: string): string {
-  if (isNetworkError(e)) return 'Could not reach PulseTrack. Check your internet connection and try again.'
+  if (isNetworkError(e)) return 'Could not reach Metriq. Check your internet connection and try again.'
   const m = (e as { message?: string })?.message
   if (!m) return fallback
   try {
@@ -57,7 +57,7 @@ function liveOvertimeMin(me: Synced): number {
   return t.overtimeMin + Math.max(0, extra)
 }
 
-/** Minutes until PulseTrack checks this session out by itself (null when it won't). */
+/** Minutes until Metriq checks this session out by itself (null when it won't). */
 function minutesToAutoCheckout(me: Synced): number | null {
   const at = me.today.autoCheckoutAt
   if (!at || me.today.state === 'OUT' || me.today.state === 'NOT_IN') return null

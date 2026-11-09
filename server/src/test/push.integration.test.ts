@@ -85,6 +85,22 @@ describe('pop-up notifications when PulseTrack is closed', () => {
     expect(sent.find((s) => s.payload.kind === 'missed')?.payload).toMatchObject({ tag: `call-${c.body.call.id}`, title: 'Missed video call' })
   }, 30_000)
 
+  it('every bell notification reaches the phone too, and a tap opens the same place', async () => {
+    // itadMember subscribed in the first test; a lead-style alert is just a Notification row.
+    await prisma.notification.create({ data: { userId: w.itadMember.id, type: 'TASK_DUE_SOON', title: 'Due now: Call Dan', body: 'Desert HHW', link: '/app/leads/abc', entityType: 'Lead', entityId: 'abc' } })
+    await flush()
+    const mine = sent.filter((s) => s.payload.title === 'Due now: Call Dan')
+    expect(mine.length).toBeGreaterThanOrEqual(1)
+    expect(mine[0].payload).toMatchObject({ kind: 'alert', type: 'TASK_DUE_SOON', body: 'Desert HHW', url: '/app/leads/abc' })
+    expect(String(mine[0].payload.tag)).toMatch(/^n-Lead-abc/)
+    // Several people in one createMany: one pop-up each; nobody looking at Metriq right now is counted.
+    sent.length = 0
+    await prisma.notification.createMany({ data: [w.itadMember.id, w.itadLead.id].map((userId) => ({ userId, type: 'MENTION' as const, title: 'Sam mentioned you', body: 'on a card' })) })
+    await flush()
+    expect(sent.filter((s) => s.payload.title === 'Sam mentioned you').length).toBeGreaterThanOrEqual(1)
+    expect(sent.find((s) => s.payload.title === 'Sam mentioned you')?.payload.url).toBe('/app/notifications')
+  })
+
   it('a device the browser dropped is forgotten', async () => {
     failWith = 410
     await request(app).post(`/api/chat/conversations/${dm}/messages`).set(...auth(w.itadLead)).send({ body: 'hello?' }).expect(201)

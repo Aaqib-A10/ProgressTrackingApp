@@ -1,5 +1,4 @@
 import { prisma } from '../prisma'
-import { sendPush } from '../push'
 
 /**
  * Bell + phone push for System Health. It goes to developers (User.isDeveloper); while nobody
@@ -32,7 +31,7 @@ export async function alertDevelopers(a: { title: string; body: string; link: st
   await prisma.notification.createMany({
     data: to.map((userId) => ({ userId, type: 'SYSTEM_HEALTH' as const, title: a.title, body: a.body, link: a.link, entityType: 'SystemHealth' })),
   })
-  void sendPush(to, { kind: 'alert', title: a.title, body: a.body, tag: `health-${a.key}`.slice(0, 60), url: a.link }, { evenIfActive: true })
+  // The phone pop-up follows the saved rows by itself (lib/push onNotificationSaved), even for people in the app.
   return true
 }
 

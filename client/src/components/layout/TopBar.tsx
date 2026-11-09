@@ -78,7 +78,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
             // A chat @mention already pops up as the chat message itself: don't show it twice.
             const fresh = stored.filter((n) => !seenIds.current!.has(n.id) && !(n.link?.startsWith('/app/chat') && desktop.active('chat')))
             if (fresh.length === 1) desktop.popup({ kind: 'tasks', title: fresh[0].title, body: fresh[0].body, link: fresh[0].link, tag: fresh[0].id })
-            else if (fresh.length > 1) desktop.popup({ kind: 'tasks', title: `${fresh.length} new PulseTrack alerts`, body: fresh.slice(0, 3).map((n) => n.title).join('\n'), link: '/app/notifications', tag: 'pt-many' })
+            else if (fresh.length > 1) desktop.popup({ kind: 'tasks', title: `${fresh.length} new Metriq alerts`, body: fresh.slice(0, 3).map((n) => n.title).join('\n'), link: '/app/notifications', tag: 'pt-many' })
           }
           seenIds.current = new Set([...(seenIds.current ?? []), ...stored.map((n) => n.id)])
         })
@@ -125,7 +125,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   const hasUnread = notifs.length > 0 && notifKey !== seenKey
 
   return (
-    <header className="relative z-30 flex h-[52px] shrink-0 items-center gap-1.5 border-b border-line bg-bg/85 px-2.5 backdrop-blur-md sm:gap-3 sm:px-4">
+    <header className="relative z-30 flex h-[calc(52px+env(safe-area-inset-top))] shrink-0 items-center gap-1.5 border-b border-line bg-bg/85 px-2.5 pt-[env(safe-area-inset-top)] backdrop-blur-md sm:gap-3 sm:px-4">
       {/* Hamburger — toggles the sidebar on desktop, opens the drawer on mobile */}
       <button
         onClick={onMenu}
@@ -158,12 +158,12 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         {/* Attendance clock */}
         <ClockWidget />
 
-        <div className="mx-1 h-5 w-px bg-line" />
+        <div className="mx-1 hidden h-5 w-px bg-line md:block" />
 
         {/* Chat */}
         <button
           onClick={() => navigate('/app/chat')}
-          className="relative rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink"
+          className="relative hidden rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink md:block"
           aria-label={chatUnread.total ? `Chat, ${chatUnread.total} unread` : 'Chat'}
           title="Chat"
         >

@@ -396,14 +396,14 @@ function AddEntry({ period, date, pastPeriod, tagIdeas, onAdded }: { period: Wor
         <textarea ref={ref} rows={1} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={3000}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); addOne() } }}
           placeholder={prompt} title="Enter adds it. Shift+Enter starts a new line. Paste a list to add each line as its own item."
-          className="min-h-[40px] min-w-0 flex-1 resize-none rounded-btn border border-line bg-card px-2.5 py-2 text-body-md leading-snug text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10" />
+          className="min-h-[40px] min-w-full flex-1 resize-none rounded-btn border border-line bg-card px-2.5 py-2 text-body-md leading-snug text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10 sm:min-w-0" />
         <div className="inline-flex rounded-btn border border-line bg-card p-0.5 text-body-sm">
           {(['PLANNED', 'IN_PROGRESS', 'DONE'] as WorkStatus[]).map((s) => (
             <button key={s} type="button" onClick={() => setStatus(s)} className={cn('h-8 rounded-md px-2.5 font-semibold', status === s ? (s === 'DONE' ? 'bg-success text-white' : s === 'IN_PROGRESS' ? 'bg-warning text-white' : 'bg-ink text-card') : 'text-ink-muted')}>{STATUS_LABEL[s]}</button>
           ))}
         </div>
         <button type="button" onClick={() => setMore((m) => !m)} className="rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink" title="Details, time, how many, tag" aria-label="More options"><MoreHorizontal size={16} /></button>
-        <Button type="submit" size="sm" disabled={busy || !title.trim()}>{multi ? 'Add as one' : 'Add'}</Button>
+        <Button type="submit" size="sm" className="ml-auto" disabled={busy || !title.trim()}>{multi ? 'Add as one' : 'Add'}</Button>
       </div>
       {multi && (
         <div className="flex flex-wrap items-center gap-2 rounded-btn bg-primary/5 px-3 py-2 text-body-sm text-ink">

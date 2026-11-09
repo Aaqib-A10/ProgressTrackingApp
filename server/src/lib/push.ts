@@ -1,5 +1,5 @@
 import webpush from 'web-push'
-import { prisma } from './prisma'
+import { prisma, onNotificationSaved, type NotificationRow } from './prisma'
 import { inAudit } from './health/auditContext'
 
 /**
@@ -13,6 +13,8 @@ import { inAudit } from './health/auditContext'
 
 export interface PushPayload {
   kind: 'msg' | 'call' | 'missed' | 'test' | 'alert'
+  /** The bell notification's kind (TASK_DUE_SOON, LEAD_ASSIGNED, …): the phone app groups by it. */
+  type?: string
   title: string
   body: string
   /** Same tag replaces the earlier pop-up (one per chat, one per call). */
@@ -156,3 +158,21 @@ export async function pushMissed(input: { callId: string; conversationId: string
     conversationId: input.conversationId,
   }, { ttl: 24 * 3600, evenIfActive: false })
 }
+
+/**
+ * Every bell notification also reaches the phone: a task due or overdue, a lead assigned, Jesse's
+ * decision, an @mention, an attendance reminder, a project update. Same title, same text, and a
+ * tap opens the same place the bell does. People looking at Metriq right now are skipped (sendPush).
+ */
+onNotificationSaved((rows: NotificationRow[]) => {
+  const byKey = new Map<string, { ids: string[]; row: NotificationRow }>()
+  for (const r of rows) {
+    const key = `${r.entityType ?? r.type}-${r.entityId ?? ''}-${r.title}`
+    const g = byKey.get(key)
+    if (g) g.ids.push(r.userId); else byKey.set(key, { ids: [r.userId], row: r })
+  }
+  for (const { ids, row } of byKey.values()) {
+    const tag = `n-${row.entityType ?? row.type}-${row.entityId ?? row.title}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)
+    void sendPush(ids, { kind: 'alert', type: row.type, title: row.title.slice(0, 120), body: row.body.slice(0, 200), tag, url: row.link || '/app/notifications' }, { evenIfActive: row.type === 'SYSTEM_HEALTH' }).catch(() => undefined)
+  }
+})

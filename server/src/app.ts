@@ -126,9 +126,11 @@ export function createApp(): Express {
   // Website forms send leads from other sites: its own CORS rule, before the app's.
   app.use('/api/lead-in', leadInRouter)
 
+  // CLIENT_ORIGIN takes a comma-separated list: the website, and later the phone app's own
+  // origins (capacitor://localhost on iPhone, http://localhost on Android).
   app.use(
     cors({
-      origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
+      origin: (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim()).filter(Boolean),
       credentials: true,
     }),
   )

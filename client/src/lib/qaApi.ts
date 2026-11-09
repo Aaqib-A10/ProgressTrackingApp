@@ -3,7 +3,8 @@ import type { RangeKey, CustomRange } from '../components/layout/RangeSelector'
 import { rangeQuery } from './range'
 import type { Department } from './types'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase, sessionHeaders } from './session'
+const BASE_URL = apiBase()
 
 export type QaQuestionType = 'RATING' | 'YES_NO'
 
@@ -225,7 +226,7 @@ export async function uploadRecording(file: File): Promise<{ attachmentId: strin
   const res = await fetch(`${BASE_URL}/qa/recordings?name=${encodeURIComponent(file.name)}`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': file.type || 'audio/mpeg' },
+    headers: { 'Content-Type': file.type || 'audio/mpeg', ...sessionHeaders() },
     body: file,
   })
   if (!res.ok) throw new Error((await res.text().catch(() => '')) || 'Upload failed')

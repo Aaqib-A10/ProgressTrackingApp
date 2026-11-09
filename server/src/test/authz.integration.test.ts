@@ -36,6 +36,14 @@ describe('login', () => {
     const res = await request(app).post('/api/auth/login').send({ email: 'itad.member@test.local', password: 'Password123!' }).expect(200)
     expect(String(res.headers['set-cookie'])).toMatch(/token=/)
   })
+  it('the website never gets the token in the body; the phone app (X-PT-App: 1) does, and can use it as Bearer', async () => {
+    const web = await request(app).post('/api/auth/login').send({ email: 'itad.member@test.local', password: 'Password123!' }).expect(200)
+    expect(web.body.token).toBeUndefined()
+    const app1 = await request(app).post('/api/auth/login').set('X-PT-App', '1').send({ email: 'itad.member@test.local', password: 'Password123!' }).expect(200)
+    expect(typeof app1.body.token).toBe('string')
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${app1.body.token}`).expect(200)
+    expect(me.body.user.email).toBe('itad.member@test.local')
+  })
   it('wrong password → 401', async () => {
     await request(app).post('/api/auth/login').send({ email: 'itad.member@test.local', password: 'wrong-password' }).expect(401)
   })

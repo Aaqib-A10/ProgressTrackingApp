@@ -86,7 +86,7 @@ export default function ReportsMonthly() {
           <h1 className="text-headline-lg text-ink">Monthly Reports</h1>
           <p className="mt-0.5 text-body-md text-ink-muted">Team progress summary — the same report that emails to management each month.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
             <div className="inline-flex gap-1.5">
               {(['ITAD', 'LEAD_GEN'] as Dept[]).map((d) => (
@@ -114,7 +114,7 @@ export default function ReportsMonthly() {
               <p className="mt-0.5 text-body-sm text-ink-muted">One consolidated email that goes to management on the 1st of each month. Preview or send it now.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="secondary" leadingIcon={<FileDown size={15} />} onClick={() => window.open(managementPreviewUrl(month), '_blank', 'noopener')}>
               Preview / PDF
             </Button>

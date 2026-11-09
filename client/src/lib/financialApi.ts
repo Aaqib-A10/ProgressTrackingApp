@@ -1,7 +1,8 @@
 import { api } from './api'
 import type { Department } from './types'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase, sessionHeaders } from './session'
+const BASE_URL = apiBase()
 
 export interface PersonCost {
   id: string
@@ -64,7 +65,7 @@ export const deleteSalary = (id: string) => api.del<void>(`/financials/salaries/
 
 /** Fetches the financial report CSV (cookie-authed) and triggers a browser download. */
 export async function downloadFinancialCsv(from: string, to: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/financials/report.csv?from=${from}&to=${to}`, { credentials: 'include' })
+  const res = await fetch(`${BASE_URL}/financials/report.csv?from=${from}&to=${to}`, { credentials: 'include', headers: sessionHeaders() })
   if (!res.ok) throw new Error('Download failed')
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)

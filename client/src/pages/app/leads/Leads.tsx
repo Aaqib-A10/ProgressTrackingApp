@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ChevronLeft, ChevronRight, Columns3, Download, Flag, Inbox, Phone, Plus, Search, Upload, X } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Columns3, Download, Flag, Inbox, Phone, Plus, Search, SlidersHorizontal, Upload, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { EmptyState } from '../../../components/ui/EmptyState'
@@ -53,6 +53,8 @@ export default function Leads() {
   const [bulkTo, setBulkTo] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [moreFilters, setMoreFilters] = useState(false)
+  // Phones: the search is always there; the drop-downs open on demand.
+  const [phoneFilters, setPhoneFilters] = useState(false)
   const cmr = !!business && business.kind === 'CMR' && !all
   const [cols, setCols] = useColumns(cmr)
   const canManage = !!meta?.me.admin || (all ? (meta?.me.managerOf.length ?? 0) > 0 : business?.myRole === 'MANAGER')
@@ -120,6 +122,8 @@ export default function Leads() {
             <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
             <TextField value={q} onChange={(e) => onSearch(e.target.value)} placeholder="Search company, contact, phone, email, website, vendor…" className="pl-8" aria-label="Search" />
           </div>
+          <button type="button" onClick={() => setPhoneFilters((v) => !v)} className={cn('inline-flex h-9 items-center gap-1.5 rounded-btn border px-3 text-body-sm font-medium md:hidden', phoneFilters || activeFilters.length || status !== 'open' ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted')} aria-expanded={phoneFilters}><SlidersHorizontal size={15} />Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}</button>
+          <div className={cn('contents', !phoneFilters && 'max-md:hidden')}>
           <Select value={status} onChange={(e) => setParam({ status: e.target.value })} aria-label="Status">
             <option value="open">Open statuses</option>
             {pipeline.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
@@ -147,7 +151,8 @@ export default function Leads() {
             <option value="">Active + closed</option><option value="1">Active only</option><option value="0">Closed only</option>
           </Select>
           <button type="button" onClick={() => setMoreFilters((v) => !v)} className={cn('h-9 rounded-btn border px-3 text-body-sm font-medium', moreFilters || activeFilters.length ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted hover:text-ink')}>More{activeFilters.length ? ` (${activeFilters.length})` : ''}</button>
-          <div className="relative ml-auto">
+          </div>
+          <div className="relative ml-auto max-md:hidden">
             <Button size="sm" variant="secondary" leadingIcon={<Columns3 size={15} />} onClick={() => setColsOpen((v) => !v)}>Columns ({cols.length})</Button>
             {colsOpen && <ColumnsMenu cmr={cmr} cols={cols} onChange={setCols} onClose={() => setColsOpen(false)} />}
           </div>
@@ -182,8 +187,21 @@ export default function Leads() {
         </div>
       )}
 
+      {/* Phones: one card per lead (the table needs a wider screen). */}
+      <div className="space-y-2 md:hidden">
+        {loading && !data && Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-20 animate-pulse rounded-card border border-line bg-card" />)}
+        {data?.leads.map((l) => <LeadCard key={l.id} l={l} dial={meta?.dial} viaTalkLoop={!!meta?.talkloopDial} business={businesses.find((b) => b.id === l.businessId) ?? business} canManage={canManage} picked={picked.has(l.id)} onPick={(v) => setPicked((p) => { const n = new Set(p); if (v) n.add(l.id); else n.delete(l.id); return n })} onOpen={() => nav(`/app/leads/${l.id}`)} onChanged={load} toast={addToast} />)}
+        {data && !data.leads.length && <div className="rounded-card border border-line bg-card px-3 py-10"><EmptyState compact icon={<Inbox />} title="No leads match" hint="Change the filters, or add a lead." /></div>}
+        {data && data.total > data.pageSize && (
+          <div className="flex items-center justify-between px-1 py-1 text-body-sm text-ink-muted">
+            <span>{(page - 1) * data.pageSize + 1}–{Math.min(page * data.pageSize, data.total)} of {data.total}</span>
+            <span className="flex gap-1"><Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setParam({ page: String(page - 1) })} leadingIcon={<ChevronLeft size={14} />}>Prev</Button><Button size="sm" variant="ghost" disabled={page * data.pageSize >= data.total} onClick={() => setParam({ page: String(page + 1) })} trailingIcon={<ChevronRight size={14} />}>Next</Button></span>
+          </div>
+        )}
+      </div>
+
       {/* Table */}
-      <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs">
+      <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-body-sm">
             <thead className="sticky top-0 z-[1] bg-slate-50 text-[11.5px] uppercase tracking-wide text-ink-muted dark:bg-white/[0.03]">
@@ -302,6 +320,43 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
         </span>
       </td>
     </tr>
+  )
+}
+
+/** The phone's row: company, contact, status, next step and the call button. Tap opens the lead. */
+function LeadCard({ l, business, canManage, picked, onPick, onOpen, onChanged, toast, dial, viaTalkLoop }: { l: LeadRow; business: MetaBusiness | null; canManage: boolean; dial?: DialSetting; viaTalkLoop?: boolean; picked: boolean; onPick: (v: boolean) => void; onOpen: () => void; onChanged: () => void; toast: ReturnType<typeof useToast>['addToast'] }) {
+  const [busy, setBusy] = useState(false)
+  const pipeline = business?.pipeline ?? []
+  const st = pipeline.find((s) => s.key === l.status)
+  const run = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast({ type: 'success', message: ok }); onChanged() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation()
+  return (
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen() }} className={cn('rounded-card border border-line bg-card p-3 shadow-xs active:bg-slate-50 dark:active:bg-white/[0.03]', l.jesseInputNeeded && 'border-orange-200 bg-orange-50/40 dark:bg-orange-500/5', picked && 'border-primary/50 bg-primary/[0.05]')}>
+      <div className="flex items-start gap-2.5">
+        {canManage && <input type="checkbox" checked={picked} onClick={stop} onChange={(e) => onPick(e.target.checked)} className="mt-2.5 h-4 w-4 shrink-0 rounded border-line" aria-label={`Pick ${leadTitle(l)}`} />}
+        <Avatar name={l.organization || l.name || '?'} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 font-semibold text-ink"><span className="truncate">{l.organization || l.name || <span className="text-ink-faint">No name</span>}</span>{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="shrink-0 text-orange-500" /></span>}</div>
+          <div className="truncate text-[11.5px] text-ink-muted">{[l.organization ? l.name : null, l.phone, !l.phone ? l.email : null].filter(Boolean).join(' · ') || l.email || <span className="text-ink-faint">No contact yet</span>}</div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-muted">
+            {st ? <span className="font-semibold" style={{ color: st.color }}>{st.label}</span> : <StatusPill status={l.status} label={l.statusLabel} />}
+            {l.industry && <span>· {l.industry}</span>}
+            {l.state && <span>· {l.state}</span>}
+            {l.assignee ? <span>· {shortName(l.assignee.name)}</span> : canManage ? <span className="text-warning">· Unassigned</span> : null}
+            <span className="inline-flex items-center gap-1 tabular-nums">· <Phone size={11} className="text-ink-faint" />{l.callsCount}</span>
+          </div>
+          {(l.nextStep || l.nextStepDate || l.openTasks) ? (
+            <div className={cn('mt-1 flex items-center gap-1.5 text-[11.5px]', l.overdue ? 'font-semibold text-danger' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} />}<span className="truncate">{l.nextStep ?? 'Next step'}</span>{l.nextStepDate && <span className="shrink-0">· {fmtDate(l.nextStepDate)}</span>}{l.openTasks ? <Badge tone="primary" className="whitespace-nowrap">{l.openTasks} task{l.openTasks === 1 ? "" : "s"}</Badge> : null}</div>
+          ) : null}
+        </div>
+        <span className="flex shrink-0 flex-col items-end gap-1" onClick={stop}>
+          {l.phone && (viaTalkLoop && !l.prohibited
+            ? <button type="button" disabled={busy} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')} className="rounded-full bg-primary/10 p-2.5 text-primary" title={`Call ${l.phone} via TalkLoop`} aria-label="Call via TalkLoop"><Phone size={17} /></button>
+            : <a href={dialHref(l.phoneE164 ?? l.phone, dial) ?? '#'} className="rounded-full bg-primary/10 p-2.5 text-primary" title={`Call ${l.phone}`} aria-label="Call"><Phone size={17} /></a>)}
+          {l.jesseInputNeeded ? null : <FactsMeter facts={l.facts} size="sm" />}
+        </span>
+      </div>
+    </div>
   )
 }
 

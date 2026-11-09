@@ -1,6 +1,7 @@
 import { api, ApiError } from './api'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase, sessionHeaders } from './session'
+const BASE_URL = apiBase()
 
 export type AttachmentKind = 'ITAD' | 'LEAD_GEN'
 
@@ -31,7 +32,7 @@ export async function uploadAttachment(kind: AttachmentKind, file: File, date?: 
   const res = await fetch(`${BASE_URL}/attachments?${qs.toString()}`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    headers: { 'Content-Type': file.type || 'application/octet-stream', ...sessionHeaders() },
     body: file,
   })
   if (!res.ok) {

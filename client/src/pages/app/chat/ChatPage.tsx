@@ -59,7 +59,8 @@ export default function ChatPage() {
 
   if (!user) return null
   return (
-    <div className="-m-4 flex h-[calc(100dvh-52px)] overflow-hidden bg-card sm:-mx-8 sm:-my-7">
+    // Fills the page area exactly (whatever banners sit above it); on phones it stops at the tab bar.
+    <div className="absolute inset-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] flex overflow-hidden bg-card md:bottom-0">
       <aside className={cn('w-full shrink-0 border-r border-line bg-sidebar/50 md:w-[300px]', active && 'hidden md:block')}>
         <div className="flex h-12 items-center justify-between px-4">
           <h1 className="text-[15px] font-semibold text-ink">Chat</h1>

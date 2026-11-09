@@ -5,7 +5,7 @@ import { errMsg } from '../../lib/projectsApi'
 import { useToast } from '../ui/Toast'
 
 /**
- * Notifications that reach you when PulseTrack is closed: calls ring and messages pop up
+ * Notifications that reach you when Metriq is closed: calls ring and messages pop up
  * on this computer or phone, like WhatsApp. Turned on per device.
  */
 
@@ -16,11 +16,11 @@ function usePushState(): [PushState | null, (s: PushState) => void] {
 }
 
 const HELP: Record<PushState, string> = {
-  on: 'On for this device. Calls and messages pop up even when PulseTrack is closed.',
+  on: 'On for this device. Calls and messages pop up even when Metriq is closed.',
   off: 'Off for this device.',
   denied: 'Blocked in this browser. Click the lock next to the address, allow Notifications, then reload.',
-  unsupported: 'This browser cannot show notifications when PulseTrack is closed. Use Chrome, Edge or Firefox.',
-  'ios-install': 'On iPhone: tap Share, then "Add to Home Screen", open PulseTrack from there and turn this on.',
+  unsupported: 'This browser cannot show notifications when Metriq is closed. Use Chrome, Edge or Firefox.',
+  'ios-install': 'On iPhone: tap Share, then "Add to Home Screen", open Metriq from there and turn this on.',
 }
 
 /** The switch for the settings window. */
@@ -35,7 +35,7 @@ export function PushSetting() {
       if (on) {
         const r = await enablePush()
         setSt(r)
-        if (r === 'on') addToast({ type: 'success', message: 'Done. Calls and messages will reach you even when PulseTrack is closed.' })
+        if (r === 'on') addToast({ type: 'success', message: 'Done. Calls and messages will reach you even when Metriq is closed.' })
         else if (r === 'denied') addToast({ type: 'error', message: HELP.denied })
       } else {
         await disablePush()
@@ -59,7 +59,7 @@ export function PushSetting() {
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Smartphone size={17} /></span>
         <div className="min-w-0 flex-1">
-          <p className="text-body-md font-semibold text-ink">When PulseTrack is closed</p>
+          <p className="text-body-md font-semibold text-ink">When Metriq is closed</p>
           <p className="text-body-sm text-ink-muted">{st ? HELP[st] : 'Checking…'}</p>
         </div>
         {busy ? <Loader2 size={18} className="animate-spin text-ink-muted" /> : st === 'on' ? (
@@ -96,8 +96,8 @@ export function PushBanner() {
       <BellRing size={18} className="shrink-0 text-primary" />
       <p className="min-w-0 flex-1 text-body-sm text-ink">
         {st === 'ios-install'
-          ? <>To get calls and messages on this iPhone like WhatsApp: tap <b>Share</b>, then <b>Add to Home Screen</b>, and open PulseTrack from there.</>
-          : <><b>Never miss a call or message.</b> Turn on notifications and they pop up even when PulseTrack is closed.</>}
+          ? <>To get calls and messages on this iPhone like WhatsApp: tap <b>Share</b>, then <b>Add to Home Screen</b>, and open Metriq from there.</>
+          : <><b>Never miss a call or message.</b> Turn on notifications and they pop up even when Metriq is closed.</>}
       </p>
       {st === 'off' && (
         <button

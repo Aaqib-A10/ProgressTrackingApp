@@ -18,6 +18,7 @@ export function FloatingChat({ meId }: { meId: string }) {
   const { total } = useChatUnread()
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState<string | null>(null)
+  // Phones have the Chat tab in the bottom bar instead (the bubble would sit on top of it).
   if (pathname.startsWith('/app/chat')) return null
 
   return (
@@ -40,7 +41,7 @@ export function FloatingChat({ meId }: { meId: string }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={cn('fixed bottom-4 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-overlay transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30', open && 'bg-primary-700')}
+        className={cn('fixed bottom-4 right-4 z-40 hidden h-12 w-12 md:flex items-center justify-center rounded-full bg-primary text-white shadow-overlay transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30', open && 'bg-primary-700')}
         aria-label={total ? `Chat, ${total} unread` : 'Chat'}
         title="Chat"
       >

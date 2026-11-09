@@ -1,6 +1,5 @@
 import type { NotificationType } from '@prisma/client'
 import { prisma } from '../prisma'
-import { sendPush } from '../push'
 
 /** The managers of a business; when it has none, the company's Super Admins (someone must hear of a lead). */
 export async function leadManagers(businessId: string): Promise<string[]> {
@@ -12,7 +11,7 @@ export async function leadManagers(businessId: string): Promise<string[]> {
 
 export const leadLink = (leadId: string) => `/app/leads/${encodeURIComponent(leadId)}`
 
-/** Bell notification and a phone/computer pop-up. Never throws (a lead is never lost over an alert). */
+/** Bell notification (and, through it, the phone pop-up). Never throws (a lead is never lost over an alert). */
 export async function tellAboutLead(userIds: (string | null | undefined)[], n: { type: NotificationType; title: string; body: string; leadId: string; link?: string; actorId?: string | null }): Promise<void> {
   const ids = [...new Set(userIds.filter((x): x is string => !!x))].filter((id) => id !== n.actorId)
   if (!ids.length) return
@@ -21,7 +20,7 @@ export async function tellAboutLead(userIds: (string | null | undefined)[], n: {
     await prisma.notification.createMany({
       data: ids.map((userId) => ({ userId, type: n.type, actorId: n.actorId ?? null, title: n.title.slice(0, 200), body: n.body.slice(0, 500), link, entityType: 'Lead', entityId: n.leadId })),
     })
-    void sendPush(ids, { kind: 'alert', title: n.title.slice(0, 120), body: n.body.slice(0, 200), tag: `lead-${n.leadId}`, url: link }).catch(() => undefined)
+    // The phone pop-up follows the saved row by itself (lib/push onNotificationSaved).
   } catch (e) {
     console.warn('[leads] notify failed', (e as Error).message)
   }

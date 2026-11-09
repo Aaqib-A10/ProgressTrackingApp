@@ -1,6 +1,7 @@
 import { api } from './api'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
+import { apiBase } from './session'
+const BASE_URL = apiBase()
 
 export interface ItadAgentRow {
   id: string

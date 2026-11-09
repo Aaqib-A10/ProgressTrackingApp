@@ -46,6 +46,9 @@ function setAuthCookie(res: Response, token: string): void {
   })
 }
 
+/** The phone app (its own origin, no cookies) says X-PT-App: 1 and gets the session token in the body too. */
+const fromApp = (req: Request) => req.headers['x-pt-app'] === '1'
+
 /** Shape returned to the client — never includes passwordHash. */
 async function publicUser(userId: string) {
   const user = await prisma.user.findUniqueOrThrow({
@@ -230,9 +233,10 @@ export async function login(req: Request, res: Response): Promise<void> {
     return
   }
 
-  setAuthCookie(res, signToken({ sub: user.id, role: user.role }))
+  const token = signToken({ sub: user.id, role: user.role })
+  setAuthCookie(res, token)
   await logSignIn(req, user.id, 'LOGIN')
-  res.json({ user: await publicUser(user.id) })
+  res.json({ user: await publicUser(user.id), ...(fromApp(req) ? { token } : {}) })
 }
 
 export async function me(req: AuthedRequest, res: Response): Promise<void> {
@@ -324,8 +328,9 @@ export async function changePassword(req: AuthedRequest, res: Response): Promise
   // Member set their own secret — revoke any other outstanding sessions, then
   // re-issue this one so the user stays logged in.
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(parsed.data.newPassword), sessionsValidFrom: new Date() } })
-  setAuthCookie(res, signToken({ sub: user.id, role: user.role }))
-  res.json({ ok: true })
+  const token = signToken({ sub: user.id, role: user.role })
+  setAuthCookie(res, token)
+  res.json({ ok: true, ...(fromApp(req) ? { token } : {}) })
 }
 
 export async function resetPassword(req: Request, res: Response): Promise<void> {

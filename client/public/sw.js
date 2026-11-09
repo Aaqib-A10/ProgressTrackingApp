@@ -1,11 +1,11 @@
-/* PulseTrack background worker: shows pop-up notifications (messages, incoming calls,
- * missed calls) even when no PulseTrack tab is open, and opens the right place on click.
+/* Metriq background worker: shows pop-up notifications (messages, incoming calls,
+ * missed calls) even when no Metriq tab is open, and opens the right place on click.
  * It does not cache pages, so it never serves an old version of the app. */
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
 
-/** Is a PulseTrack tab in front right now? (then the page shows its own ring / message) */
+/** Is a Metriq tab in front right now? (then the page shows its own ring / message) */
 async function focusedClient() {
   const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
   return list.find((c) => c.focused && c.visibilityState === 'visible') || null
@@ -27,10 +27,10 @@ async function claimOnce(key) {
 
 self.addEventListener('push', (event) => {
   let p = {}
-  try { p = event.data ? event.data.json() : {} } catch { p = { title: 'PulseTrack', body: event.data ? event.data.text() : '' } }
+  try { p = event.data ? event.data.json() : {} } catch { p = { title: 'Metriq', body: event.data ? event.data.text() : '' } }
   event.waitUntil((async () => {
     const front = await focusedClient()
-    // Looking at PulseTrack already: a message needs no pop-up (the app shows it).
+    // Looking at Metriq already: a message needs no pop-up (the app shows it).
     if (front && p.kind === 'msg') {
       front.postMessage({ type: 'pt-push', payload: p })
       return
@@ -56,7 +56,7 @@ self.addEventListener('push', (event) => {
             ? [{ action: 'open', title: 'Call back' }]
             : [],
     }
-    await self.registration.showNotification(p.title || 'PulseTrack', options)
+    await self.registration.showNotification(p.title || 'Metriq', options)
   })())
 })
 
@@ -74,7 +74,7 @@ self.addEventListener('notificationclick', (event) => {
     if (d.kind === 'call' && event.action !== 'answer' && !url.includes('answer=')) url += (url.includes('?') ? '&' : '?') + 'answer=' + encodeURIComponent(d.callId || '')
     const target = new URL(url, self.location.origin).href
     const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    // A PulseTrack tab is open: bring it forward and send it there (no reload).
+    // A Metriq tab is open: bring it forward and send it there (no reload).
     const tab = list.find((c) => c.url.startsWith(self.location.origin))
     if (tab) {
       await tab.focus().catch(() => undefined)

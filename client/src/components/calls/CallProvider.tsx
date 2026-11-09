@@ -382,7 +382,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
     [active, dismissed, call?.callId],
   )
 
-  // Desktop pop-up once per incoming call (only when PulseTrack isn't the window in front).
+  // Desktop pop-up once per incoming call (only when Metriq isn't the window in front).
   const announced = useRef(new Set<string>())
   useEffect(() => {
     for (const c of ringing) {
@@ -392,7 +392,7 @@ export function CallProvider({ meId, children }: { meId: string; children: React
         kind: 'calls',
         sticky: true,
         title: c.isDirect ? `${c.startedBy.name} is calling you` : `${c.video ? 'Video' : 'Voice'} call in ${c.title}`,
-        body: c.isDirect ? `${c.video ? 'Video' : 'Voice'} call · open PulseTrack to answer` : `${c.startedBy.name} started a call · open PulseTrack to join`,
+        body: c.isDirect ? `${c.video ? 'Video' : 'Voice'} call · open Metriq to answer` : `${c.startedBy.name} started a call · open Metriq to join`,
         link: `/app/chat?c=${encodeURIComponent(c.conversationId)}`,
         tag: `call-${c.id}`,
         once: `ring-${c.id}`,

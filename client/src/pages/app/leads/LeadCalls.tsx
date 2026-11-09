@@ -42,12 +42,30 @@ export default function LeadCalls() {
         {canManage && <Select value={params.get('user') ?? ''} onChange={(e) => setP('user', e.target.value || null)} aria-label="Agent"><option value="">All agents</option><option value="me">Me</option>{(business?.members ?? []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select>}
         <Select value={params.get('disposition') ?? ''} onChange={(e) => setP('disposition', e.target.value || null)} aria-label="Disposition"><option value="">Any result</option>{DISPOSITIONS.map((x) => <option key={x} value={x}>{DISPOSITION_LABEL[x]}</option>)}</Select>
         <Select value={params.get('minSecs') ?? ''} onChange={(e) => setP('minSecs', e.target.value || null)} aria-label="Length"><option value="">Any length</option><option value="30">30 s or longer</option><option value="120">2 min or longer</option><option value="300">5 min or longer</option></Select>
-        <label className="flex items-center gap-1.5 text-body-sm text-ink"><TextField type="date" value={params.get('from') ?? ''} onChange={(e) => setP('from', e.target.value || null)} className="w-36" /><span>to</span><TextField type="date" value={params.get('to') ?? ''} onChange={(e) => setP('to', e.target.value || null)} className="w-36" /></label>
+        <label className="flex flex-wrap items-center gap-1.5 text-body-sm text-ink"><TextField type="date" value={params.get('from') ?? ''} onChange={(e) => setP('from', e.target.value || null)} className="w-36" /><span>to</span><TextField type="date" value={params.get('to') ?? ''} onChange={(e) => setP('to', e.target.value || null)} className="w-36" /></label>
         <button type="button" onClick={() => setP('recorded', params.get('recorded') ? null : '1')} className={cn('h-9 rounded-btn border px-3 text-body-sm font-medium', params.get('recorded') ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted')}>With recording</button>
         {d && <span className="ml-auto text-body-sm text-ink-faint">{d.total} call{d.total === 1 ? '' : 's'}</span>}
       </div>
       {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
-      <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs">
+      {/* Phones: one card per call, with the recording under it. */}
+      <div className="space-y-2 md:hidden">
+        {d?.calls.map((c) => (
+          <div key={c.id} className="rounded-card border border-line bg-card p-3 shadow-xs">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <Link to={`/app/leads/${c.lead.id}`} className="block truncate font-semibold text-ink hover:underline">{c.lead.organization || c.lead.name}</Link>
+                <div className="text-[11.5px] text-ink-muted">{fmtWhen(c.at)} · {c.user?.name ?? 'TalkLoop'}{c.durationSec ? ` · ${fmtDur(c.durationSec)}` : ''}</div>
+              </div>
+              <span className="flex shrink-0 gap-1"><Badge tone={c.disposition === 'CONNECTED' ? 'success' : 'neutral'}>{DISPOSITION_LABEL[c.disposition]}</Badge>{c.consentGiven === false && <Badge tone="warning">No consent</Badge>}</span>
+            </div>
+            {c.summary && <p className="mt-1.5 line-clamp-3 text-body-sm text-ink-muted">{c.summary}</p>}
+            {c.recordingUrl ? <audio controls preload="none" src={c.recordingUrl} className="mt-2 h-8 w-full" /> : c.hasRecording ? <p className="mt-1 text-[11.5px] text-ink-faint">Recording not for you</p> : null}
+          </div>
+        ))}
+        {d && !d.calls.length && <div className="rounded-card border border-line bg-card px-3 py-10"><EmptyState compact icon={<PhoneCall />} title="No calls match" hint="Calls logged on leads appear here; TalkLoop's call log joins them once connected." /></div>}
+        {d && d.total > d.pageSize && <div className="flex items-center justify-between px-1 text-body-sm text-ink-muted"><span>Page {page}</span><span className="flex gap-1"><Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setP('page', String(page - 1))}>Prev</Button><Button size="sm" variant="ghost" disabled={page * d.pageSize >= d.total} onClick={() => setP('page', String(page + 1))}>Next</Button></span></div>}
+      </div>
+      <div className="overflow-hidden rounded-card border border-line bg-card shadow-xs max-md:hidden">
         <table className="w-full text-left text-body-sm">
           <thead className="bg-slate-50 text-[11.5px] uppercase tracking-wide text-ink-muted dark:bg-white/[0.03]"><tr>{['When', 'Lead', 'Agent', 'Result', 'Length', 'Summary', 'Recording'].map((h) => <th key={h} className="px-3 py-2.5 font-semibold">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">

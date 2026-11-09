@@ -13,6 +13,8 @@ import { SilentUpdater } from './SilentUpdater'
 import { PushBanner } from './PushControls'
 import { CommandPalette } from './GlobalSearch'
 import { endPreview, usePreview } from '../../lib/preview'
+import { BottomTabs } from '../../mobile/BottomTabs'
+import { InstallBanner } from '../../mobile/InstallBanner'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -125,14 +127,17 @@ export function AppShell({ user, children }: AppShellProps) {
             <PreviewBanner />
             <AccountBanners user={user} />
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
-            <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:px-8 sm:py-7">
+            {/* Phones: room at the bottom for the tab bar (and the home indicator under it). */}
+            <main ref={mainRef} className="relative flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:px-8 sm:py-7 md:pb-7">
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
-                <PushBanner />
+                {/* The chat fills the whole page area; its banners wait for the next screen. */}
+                {!location.pathname.startsWith('/app/chat') && <><InstallBanner /><PushBanner /></>}
                 {children ?? <Outlet />}
               </Suspense>
             </main>
           </div>
         </div>
+        <BottomTabs user={user} onMore={() => setNavOpen(true)} />
         <CommandPalette />
         <FloatingChat meId={user.id} />
         <SilentUpdater />

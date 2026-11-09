@@ -56,7 +56,7 @@ function ResultIcon({ r, size = 15 }: { r: CheckResult; size?: number }) {
 
 function Segmented<T extends string>({ value, options, onChange, size = 'md' }: { value: T; options: { value: T; label: React.ReactNode }[]; onChange: (v: T) => void; size?: 'sm' | 'md' }) {
   return (
-    <div className="inline-flex max-w-full overflow-x-auto rounded-lg bg-slate-100 p-0.5 ring-1 ring-inset ring-line/60">
+    <div className="inline-flex max-w-full flex-wrap rounded-lg bg-slate-100 p-0.5 ring-1 ring-inset ring-line/60">
       {options.map((o) => (
         <button key={o.value} type="button" onClick={() => onChange(o.value)} aria-pressed={value === o.value}
           className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors', size === 'sm' ? 'h-6 px-2.5 text-[12px]' : 'h-7 px-3 text-body-sm',

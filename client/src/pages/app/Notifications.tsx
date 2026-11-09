@@ -47,11 +47,11 @@ export default function Notifications() {
           <h1 className="text-headline-lg text-ink">Notifications</h1>
           <p className="mt-0.5 text-body-md text-ink-muted">Task assignments, deadlines, mentions and project updates.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-btn border border-line bg-card p-0.5">
             {(['all', 'unread'] as const).map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn('h-7 rounded-md px-3 text-body-sm font-semibold capitalize', filter === f ? 'bg-primary text-white' : 'text-ink-muted')}>{f}</button>)}
           </div>
-          <Button size="sm" variant="secondary" leadingIcon={<Settings size={15} />} onClick={() => setPrefsOpen(true)}>Notification settings</Button>
+          <Button size="sm" variant="secondary" leadingIcon={<Settings size={15} />} onClick={() => setPrefsOpen(true)}><span className="max-sm:hidden">Notification </span>Settings</Button>
           <Button size="sm" variant="secondary" leadingIcon={<CheckCheck size={15} />} onClick={() => markAllNotificationsRead().then(() => setRows((r) => r?.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })) ?? r))}>Mark all read</Button>
         </div>
       </div>
@@ -68,7 +68,7 @@ export default function Notifications() {
                   className={cn('flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50', !n.readAt && 'bg-primary/[0.04]')}
                 >
                   <span className="mt-0.5 shrink-0">{ICON[n.type] ?? <Bell size={16} className="text-ink-muted" />}</span>
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                     <span className={cn('block text-body-md text-ink', !n.readAt && 'font-semibold')}>{n.title}</span>
                     <span className="block text-body-sm text-ink-muted">{n.body}</span>
                   </span>
