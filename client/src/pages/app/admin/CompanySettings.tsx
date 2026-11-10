@@ -43,7 +43,7 @@ export default function CompanySettings() {
         <h1 className="text-headline-lg text-ink">Company Settings</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Your company's name and time zone, its departments, and roles of your own on top of the built-in ones.</p>
       </div>
-      <div role="tablist" className="flex flex-wrap gap-1 border-b border-line">
+      <div role="tablist" className="pt-tabs flex flex-wrap gap-1 border-b border-line">
         {TABS.map((t) => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} type="button" onClick={() => setTab(t.key)}
             className={cn('-mb-px inline-flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-body-md font-medium transition-colors', tab === t.key ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink')}>
@@ -124,7 +124,7 @@ function GeneralTab() {
     )}
     {data.canEdit && !c.home && (
       <Card title="Help from Metriq support" subtitle="When you ask us for help, you can let us see Metriq as one of your people for a while. You see it in your activity log, and they see a banner the whole time. Finance stays closed to us.">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="pt-filters flex flex-wrap items-center gap-2">
           {c.supportAccessUntil ? (
             <>
               <Badge tone="warning">Allowed until {new Date(c.supportAccessUntil).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Badge>

@@ -109,7 +109,7 @@ export default function DealBoard() {
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
           {/* Phones: one stage at a time. */}
           <div className="md:hidden">
-            <div className="mb-3 flex flex-wrap gap-1.5">
+            <div className="pt-tabs mb-3 flex flex-wrap gap-1.5">
               {cols.map((c, i) => (
                 <button key={c.key} type="button" onClick={() => setPhoneCol(i)} className={cn('inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-body-sm font-semibold', i === phoneCol ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted')}>
                   <span className="h-2 w-2 rounded-full" style={{ background: c.color }} />{c.label}<span className={cn('tabular-nums', i === phoneCol ? 'text-card/70' : 'text-ink-faint')}>{c.count}</span>

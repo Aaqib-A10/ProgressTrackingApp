@@ -200,7 +200,7 @@ export default function TeamAttendance() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
-            <div className="inline-flex flex-wrap gap-1.5">
+            <div className="pt-tabs inline-flex flex-wrap gap-1.5">
               <button
                 onClick={() => setDept('ALL')}
                 className={'rounded-full px-3.5 py-1.5 text-body-sm font-medium transition-colors ' + (dept === 'ALL' ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}

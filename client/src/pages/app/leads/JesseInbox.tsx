@@ -43,7 +43,7 @@ export default function JesseInbox() {
     <div className="mx-auto w-full max-w-[1100px] space-y-4">
       <PageHeader title="Inbox" hint={`${biz?.name ?? ''} · what the SDRs sent you. Open one, read the form, answer in the chat; they take it from there.`} actions={<>{cmrBiz.length > 1 && <BusinessPicker />}<Link to="/app/leads/summary" className="text-body-sm font-semibold text-primary hover:underline">Summary →</Link></>} />
       {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="pt-tabs flex flex-wrap gap-1.5">
         {tabs.map((t) => (
           <button key={t.key} type="button" onClick={() => setParams(t.key === 'waiting' ? {} : { tab: t.key })} className={cn('inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-body-sm font-semibold', tab === t.key ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted hover:text-ink')}>
             {t.label}{t.n != null && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', tab === t.key ? 'bg-card/20' : t.tone === 'danger' ? 'bg-danger/10 text-danger' : 'bg-slate-100 dark:bg-white/10')}>{t.n}</span>}

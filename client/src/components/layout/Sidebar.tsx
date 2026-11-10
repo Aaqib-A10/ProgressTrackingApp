@@ -193,7 +193,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
   )
 
   return (
-    <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-line bg-sidebar">
+    <aside className="pt-sidebar flex h-full w-[248px] shrink-0 flex-col border-r border-line bg-sidebar">
       {/* Brand */}
       <div className="flex h-[52px] items-center justify-between gap-2 px-4">
         <img src={metriqLogo} alt="Metriq" className="h-[22px] w-auto dark:hidden" />

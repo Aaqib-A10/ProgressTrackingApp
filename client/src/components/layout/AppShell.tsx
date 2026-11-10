@@ -1,5 +1,5 @@
 import { api } from '../../lib/api'
-import { createContext, useContext, useState, useEffect, useRef, Suspense, type ReactNode } from 'react'
+import { createContext, Fragment, useContext, useState, useEffect, useRef, Suspense, type ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Activity } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -15,6 +15,7 @@ import { CommandPalette } from './GlobalSearch'
 import { endPreview, usePreview } from '../../lib/preview'
 import { BottomTabs } from '../../mobile/BottomTabs'
 import { InstallBanner } from '../../mobile/InstallBanner'
+import { PullIndicator, usePullToRefresh } from '../../mobile/PullToRefresh'
 import { setNativeNavigator, takeWaitingPlace } from '../../mobile/native'
 import { QuickLogWidget } from '../itad/QuickLogWidget'
 
@@ -67,6 +68,9 @@ export function AppShell({ user, children }: AppShellProps) {
     if (to && to !== `${location.pathname}${location.search}`) goTo(to)
   }, [location.pathname, location.search, goTo])
   const mainRef = useRef<HTMLElement>(null)
+  // Phones: pull down at the top to load the screen again (the page is mounted afresh).
+  const [refreshKey, setRefreshKey] = useState(0)
+  const ptr = usePullToRefresh(mainRef, () => { setRefreshKey((k) => k + 1); window.dispatchEvent(new CustomEvent('pt:refresh')) }, location.pathname.startsWith('/app/chat'))
   // Moving to another section starts at the top, with a short fade so the change feels
   // smooth. Moving inside a section (one chat to another, a task drawer) is left alone.
   const section = location.pathname.split('/').slice(0, 3).join('/')
@@ -140,10 +144,11 @@ export function AppShell({ user, children }: AppShellProps) {
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
             {/* Phones: room at the bottom for the tab bar (and the home indicator under it). */}
             <main ref={mainRef} className="relative flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:px-8 sm:py-7 md:pb-7">
+              <PullIndicator pull={ptr.pull} busy={ptr.busy} />
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
                 {/* The chat fills the whole page area; its banners wait for the next screen. */}
                 {!location.pathname.startsWith('/app/chat') && <><InstallBanner /><PushBanner /></>}
-                {children ?? <Outlet />}
+                <Fragment key={refreshKey}>{children ?? <Outlet />}</Fragment>
               </Suspense>
             </main>
           </div>

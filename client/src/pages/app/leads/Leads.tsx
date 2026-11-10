@@ -105,7 +105,7 @@ export default function Leads() {
 
       {/* Quick counts */}
       {data && (
-        <div className="flex flex-wrap gap-2">
+        <div className="pt-chips flex flex-wrap gap-2">
           <Quick label="Open" value={Object.entries(data.counts.byStatus).filter(([k]) => (pipeline.length ? pipeline.find((s) => s.key === k)?.open : !['WON', 'LOST', 'SPAM', 'CLOSED_WON', 'CLOSED_LOST', 'NOT_A_FIT', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER'].includes(k))).reduce((a, [, n]) => a + n, 0)} active={status === 'open' && !activeFilters.length} onClick={() => setParams(new URLSearchParams(all ? { business: 'all' } : business ? { business: business.id } : {}))} />
           <Quick label="Mine" value={data.counts.mine} active={params.get('assignee') === 'me'} onClick={() => setParam({ assignee: params.get('assignee') === 'me' ? null : 'me', status: 'open' })} />
           {canManage && <Quick label="Unassigned" value={data.counts.unassigned} active={params.get('assignee') === 'none'} tone="warning" onClick={() => setParam({ assignee: params.get('assignee') === 'none' ? null : 'none', status: 'open' })} />}

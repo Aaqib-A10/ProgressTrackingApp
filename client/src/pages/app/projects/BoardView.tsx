@@ -23,6 +23,7 @@ import { AvatarStack, DueChip, PriorityGlyph, StatusIcon, PRIORITY_META } from '
 import { LabelChip } from '../../../components/projects/Pickers'
 import { VERDICT_META, VerdictBadge } from '../../../components/projects/Reviews'
 import { cn } from '../../../lib/cn'
+import { usePhone } from '../../../mobile/usePhone'
 
 /**
  * Kanban board with drag and drop (dnd-kit):
@@ -64,6 +65,84 @@ export function BoardView({ columns, tasks, canMove, canManage, onOpen, onMoveTa
   /** Show every finished task (e.g. while searching or filtering). */
   showAllDone?: boolean
 }) {
+  // Phones: one column at a time, and "Move to" under each card instead of dragging.
+  const phone = usePhone()
+  if (phone) return <PhoneBoard columns={columns} tasks={tasks} canMove={canMove} onOpen={onOpen} onMoveTask={onMoveTask} onQuickAdd={onQuickAdd} onAddTask={onAddTask ?? null} showAllDone={showAllDone} />
+  return <DeskBoard columns={columns} tasks={tasks} canMove={canMove} canManage={canManage} onOpen={onOpen} onMoveTask={onMoveTask} onReorderColumns={onReorderColumns} onQuickAdd={onQuickAdd} onAddTask={onAddTask} onDragState={onDragState} showAllDone={showAllDone} />
+}
+
+type BoardProps = Parameters<typeof BoardView>[0]
+
+/** A board on a phone: pick a column with the tabs, read its cards, move a card with "Move to". */
+function PhoneBoard({ columns, tasks, canMove, onOpen, onMoveTask, onQuickAdd, onAddTask, showAllDone }: Pick<BoardProps, 'columns' | 'tasks' | 'canMove' | 'onOpen' | 'onMoveTask' | 'onQuickAdd' | 'showAllDone'> & { onAddTask: ((columnId: string) => void) | null }) {
+  const [colId, setColId] = useState<string | null>(null)
+  const [showOld, setShowOld] = useState(false)
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const byCol = useMemo(() => {
+    const m: Record<string, TaskCard[]> = {}
+    for (const c of columns) m[c.id] = []
+    for (const t of [...tasks].sort((a, b) => a.position - b.position)) (m[t.columnId] ??= []).push(t)
+    return m
+  }, [columns, tasks])
+  const col = columns.find((c) => c.id === colId) ?? columns.find((c) => c.category !== 'DONE' && (byCol[c.id]?.length ?? 0) > 0) ?? columns[0]
+  if (!col) return null
+  const now = Date.now()
+  const all = byCol[col.id] ?? []
+  const tucked = col.category === 'DONE' && !showAllDone ? all.filter((t) => isOldDone(t, now)) : []
+  const list = showOld || !tucked.length ? all : all.filter((t) => !tucked.includes(t))
+  const moveTo = (t: TaskCard, to: string) => {
+    if (to === t.columnId) return
+    const target = (byCol[to] ?? []).filter((x) => x.id !== t.id)
+    onMoveTask(t.id, to, target.length ? target[target.length - 1].id : null, null)
+  }
+  return (
+    <div className="space-y-3">
+      <div role="tablist" aria-label="Columns" className="pt-tabs flex flex-wrap gap-1.5">
+        {columns.map((c) => {
+          const on = c.id === col.id
+          return (
+            <button key={c.id} type="button" role="tab" aria-selected={on} onClick={() => { setColId(c.id); setShowOld(false) }} className={cn('inline-flex h-9 items-center justify-center gap-1.5 rounded-full border px-3 text-body-sm font-semibold', on ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted')}>
+              <span className="truncate">{c.name}</span><span className={cn('shrink-0 tabular-nums', on ? 'opacity-70' : 'text-ink-faint')}>{byCol[c.id]?.length ?? 0}</span>
+            </button>
+          )
+        })}
+      </div>
+      <section aria-label={`${col.name} column, ${all.length} tasks`} className="space-y-2">
+        {list.map((t) => (
+          <div key={t.id}>
+            <div role="button" tabIndex={0} aria-label={`${t.code} ${t.title}`} onClick={() => onOpen(t.code)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(t.code) }} className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <CardBody task={t} />
+            </div>
+            {canMove && columns.length > 1 && (
+              <label className="-mt-1 flex items-center gap-2 rounded-b-lg border border-t-0 border-line bg-card px-3 pb-2 pt-3 text-body-sm text-ink-muted">Move to
+                <select value={t.columnId} onChange={(e) => moveTo(t, e.target.value)} className="h-9 min-w-0 flex-1 rounded-btn border border-line bg-card px-2 text-body-sm text-ink" aria-label={`Move ${t.code} to`}>
+                  {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+        ))}
+        {!list.length && <p className="rounded-lg border border-dashed border-line-strong/70 px-3 py-8 text-center text-body-sm text-ink-faint">{tucked.length ? 'Nothing finished in the last day' : 'No tasks here'}</p>}
+        {tucked.length > 0 && (
+          <button type="button" onClick={() => setShowOld((v) => !v)} className="flex w-full items-center justify-center gap-1 rounded-lg py-2 text-body-sm font-medium text-ink-muted">
+            {showOld ? <><ChevronUp size={16} /> Hide older</> : <><ChevronDown size={16} /> Show {tucked.length} older</>}
+          </button>
+        )}
+        {onAddTask ? (
+          <button type="button" onClick={() => onAddTask(col.id)} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong text-body-sm font-medium text-ink-muted"><Plus size={16} /> Add task to {col.name}</button>
+        ) : onQuickAdd && (
+          <form className="flex gap-2" onSubmit={async (e) => { e.preventDefault(); if (!title.trim()) return; setBusy(true); try { await onQuickAdd(col.id, title.trim()); setTitle('') } finally { setBusy(false) } }}>
+            <input value={title} disabled={busy} onChange={(e) => setTitle(e.target.value)} placeholder={`New task in ${col.name}`} className="h-11 min-w-0 flex-1 rounded-btn border border-line bg-card px-3 text-ink" aria-label="New task title" />
+            <button type="submit" disabled={busy || !title.trim()} className="inline-flex h-11 items-center gap-1 rounded-btn bg-primary px-4 font-semibold text-white disabled:opacity-50"><Plus size={16} /> Add</button>
+          </form>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function DeskBoard({ columns, tasks, canMove, canManage, onOpen, onMoveTask, onReorderColumns, onQuickAdd, onAddTask, onDragState, showAllDone = false }: BoardProps) {
   // Local mirror of "which column holds which card ids, in order" so cards can
   // hop columns while dragging; rebuilt from props whenever not dragging.
   const grouped = useMemo(() => {

@@ -63,7 +63,7 @@ export default function ProjectsList() {
             </p>
           ) : <p className="mt-1 text-body-md text-ink-muted">Boards for each project you're part of.</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-md:w-full max-md:flex-nowrap max-md:[&>:not(:first-child)]:flex-1 max-md:[&>:not(:first-child)]:justify-center">
           <button type="button" onClick={() => setParams({ settings: 'notifications' })} className="rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink" title="Notification settings" aria-label="Notification settings"><BellRing size={16} /></button>
           {isAdminSomewhere && (
             <Link to="/app/projects/dashboard" className="inline-flex h-7 items-center gap-1.5 rounded-btn border border-line bg-card px-2.5 text-[12.5px] font-medium text-ink shadow-xs hover:border-line-strong hover:bg-slate-50">

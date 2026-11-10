@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { cn } from '../../../lib/cn'
+import { usePhone } from '../../../mobile/usePhone'
 import type { WorkEntry, WorkStatus } from '../../../lib/workLogApi'
 import { Chips, DoneCheck, EntryText, RowActions, type EntryActions } from './parts'
 import { NoteList } from './notes'
@@ -19,6 +20,39 @@ const COLUMNS: { status: WorkStatus; label: string; dot: string; empty: string }
 export function TodoBoard({ entries, readOnly, actions, flash }: { entries: WorkEntry[]; readOnly: boolean; actions: EntryActions; flash?: string | null }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }))
   const [dragging, setDragging] = useState<WorkEntry | null>(null)
+  // Phones: one column at a time, and "Move to" on each card instead of dragging.
+  const phone = usePhone()
+  const [phoneCol, setPhoneCol] = useState<WorkStatus>('PLANNED')
+  if (phone) {
+    const col = COLUMNS.find((c) => c.status === phoneCol) ?? COLUMNS[0]
+    const rows = entries.filter((e) => e.status === col.status).sort((a, b) => Number(b.blocked) - Number(a.blocked))
+    return (
+      <div className="space-y-3">
+        <div role="tablist" aria-label="Columns" className="pt-tabs flex flex-wrap gap-1.5">
+          {COLUMNS.map((c) => (
+            <button key={c.status} type="button" role="tab" aria-selected={c.status === col.status} onClick={() => setPhoneCol(c.status)} className={cn('inline-flex h-9 items-center justify-center gap-1.5 rounded-full border px-3 text-body-sm font-semibold', c.status === col.status ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted')}>
+              <span className={cn('h-2 w-2 shrink-0 rounded-full', c.dot)} />{c.label}<span className="tabular-nums opacity-70">{entries.filter((e) => e.status === c.status).length}</span>
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {rows.map((e) => (
+            <div key={e.id} data-entry-id={e.id} className={cn('rounded-btn transition-shadow duration-700', flash === e.id && 'ring-2 ring-primary/50')}>
+              <CardBody e={e} readOnly={readOnly} actions={actions} />
+              {!readOnly && (
+                <label className="-mt-1 flex items-center gap-2 rounded-b-btn border border-t-0 border-line bg-card px-3 pb-2 pt-3 text-body-sm text-ink-muted">Move to
+                  <select value={e.status} onChange={(ev) => actions.onStatus(e, ev.target.value as WorkStatus)} className="h-9 min-w-0 flex-1 rounded-btn border border-line bg-card px-2 text-body-sm text-ink" aria-label="Move to">
+                    {COLUMNS.map((c) => <option key={c.status} value={c.status}>{c.label}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          ))}
+          {rows.length === 0 && <p className="rounded-btn border border-dashed border-line px-3 py-8 text-center text-body-sm text-ink-muted">{col.status === 'PLANNED' ? 'Nothing waiting.' : col.status === 'IN_PROGRESS' ? 'Nothing in progress.' : 'Nothing done yet.'}</p>}
+        </div>
+      </div>
+    )
+  }
 
   function onStart(ev: DragStartEvent) { setDragging(entries.find((e) => e.id === ev.active.id) ?? null) }
   function onEnd(ev: DragEndEvent) {

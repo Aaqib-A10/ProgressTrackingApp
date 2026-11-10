@@ -64,9 +64,9 @@ export default function LeadsDashboard() {
           </div>
 
           {/* Needs attention */}
-          <div className="flex flex-wrap gap-2">
+          <div className="pt-chips flex flex-wrap gap-2">
             <Mini label="New this week" value={c.newThisWeek} color="#0EA5E9" onClick={() => go({ status: 'all', sort: 'newest' })} />
-            <Mini label="Updated in 48 h" value={c.recentlyUpdated} color="#14B8A6" onClick={() => go({ status: 'all', sort: 'activity' })} />
+            <Mini label={'Updated in 48\u00a0h'} value={c.recentlyUpdated} color="#14B8A6" onClick={() => go({ status: 'all', sort: 'activity' })} />
             <Mini label="Never called" value={c.noStatus} color="#94A3B8" onClick={() => go({ status: 'NEW' })} />
             {canManage && <Mini label="Unassigned" value={c.unassigned} color="#F59E0B" onClick={() => go({ assignee: 'none' })} />}
             {canManage && <Mini label="Assigned" value={c.assigned} color="#8B5CF6" icon={<Users size={12} />} onClick={() => go({ status: 'all' })} />}

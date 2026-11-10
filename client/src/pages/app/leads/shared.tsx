@@ -123,13 +123,13 @@ export function Avatar({ name, size = 28 }: { name: string; size?: number }) {
 export function PageHeader({ title, hint, back, actions, children }: { title: string; hint?: ReactNode; back?: { to: string; label: string }; actions?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-0 max-md:w-full">
         {back && <Link to={back.to} className="text-body-sm text-ink-muted hover:text-ink">← {back.label}</Link>}
         <h1 className="text-headline-lg text-ink">{title}</h1>
         {hint && <p className="mt-0.5 text-body-md text-ink-muted">{hint}</p>}
         {children}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="pt-actions flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
 }

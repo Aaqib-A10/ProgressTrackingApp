@@ -140,7 +140,7 @@ export default function LeadDialer() {
       )}
 
       {/* Tabs */}
-      <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1 max-md:flex-wrap">
+      <div className="pt-tabs -mx-1 flex gap-1 overflow-x-auto border-b border-line px-1 max-md:mx-0 max-md:flex-wrap max-md:px-0">
         {tabs.filter((t) => !t.manager || isManager).map((t) => (
           <button key={t.key} type="button" onClick={() => go(t.key)} className={cn('-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-body-md font-medium', view === t.key ? 'border-primary text-ink' : 'border-transparent text-ink-muted hover:text-ink')}>
             {t.label}

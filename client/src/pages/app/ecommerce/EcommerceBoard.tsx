@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { usePhone } from '../../../mobile/usePhone'
 import { useSearchParams } from 'react-router-dom'
 import { DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import { Plus, CalendarClock, Trash2, MessageSquare } from 'lucide-react'
@@ -22,6 +23,8 @@ const COLUMNS: { status: EcomTaskStatus; label: string }[] = [
 const STATUS_LABEL: Record<EcomTaskStatus, string> = { TODO: 'To Do', IN_PROGRESS: 'In Progress', DONE: 'Done' }
 
 export default function EcommerceBoard() {
+  const phone = usePhone()
+  const [phoneCol, setPhoneCol] = useState<EcomTaskStatus>('TODO')
   const { user } = useAuth()
   const { addToast } = useToast()
   const isHod = user?.role === 'SUPER_ADMIN' || (user?.role === 'TEAM_LEAD' && (user?.department === 'ECOMMERCE' || !!user?.blocks?.includes('ecom-board')))
@@ -75,11 +78,20 @@ export default function EcommerceBoard() {
         {isHod && <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setNewOpen(true)}>New Task</Button>}
       </div>
 
+      {/* Phones: one column at a time (no dragging, so a swipe on a card scrolls the page); each card keeps its status picker. */}
+      {phone && (
+        <div role="tablist" aria-label="Columns" className="pt-tabs flex flex-wrap gap-1.5">
+          {COLUMNS.map((c) => {
+            const n = tasks.filter((t) => t.status === c.status).length
+            return <button key={c.status} type="button" role="tab" aria-selected={phoneCol === c.status} onClick={() => setPhoneCol(c.status)} className={'inline-flex h-9 items-center justify-center gap-1.5 rounded-full border px-3 text-body-sm font-semibold ' + (phoneCol === c.status ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted')}>{c.label}<span className="tabular-nums opacity-70">{n}</span></button>
+          })}
+        </div>
+      )}
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {COLUMNS.map((col) => (
+          {COLUMNS.filter((col) => !phone || col.status === phoneCol).map((col) => (
             <Column key={col.status} status={col.status} label={col.label} tasks={tasks.filter((t) => t.status === col.status)}
-              canMove={canMove} isHod={isHod} onDelete={remove} onOpen={setDetailId} onStatus={setStatus} />
+              canMove={phone ? () => false : canMove} canSetStatus={canMove} isHod={isHod} onDelete={remove} onOpen={setDetailId} onStatus={setStatus} />
           ))}
         </div>
       </DndContext>
@@ -94,8 +106,8 @@ export default function EcommerceBoard() {
   )
 }
 
-function Column({ status, label, tasks, canMove, isHod, onDelete, onOpen, onStatus }: {
-  status: EcomTaskStatus; label: string; tasks: EcomTask[]; canMove: (t: EcomTask) => boolean; isHod: boolean
+function Column({ status, label, tasks, canMove, canSetStatus, isHod, onDelete, onOpen, onStatus }: {
+  status: EcomTaskStatus; label: string; tasks: EcomTask[]; canMove: (t: EcomTask) => boolean; canSetStatus: (t: EcomTask) => boolean; isHod: boolean
   onDelete: (id: string) => void; onOpen: (id: string) => void; onStatus: (id: string, s: EcomTaskStatus) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
@@ -106,14 +118,14 @@ function Column({ status, label, tasks, canMove, isHod, onDelete, onOpen, onStat
         <span className="rounded-full bg-slate-200 px-2 text-body-sm font-semibold text-ink-muted">{tasks.length}</span>
       </div>
       <div className="flex min-h-[140px] flex-col gap-2.5 p-1">
-        {tasks.map((t) => <TaskCard key={t.id} task={t} movable={canMove(t)} isHod={isHod} onDelete={onDelete} onOpen={onOpen} onStatus={onStatus} />)}
+        {tasks.map((t) => <TaskCard key={t.id} task={t} movable={canMove(t)} canSetStatus={canSetStatus(t)} isHod={isHod} onDelete={onDelete} onOpen={onOpen} onStatus={onStatus} />)}
       </div>
     </div>
   )
 }
 
-function TaskCard({ task, movable, isHod, onDelete, onOpen, onStatus }: {
-  task: EcomTask; movable: boolean; isHod: boolean
+function TaskCard({ task, movable, canSetStatus, isHod, onDelete, onOpen, onStatus }: {
+  task: EcomTask; movable: boolean; canSetStatus: boolean; isHod: boolean
   onDelete: (id: string) => void; onOpen: (id: string) => void; onStatus: (id: string, s: EcomTaskStatus) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id, disabled: !movable })
@@ -136,7 +148,7 @@ function TaskCard({ task, movable, isHod, onDelete, onOpen, onStatus }: {
         {task.assignee && <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary" title={task.assignee.name}>{initials(task.assignee.name)}</span>}
       </div>
       <div className="mt-2.5 border-t border-line pt-2" {...stop}>
-        <select value={task.status} onChange={(e) => onStatus(task.id, e.target.value as EcomTaskStatus)} disabled={!movable}
+        <select value={task.status} onChange={(e) => onStatus(task.id, e.target.value as EcomTaskStatus)} disabled={!canSetStatus}
           className="h-8 w-full rounded-btn border border-line bg-bg px-2 text-body-sm text-ink focus:border-primary focus:outline-none disabled:opacity-60">
           {COLUMNS.map((c) => <option key={c.status} value={c.status}>{STATUS_LABEL[c.status]}</option>)}
         </select>

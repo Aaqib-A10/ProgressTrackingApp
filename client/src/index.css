@@ -345,4 +345,109 @@ select:focus-visible {
   html.pt-app body {
     overscroll-behavior-x: none;
   }
+
+  /*
+   * Rows of filters and tabs, the same everywhere (screens opt in with these classes):
+   *  .pt-actions  a page header's controls: two to a line, each the same width
+   *  .pt-filters  a row of selects or fields: two to a line
+   *  .pt-chips    count chips (Open 11, Mine 0…): an even grid, two to a line
+   *  .pt-tabs     a tab strip or segmented control: equal tabs, up to four on one line, three to a line past that
+   */
+  html.pt-app :is(.pt-actions, .pt-filters) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+  }
+  html.pt-app :is(.pt-actions, .pt-filters) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  html.pt-app :is(.pt-actions, .pt-filters) > *,
+  html.pt-app :is(.pt-actions, .pt-filters) > a > button,
+  html.pt-app :is(.pt-actions, .pt-filters) > label > :is(select, input) {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+  html.pt-app .pt-chips {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+  }
+  html.pt-app .pt-chips > * {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    height: auto;
+    min-height: 2.75rem;
+    padding: 0.375rem 0.625rem 0.375rem 0.875rem;
+    border-radius: 0.75rem;
+    white-space: normal;
+    text-align: left;
+    line-height: 1.2;
+  }
+  /* The count sits at the right end of its chip. */
+  html.pt-app .pt-chips > * > :last-child { margin-left: auto; flex-shrink: 0; }
+  html.pt-app .pt-tabs {
+    display: grid !important;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+  }
+  html.pt-app .pt-tabs:has(> :nth-child(5)) {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  html.pt-app .pt-tabs > * {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    padding: 0.375rem;
+    height: auto;
+    min-height: 2.5rem;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  /* The menu that slides in from "More": wider, with full-size rows like a phone's settings list. */
+  html.pt-app .pt-sidebar { width: min(86vw, 330px); }
+  html.pt-app .pt-sidebar nav :is(a, button).h-\[30px\],
+  html.pt-app .pt-sidebar > div :is(a, button).h-\[30px\] { height: 2.75rem; border-radius: 0.625rem; }
+  html.pt-app .pt-sidebar nav :is(a, button).h-\[28px\] { height: 2.5rem; }
+  html.pt-app .pt-sidebar nav p.h-6 { height: 2rem; }
+  html.pt-app .pt-sidebar nav svg,
+  html.pt-app .pt-sidebar > div:last-child svg { width: 20px; height: 20px; }
+  html.pt-app .pt-sidebar .space-y-px > * + * { margin-top: 2px; }
+  html.pt-app .pt-sidebar .h-\[30px\]:not(a):not(button) { height: 2.75rem; }
+  html.pt-app .pt-sidebar .h-\[52px\] { height: 3.75rem; }
+  html.pt-app .pt-sidebar .h-\[22px\] { height: 26px; }
+
+  /* Menus that drop from the top bar (alerts, your menu, the date range): rows a thumb can hit. */
+  html.pt-app header [role='menu'] { max-width: calc(100vw - 1rem); max-height: calc(100dvh - 9rem); overflow-y: auto; }
+  html.pt-app header [role='menu'] :is(a, button):not(.h-6):not(.h-7):not(.h-8):not([class*='rounded-full']) { min-height: 2.75rem; }
+
+  /*
+   * Every segmented control (a track holding only buttons: Day | Week | Month, List | Board…):
+   * its options are the same width; five or more options become an even three-across grid.
+   */
+  html.pt-app main :is(div, nav):is([class~='p-0.5'], [class~='p-1']):has(> :is(button, a) + :is(button, a)):not(:has(> :not(button, a))):not(.pt-tabs):not(.grid):not(.hidden) {
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    max-width: 100%;
+  }
+  html.pt-app main :is(div, nav):is([class~='p-0.5'], [class~='p-1']):has(> :is(button, a):nth-child(5)):not(:has(> :not(button, a))):not(.pt-tabs):not(.grid):not(.hidden) {
+    display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  html.pt-app main :is(div, nav):is([class~='p-0.5'], [class~='p-1']):has(> :is(button, a) + :is(button, a)):not(:has(> :not(button, a))):not(.pt-tabs):not(.grid):not(.hidden) > * {
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+    min-width: 0;
+  }
 }

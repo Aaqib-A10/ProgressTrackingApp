@@ -262,7 +262,7 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
   return (
     <Section icon={<Mail size={17} />} title="Email inbox" hint="New emails to this mailbox become leads (checked every 2 minutes). Only emails that arrive after it is switched on; nothing in the mailbox is changed."
       action={<Toggle checked={biz.inboxOn} onChange={(v) => void save(v)} label={biz.inboxOn ? 'On' : 'Off'} />}>
-      <div className="mb-3 flex flex-wrap gap-1.5">
+      <div className="pt-tabs mb-3 flex flex-wrap gap-1.5">
         {PRESETS.map((p) => <button key={p.label} type="button" onClick={() => setF({ ...f, inboxHost: p.host || f.inboxHost, inboxPort: p.port, inboxSecure: true })} className={cn('h-8 rounded-full border px-3 text-body-sm', preset?.label === p.label ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted hover:text-ink')}>{p.label}</button>)}
       </div>
       {preset && <p className="mb-3 text-body-sm text-ink-muted">{preset.hint}</p>}

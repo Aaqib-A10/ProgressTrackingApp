@@ -94,10 +94,13 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
     const timer = setInterval(() => { if (document.visibilityState === 'visible' || desktop.active('tasks')) load() }, 30000)
     const onVis = () => { if (document.visibilityState === 'visible') load() }
     document.addEventListener('visibilitychange', onVis)
+    // Pull to refresh (phones) reloads the bell too.
+    window.addEventListener('pt:refresh', load)
     return () => {
       active = false
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pt:refresh', load)
     }
   }, [])
 
