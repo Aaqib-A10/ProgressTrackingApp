@@ -642,7 +642,7 @@ export default function MarketingProfiles() {
             to add a channel, or a brand name to open its full list.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <PillFilter
             options={[{ value: 'matrix', label: 'Matrix' }, { value: 'board', label: 'Tier board' }] as never}
             value={view}

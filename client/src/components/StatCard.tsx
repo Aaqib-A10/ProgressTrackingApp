@@ -31,7 +31,7 @@ export function StatCard({ label, value, delta, deltaLabel, caption, icon, child
   const inner = (
     <>
       <div className="flex items-center justify-between">
-        <span className="truncate text-[13px] font-medium text-ink-muted">{label}</span>
+        <span className="truncate text-[13px] font-medium text-ink-muted max-md:whitespace-normal max-md:leading-tight">{label}</span>
         {icon && (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-slate-50 text-ink-muted [&>svg]:h-[15px] [&>svg]:w-[15px]">
             {icon}

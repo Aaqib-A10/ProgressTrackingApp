@@ -58,7 +58,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 max-md:items-end max-md:overflow-hidden max-md:p-0">
       <div className="absolute inset-0 animate-fade-in bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
       <div
         ref={dialogRef}
@@ -66,10 +66,13 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[calc(100vh-2rem)] w-full flex-col animate-scale-in rounded-xl border border-line bg-card shadow-overlay focus:outline-none',
+          'relative flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-xl border border-line bg-card shadow-overlay focus:outline-none md:animate-scale-in',
+          // On a phone a window is a sheet: full width, up from the bottom, rounded at the top.
+          'max-md:max-h-[92dvh] max-md:!max-w-none max-md:animate-sheet-up max-md:rounded-b-none max-md:rounded-t-[20px] max-md:border-x-0 max-md:border-b-0',
           SIZES[size],
         )}
       >
+        <span aria-hidden className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong md:hidden" />
         {title != null && (
           <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
             <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
@@ -84,7 +87,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
         )}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer != null && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-slate-50/60 px-5 py-3 rounded-b-xl">{footer}</div>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-line bg-slate-50/60 px-5 py-3 rounded-b-xl max-md:flex-wrap max-md:rounded-none max-md:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-md:[&>button]:min-w-[7rem] max-md:[&>button]:flex-1">{footer}</div>
         )}
       </div>
     </div>,

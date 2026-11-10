@@ -40,7 +40,7 @@ export function QuickLogWidget({ user }: { user: CurrentUser }) {
   return (
     <>
       {open && (
-        <div className="fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 flex max-h-[min(560px,calc(100dvh-6rem))] flex-col overflow-hidden rounded-card border border-line bg-card shadow-overlay md:inset-x-auto md:bottom-[4.75rem] md:right-20 md:w-[300px]" role="dialog" aria-label="Quick Log">
+        <div className="fixed inset-x-2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex max-h-[min(560px,calc(100dvh-6rem))] flex-col overflow-hidden rounded-card border border-line bg-card shadow-overlay md:inset-x-auto md:bottom-[4.75rem] md:right-20 md:w-[300px]" role="dialog" aria-label="Quick Log">
           {blocked && (
             <div className="flex items-center gap-2 border-b border-warning/40 bg-warning/10 px-3 py-1.5 text-[12px] text-ink">
               Pop-ups are blocked here. <a href="/quicklog" target="_blank" rel="noopener" className="font-semibold text-primary underline" onClick={() => setBlocked(false)}>Open in a tab</a>
@@ -54,7 +54,7 @@ export function QuickLogWidget({ user }: { user: CurrentUser }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn('fixed z-40 flex h-12 items-center gap-2 rounded-full bg-ink px-4 text-card shadow-overlay transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30',
-          'right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-4 md:right-20',
+          'right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-4 md:right-20',
           open && 'bg-primary text-white max-md:hidden')} // on a phone the open panel covers this corner: its own Close and Minimize take over
         aria-label={open ? 'Hide Quick Log' : 'Quick Log: today’s activity'}
         title="Quick Log: add today’s calls, emails and results from anywhere"

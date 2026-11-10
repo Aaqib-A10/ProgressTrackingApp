@@ -14,6 +14,12 @@ import { onPreloadError } from './lib/staleChunks'
 initTheme()
 installErrorReporter()
 
+// The app (not the public website) gets a bigger type scale and bigger buttons on phones: index.css, html.pt-app.
+const WEBSITE = /^\/(?:$|pricing|security|product|solutions|terms|privacy|cookies|dpa)(?:\/|$)/
+const markApp = (path: string) => document.documentElement.classList.toggle('pt-app', !WEBSITE.test(path))
+markApp(window.location.pathname)
+router.subscribe((state) => markApp(state.location.pathname))
+
 // After a deploy the old page files are replaced: reload once to pick up the new version.
 window.addEventListener('vite:preloadError', (e) => {
   let storage: Storage | null = null

@@ -203,7 +203,7 @@ export default function TeamMembers() {
                   <div className="min-w-0 flex-1">
                     <p className="text-body-md text-ink">
                       <span className="font-semibold">{e.memberName}</span>{' '}
-                      <span className="text-ink-muted">({e.memberEmail})</span>
+                      <span className="break-all text-ink-muted">({e.memberEmail})</span>
                     </p>
                     <p className="text-body-sm text-ink-muted">
                       {meta.label} by {e.actorName} · {fromNow(e.createdAt)}

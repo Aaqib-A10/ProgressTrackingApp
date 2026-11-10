@@ -37,6 +37,14 @@
   --slate-800: 39 40 45;
   --slate-900: 27 28 31;
   --slate-950: 17 17 19;
+  /* The type scale (tailwind.config.js reads these). Phones get a bigger one at the end of this file. */
+  --fs-label-md: 11px; --lh-label-md: 16px;
+  --fs-body-sm: 12px; --lh-body-sm: 16px;
+  --fs-body-md: 13.5px; --lh-body-md: 20px;
+  --fs-body-lg: 15px; --lh-body-lg: 22px;
+  --fs-headline-md: 17px; --lh-headline-md: 24px;
+  --fs-headline-lg: 22px; --lh-headline-lg: 28px;
+  --fs-metric-lg: 28px; --lh-metric-lg: 34px;
 }
 
 .dark {
@@ -260,5 +268,81 @@ select:focus-visible {
   }
   h1, h2, h3 {
     letter-spacing: -0.015em;
+  }
+}
+
+/*
+ * The app on a phone (below 768px; html.pt-app is on everywhere except the public website,
+ * see main.tsx). A computer screen is dense on purpose; a phone is read at arm's length and
+ * worked with a thumb, so the same screens get bigger text and bigger things to tap, the way
+ * phone apps do. Nothing here applies on a computer.
+ */
+@media (max-width: 767px) {
+  html.pt-app {
+    --fs-label-md: 12.5px; --lh-label-md: 18px;
+    --fs-body-sm: 14px; --lh-body-sm: 20px;
+    --fs-body-md: 16px; --lh-body-md: 23px;
+    --fs-body-lg: 17px; --lh-body-lg: 25px;
+    --fs-headline-md: 19px; --lh-headline-md: 26px;
+    --fs-headline-lg: 24px; --lh-headline-lg: 30px;
+    --fs-metric-lg: 30px; --lh-metric-lg: 36px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  /* Text sized by hand in a screen (text-[12px] and friends) grows by the same step. */
+  html.pt-app .text-\[9px\] { font-size: 11px; }
+  html.pt-app .text-\[10px\] { font-size: 12px; }
+  html.pt-app .text-\[10\.5px\] { font-size: 12px; }
+  html.pt-app .text-\[11px\] { font-size: 13px; }
+  html.pt-app .text-\[11\.5px\] { font-size: 13px; }
+  html.pt-app .text-\[12px\] { font-size: 14px; }
+  html.pt-app .text-\[12\.5px\] { font-size: 14px; }
+  html.pt-app .text-\[13px\] { font-size: 15px; }
+  html.pt-app .text-\[13\.5px\] { font-size: 16px; }
+  html.pt-app .text-\[14px\] { font-size: 16px; }
+  html.pt-app .text-\[14\.5px\] { font-size: 16.5px; }
+  html.pt-app .text-\[15px\] { font-size: 17px; }
+  html.pt-app .text-\[15\.5px\] { font-size: 17px; }
+  html.pt-app .text-\[16px\] { font-size: 18px; }
+  html.pt-app .text-\[17px\] { font-size: 19px; }
+  html.pt-app .text-\[18px\] { font-size: 20px; }
+  html.pt-app .text-\[19px\] { font-size: 21px; }
+
+  /* Fields: 16px text (an iPhone zooms the page on anything smaller) and a full-height tap target. */
+  html.pt-app :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select, textarea) {
+    font-size: 16px;
+  }
+  html.pt-app :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select) {
+    min-height: 44px;
+  }
+  html.pt-app :is(input[type='checkbox'], input[type='radio']) {
+    min-width: 20px;
+    min-height: 20px;
+  }
+
+  /* Buttons, tabs, chips and links with a fixed height get a taller one; square icon buttons stay square. */
+  html.pt-app :is(button, a, [role='button'], [role='tab']).h-6 { height: 1.875rem; }
+  html.pt-app :is(button, a, [role='button'], [role='tab']).h-7 { height: 2.25rem; }
+  html.pt-app :is(button, a, [role='button'], [role='tab']).h-8 { height: 2.5rem; }
+  html.pt-app :is(button, a, [role='button'], [role='tab']).h-9 { height: 2.75rem; }
+  html.pt-app :is(button, a, [role='button'], [role='tab']).h-10 { height: 3rem; }
+  html.pt-app :is(button, a, [role='button']).h-6.w-6 { width: 1.875rem; }
+  html.pt-app :is(button, a, [role='button']).h-7.w-7 { width: 2.25rem; }
+  html.pt-app :is(button, a, [role='button']).h-8.w-8 { width: 2.5rem; }
+  html.pt-app :is(button, a, [role='button']).h-9.w-9 { width: 2.75rem; }
+  /* Icon buttons made with padding only. */
+  html.pt-app :is(button, a)[class~='p-1'] { padding: 0.5rem; }
+  html.pt-app :is(button, a)[class~='p-1.5'] { padding: 0.625rem; }
+
+  /* Touch feel: taps answer at once, a pressed row or link dims for a moment, pages do not rubber-band sideways. */
+  html.pt-app :is(a, button, select, input, textarea, label, [role='button'], [role='tab']) {
+    touch-action: manipulation;
+  }
+  html.pt-app :is(a, [role='button']):active {
+    opacity: 0.72;
+    transition: opacity 60ms;
+  }
+  html.pt-app body {
+    overscroll-behavior-x: none;
   }
 }

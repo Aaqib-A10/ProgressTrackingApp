@@ -275,7 +275,7 @@ export default function BidTracker() {
             <option value="">All agents</option>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-          <div className="flex items-center gap-1.5 text-body-sm text-ink-muted">
+          <div className="flex flex-wrap items-center gap-1.5 text-body-sm text-ink-muted">
             <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className={filterCls} aria-label="Closed from" title="Closed / due from" />
             <span>–</span>
             <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={filterCls} aria-label="Closed to" title="Closed / due to" />

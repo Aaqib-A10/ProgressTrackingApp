@@ -61,7 +61,7 @@ export default function LeadSettings() {
       {list && !list.length ? (
         <SetupSteps cmrOn={cmrOn} plain={plain} onCreate={() => setCreating(true)} />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
           <nav className="space-y-1.5">
             {(list ?? []).map((b) => (
               <button key={b.id} type="button" onClick={() => setSel(b.id)} className={cn('flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-left transition-colors', sel === b.id ? 'border-primary bg-primary/[0.04]' : 'border-line bg-card hover:border-line-strong')}>
@@ -127,7 +127,7 @@ function BusinessEditor({ biz, people, cmrOn, plain, onSaved, onDeleted, toast }
           </label>
           <div className="sm:col-span-2">
             <span className="mb-1.5 block text-body-sm font-medium text-ink">Colour</span>
-            <div className="flex gap-2">{COLORS.map((c) => <button key={c} type="button" aria-label={c} onClick={() => setF({ ...f, color: c })} className={cn('flex h-7 w-7 items-center justify-center rounded-full text-white', f.color === c && 'ring-2 ring-offset-2 ring-offset-card')} style={{ background: c, ['--tw-ring-color' as string]: c }}>{f.color === c && <Check size={14} />}</button>)}</div>
+            <div className="flex flex-wrap gap-2">{COLORS.map((c) => <button key={c} type="button" aria-label={c} onClick={() => setF({ ...f, color: c })} className={cn('flex h-7 w-7 items-center justify-center rounded-full text-white', f.color === c && 'ring-2 ring-offset-2 ring-offset-card')} style={{ background: c, ['--tw-ring-color' as string]: c }}>{f.color === c && <Check size={14} />}</button>)}</div>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
@@ -168,7 +168,7 @@ function PeopleSection({ biz, people, onSaved, toast }: { biz: BusinessRow; peop
         </ul>
       ) : <p className="text-body-md text-ink-muted">Nobody yet. Until a manager is added, new leads alert the Super Admins.</p>}
       <div className="mt-3 flex flex-wrap gap-2">
-        <select value={pick} onChange={(e) => setPick(e.target.value)} className="h-9 min-w-[240px] flex-1 rounded-btn border border-line bg-card px-2.5 text-body-md">
+        <select value={pick} onChange={(e) => setPick(e.target.value)} className="h-9 min-w-[min(240px,100%)] flex-1 rounded-btn border border-line bg-card px-2.5 text-body-md">
           <option value="">Add a person…</option>
           {others.map((p) => <option key={p.id} value={p.id}>{p.name}{p.department ? ` · ${p.department}` : ''}</option>)}
         </select>

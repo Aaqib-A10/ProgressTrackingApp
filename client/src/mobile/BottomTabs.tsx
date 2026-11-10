@@ -70,14 +70,14 @@ export function BottomTabs({ user, onMore }: { user: CurrentUser; onMore: () => 
   const active = activeTab(tabs, pathname)
   return (
     <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
-      <ul className="flex h-14 items-stretch">
+      <ul className="flex h-[3.75rem] items-stretch">
         {tabs.map((t) => {
           const on = active === t.to
           return (
             <li key={t.to} className="min-w-0 flex-1">
-              <Link to={t.to} aria-current={on ? 'page' : undefined} className={cn('relative flex h-full flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium', on ? 'text-primary' : 'text-ink-muted active:text-ink')}>
-                <span className={cn('flex h-7 w-12 items-center justify-center rounded-full transition-colors', on && 'bg-primary/10')}>
-                  <t.icon size={20} strokeWidth={on ? 2.4 : 2} />
+              <Link to={t.to} aria-current={on ? 'page' : undefined} className={cn('relative flex h-full flex-col items-center justify-center gap-0.5 text-[0.75rem] font-medium', on ? 'text-primary' : 'text-ink-muted active:text-ink')}>
+                <span className={cn('flex h-7 w-14 items-center justify-center rounded-full transition-colors', on && 'bg-primary/10')}>
+                  <t.icon size={22} strokeWidth={on ? 2.4 : 2} />
                 </span>
                 <span className="truncate">{t.label}</span>
                 {t.to === '/app/chat' && chat.total > 0 && <span className="absolute left-1/2 top-1 ml-1.5 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-white ring-2 ring-card">{chat.total > 99 ? '99+' : chat.total}</span>}
@@ -86,8 +86,8 @@ export function BottomTabs({ user, onMore }: { user: CurrentUser; onMore: () => 
           )
         })}
         <li className="min-w-0 flex-1">
-          <button type="button" onClick={onMore} className={cn('flex h-full w-full flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium active:text-ink', active ? 'text-ink-muted' : 'text-primary')} aria-label="More">
-            <span className={cn('flex h-7 w-12 items-center justify-center rounded-full', !active && 'bg-primary/10')}><Menu size={20} /></span>
+          <button type="button" onClick={onMore} className={cn('flex h-full w-full flex-col items-center justify-center gap-0.5 text-[0.75rem] font-medium active:text-ink', active ? 'text-ink-muted' : 'text-primary')} aria-label="More">
+            <span className={cn('flex h-7 w-14 items-center justify-center rounded-full', !active && 'bg-primary/10')}><Menu size={22} /></span>
             <span>More</span>
           </button>
         </li>

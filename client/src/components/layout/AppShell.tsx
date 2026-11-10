@@ -139,7 +139,7 @@ export function AppShell({ user, children }: AppShellProps) {
             <AccountBanners user={user} />
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
             {/* Phones: room at the bottom for the tab bar (and the home indicator under it). */}
-            <main ref={mainRef} className="relative flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:px-8 sm:py-7 md:pb-7">
+            <main ref={mainRef} className="relative flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:px-8 sm:py-7 md:pb-7">
               <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
                 {/* The chat fills the whole page area; its banners wait for the next screen. */}
                 {!location.pathname.startsWith('/app/chat') && <><InstallBanner /><PushBanner /></>}
