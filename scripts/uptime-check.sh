@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Metriq outside uptime check (System Health). Runs every minute on the OFFICE server (R740xd),
-# so you hear about it even when the whole app server is down.
+# Metriq uptime check (System Health). Runs every minute from cron, on the app server
+# (it was planned for the office server first; the steps below work on either).
 #
 # What it does each minute:
 #   * Opens https://pulsetrack.online/api/health. A miss is tried again once (after 5 seconds,
 #     over IPv4); only then it counts. Three misses in a row = the site is down.
 #   * On a miss it also asks the app on this server directly (LOCAL_URL, default
 #     http://127.0.0.1:4000/api/health). That tells "the app stopped" apart from "the app is fine
-#     but the way in from the internet (Cloudflare) is cut", and the report says which.
-#   * Down: emails ALERT_EMAIL straight away (through Mailtrap), and again every 30 minutes.
+#     but the way in from the internet (Cloudflare) is cut". Only "the app stopped" (or an
+#     error page) counts as down; a cut way in is listed quietly on System Health, no alerts.
+#   * Down (3 real misses): emails ALERT_EMAIL straight away (through Mailtrap), and again every 30 minutes.
 #   * Back up: emails "back up", and reports the outage to Metriq, which puts it on the
 #     System Health page and sends the developers a bell and phone alert.
 #   * Up: tells Metriq "still here", so System Health can see the checker itself is working.
@@ -69,9 +70,19 @@ send_mail() { # subject, text
   log "email '$subject' -> $code"
 }
 
+# Reports go to the app on this server first (they get through even when the way in from the
+# internet is cut), and through the public address only if that fails.
+METRIQ_LOCAL="${LOCAL_URL%/api/health}"
 tell_metriq() { # json body
-  curl -sS -m 15 -o /dev/null -w '%{http_code}' -X POST "$SITE_URL/api/system-health/uptime" \
-    -H "Content-Type: application/json" -H "x-uptime-token: $UPTIME_TOKEN" -H "User-Agent: MetriqUptime/1.0" -d "$1" || echo 000
+  local c
+  for base in "$METRIQ_LOCAL" "$SITE_URL"; do
+    c=$(curl -sS -m 15 -o /dev/null -w '%{http_code}' -X POST "$base/api/system-health/uptime" \
+      -H "Content-Type: application/json" -H "x-uptime-token: $UPTIME_TOKEN" -H "User-Agent: MetriqUptime/1.0" -d "$1" 2>/dev/null || true)
+    [ -z "$c" ] && c=000
+    case "$c" in 000|404|502|503|504) continue ;; esac
+    break
+  done
+  echo "$c"
 }
 
 # --- Look at the site ---------------------------------------------------------------------
@@ -119,22 +130,43 @@ if [ "$TEST" = 1 ]; then
   exit 0
 fi
 
-if [ "$OK" = 1 ]; then
+# No answer through the internet while the app answers here: only the way in from the internet
+# (Cloudflare to this server, as seen FROM this server) is cut. That is not "Metriq is down":
+# it is not counted, nobody is emailed, and Metriq lists it quietly on System Health.
+ROUTE_ONLY=0
+[ "$OK" = 0 ] && [ "$CODE" = 000 ] && [ "$APP_UP" = 1 ] && ROUTE_ONLY=1
+
+send_pending() { # file
+  [ -f "$1" ] || return 0
+  local c; c=$(tell_metriq "$(cat "$1")")
+  case "$c" in 201|400) rm -f "$1" ;; esac
+  log "reported to Metriq ($(basename "$1")) -> $c"
+}
+
+if [ "$ROUTE_ONLY" = 1 ]; then
+  [ -f "$STATE_DIR/route_since" ] || { now_iso > "$STATE_DIR/route_since"; echo "$DETAIL" > "$STATE_DIR/route_why"; }
+  log "no answer through the internet, but the app answers on the server (not counted as down): $DETAIL"
+elif [ "$OK" = 1 ] && [ -f "$STATE_DIR/route_since" ]; then
+  R_AT=$(cat "$STATE_DIR/route_since"); R_WHY=$(cat "$STATE_DIR/route_why" 2>/dev/null || echo "")
+  echo "{\"event\":\"outage\",\"downAt\":\"$R_AT\",\"upAt\":\"$(now_iso)\",\"appUp\":true,\"detail\":\"$(clean "$R_WHY")\"}" > "$STATE_DIR/pending_route"
+  rm -f "$STATE_DIR/route_since" "$STATE_DIR/route_why"
+  log "the way in from the internet works again (cut since $R_AT)"
+fi
+
+if [ "$OK" = 1 ] || [ "$ROUTE_ONLY" = 1 ]; then
   if [ "$STATUS" = down ]; then
     DOWN_AT=$(cat "$STATE_DIR/down_at" 2>/dev/null || now_iso)
     WHY=$(cat "$STATE_DIR/why" 2>/dev/null || echo "")
-    # appUp: true only when the app answered on this server at every miss of this outage.
-    APPUP=true; [ -f "$STATE_DIR/app_down_seen" ] && APPUP=false
-    echo "{\"event\":\"outage\",\"downAt\":\"$DOWN_AT\",\"upAt\":\"$(now_iso)\",\"appUp\":$APPUP,\"detail\":\"$(clean "$WHY")\"}" > "$STATE_DIR/pending_outage"
+    # appUp false: the app itself did not answer at some point of this outage.
+    APPUP=""; [ -f "$STATE_DIR/app_down_seen" ] && APPUP=',"appUp":false'
+    echo "{\"event\":\"outage\",\"downAt\":\"$DOWN_AT\",\"upAt\":\"$(now_iso)\"$APPUP,\"detail\":\"$(clean "$WHY")\"}" > "$STATE_DIR/pending_outage"
     send_mail "Metriq is back up" "$SITE_URL answers again (it went down at $DOWN_AT UTC: $WHY)."
     log "back up (was down since $DOWN_AT)"
   fi
   echo up > "$STATE_DIR/status"; echo 0 > "$STATE_DIR/fails"; rm -f "$STATE_DIR/app_down_seen"
-  # Report the outage to Metriq (kept until Metriq has it).
-  if [ -f "$STATE_DIR/pending_outage" ]; then
-    C=$(tell_metriq "$(cat "$STATE_DIR/pending_outage")")
-    case "$C" in 201|400) rm -f "$STATE_DIR/pending_outage" ;; esac
-    log "outage reported to Metriq -> $C"
+  # Reports wait in files until Metriq has them (Metriq ignores one it already has).
+  if [ -f "$STATE_DIR/pending_outage" ] || [ -f "$STATE_DIR/pending_route" ]; then
+    send_pending "$STATE_DIR/pending_outage"; send_pending "$STATE_DIR/pending_route"
   else
     tell_metriq '{"event":"ping"}' >/dev/null
   fi

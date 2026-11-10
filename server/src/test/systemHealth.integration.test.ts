@@ -316,35 +316,30 @@ describe('outside uptime checker', () => {
     delete process.env.UPTIME_TOKEN
   })
 
-  it('lists short drops quietly while the app keeps running, with one alert a day once they repeat', async () => {
+  it('lists a cut way in quietly, keeps a report sent twice once, and still alerts when Metriq stops', async () => {
     process.env.UPTIME_TOKEN = 'test-uptime-token-1234567890'
     resetAlertLimits()
     await prisma.uptimeEvent.deleteMany()
     await prisma.notification.deleteMany({ where: { type: 'SYSTEM_HEALTH' } })
     const send = (minsAgo: number, mins: number, appUp?: boolean) => {
-      const down = new Date(Date.now() - minsAgo * 60_000)
+      const down = new Date(Date.UTC(2026, 10, 10, 12, 0) - minsAgo * 60_000)
       const up = new Date(down.getTime() + mins * 60_000)
       return request(app).post('/api/system-health/uptime').set('x-uptime-token', process.env.UPTIME_TOKEN!)
-        .send({ event: 'outage', downAt: down.toISOString(), upAt: up.toISOString(), detail: 'No answer (the app on the server was answering)', ...(appUp === undefined ? {} : { appUp }) }).expect(201)
+        .send({ event: 'outage', downAt: down.toISOString(), upAt: up.toISOString(), detail: 'No answer: curl: (28)', ...(appUp === undefined ? {} : { appUp }) }).expect(201)
     }
     const bell = async () => (await alerts(w.itadMember)).filter((n) => n.type === 'SYSTEM_HEALTH').map((n) => n.title)
-    await send(300, 4, true)
-    await send(200, 3, true)
+    // The way in was cut 5 times, short and long: no alert at all.
+    await send(300, 4, true); await send(250, 20, true); await send(200, 3, true); await send(150, 18, true); await send(120, 2, true)
     expect(await bell()).toEqual([])
-    await send(100, 4, true)
-    expect(await bell()).toEqual(['The way in to Metriq keeps dropping'])
-    resetAlertLimits() // as after a restart: still only one for the day
-    await send(50, 2, true)
-    expect(await bell()).toHaveLength(1)
-    // The app itself stopped: alert straight away. A long outage too. An older checker (no appUp) as before.
+    // The same outage reported twice (the reply was lost): kept once, one alert.
+    await send(100, 20); await send(100, 20)
+    expect(await bell()).toEqual(['The site was down for 20 min'])
+    expect(await prisma.uptimeEvent.count()).toBe(6)
+    // Metriq itself stopped: alert.
     await send(40, 3, false)
-    await send(30, 12, true)
-    await send(10, 5)
-    const titles = await bell()
-    expect(titles).toEqual(expect.arrayContaining(['Metriq stopped answering for 3 min', 'The site was down for 12 min', 'The site was down for 5 min']))
-    expect(titles).toHaveLength(4)
+    expect(await bell()).toEqual(['The site was down for 20 min', 'Metriq stopped answering for 3 min'])
     const s = await request(app).get('/api/system-health/summary').set(...auth(w.superAdmin)).expect(200)
-    expect(s.body.uptime.outages).toHaveLength(5)
+    expect(s.body.uptime.outages.find((o: { minutes: number }) => o.minutes === 18).detail).toMatch(/^Only the way in from the internet/)
     delete process.env.UPTIME_TOKEN
   })
 })

@@ -175,11 +175,16 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ v: T; ms: number }> {
   return { v, ms: Date.now() - s }
 }
 
+/** The public address timed out while the app answers on the server (see publicFetch). */
+class WayInCut extends Error {}
+
 async function safe(category: string, name: string, fn: () => Promise<CheckRow | CheckRow[]>): Promise<CheckRow[]> {
   try {
     const r = await fn()
     return Array.isArray(r) ? r : [r]
   } catch (e) {
+    // A warning, not a failure: Metriq works, so no "new problem" alert every time it flips.
+    if (e instanceof WayInCut) return [{ category, name, result: 'WARN', detail: e.message.slice(0, 300) }]
     return [{ category, name, result: 'FAIL', detail: (e as Error).message.slice(0, 300) }]
   }
 }
@@ -330,6 +335,23 @@ function certDaysLeft(host: string): Promise<number> {
   })
 }
 
+/**
+ * The public address is opened from this same server, through Cloudflare. When that times out,
+ * say whether the app itself answers here, so the report tells "Metriq is down" apart from
+ * "the server cannot get back in through Cloudflare" (people elsewhere may still reach it).
+ */
+async function publicFetch(url: string): Promise<Response> {
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(10_000) })
+  } catch (e) {
+    if ((e as Error).name !== 'TimeoutError') throw e
+    const local = await fetch(`http://127.0.0.1:${Number(process.env.PORT) || 4000}/api/health`, { signal: AbortSignal.timeout(3000) })
+      .then((r) => r.ok).catch(() => false)
+    if (local) throw new WayInCut('The server could not reach its own public address through Cloudflare in 10 s; Metriq itself answers on the server')
+    throw new Error('No answer within 10 s, and the app does not answer on the server either')
+  }
+}
+
 async function websiteChecks(): Promise<CheckRow[]> {
   const C = 'website'
   const rows: CheckRow[] = []
@@ -338,7 +360,7 @@ async function websiteChecks(): Promise<CheckRow[]> {
     rows.push({ category: C, name: 'Website', result: 'SKIP', detail: 'APP_URL is not set' })
   } else {
     rows.push(...await safe(C, 'Home page', async () => {
-      const { v: res, ms } = await timed(() => fetch(site + '/', { signal: AbortSignal.timeout(10_000) }))
+      const { v: res, ms } = await timed(() => publicFetch(site + '/'))
       const html = await res.text()
       if (!res.ok || !html.includes('id="root"')) return { category: C, name: 'Home page', result: 'FAIL', ms, status: res.status, detail: `The page did not load properly (${res.status})` }
       const out: CheckRow[] = [{ category: C, name: 'Home page', result: ms > SLOW_MS ? 'WARN' : 'PASS', ms, status: res.status, detail: `Loads in ${ms} ms` }]
@@ -350,7 +372,7 @@ async function websiteChecks(): Promise<CheckRow[]> {
       return out
     }))
     rows.push(...await safe(C, 'API through the public address', async () => {
-      const { v: res, ms } = await timed(() => fetch(site + '/api/health', { signal: AbortSignal.timeout(10_000) }))
+      const { v: res, ms } = await timed(() => publicFetch(site + '/api/health'))
       const body = (await res.json().catch(() => ({}))) as { status?: string; db?: string }
       const ok = res.ok && body.status === 'ok' && body.db === 'up'
       return { category: C, name: 'API through the public address', result: ok ? 'PASS' : 'FAIL', ms, status: res.status, detail: ok ? 'Reachable' : `Not answering properly (${res.status})` }
@@ -366,7 +388,7 @@ async function websiteChecks(): Promise<CheckRow[]> {
   else {
     const last = lastUptimePing()
     const since = last ? Date.now() - last.getTime() : null
-    rows.push({ category: C, name: 'Outside uptime check', result: since !== null && since < 10 * 60_000 ? 'PASS' : 'WARN', detail: since === null ? 'No word from the outside checker since the app started' : `Last heard ${ago(since)} ago` })
+    rows.push({ category: C, name: 'Outside uptime check', result: since !== null && since < 10 * 60_000 ? 'PASS' : 'WARN', detail: since === null ? 'No word from the uptime checker since the app started (it reports every minute; check its cron and run metriq-uptime --test)' : `Last heard ${ago(since)} ago` })
   }
   return rows
 }

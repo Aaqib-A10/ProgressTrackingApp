@@ -3504,13 +3504,11 @@ model JobHeartbeat {
 /// A time the whole site was down, reported by the outside checker once it is back.
 model UptimeEvent {
   id        String   @id @default(cuid())
-  downAt    DateTime
+  downAt    DateTime @unique // one row per outage, even when the checker reports it twice
   upAt      DateTime
   minutes   Int
   detail    String?
   createdAt DateTime @default(now())
-
-  @@index([downAt(sort: Desc)])
 }
 
 // ================================================================== Owner console (erp, step 0)

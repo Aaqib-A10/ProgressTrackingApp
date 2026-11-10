@@ -593,7 +593,7 @@ function ServerTab({ s }: { s: HealthSummary }) {
               </p>
               {s.uptime.outages.length ? (
                 <ul className="divide-y divide-line rounded-lg border border-line">
-                  {s.uptime.outages.map((o) => <li key={o.id} className="px-3 py-2 text-body-sm"><span className="font-medium text-ink">Down {o.minutes} min</span> <span className="text-ink-muted">· {fmtDateTime(o.downAt)}{o.detail ? ` · ${o.detail}` : ''}</span></li>)}
+                  {s.uptime.outages.map((o) => <li key={o.id} className="px-3 py-2 text-body-sm"><span className="font-medium text-ink">{o.detail?.startsWith('Only the way in') ? `Way in from the internet cut ${o.minutes} min (Metriq kept working)` : `Down ${o.minutes} min`}</span> <span className="text-ink-muted">· {fmtDateTime(o.downAt)}{o.detail ? ` · ${o.detail.replace(/^Only the way in from the internet: Metriq kept answering on the server\.\s*/, '')}` : ''}</span></li>)}
                 </ul>
               ) : <p className="text-body-sm text-ink-muted">No outages recorded.</p>}
             </div>
