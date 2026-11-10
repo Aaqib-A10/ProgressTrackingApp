@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
 import { ClipboardPen, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import type { CurrentUser } from '../../lib/types'
@@ -25,15 +24,14 @@ export function openQuickLogWindow(): boolean {
 }
 
 export function QuickLogWidget({ user }: { user: CurrentUser }) {
-  const { pathname } = useLocation()
   const { addToast } = useToast()
   // People who fill the ITAD Daily Log themselves (the Super Admin only reads it).
   const show = useMemo(() => user.role !== 'SUPER_ADMIN' && filterNav(user).some((g) => [...g.items, ...(g.subgroups ?? []).flatMap((s) => s.items)].some((i) => i.to === '/app/itad/log')), [user])
   const [open, setOpen] = useState(() => { try { return sessionStorage.getItem(openKey(user.id)) === '1' } catch { return false } })
   const [blocked, setBlocked] = useState(false)
   useEffect(() => { try { sessionStorage.setItem(openKey(user.id), open ? '1' : '0') } catch { /* fine */ } }, [open, user.id])
-  // The full page is the log itself; the pop-out window has its own copy.
-  if (!show || pathname.startsWith('/app/itad/log')) return null
+  // Everywhere, the full Daily Log page included (people detach it from there).
+  if (!show) return null
 
   const detach = () => {
     if (openQuickLogWindow()) { setOpen(false); setBlocked(false) } else { setBlocked(true); addToast({ type: 'error', message: 'Your browser blocked the little window. Allow pop-ups for Metriq, or use "Open in a tab".' }) }

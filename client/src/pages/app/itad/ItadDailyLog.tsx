@@ -47,11 +47,14 @@ export default function ItadDailyLog() {
   // Local draft memory: agents tally numbers across the day, so in-progress (unsubmitted)
   // values survive a page refresh. Keyed per user + day; cleared on submit.
   const draftKeyRef = useRef<string | null>(null)
+  // The saved numbers the draft was typed on top of: when the Quick Log adds to the day meanwhile,
+  // the page keeps your unsubmitted edits AND the new counts (server + what you changed).
+  const draftBaseRef = useRef<ItadTotals>(zeroTotals())
   function saveDraft(m: ItadTotals, n: string, leave: boolean) {
     const key = draftKeyRef.current
     if (!key) return
     try {
-      localStorage.setItem(key, JSON.stringify({ metrics: m, notes: n, onLeave: leave, at: Date.now() }))
+      localStorage.setItem(key, JSON.stringify({ metrics: m, notes: n, onLeave: leave, at: Date.now(), base: draftBaseRef.current }))
     } catch {
       /* storage unavailable (private mode / quota) — drafts just won't persist */
     }
@@ -68,25 +71,36 @@ export default function ItadDailyLog() {
         const key = `itad-draft:${user?.id ?? 'me'}:${res.date}`
         draftKeyRef.current = key
         // Base values from any saved entry, then overlay the local draft (latest edits win).
-        let baseMetrics = res.entry
+        const server = res.entry
           ? (ITAD_METRICS.reduce((acc, m) => ({ ...acc, [m.key]: res.entry![m.key] }), {} as ItadTotals))
           : zeroTotals()
+        let baseMetrics = { ...server }
         let baseNotes = res.entry?.notes ?? ''
         let baseLeave = res.entry ? res.entry.status !== 'SUBMITTED' : false
+        let hadDraft = false
         try {
           const raw = localStorage.getItem(key)
           if (raw) {
-            const d = JSON.parse(raw) as { metrics?: Partial<ItadTotals>; notes?: string; onLeave?: boolean; at?: number }
-            // A draft older than the saved entry (the Quick Log saved since) would undo those counts: drop it.
-            const stale = !!res.entry?.updatedAt && (!d.at || d.at < new Date(res.entry.updatedAt).getTime())
-            if (stale) { localStorage.removeItem(key); throw new Error('stale draft') }
-            if (d.metrics) baseMetrics = { ...baseMetrics, ...d.metrics }
+            const d = JSON.parse(raw) as { metrics?: Partial<ItadTotals>; notes?: string; onLeave?: boolean; at?: number; base?: Partial<ItadTotals> }
+            if (d.metrics) {
+              hadDraft = true
+              // Keep what you changed here on top of what is saved now (the Quick Log may have added since):
+              // shown = saved now + (your draft − the saved numbers your draft started from).
+              for (const m of ITAD_METRICS) {
+                const typed = d.metrics[m.key]
+                if (typeof typed !== 'number') continue
+                const from = d.base?.[m.key] ?? (d.at && res.entry?.updatedAt && d.at < new Date(res.entry.updatedAt).getTime() ? server[m.key] : 0)
+                baseMetrics[m.key] = Math.max(0, server[m.key] + (typed - from))
+              }
+            }
             if (typeof d.notes === 'string') baseNotes = d.notes
             if (typeof d.onLeave === 'boolean') baseLeave = d.onLeave
           }
         } catch {
           /* ignore malformed draft */
         }
+        draftBaseRef.current = server
+        if (hadDraft) saveDraft(baseMetrics, baseNotes, baseLeave) // re-based on the numbers saved now
         setMetrics(baseMetrics)
         setNotes(baseNotes)
         setOnLeave(baseLeave)

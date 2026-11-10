@@ -125,6 +125,12 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
     if (shown + d < 0) return
     setPending((p) => ({ ...p, [k]: p[k] + d }))
   }
+  // Typing a number sets the shown total; what is sent is still the difference from the saved value.
+  const setTyped = (k: ItadMetricKey, raw: string) => {
+    const base = data?.entry?.[k] ?? 0
+    const n = raw === '' ? 0 : Math.max(0, Math.min(100000, Math.floor(Number(raw) || 0)))
+    setPending((p) => ({ ...p, [k]: n - base }))
+  }
 
   const dateLabel = data?.date ? new Date(`${data.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : ''
   const onLeave = !!data?.entry && data.entry.status !== 'SUBMITTED'
@@ -171,7 +177,7 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
                   {p !== 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-semibold tabular-nums', p > 0 ? 'bg-primary/10 text-primary' : 'bg-warning/15 text-amber-700')}>{p > 0 ? `+${p}` : p}</span>}
                   <div className="inline-flex items-center rounded-btn border border-line">
                     <button type="button" onClick={() => bump(m.key, -1)} disabled={shown <= 0} className="flex h-8 w-8 items-center justify-center rounded-l-btn text-ink-muted hover:bg-slate-100 hover:text-ink disabled:opacity-30 active:bg-slate-200" aria-label={`${m.label}: one less`}><Minus size={14} /></button>
-                    <span className="w-8 text-center text-[14px] font-semibold tabular-nums">{shown}</span>
+                    <input type="number" inputMode="numeric" min={0} max={100000} value={shown} onChange={(e) => setTyped(m.key, e.target.value)} onFocus={(e) => e.currentTarget.select()} className="h-8 w-11 border-x border-line bg-transparent text-center text-[14px] font-semibold tabular-nums text-ink focus:bg-primary/[0.06] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`${m.label}: type the number`} />
                     <button type="button" onClick={() => bump(m.key, 1)} className="flex h-8 w-8 items-center justify-center rounded-r-btn text-primary hover:bg-primary/10 active:bg-primary/20" aria-label={`${m.label}: one more`}><Plus size={15} /></button>
                   </div>
                 </li>
