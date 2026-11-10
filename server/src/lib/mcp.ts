@@ -37,7 +37,7 @@ export function newKey(): string { return KEY_PREFIX + crypto.randomBytes(32).to
 type User = { id: string; role: Role; name: string; companyId: string }
 
 const INSTRUCTIONS = `Metriq is the team's work app: project tickets, plus each team's own work (ITAD Lead Dialer, daily logs and deals; E-commerce board, listings and stock; Lead Gen; Marketing; attendance; to-dos; reports).
-For anything that is not a project ticket, call metriq_guide first: it lists what this person can see and how to read it (metriq_read, or the Lead Dialer tools dialer_summary, dialer_leads, dialer_lead, dialer_update_lead). Answer from that real data; never guess or ask for screenshots.
+For anything that is not a project ticket, call metriq_guide first: it lists what this person can see and how to read it (metriq_read, or the Lead Dialer tools dialer_summary, dialer_leads, dialer_lead, dialer_update_lead, dialer_edit_lead for a lead's second phone / email and other extra details). Answer from that real data; never guess or ask for screenshots.
 Leads (Lead Management, every business's website, phone, sheet and email leads): leads_list ("late" for leads waiting too long), lead_get, lead_update (log a call or email, note, status, assign), lead_add.
 To-dos and meetings: todo_list, todo_add, todo_update, meetings_list, meeting_schedule.
 ITAD follow-ups and "who do I call first": dialer_leads with view follow_ups (overdue first), call_now or prime_time, and hot for Interested and Pipeline leads.

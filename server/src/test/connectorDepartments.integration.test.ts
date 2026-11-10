@@ -52,7 +52,7 @@ describe('the connector reads each team\'s data', () => {
   it('lists the new tools; metriq_guide shows each person their own team', async () => {
     const tools = await request(app).post(urls.itad).send({ jsonrpc: '2.0', id: 1, method: 'tools/list' }).expect(200)
     const names = tools.body.result.tools.map((t: { name: string }) => t.name)
-    for (const n of ['metriq_guide', 'metriq_read', 'dialer_summary', 'dialer_leads', 'dialer_lead', 'dialer_update_lead']) expect(names).toContain(n)
+    for (const n of ['metriq_guide', 'metriq_read', 'dialer_summary', 'dialer_leads', 'dialer_lead', 'dialer_update_lead', 'dialer_edit_lead']) expect(names).toContain(n)
     const itad = out(await call('itad', 'metriq_guide'))
     expect(itad).toContain('team ITAD')
     expect(itad).toContain('dialer_leads')
@@ -93,6 +93,33 @@ describe('the connector reads each team\'s data', () => {
     expect(out(await call('itad', 'dialer_lead', { lead: lead.id }))).toContain('Spoke to Ann')
     // Not someone else's lead.
     expect((await call('itad', 'dialer_update_lead', { lead: 'Lead Of The Lead', action: 'note', text: 'x' })).isError).toBe(true)
+  })
+
+  it('ITAD: the second phone, second email and other extra details are set and removed through the connector', async () => {
+    const r = await call('itad', 'dialer_edit_lead', { lead: 'Mesa Data', second_phone: '602-555-0199 ext 12', second_email: 'cy.dale@mesadata.test', decision_maker: 'Cy Dale, IT Director', best_time: 'Tue-Thu after 2 PM MT', tags: ['warm', 'servers'] })
+    expect(r.isError).toBeFalsy()
+    expect(out(r)).toContain('Mesa Data: second phone 602-555-0199 ext 12; second email cy.dale@mesadata.test')
+    let lead = await prisma.dialerLead.findFirstOrThrow({ where: { company: 'Mesa Data' }, include: { actions: true } })
+    expect(lead).toMatchObject({ phone2: '602-555-0199 ext 12', email2: 'cy.dale@mesadata.test', decisionMaker: 'Cy Dale, IT Director', bestTime: 'Tue-Thu after 2 PM MT', tags: ['warm', 'servers'] })
+    expect(lead.actions.filter((x) => x.kind === 'EDIT' && x.userId === w.itadMember.id).length).toBe(5)
+    // The lead page shows them, and the lead is found by its second phone.
+    expect(out(await call('itad', 'dialer_lead', { lead: lead.id }))).toContain('cy.dale@mesadata.test')
+    // Remove one, keep the rest; tick Done in Earthzone.
+    expect(out(await call('itad', 'dialer_edit_lead', { lead: lead.id, second_email: '', done_in_earthzone: true }))).toContain('second email removed; marked done in Earthzone')
+    lead = await prisma.dialerLead.findFirstOrThrow({ where: { company: 'Mesa Data' }, include: { actions: true } })
+    expect(lead.email2).toBeNull()
+    expect(lead.phone2).toBe('602-555-0199 ext 12')
+    expect(lead.needsCrmUpdate).toBe(false)
+    // Checks: a bad email or phone, nothing to change, someone else's lead, another team.
+    expect(out(await call('itad', 'dialer_edit_lead', { lead: lead.id, second_email: 'not-an-email' }))).toContain('does not look like an email')
+    expect(out(await call('itad', 'dialer_edit_lead', { lead: lead.id, second_phone: '12' }))).toContain('does not look like a phone')
+    expect((await call('itad', 'dialer_edit_lead', { lead: lead.id })).isError).toBe(true)
+    expect((await call('itad', 'dialer_edit_lead', { lead: 'Lead Of The Lead', second_phone: '305-555-0110' })).isError).toBe(true)
+    expect((await call('ecom', 'dialer_edit_lead', { lead: 'Mesa Data', second_phone: '602-555-0100' })).isError).toBe(true)
+    expect((await prisma.dialerLead.findFirstOrThrow({ where: { company: 'Lead Of The Lead' } })).phone2).toBeNull()
+    // A manager can fix a rep's lead.
+    expect((await call('itadLead', 'dialer_edit_lead', { lead: 'Harbor', rep: 'itad member', second_phone: '404-555-0177' })).isError).toBeFalsy()
+    expect((await prisma.dialerLead.findFirstOrThrow({ where: { company: 'Harbor Cold Storage' } })).phone2).toBe('404-555-0177')
   })
 
   it('other teams cannot reach the Lead Dialer, ITAD cannot reach E-commerce, and the app\'s checks hold', async () => {

@@ -103,7 +103,7 @@ const AREAS: { title: string; for: (m: Me) => boolean; lines: string[] }[] = [
     title: 'ITAD',
     for: (m) => inDept(m, 'ITAD'),
     lines: [
-      'Lead Dialer: use dialer_summary, dialer_leads (follow-ups, who to call now, hot leads, filters) and dialer_lead; dialer_update_lead to log a note, call later or snooze.',
+      'Lead Dialer: use dialer_summary, dialer_leads (follow-ups, who to call now, hot leads, filters) and dialer_lead; dialer_update_lead to log a note, call later or snooze; dialer_edit_lead to set the second phone, second email, LinkedIn, decision maker, best time or tags.',
       '/api/itad/entries?date=YYYY-MM-DD : my daily log for a day',
       '/api/itad/team?range=week : the team\'s daily logs (team leads)',
       '/api/itad/analytics?range=month : calls, connects and results over time',
@@ -459,6 +459,62 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
       if (r.status >= 400) return fail(apiError(r))
       const whenTxt = at ? ` ${DateTime.fromISO(at).setZone(PKT_ZONE).toFormat('d LLL h:mm a')} PKT` : ''
       return text(kind === 'CALL_LATER' ? `${lead.company}: call back set for${whenTxt}.` : kind === 'SNOOZE' ? `${lead.company}: snoozed until${whenTxt}.` : kind === 'CALL_NOW' ? `${lead.company}: marked as called now.` : `${lead.company}: call back and snooze cleared.`)
+    },
+  },
+  {
+    name: 'dialer_edit_lead',
+    title: 'Edit a lead\'s extra contact details',
+    description: 'On a Lead Dialer lead, as the person: set or change the extra details kept in Metriq (second phone, second email, LinkedIn, decision maker, best time to call, tags), or tick "Done in Earthzone". Give only what changes; an empty text ("") removes that detail. The CRM import never overwrites these. Changes are marked "needs Earthzone" (when that tick is on) unless earthzone is false.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        lead: { type: 'string', description: 'Lead id, company name or phone number' },
+        rep: { type: 'string', description: 'Managers: "all" (or the rep\'s name) to find the lead among the team\'s leads.' },
+        second_phone: { type: 'string', description: 'Second phone number ("" removes it)' },
+        second_email: { type: 'string', description: 'Second email address ("" removes it)' },
+        linkedin: { type: 'string', description: 'LinkedIn profile link ("" removes it)' },
+        decision_maker: { type: 'string', description: 'Decision maker\'s name and role ("" removes it)' },
+        best_time: { type: 'string', description: 'Best time to call, e.g. "Tue-Thu after 2 PM ET" ("" removes it)' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'The lead\'s tags (replaces them; [] removes all)' },
+        earthzone: { type: 'boolean', description: 'false: this change does not need to go into Earthzone. Default true.' },
+        done_in_earthzone: { type: 'boolean', description: 'true: the marked changes are now in Earthzone (clears "needs Earthzone").' },
+      },
+      required: ['lead'],
+      additionalProperties: false,
+    },
+    async run(u, a) {
+      // Managers: any rep given looks through the whole team's leads (the app checks the lead is theirs to edit).
+      const { lead, error } = await findLead(u, a.lead, repParam(a.rep) === 'me' ? 'me' : 'all')
+      if (!lead) return fail(error!)
+      const body: Record<string, unknown> = {}
+      const fields: [string, string, string, number][] = [
+        ['second_phone', 'phone2', 'second phone', 40], ['second_email', 'email2', 'second email', 200], ['linkedin', 'linkedin', 'LinkedIn', 300],
+        ['decision_maker', 'decisionMaker', 'decision maker', 120], ['best_time', 'bestTime', 'best time to call', 80],
+      ]
+      const said: string[] = []
+      for (const [arg, key, label, max] of fields) {
+        if (a[arg] === undefined || a[arg] === null) continue
+        if (typeof a[arg] !== 'string') return fail(`${label} must be text.`)
+        const v = str(a[arg])
+        if (v.length > max) return fail(`The ${label} is too long (at most ${max} characters).`)
+        if (key === 'phone2' && v && v.replace(/\D/g, '').length < 7) return fail(`"${v}" does not look like a phone number.`)
+        if (key === 'email2' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return fail(`"${v}" does not look like an email address.`)
+        body[key] = v || null
+        said.push(v ? `${label} ${v}` : `${label} removed`)
+      }
+      if (a.tags !== undefined) {
+        if (!Array.isArray(a.tags)) return fail('tags must be a list.')
+        const tags = [...new Set(a.tags.map(str).filter(Boolean))]
+        if (tags.length > 20 || tags.some((t) => t.length > 30)) return fail('At most 20 tags, each up to 30 characters.')
+        body.tags = tags
+        said.push(tags.length ? `tags ${tags.join(', ')}` : 'tags removed')
+      }
+      if (a.earthzone === false) body.needsCrm = false
+      if (a.done_in_earthzone === true) { body.crmDone = true; said.push('marked done in Earthzone') }
+      if (!said.length) return fail('Say what to change: second_phone, second_email, linkedin, decision_maker, best_time, tags or done_in_earthzone.')
+      const r = await apiAs(u, 'PATCH', `/api/dialer/leads/${encodeURIComponent(lead.id)}`, { body })
+      if (r.status >= 400) return fail(apiError(r))
+      return text(`${lead.company}: ${said.join('; ')}.`)
     },
   },
 ]
