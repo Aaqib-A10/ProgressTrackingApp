@@ -35,7 +35,8 @@ self.addEventListener('push', (event) => {
       front.postMessage({ type: 'pt-push', payload: p })
       return
     }
-    const once = p.kind === 'msg' && p.messageId ? 'msg-' + p.messageId : p.kind === 'call' && p.callId ? 'ring-' + p.callId : null
+    // One message, call or bell notification = one pop-up on this browser (an open tab may have shown it already).
+    const once = p.kind === 'msg' && p.messageId ? 'msg-' + p.messageId : p.kind === 'call' && p.callId ? 'ring-' + p.callId : p.nid ? 'n-' + p.nid : null
     if (once && !(await claimOnce(once))) return
     const isCall = p.kind === 'call'
     const options = {

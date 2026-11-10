@@ -101,6 +101,29 @@ describe('pop-up notifications when PulseTrack is closed', () => {
     expect(sent.find((s) => s.payload.title === 'Sam mentioned you')?.payload.url).toBe('/app/notifications')
   })
 
+  it('one notification is one pop-up: the push carries the id the bell shows, so a browser shows it once', async () => {
+    await request(app).post('/api/push/subscribe').set(...auth(w.itadLead)).send(sub(2)).expect(200)
+    sent.length = 0
+    const one = await prisma.notification.create({ data: { userId: w.itadMember.id, type: 'GRACE_EXCEEDED', title: 'Late sign-in', body: 'Sam exceeded the 10m sign-in grace today.' } })
+    await flush()
+    const mine = sent.filter((s) => s.payload.title === 'Late sign-in')
+    expect(mine).toHaveLength(1)
+    expect(mine[0].payload.nid).toBe(one.id)
+    // Several people in one save: each gets one pop-up, with the id of their own row.
+    sent.length = 0
+    await prisma.notification.createMany({ data: [w.itadMember.id, w.itadLead.id].map((userId) => ({ userId, type: 'BREAK_OVERRUN' as const, title: 'Break exceeded limit', body: 'Sam’s break is 50m (limit 30m) today.' })) })
+    await flush()
+    const many = sent.filter((s) => s.payload.title === 'Break exceeded limit')
+    expect(many).toHaveLength(2)
+    const rows = await prisma.notification.findMany({ where: { title: 'Break exceeded limit' }, select: { id: true } })
+    expect(many.map((m) => String(m.payload.nid)).sort()).toEqual(rows.map((r) => r.id).sort())
+    // The same alert saved twice for one person in one go is still one pop-up.
+    sent.length = 0
+    await prisma.notification.createMany({ data: [1, 2].map(() => ({ userId: w.itadMember.id, type: 'MENTION' as const, title: 'Twice in one save', body: 'same words' })) })
+    await flush()
+    expect(sent.filter((s) => s.payload.title === 'Twice in one save')).toHaveLength(1)
+  })
+
   it('a device the browser dropped is forgotten', async () => {
     failWith = 410
     await request(app).post(`/api/chat/conversations/${dm}/messages`).set(...auth(w.itadLead)).send({ body: 'hello?' }).expect(201)

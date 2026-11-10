@@ -126,6 +126,11 @@ export async function claimOnce(key: string): Promise<boolean> {
   }
 }
 
+/** Would a pop-up of this kind show right now (alerts on, and the person is not looking at this tab)? */
+export function wouldPopup(kind: PopupInput['kind']): boolean {
+  return active(kind) && userIsAway()
+}
+
 export function popup(p: PopupInput): boolean {
   if (!active(p.kind)) return false
   if (!p.force && !userIsAway()) return false

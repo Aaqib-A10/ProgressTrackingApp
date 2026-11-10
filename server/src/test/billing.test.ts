@@ -13,7 +13,8 @@ describe('signatures', () => {
     const t = Math.floor(Date.now() / 1000)
     const v1 = crypto.createHmac('sha256', secret).update(`${t}.${body.toString()}`).digest('hex')
     expect(stripeSignatureOk(`t=${t},v1=${v1}`, body, secret)).toBe(true)
-    expect(stripeSignatureOk(`t=${t},v1=${v1.replace(/.$/, '0')}`, body, secret)).toBe(false)
+    // A signature with its last character changed (to something it was not: one in sixteen already end in 0).
+    expect(stripeSignatureOk(`t=${t},v1=${v1.slice(0, -1)}${v1.endsWith('0') ? '1' : '0'}`, body, secret)).toBe(false)
     expect(stripeSignatureOk(`t=${t},v1=${v1}`, Buffer.from('{}'), secret)).toBe(false)
     expect(stripeSignatureOk(`t=${t - 600},v1=${crypto.createHmac('sha256', secret).update(`${t - 600}.${body.toString()}`).digest('hex')}`, body, secret)).toBe(false)
   })

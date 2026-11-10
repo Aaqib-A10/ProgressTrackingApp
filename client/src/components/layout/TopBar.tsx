@@ -77,8 +77,14 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           if (seenIds.current) {
             // A chat @mention already pops up as the chat message itself: don't show it twice.
             const fresh = stored.filter((n) => !seenIds.current!.has(n.id) && !(n.link?.startsWith('/app/chat') && desktop.active('chat')))
-            if (fresh.length === 1) desktop.popup({ kind: 'tasks', title: fresh[0].title, body: fresh[0].body, link: fresh[0].link, tag: fresh[0].id })
-            else if (fresh.length > 1) desktop.popup({ kind: 'tasks', title: `${fresh.length} new Metriq alerts`, body: fresh.slice(0, 3).map((n) => n.title).join('\n'), link: '/app/notifications', tag: 'pt-many' })
+            // One notification pops up once on this browser: another tab, or the push that came for it, may have shown it already.
+            if (fresh.length && desktop.wouldPopup('tasks')) {
+              void Promise.all(fresh.map((n) => desktop.claimOnce(`n-${n.id}`))).then((firsts) => {
+                const mine = fresh.filter((_, i) => firsts[i])
+                if (mine.length === 1) desktop.popup({ kind: 'tasks', title: mine[0].title, body: mine[0].body, link: mine[0].link, tag: mine[0].id })
+                else if (mine.length > 1) desktop.popup({ kind: 'tasks', title: `${mine.length} new Metriq alerts`, body: mine.slice(0, 3).map((n) => n.title).join('\n'), link: '/app/notifications', tag: 'pt-many' })
+              })
+            }
           }
           seenIds.current = new Set([...(seenIds.current ?? []), ...stored.map((n) => n.id)])
         })

@@ -25,6 +25,8 @@ export interface PushPayload {
   conversationId?: string
   /** The chat message: the browser shows each message once (see /sw.js claimOnce). */
   messageId?: string
+  /** The bell notification's id: the browser shows each notification once (see /sw.js claimOnce). */
+  nid?: string
   video?: boolean
   /** Keep on screen until clicked (ringing calls). */
   sticky?: boolean
@@ -165,14 +167,14 @@ export async function pushMissed(input: { callId: string; conversationId: string
  * tap opens the same place the bell does. People looking at Metriq right now are skipped (sendPush).
  */
 onNotificationSaved((rows: NotificationRow[]) => {
-  const byKey = new Map<string, { ids: string[]; row: NotificationRow }>()
-  for (const r of rows) {
-    const key = `${r.entityType ?? r.type}-${r.entityId ?? ''}-${r.title}`
-    const g = byKey.get(key)
-    if (g) g.ids.push(r.userId); else byKey.set(key, { ids: [r.userId], row: r })
-  }
-  for (const { ids, row } of byKey.values()) {
+  // One pop-up per person per notification. The same alert saved twice for one person in one go is sent once.
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (!row.userId) continue
+    const same = `${row.userId}|${row.type}|${row.entityType ?? ''}|${row.entityId ?? ''}|${row.title}|${row.body}`
+    if (seen.has(same)) continue
+    seen.add(same)
     const tag = `n-${row.entityType ?? row.type}-${row.entityId ?? row.title}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)
-    void sendPush(ids, { kind: 'alert', type: row.type, title: row.title.slice(0, 120), body: row.body.slice(0, 200), tag, url: row.link || '/app/notifications' }, { evenIfActive: row.type === 'SYSTEM_HEALTH' }).catch(() => undefined)
+    void sendPush([row.userId], { kind: 'alert', type: row.type, title: row.title.slice(0, 120), body: row.body.slice(0, 200), tag, url: row.link || '/app/notifications', nid: row.id }, { evenIfActive: row.type === 'SYSTEM_HEALTH' }).catch(() => undefined)
   }
 })
