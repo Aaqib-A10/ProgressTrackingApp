@@ -5,11 +5,44 @@ import type { AuthedRequest } from '../middleware/auth'
 import { parse, viewer } from '../lib/pm/http'
 import { HttpError } from '../lib/pm/access'
 import { sendPush, vapidKeys } from '../lib/push'
+import { nativePushConfigured } from '../lib/nativePush'
 import { runAsSystem } from '../lib/tenancy'
 
 /** GET /api/push/key — the public key browsers need to subscribe. */
 export async function pushKey(_req: AuthedRequest, res: Response): Promise<void> {
-  res.json({ publicKey: (await vapidKeys()).publicKey })
+  // nativePush: the server can reach the Metriq phone app (the app registers its device only then).
+  res.json({ publicKey: (await vapidKeys()).publicKey, nativePush: nativePushConfigured() })
+}
+
+const deviceSchema = z.object({
+  token: z.string().min(20).max(4096).regex(/^[A-Za-z0-9_:\-.=+/]+$/, 'Bad token'),
+  platform: z.enum(['android', 'ios']),
+  appVersion: z.string().max(40).optional(),
+})
+
+/** POST /api/push/device — the Metriq phone app on this phone wants my notifications (re-sent on every app start). */
+export async function registerDevice(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const b = parse(deviceSchema, req.body)
+  // The same phone signed in as someone else now (maybe in another company): the notifications follow the new person.
+  await runAsSystem(() => prisma.pushDevice.deleteMany({ where: { token: b.token, NOT: { userId: me.id } } }))
+  await prisma.pushDevice.upsert({
+    where: { token: b.token },
+    create: { userId: me.id, token: b.token, platform: b.platform, appVersion: b.appVersion ?? null },
+    update: { userId: me.id, platform: b.platform, appVersion: b.appVersion ?? null },
+  })
+  // A person has at most 10 phones; the oldest go first.
+  const all = await prisma.pushDevice.findMany({ where: { userId: me.id }, orderBy: { createdAt: 'desc' }, select: { id: true } })
+  if (all.length > 10) await prisma.pushDevice.deleteMany({ where: { id: { in: all.slice(10).map((x) => x.id) } } })
+  res.json({ ok: true })
+}
+
+/** POST /api/push/device/remove { token } — stop notifications on this phone (sign-out, or turned off in the app). */
+export async function removeDevice(req: AuthedRequest, res: Response): Promise<void> {
+  const me = viewer(req)
+  const { token } = parse(z.object({ token: z.string().max(4096) }), req.body)
+  await prisma.pushDevice.deleteMany({ where: { token, userId: me.id } })
+  res.json({ ok: true })
 }
 
 const subSchema = z.object({
@@ -49,7 +82,7 @@ export async function unsubscribe(req: AuthedRequest, res: Response): Promise<vo
 /** POST /api/push/test — send myself a test pop-up (to every device I turned it on for). */
 export async function testPush(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
-  const n = await prisma.pushSubscription.count({ where: { userId: me.id } })
+  const n = (await prisma.pushSubscription.count({ where: { userId: me.id } })) + (nativePushConfigured() ? await prisma.pushDevice.count({ where: { userId: me.id } }) : 0)
   if (!n) throw new HttpError(422, 'Pop-ups are not turned on for any of your devices yet')
   const sent = await sendPush([me.id], { kind: 'test', title: 'PulseTrack notifications work', body: 'You will get calls and messages like this, even when PulseTrack is closed.', tag: 'pt-test', url: '/app/chat' }, { evenIfActive: true, ttl: 120 })
   res.json({ devices: n, sent })

@@ -15,6 +15,7 @@ import { CommandPalette } from './GlobalSearch'
 import { endPreview, usePreview } from '../../lib/preview'
 import { BottomTabs } from '../../mobile/BottomTabs'
 import { InstallBanner } from '../../mobile/InstallBanner'
+import { setNativeNavigator, takeWaitingPlace } from '../../mobile/native'
 import { QuickLogWidget } from '../itad/QuickLogWidget'
 
 // The selected date range is shared with every dashboard under the shell.
@@ -56,6 +57,15 @@ export function AppShell({ user, children }: AppShellProps) {
     try { return localStorage.getItem('pt-sidebar-collapsed') === '1' } catch { return false }
   })
   const location = useLocation()
+  // Inside the Metriq phone app: a tapped notification or an outside link opens its place here.
+  const goTo = useNavigate()
+  useEffect(() => { setNativeNavigator((to) => goTo(to)); return () => setNativeNavigator(null) }, [goTo])
+  // A notification tapped while the app was closed: go there once the app has settled on its first page (not on bare /app, which moves on by itself).
+  useEffect(() => {
+    if (location.pathname.replace(/\/$/, '') === '/app') return
+    const to = takeWaitingPlace()
+    if (to && to !== `${location.pathname}${location.search}`) goTo(to)
+  }, [location.pathname, location.search, goTo])
   const mainRef = useRef<HTMLElement>(null)
   // Moving to another section starts at the top, with a short fade so the change feels
   // smooth. Moving inside a section (one chat to another, a task drawer) is left alone.

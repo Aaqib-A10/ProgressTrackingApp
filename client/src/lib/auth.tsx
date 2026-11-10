@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api, setUnauthorizedHandler } from './api'
+import { disablePush } from './push'
+import { isNativeApp } from '../mobile/native'
 import type { CurrentUser, Department } from './types'
 
 /** Set by the 401 handler so the login screen can explain the bounce. */
@@ -87,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
+    // In the phone app: this phone stops getting my notifications before I am signed out.
+    if (isNativeApp()) await disablePush().catch(() => undefined)
     await api.post('/auth/logout')
     setUser(null)
   }, [])

@@ -7,6 +7,7 @@ import { useToast } from '../ui/Toast'
 import { errMsg, projectsApi, type NotifyPrefs } from '../../lib/projectsApi'
 import * as desktop from '../../lib/desktopAlerts'
 import { PushSetting } from '../layout/PushControls'
+import { isNativeApp } from '../../mobile/native'
 
 /** Notification settings for everyone: pop-ups on this computer + which alerts also come by email. */
 export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
@@ -49,8 +50,8 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
         <PushSetting />
       </section>
 
-      {/* Desktop pop-ups */}
-      <section>
+      {/* Desktop pop-ups (a browser thing: the phone app has its own notifications above) */}
+      {!isNativeApp() && <section>
         <h3 className="flex items-center gap-2 text-body-md font-semibold text-ink"><MonitorSmartphone size={16} /> Pop-up alerts on this computer</h3>
         <p className="mt-0.5 text-body-sm text-ink-muted">Shows a Windows or Mac notification when something happens, even if Metriq is in a background tab. Keep one Metriq tab open.</p>
         {perm === 'unsupported' ? (
@@ -103,7 +104,7 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
             )}
           </ul>
         )}
-      </section>
+      </section>}
 
       {/* Email */}
       <section className="mt-5 border-t border-line pt-4">

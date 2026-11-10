@@ -1,11 +1,13 @@
 import webpush from 'web-push'
 import { prisma, onNotificationSaved, type NotificationRow } from './prisma'
 import { inAudit } from './health/auditContext'
+import { sendNativePush } from './nativePush'
 
 /**
  * Pop-up notifications that reach people even when PulseTrack is closed (Web Push):
  * new messages, incoming calls and missed calls. The browser keeps a "subscription"
- * per device; we send to every device the person turned it on for.
+ * per device; we send to every device the person turned it on for. Phones with the Metriq
+ * app installed get the same notifications as native push (lib/nativePush).
  *
  * The server key pair is made once by itself and kept in the database (AppSecret), so
  * there is nothing to set up. VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY in .env win if set.
@@ -73,6 +75,15 @@ export async function sendPush(userIds: string[], payload: PushPayload, opts: { 
   const now = Date.now()
   const ids = [...new Set(userIds)].filter((id) => opts.evenIfActive || !isActive(id, now))
   if (!ids.length) return 0
+  // The Metriq phone app (native push) and browsers (Web Push) are told side by side.
+  const [phones, browsers] = await Promise.all([
+    sendNativePush(ids, payload, { urgent: opts.urgency === 'high' || payload.kind === 'call', ttlSeconds: opts.ttl ?? 60 * 60 }),
+    sendWebPush(ids, payload, opts),
+  ])
+  return phones + browsers
+}
+
+async function sendWebPush(ids: string[], payload: PushPayload, opts: { ttl?: number; urgency?: 'normal' | 'high' }): Promise<number> {
   try {
     const subs = await prisma.pushSubscription.findMany({ where: { userId: { in: ids } } })
     if (!subs.length) return 0

@@ -2,7 +2,7 @@
  * Where Metriq runs and how it keeps the sign-in.
  *
  * On the website the browser keeps an httpOnly cookie and the API is on the same host (/api).
- * The phone app (the Capacitor shell, Phase B) serves the same pages from its own origin, so it
+ * A bundled build (pages inside an app, API on another address) serves the pages from its own origin, so it
  * tells the API where to find it (window.__METRIQ_API__) and keeps the session token itself,
  * sending it as `Authorization: Bearer`. Nothing here changes how the website works.
  */
@@ -18,11 +18,14 @@ declare global {
 const TOKEN_KEY = 'pt-token'
 const BASE_KEY = 'pt-api-base'
 
-/** Running inside the phone app (or a build pointed at a remote API) rather than the website. */
+/**
+ * A build that talks to the API on another address and keeps the token itself. The Metriq phone
+ * app is NOT this: it opens the website itself (mobile/capacitor.config.ts), so it signs in with
+ * the same httpOnly cookie as a browser. This stays for a bundled build pointed at a remote API.
+ */
 export function inAppShell(): boolean {
   if (typeof window === 'undefined') return false
   try {
-    if (window.Capacitor?.isNativePlatform?.()) return true
     if (window.__METRIQ_API__) return true
     return !!localStorage.getItem(BASE_KEY)
   } catch { return !!window.__METRIQ_API__ }

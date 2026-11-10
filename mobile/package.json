@@ -1,0 +1,23 @@
+{
+  "name": "metriq-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Metriq phone app: a native shell (Capacitor) around the same Metriq everyone uses in the browser.",
+  "scripts": {
+    "prepare:web": "node scripts/prepare.mjs",
+    "sync": "node scripts/prepare.mjs && cap sync",
+    "android": "node scripts/prepare.mjs && cap sync android && cap open android",
+    "android:apk": "node scripts/prepare.mjs && cap sync android && node scripts/gradle.mjs assembleDebug",
+    "ios": "node scripts/prepare.mjs && cap sync ios && cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  }
+}

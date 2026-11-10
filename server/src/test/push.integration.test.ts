@@ -16,6 +16,7 @@ vi.mock('web-push', () => ({
 }))
 
 import { app, auth, prisma, seedWorld, type SeededWorld } from './helpers'
+import { fcmBody, useNativeSenderForTests, type NativeMessage, type NativeResult } from '../lib/nativePush'
 import { resetCalls } from '../lib/pm/calls'
 import { isOneEmoji } from '../controllers/chatController'
 import { fileLabel } from '../lib/chatPreview'
@@ -122,6 +123,61 @@ describe('pop-up notifications when PulseTrack is closed', () => {
     await prisma.notification.createMany({ data: [1, 2].map(() => ({ userId: w.itadMember.id, type: 'MENTION' as const, title: 'Twice in one save', body: 'same words' })) })
     await flush()
     expect(sent.filter((s) => s.payload.title === 'Twice in one save')).toHaveLength(1)
+  })
+
+  it('the Metriq phone app registers its phone, and gets the same notifications as native push', async () => {
+    const TOKEN = 'fcm-token-of-sams-phone_AAAA:1234567890abcdefghij'
+    // No push key on the server: the app is told so and does not register.
+    expect((await request(app).get('/api/push/key').set(...auth(w.itadMember)).expect(200)).body.nativePush).toBe(false)
+    const phone: NativeMessage[] = []
+    let answer: NativeResult = 'ok'
+    useNativeSenderForTests(async (m) => { phone.push(m); return answer })
+    expect((await request(app).get('/api/push/key').set(...auth(w.itadMember)).expect(200)).body.nativePush).toBe(true)
+    await request(app).post('/api/push/device').set(...auth(w.itadMember)).send({ token: 'short', platform: 'android' }).expect(422)
+    await request(app).post('/api/push/device').set(...auth(w.itadMember)).send({ token: TOKEN, platform: 'windows' }).expect(422)
+    await request(app).post('/api/push/device').send({ token: TOKEN, platform: 'android' }).expect(401)
+    await request(app).post('/api/push/device').set(...auth(w.itadMember)).send({ token: TOKEN, platform: 'android', appVersion: '1.0' }).expect(200)
+    await request(app).post('/api/push/device').set(...auth(w.itadMember)).send({ token: TOKEN, platform: 'android', appVersion: '1.0' }).expect(200) // again: no duplicate
+    expect(await prisma.pushDevice.count({ where: { userId: w.itadMember.id } })).toBe(1)
+
+    // A bell notification reaches the phone once, with the place to open and the id the bell shows.
+    const n = await prisma.notification.create({ data: { userId: w.itadMember.id, type: 'TASK_DUE_SOON', title: 'Due now: Call Dan', body: 'Desert HHW', link: '/app/leads/abc', entityType: 'Lead', entityId: 'abc' } })
+    await flush()
+    expect(phone).toHaveLength(1)
+    expect(phone[0]).toMatchObject({ token: TOKEN, platform: 'android', urgent: false })
+    expect(phone[0].payload).toMatchObject({ kind: 'alert', title: 'Due now: Call Dan', url: '/app/leads/abc', nid: n.id })
+    // What Google is sent: title and body to show, the address and id as data, Metriq's own channel.
+    const body = fcmBody(phone[0]) as { message: { token: string; notification: { title: string }; data: Record<string, string>; android: { priority: string; notification: { channel_id: string; tag: string } } } }
+    expect(body.message.token).toBe(TOKEN)
+    expect(body.message.notification.title).toBe('Due now: Call Dan')
+    expect(body.message.data).toMatchObject({ kind: 'alert', url: '/app/leads/abc', nid: n.id })
+    expect(body.message.android).toMatchObject({ priority: 'NORMAL', notification: { channel_id: 'metriq_alerts' } })
+    expect(Object.values(body.message.data).every((v) => typeof v === 'string')).toBe(true)
+
+    // A chat message is urgent (wakes the phone).
+    phone.length = 0
+    await request(app).post(`/api/chat/conversations/${dm}/messages`).set(...auth(w.itadLead)).send({ body: 'On the phone too?' }).expect(201)
+    await flush()
+    expect(phone).toHaveLength(1)
+    expect(phone[0].payload).toMatchObject({ kind: 'msg', body: 'On the phone too?' })
+    expect(phone[0].urgent).toBe(true)
+
+    // The same phone signs in as someone else: the notifications follow the new person.
+    await request(app).post('/api/push/device').set(...auth(w.itadLead)).send({ token: TOKEN, platform: 'android' }).expect(200)
+    expect(await prisma.pushDevice.count({ where: { userId: w.itadMember.id } })).toBe(0)
+    expect(await prisma.pushDevice.count({ where: { userId: w.itadLead.id } })).toBe(1)
+    // Someone else cannot remove my phone; I can (sign-out).
+    await request(app).post('/api/push/device/remove').set(...auth(w.itadMember)).send({ token: TOKEN }).expect(200)
+    expect(await prisma.pushDevice.count({ where: { token: TOKEN } })).toBe(1)
+    // The app was removed from the phone: Google says so, the phone is forgotten.
+    answer = 'gone'
+    await prisma.notification.create({ data: { userId: w.itadLead.id, type: 'MENTION', title: 'Gone phone', body: 'x' } })
+    await flush()
+    expect(await prisma.pushDevice.count({ where: { token: TOKEN } })).toBe(0)
+    await request(app).post('/api/push/device').set(...auth(w.itadLead)).send({ token: TOKEN, platform: 'ios' }).expect(200)
+    await request(app).post('/api/push/device/remove').set(...auth(w.itadLead)).send({ token: TOKEN }).expect(200)
+    expect(await prisma.pushDevice.count({ where: { token: TOKEN } })).toBe(0)
+    useNativeSenderForTests(null)
   })
 
   it('a device the browser dropped is forgotten', async () => {

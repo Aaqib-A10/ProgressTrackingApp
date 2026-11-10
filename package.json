@@ -17,7 +17,9 @@
     "prisma:migrate": "npm run prisma:migrate -w server",
     "prisma:studio": "npm run prisma:studio -w server",
     "fetch:media": "node scripts/fetch-pexels.mjs",
-    "dev:erp": "node scripts/dev-erp.mjs"
+    "dev:erp": "node scripts/dev-erp.mjs",
+    "mobile:install": "npm --prefix mobile install",
+    "mobile:apk": "npm --prefix mobile run android:apk"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

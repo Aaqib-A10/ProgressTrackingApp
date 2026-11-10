@@ -1,4 +1,5 @@
 import { api } from './api'
+import { disableNativePush, enableNativePush, isNativeApp, nativePushState, syncNativePush } from '../mobile/native'
 
 /**
  * Pop-up notifications that work even when PulseTrack is closed (Web Push).
@@ -6,7 +7,18 @@ import { api } from './api'
  * browser and keeps the server's copy of the subscription fresh.
  */
 
-export type PushState = 'unsupported' | 'ios-install' | 'denied' | 'off' | 'on'
+// 'app-later' / 'app-denied': inside the Metriq phone app (native push, see mobile/native.ts).
+export type PushState = 'unsupported' | 'ios-install' | 'denied' | 'off' | 'on' | 'app-later' | 'app-denied'
+
+const send = (path: string, body: Record<string, unknown>) => api.post(path, body)
+/** Has the server its key for the phone app's push? (asked once per page load) */
+let nativeReady: Promise<boolean> | null = null
+function serverHasNativePush(): Promise<boolean> {
+  if (!nativeReady) {
+    nativeReady = api.get<{ nativePush?: boolean }>('/push/key').then((r) => !!r.nativePush).catch(() => { nativeReady = null; return false })
+  }
+  return nativeReady
+}
 
 export function pushSupported(): boolean {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && window.isSecureContext
@@ -24,7 +36,8 @@ let reg: Promise<ServiceWorkerRegistration | null> | null = null
 /** Register the background worker once (quietly does nothing where unsupported). */
 export function registerWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!reg) {
-    reg = 'serviceWorker' in navigator && window.isSecureContext
+    // The phone app has native push; a background worker there would only get in the way.
+    reg = !isNativeApp() && 'serviceWorker' in navigator && window.isSecureContext
       ? navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => null)
       : Promise.resolve(null)
   }
@@ -32,6 +45,7 @@ export function registerWorker(): Promise<ServiceWorkerRegistration | null> {
 }
 
 export async function pushState(): Promise<PushState> {
+  if (isNativeApp()) return nativePushState(await serverHasNativePush())
   if (needsIosInstall()) return 'ios-install'
   if (!pushSupported()) return 'unsupported'
   if (Notification.permission === 'denied') return 'denied'
@@ -48,6 +62,7 @@ function keyBytes(b64: string): Uint8Array {
 
 /** Ask the browser (must come from a click) and subscribe. */
 export async function enablePush(): Promise<PushState> {
+  if (isNativeApp()) return enableNativePush(await serverHasNativePush(), send)
   if (needsIosInstall()) return 'ios-install'
   if (!pushSupported()) return 'unsupported'
   const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
@@ -69,6 +84,7 @@ export async function enablePush(): Promise<PushState> {
 }
 
 export async function disablePush(): Promise<void> {
+  if (isNativeApp()) return disableNativePush(send)
   const r = await registerWorker()
   const sub = await r?.pushManager.getSubscription().catch(() => null)
   if (!sub) return
@@ -79,6 +95,7 @@ export async function disablePush(): Promise<void> {
 /** On every app start: if pop-ups are on here, make sure the server still has them for me. */
 export async function syncPush(): Promise<void> {
   try {
+    if (isNativeApp()) return await syncNativePush(await serverHasNativePush(), send)
     if (!pushSupported() || Notification.permission !== 'granted') return
     await enablePush()
   } catch { /* offline; next start */ }

@@ -6,6 +6,7 @@ import NotFound from '../pages/NotFound'
 import { RequireAuth, RequireRole, RequireFinance, AppShellRoute, RequireHealth, RequirePower, RequireFlag } from './guards'
 import { RouteError } from './RouteError'
 import { pageModule } from '../lib/staleChunks'
+import { isNativeApp } from '../mobile/native'
 
 // Public pages people open rarely load on demand (Login stays in the main bundle: it is
 // the page most people land on).
@@ -130,7 +131,8 @@ const Notifications = lazy(pageModule(() => import('../pages/app/Notifications')
 
 // See CLAUDE.md "Screen map". Public auth routes + protected /app/* under the shell.
 export const router = createBrowserRouter([
-  { path: '/', element: <Page><Landing /></Page> },
+  // The phone app never shows the marketing site: it opens the app (or the sign-in page).
+  { path: '/', element: isNativeApp() ? <Navigate to="/app" replace /> : <Page><Landing /></Page> },
   { path: '/pricing', element: <Page><Pricing /></Page> },
   { path: '/security', element: <Page><Security /></Page> },
   { path: '/product', element: <Page><Product /></Page> },

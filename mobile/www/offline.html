@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Metriq</title>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #FAFAFB; color: #0F172A; text-align: center; }
+  .box { max-width: 320px; }
+  .logo { width: 64px; height: 64px; border-radius: 18px; background: #4F46E5; color: #fff; font-size: 34px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  p { font-size: 15px; line-height: 1.5; color: #64748B; margin: 0 0 22px; }
+  button { height: 46px; padding: 0 22px; border: 0; border-radius: 10px; background: #4F46E5; color: #fff; font-size: 16px; font-weight: 600; }
+  small { display: block; margin-top: 16px; font-size: 12.5px; color: #94A3B8; }
+  @media (prefers-color-scheme: dark) { body { background: #0E0F11; color: #F1F5F9; } p { color: #94A3B8; } }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="logo" aria-hidden="true">M</div>
+    <h1>No connection</h1>
+    <p>Metriq needs the internet to open. Check your Wi-Fi or mobile data and try again.</p>
+    <button type="button" id="again">Try again</button>
+    <small id="note"></small>
+  </div>
+<script src="start.js"></script>
+<script>
+  // Go back to Metriq as soon as the phone is online again, or when the person asks.
+  var target = window.METRIQ_START_URL || 'https://pulsetrack.online/app';
+  function go() { document.getElementById('note').textContent = 'Opening Metriq…'; location.replace(target); }
+  document.getElementById('again').addEventListener('click', go);
+  window.addEventListener('online', go);
+</script>
+</body>
+</html>

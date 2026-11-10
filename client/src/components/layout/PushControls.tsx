@@ -21,6 +21,8 @@ const HELP: Record<PushState, string> = {
   denied: 'Blocked in this browser. Click the lock next to the address, allow Notifications, then reload.',
   unsupported: 'This browser cannot show notifications when Metriq is closed. Use Chrome, Edge or Firefox.',
   'ios-install': 'On iPhone: tap Share, then "Add to Home Screen", open Metriq from there and turn this on.',
+  'app-later': 'Notifications for the Metriq app are being set up. You will be able to turn them on here soon.',
+  'app-denied': 'Blocked for the Metriq app. Open your phone’s Settings, then Apps, Metriq, Notifications, and allow them.',
 }
 
 /** The switch for the settings window. */
@@ -36,7 +38,7 @@ export function PushSetting() {
         const r = await enablePush()
         setSt(r)
         if (r === 'on') addToast({ type: 'success', message: 'Done. Calls and messages will reach you even when Metriq is closed.' })
-        else if (r === 'denied') addToast({ type: 'error', message: HELP.denied })
+        else if (r === 'denied' || r === 'app-denied') addToast({ type: 'error', message: HELP[r] })
       } else {
         await disablePush()
         setSt('off')

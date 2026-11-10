@@ -1,0 +1,13 @@
+node_modules/
+
+# Never in the repository: the push service's settings files and the keys the app is signed with.
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+*.keystore
+*.jks
+keystore.properties
+
+# Built apps
+*.apk
+*.aab
+*.ipa

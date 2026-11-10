@@ -293,6 +293,7 @@ model User {
   chatMemberships      ChatMember[]         @relation("ChatMemberships")
   chatMessagesSent     ChatMessage[]        @relation("ChatMessagesSent")
   pushSubscriptions    PushSubscription[]
+  pushDevices          PushDevice[]
   savedDocs            SavedDoc[]           @relation("SavedDocOwner")
   wfhRequests          WfhRequest[]         @relation("WfhRequester")
   wfhDecisions         WfhRequest[]         @relation("WfhDecider")
@@ -2833,6 +2834,26 @@ model PushSubscription {
   @@index([companyId])
 }
 
+/// A phone with the Metriq app installed (the native shell): where its push notifications go.
+/// One row per app installation; the token is Google's (Android, FCM) or Apple's (iPhone, APNs).
+model PushDevice {
+  id         String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String    @default("")
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// android | ios
+  platform   String
+  token      String    @unique
+  appVersion String?
+  createdAt  DateTime  @default(now())
+  lastOkAt   DateTime?
+
+  @@index([userId])
+  @@index([companyId])
+}
+
 /// Keys the server makes for itself once and keeps (e.g. the Web Push key pair).
 model AppSecret {
   name      String   @id
@@ -3634,6 +3655,7 @@ model Company {
   chatMemberRows           ChatMember[]
   chatMessageRows          ChatMessage[]
   pushSubscriptionRows     PushSubscription[]
+  pushDeviceRows           PushDevice[]
   savedDocRows             SavedDoc[]
   wfhRequestRows           WfhRequest[]
   dialerLeadRows           DialerLead[]

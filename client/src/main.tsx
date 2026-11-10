@@ -6,6 +6,7 @@ import { ToastProvider } from './components/ui/Toast'
 import { AuthProvider } from './lib/auth'
 import './index.css'
 import { registerWorker } from './lib/push'
+import { startNative } from './mobile/native'
 import { initTheme } from './lib/theme'
 import { installErrorReporter } from './lib/errorReporter'
 import { onPreloadError } from './lib/staleChunks'
@@ -23,6 +24,8 @@ window.addEventListener('vite:preloadError', (e) => {
 // Background worker for pop-up notifications when PulseTrack is closed. A click on one
 // while a tab is open sends that tab to the right chat (no new tab, no reload).
 void registerWorker()
+// Inside the Metriq phone app: the back button, notification taps, links opened from outside.
+startNative()
 navigator.serviceWorker?.addEventListener('message', (e: MessageEvent) => {
   const d = e.data as { type?: string; url?: string } | null
   if (d?.type === 'pt-open' && d.url) window.dispatchEvent(new CustomEvent('pt:navigate', { detail: d.url }))
