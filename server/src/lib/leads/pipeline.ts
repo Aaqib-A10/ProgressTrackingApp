@@ -28,6 +28,8 @@ export const CMR_PIPELINE: PipelineStatus[] = [
   { key: 'EXISTING_CUSTOMER', label: 'Existing Customer', color: '#64748B', open: false },
   { key: 'REFERRAL_PARTNER', label: 'Referral Partner', color: '#8B5CF6', open: false },
   { key: 'NOT_A_FIT', label: 'Not a Fit', color: '#EF4444', open: false },
+  /** DNS: do not solicit. They asked not to be contacted again: closed, nobody calls or emails. */
+  { key: 'DNS', label: 'DNS', color: '#475569', open: false },
   { key: 'CLOSED_WON', label: 'Closed Won', color: '#059669', open: false },
   { key: 'CLOSED_LOST', label: 'Closed Lost', color: '#DC2626', open: false },
 ]
@@ -80,7 +82,7 @@ export const PAYS_UNITS = ['LB', 'DRUM', 'NONE', 'UNKNOWN'] as const
 export const FREIGHT = ['BOOKS', 'NEEDS_QUOTE', 'UNKNOWN'] as const
 export const DISPOSITIONS = ['CONNECTED', 'VOICEMAIL', 'NO_ANSWER', 'BUSY', 'WRONG_NUMBER', 'GATEKEEPER'] as const
 export const MEETING_OUTCOMES = ['QUOTE_SENT', 'SHIPMENT_BOOKED', 'NURTURE', 'CLOSED_LOST'] as const
-export const CLOSE_REASONS = ['OTHER_CHEMISTRY', 'BATTERY_NETWORK', 'RELATED_PARTY', 'PROHIBITED', 'NOT_COLLECTOR', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'NO_VOLUME', 'PRICE', 'NO_RESPONSE', 'NOT_INTERESTED', 'OTHER'] as const
+export const CLOSE_REASONS = ['OTHER_CHEMISTRY', 'BATTERY_NETWORK', 'RELATED_PARTY', 'PROHIBITED', 'NOT_COLLECTOR', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'NO_VOLUME', 'PRICE', 'NO_RESPONSE', 'NOT_INTERESTED', 'DO_NOT_SOLICIT', 'OTHER'] as const
 export const TASK_KINDS = ['FOLLOW_UP', 'NEXT_STEP', 'APPROVE', 'HEAD_REVIEW', 'SEND_INVITE', 'RELAY', 'RECONFIRM', 'OUTCOME', 'REPLY', 'CALL', 'CUSTOM'] as const
 export type TaskKind = (typeof TASK_KINDS)[number]
 
@@ -241,12 +243,15 @@ export function leadWarnings(l: FactsInput & { prohibited: boolean; existingCust
 }
 
 /** The Call Summary from the template fields (facts only, 3–5 sentences). */
+/** Under a dollar in cents (0.25 → "25¢"), else "$1.50". */
+export const dollarsOrCents = (v: number): string => (v > 0 && v < 1 ? `${Number((v * 100).toFixed(2))}¢` : `$${Number(v.toFixed(4))}`)
+
 export function composeSummary(l: { company: string; contact: string | null; handlesAlkaline: string; lbsPerMonth: number | null; lbsPerShipment: number | null; currentVendor: string | null; paysToday: number | null; paysUnit: string; nextStep: string | null; nextStepDate: Date | null; owner: string; jesseInputNeeded: boolean }, outcome: string): string {
   const parts: string[] = []
   parts.push(`${l.company}${l.contact ? ` (${l.contact})` : ''}: ${outcome.trim().replace(/\.$/, '')}.`)
   parts.push(`Handles alkaline: ${l.handlesAlkaline === 'YES' ? 'yes' : l.handlesAlkaline === 'NO' ? 'no' : 'unknown'}.`)
   if (l.lbsPerShipment || l.lbsPerMonth) parts.push(`Volume: ${[l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb per shipment` : '', l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()} lb per month` : ''].filter(Boolean).join(', ')}.`)
-  if (l.currentVendor) parts.push(`Current vendor: ${l.currentVendor}${l.paysUnit === 'NONE' ? ', pays nothing' : l.paysToday != null ? `, pays $${l.paysToday}${l.paysUnit === 'DRUM' ? ' per drum' : '/lb'}` : ''}.`)
+  if (l.currentVendor) parts.push(`Current vendor: ${l.currentVendor}${l.paysUnit === 'NONE' ? ', pays nothing' : l.paysToday != null ? `, pays ${dollarsOrCents(l.paysToday)}${l.paysUnit === 'DRUM' ? ' per drum' : '/lb'}` : ''}.`)
   if (l.nextStep) parts.push(`Next step: ${l.nextStep}${l.nextStepDate ? ` by ${DateTime.fromJSDate(l.nextStepDate, { zone: PHOENIX }).toFormat('d LLL')}` : ''} (${l.owner === 'HEAD' ? 'Jesse' : l.owner === 'COPY' ? 'Aaqib' : l.owner === 'MANAGER' ? 'team lead' : 'SDR'}).`)
   if (l.jesseInputNeeded) parts.push('Jesse input needed.')
   return parts.join(' ')

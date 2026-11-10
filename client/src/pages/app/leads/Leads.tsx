@@ -8,7 +8,7 @@ import { TextField } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { ago, dialHref, fmtDate, leadsApi, leadTitle, OWNER_LABEL, SOURCE_LABEL, type DialSetting, type LeadList, type LeadRow, type ListParams, type MetaBusiness } from '../../../lib/leadsApi'
+import { ago, dialHref, fmtDate, leadsApi, leadTitle, OWNER_LABEL, paysText, SOURCE_LABEL, type DialSetting, type LeadList, type LeadRow, type ListParams, type MetaBusiness } from '../../../lib/leadsApi'
 import { Avatar, BusinessPicker, FactsMeter, PageHeader, Select, StatusPill, useBusiness, useLeadsMeta } from './shared'
 import { AddLeadModal } from './AddLeadModal'
 import { ImportModal } from './ImportModal'
@@ -106,7 +106,7 @@ export default function Leads() {
       {/* Quick counts */}
       {data && (
         <div className="pt-chips flex flex-wrap gap-2">
-          <Quick label="Open" value={Object.entries(data.counts.byStatus).filter(([k]) => (pipeline.length ? pipeline.find((s) => s.key === k)?.open : !['WON', 'LOST', 'SPAM', 'CLOSED_WON', 'CLOSED_LOST', 'NOT_A_FIT', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER'].includes(k))).reduce((a, [, n]) => a + n, 0)} active={status === 'open' && !activeFilters.length} onClick={() => setParams(new URLSearchParams(all ? { business: 'all' } : business ? { business: business.id } : {}))} />
+          <Quick label="Open" value={Object.entries(data.counts.byStatus).filter(([k]) => (pipeline.length ? pipeline.find((s) => s.key === k)?.open : !['WON', 'LOST', 'SPAM', 'CLOSED_WON', 'CLOSED_LOST', 'NOT_A_FIT', 'DNS', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER'].includes(k))).reduce((a, [, n]) => a + n, 0)} active={status === 'open' && !activeFilters.length} onClick={() => setParams(new URLSearchParams(all ? { business: 'all' } : business ? { business: business.id } : {}))} />
           <Quick label="Mine" value={data.counts.mine} active={params.get('assignee') === 'me'} onClick={() => setParam({ assignee: params.get('assignee') === 'me' ? null : 'me', status: 'open' })} />
           {canManage && <Quick label="Unassigned" value={data.counts.unassigned} active={params.get('assignee') === 'none'} tone="warning" onClick={() => setParam({ assignee: params.get('assignee') === 'none' ? null : 'none', status: 'open' })} />}
           <Quick label="Overdue" value={data.counts.overdue} active={!!params.get('overdue')} tone="danger" onClick={() => setParam({ overdue: params.get('overdue') ? null : '1', status: 'open' })} />
@@ -296,7 +296,7 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
       case 'nextStepDate': return l.nextStepDate ? <span className={cn('inline-flex items-center gap-1 whitespace-nowrap', l.overdue && 'font-semibold text-danger')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}</span> : '—'
       case 'volume': return l.lbsPerShipment || l.lbsPerMonth ? <span className={cn('tabular-nums', l.belowMin && 'text-purple-600')}>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()}/load` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()}/mo` : ''}</span> : '—'
       case 'vendor': return l.currentVendor ?? '—'
-      case 'pays': return l.paysUnit === 'NONE' ? 'Nothing' : l.paysToday != null ? `$${l.paysToday}${l.paysUnit === 'DRUM' ? '/drum' : '/lb'}` : '—'
+      case 'pays': return l.paysUnit === 'NONE' ? 'Nothing' : paysText(l.paysUnit, l.paysToday) ?? '—'
       case 'calls': return <span className="inline-flex items-center gap-1 tabular-nums"><Phone size={12} className="text-ink-faint" />{l.callsCount}</span>
       case 'lastCall': return l.lastCallAt ? ago(l.lastCallAt) : '—'
       case 'tasks': return l.openTasks ? <Badge tone="primary">{l.openTasks}</Badge> : <span className="text-ink-faint">0</span>

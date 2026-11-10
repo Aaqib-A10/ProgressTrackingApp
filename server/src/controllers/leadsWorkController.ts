@@ -732,7 +732,7 @@ export async function approveLead(req: AuthedRequest, res: Response): Promise<vo
 const decideSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('MEETING'), slot: z.string().max(40), text: z.string().trim().max(2000).optional() }),
   z.object({ action: z.literal('DIRECTION'), text: z.string().trim().min(3).max(2000) }),
-  z.object({ action: z.literal('CLOSE'), status: z.enum(['NOT_A_FIT', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'CLOSED_LOST']), reason: z.enum(CLOSE_REASONS), text: z.string().trim().max(2000).optional() }),
+  z.object({ action: z.literal('CLOSE'), status: z.enum(['NOT_A_FIT', 'DNS', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'CLOSED_LOST']), reason: z.enum(CLOSE_REASONS), text: z.string().trim().max(2000).optional() }),
 ])
 
 /** POST /api/leads/:id/decide — step 6: Jesse approves a meeting (and a slot), gives pricing/freight direction, or closes with a reason. */
@@ -1284,7 +1284,10 @@ const paysOf = (v: string): { paysToday: number | null; paysUnit: string } => {
   const t = v.trim()
   if (/^(nothing|none|no charge|free)\b/i.test(t) || /^\$?0(\.0+)?$/.test(t)) return { paysToday: 0, paysUnit: 'NONE' }
   const n = num(t)
-  return n == null ? { paysToday: null, paysUnit: 'UNKNOWN' } : { paysToday: n, paysUnit: /drum/i.test(t) ? 'DRUM' : 'LB' }
+  if (n == null) return { paysToday: null, paysUnit: 'UNKNOWN' }
+  // "25c", "25 cents", "25¢" (no dollar sign): cents, saved as dollars (0.25).
+  const cents = !/\$/.test(t) && /\d\s*(c|¢|cents?)\b|\d\s*¢/i.test(t)
+  return { paysToday: cents ? Math.round(n * 10000) / 1_000_000 : n, paysUnit: /drum/i.test(t) ? 'DRUM' : 'LB' }
 }
 /** The first email in a cell that may hold two, or a note ("info@x.com (verify)"). */
 const firstEmail = (v: string): string => v.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? ''

@@ -42,7 +42,7 @@ contactName, contactRole, email: the person spoken to, as said.
 decisionMaker: "YES" | "NO" | "UNKNOWN" (is this person the decision maker). decisionMakerName: the decision maker's name if someone else was named.
 material: array from ${JSON.stringify(MATERIALS)}. materialForm: array from ${JSON.stringify(MATERIAL_FORMS)}.
 lbsPerMonth, lbsPerShipment: numbers in pounds (convert tons ×2000, drums ≈ 500 lb only if they said drums and gave no weight: then leave lbs null and mention drums in the summary).
-currentVendor: who takes the material today. paysToday: number they are paid today; paysUnit: "LB" | "DRUM" | "NONE" | "UNKNOWN" ("NONE" when they pay to dispose or get nothing).
+currentVendor: who takes the material today. paysToday: what they are paid today, in US dollars (25 cents a pound → 0.25); paysUnit: "LB" | "DRUM" | "NONE" | "UNKNOWN" ("NONE" when they pay to dispose or get nothing).
 nextShipmentDate, nextStepDate: YYYY-MM-DD only when a date or a clear day was said (today's date is given). pickupCity: city/state of the material. freight: "BOOKS" | "NEEDS_QUOTE" | "UNKNOWN".
 nextStep: the agreed next action in up to 12 words. jesseAsk: one line if the prospect asked something only the CEO can answer (price, freight, contract), else null.
 outcome: "INTERESTED" | "NOT_INTERESTED" | "CALL_BACK" | "WRONG_NUMBER" | "VOICEMAIL" | "GATEKEEPER" | null.`

@@ -6,7 +6,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { ago, DISPOSITION_LABEL, fmtDur, fmtWhen, inZone, leadsApi, leadTitle, type LeadCall, type LeadComment, type LeadRow } from '../../../lib/leadsApi'
+import { ago, DISPOSITION_LABEL, fmtDur, fmtWhen, inZone, leadsApi, leadTitle, paysText, type LeadCall, type LeadComment, type LeadRow } from '../../../lib/leadsApi'
 import { BusinessPicker, FactsMeter, PageHeader, StatusPill, useBusiness, useLeadsMeta } from './shared'
 
 /** Jesse Queue: every flagged lead, oldest first, with the timer, the five facts, the last call and the recording. Jesse decides from the lead. */
@@ -58,7 +58,7 @@ export default function JesseQueue() {
             <div className="mt-3 grid gap-3 text-body-sm sm:grid-cols-5">
               <Fact label="Material" value={l.material?.length ? l.material.map((m) => m.replace(/_/g, ' ').toLowerCase()).join(', ') : '—'} />
               <Fact label="Volume" value={l.lbsPerShipment || l.lbsPerMonth ? `${l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb/load` : ''}${l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}${l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()} lb/mo` : ''}` : '—'} />
-              <Fact label="Current outlet" value={l.currentVendor ? `${l.currentVendor} · ${l.paysUnit === 'NONE' ? 'pays nothing' : l.paysToday != null ? `$${l.paysToday}/lb` : '?'}` : '—'} />
+              <Fact label="Current outlet" value={l.currentVendor ? `${l.currentVendor} · pays ${paysText(l.paysUnit, l.paysToday) ?? '?'}` : '—'} />
               <Fact label="Decision maker" value={l.decisionMakerName ? `${l.decisionMakerName}${l.contactRole ? `, ${l.contactRole}` : ''}` : '—'} />
               <Fact label="Timing · freight" value={l.pickupCity || l.nextShipmentDate ? `${l.pickupCity ?? ''}${l.nextShipmentDate ? ` · ${new Date(l.nextShipmentDate).toLocaleDateString()}` : ''} · ${(l.freight ?? 'UNKNOWN').toLowerCase().replace('_', ' ')}` : '—'} />
             </div>

@@ -66,7 +66,7 @@ describe('CMR flow inside Lead Management', () => {
     const b = (await api(admin).post('/businesses', { name: 'CMR', kind: 'CMR', headId: jesse.id }).expect(201)).body.business
     cmrId = b.id
     expect(b.kind).toBe('CMR')
-    expect(b.pipeline.map((s: { key: string }) => s.key)).toEqual(['NEW', 'INFO_SENT', 'FOLLOW_UP', 'QUALIFIED', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'NOT_A_FIT', 'CLOSED_WON', 'CLOSED_LOST'])
+    expect(b.pipeline.map((s: { key: string }) => s.key)).toEqual(['NEW', 'INFO_SENT', 'FOLLOW_UP', 'QUALIFIED', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'NOT_A_FIT', 'DNS', 'CLOSED_WON', 'CLOSED_LOST'])
     expect(b.settings.segments).toContain('HHW program')
     expect(b.settings.consentStates).toEqual(['CA', 'WA'])
     await api(admin).post(`/businesses/${cmrId}/members`, { userId: lead.id, role: 'MANAGER' }).expect(200)
@@ -336,6 +336,12 @@ describe('CMR flow inside Lead Management', () => {
     await api(mark).patch(`/${l.id}`, { status: 'QUALIFIED' }).expect(422)
     await api(mark).patch(`/${l.id}`, { status: 'CLOSED_WON' }).expect(403)
     await api(mark).patch(`/${l.id}`, { status: 'WON' }).expect(422)
+    // DNS (do not solicit): an SDR closes with it, and so can Jesse.
+    const d1 = (await api(mark).post('/', { businessId: cmrId, organization: 'Leave Us Alone Inc', name: 'Lou' }).expect(201)).body.lead
+    expect((await api(mark).post(`/${d1.id}/close`, { status: 'DNS', reason: 'DO_NOT_SOLICIT', note: 'Asked us not to call again' }).expect(200)).body.lead).toMatchObject({ status: 'DNS', statusLabel: 'DNS', open: false, lostReason: 'DO_NOT_SOLICIT' })
+    const d2 = (await api(mark).post('/', { businessId: cmrId, organization: 'No Calls Please Co', name: 'Ned' }).expect(201)).body.lead
+    await api(mark).post(`/${d2.id}/close`, { status: 'EXISTING_CUSTOMER', reason: 'EXISTING_CUSTOMER' }).expect(200)
+    expect((await api(jesse).post(`/${d2.id}/decide`, { action: 'CLOSE', status: 'DNS', reason: 'DO_NOT_SOLICIT' }).expect(200)).body.lead).toMatchObject({ status: 'DNS', jesseInputNeeded: false })
   })
 
   it('the CMR_Lead_Tracker sheet imports: one lead per company, a call per row, the Lists words, problems listed', async () => {
@@ -343,7 +349,7 @@ describe('CMR flow inside Lead Management', () => {
     const rows = [
       ['10/20/2026', 'Matthew', 'Desert HHW', 'HHW program', 'AZ', 'Dan', 'Manager', 'Yes', '480-555-0101', 'dan@deserthhw.example', 'deserthhw.example', 'Yes', '4000', 'Battery Solutions', '0.08', 'Info Sent', 'Collects alkaline from 3 sites. Sent profile.', 'Follow up', '10/22/2026', 'SDR', 'No', ''],
       ['10/24/2026', 'Matthew', 'Desert HHW', 'HHW program', 'AZ', 'Dan', 'Manager', 'Yes', '480-555-0101', '', '', 'Yes', '4500', 'Battery Solutions', '0.08', 'Qualified', 'Wants a rate; ships monthly from Mesa.', 'Jesse review', '10/27/2026', 'Jesse', 'Yes', 'Approve a meeting next week.'],
-      ['10/21/2026', 'Mark', 'Metro Transit', 'Transit', 'TX', 'Tia', '', 'Unknown', '(214) 555-0102', 'tia@metro.example', '', 'No', '', '', '', 'Not a Fit', 'Only lead acid from buses.', '', '', 'SDR', 'No', ''],
+      ['10/21/2026', 'Mark', 'Metro Transit', 'Transit', 'TX', 'Tia', '', 'Unknown', '(214) 555-0102', 'tia@metro.example', '', 'No', '', '', '25c/lb', 'Not a Fit', 'Only lead acid from buses.', '', '', 'SDR', 'No', ''],
       ['10/22/2026', 'Marvin', 'Bad Rows Co', 'Unknown segment', 'NV', 'Bo', '', '', '', '', '', '', '', '', '', 'Maybe', '', '', '', 'SDR', '', ''],
       // Cells the way the real sheet writes them: a volume range, "Nothing" for the fee, two emails, four phones, a trailing newline in the name.
       ['10/19/2026', 'Matthew', 'Integritrade LLC \n', 'E-waste recycler', 'CA', 'Ian Ziyer', 'Owner', 'Yes', '888-694-4978 / 972-427-7770 / 903-217-8090', 'info@integritrade.example\nian@integritrade.example', 'integritrade.example', 'Yes', '1,500-2,000 (growing)', 'Unnamed downstream (NDA)', 'Nothing (no charge, no rebate)', 'Follow Up', 'Owner on the call.', 'Get the start date.', '10/24/2026', 'SDR', 'No', ''],
@@ -354,6 +360,8 @@ describe('CMR flow inside Lead Management', () => {
     const integ = await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Integritrade LLC' }, include: { cmr: true } })
     expect(integ).toMatchObject({ phone: '888-694-4978', phoneE164: '+18886944978', email: 'info@integritrade.example', orgKey: 'integritrade' })
     expect(integ.cmr).toMatchObject({ lbsPerMonth: 1500, paysToday: 0, paysUnit: 'NONE' })
+    // "25c/lb" in the sheet: 25 cents, saved as 0.25 dollars.
+    expect((await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Metro Transit' }, include: { cmr: true } })).cmr).toMatchObject({ paysToday: 0.25, paysUnit: 'LB' })
     expect(r.problems.some((p: string) => p.includes('"Marvin"'))).toBe(true)
     expect(r.problems.some((p: string) => p.includes('"Maybe"'))).toBe(true)
     const desert = await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Desert HHW' }, include: { cmr: true, calls: true, comments: true } })

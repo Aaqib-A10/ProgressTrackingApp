@@ -11,11 +11,11 @@ import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
 import { useAuth } from '../../../lib/auth'
 import {
-  CLOSE_REASON_LABEL, CLOSE_REASONS, DISPOSITION_LABEL, DISPOSITIONS, fmtDate, fmtDur, fmtWhen, FREIGHT, FREIGHT_LABEL, inZone, leadsApi, leadTitle, MATERIAL_FORMS, MATERIAL_LABEL, MATERIALS, MEETING_OUTCOMES, OUTCOME_LABEL, OWNER_LABEL, PAYS_LABEL, PAYS_UNITS, plusBusinessDays, SOURCE_LABEL, TASK_KIND_LABEL, toYmd, YES_NO_LABEL,
+  CLOSE_REASON_LABEL, CLOSE_REASONS, DISPOSITION_LABEL, DISPOSITIONS, fmtDate, fmtDur, fmtWhen, FREIGHT, FREIGHT_LABEL, inZone, leadsApi, leadTitle, MATERIAL_FORMS, MATERIAL_LABEL, MATERIALS, MEETING_OUTCOMES, money$, OUTCOME_LABEL, OWNER_LABEL, PAYS_LABEL, PAYS_UNITS, paysText, plusBusinessDays, SOURCE_LABEL, TASK_KIND_LABEL, toYmd, YES_NO_LABEL,
   type Disposition, type LeadCall, type LeadContact, type LeadDetail, type LeadFull, type LeadInput, type Owner, type YesNo,
   dialHref, money,
 } from '../../../lib/leadsApi'
-import { Avatar, Done, FactsMeter, Label, Select, StatusPill, WarningList, useLeadsMeta, useOwners } from './shared'
+import { Avatar, Done, FactsMeter, Label, PaysAmount, Select, StatusPill, WarningList, useLeadsMeta, useOwners } from './shared'
 
 /**
  * One lead: the details (contact, address, product), the five facts and the flow for a CMR
@@ -202,6 +202,19 @@ function JessePanel({ d, isHead, meId, onAction, onDecided }: { d: LeadDetail; i
 const yesNoSel = (v: YesNo | undefined, on: (v: YesNo) => void) => <Select value={v ?? 'UNKNOWN'} onChange={(e) => on(e.target.value as YesNo)} className="w-full">{(['YES', 'NO', 'UNKNOWN'] as YesNo[]).map((k) => <option key={k} value={k}>{YES_NO_LABEL[k]}</option>)}</Select>
 
 /** The five facts, edited in place. */
+/** What one of the five facts says, in words (or its hint when it is still missing). */
+export function FactValue({ fact, l, settings }: { fact: LeadFull['facts'][number]; l: LeadFull; settings: LeadDetail['settings'] }) {
+  return (
+    <>
+      {fact.key === 'material' && (l.material?.length ? <>{l.material.map((m) => MATERIAL_LABEL[m as keyof typeof MATERIAL_LABEL] ?? m).join(', ')}{l.materialForm?.length ? ` · ${l.materialForm.map((x) => x.toLowerCase()).join(', ')}` : ''} · handles alkaline: {YES_NO_LABEL[l.handlesAlkaline ?? 'UNKNOWN'].toLowerCase()}</> : fact.hint)}
+      {fact.key === 'volume' && (l.lbsPerShipment || l.lbsPerMonth ? <>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb per shipment` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()} lb per month` : ''}{l.belowMin && <span className="ml-1 text-purple-600">(below the {settings?.minLoadLbs.toLocaleString()} lb minimum)</span>}</> : fact.hint)}
+      {fact.key === 'outlet' && (l.currentVendor ? <>{l.currentVendor} · pays {paysText(l.paysUnit, l.paysToday) ?? 'unknown'}{l.usesBatteryNetwork ? ' · The Battery Network' : ''}{l.vendorRelatedParty ? ' · related party' : ''}</> : fact.hint)}
+      {fact.key === 'decisionMaker' && (l.decisionMakerName ? <>{l.decisionMakerName}{l.contactRole ? `, ${l.contactRole}` : ''} · will talk to Jesse: {YES_NO_LABEL[l.dmAgreed ?? 'UNKNOWN'].toLowerCase()}</> : fact.hint)}
+      {fact.key === 'timing' && (l.pickupCity || l.nextShipmentDate ? <>{l.nextShipmentDate ? `next shipment ${fmtDate(l.nextShipmentDate)}` : 'no shipment date'} · {l.pickupCity ?? 'pickup city?'} · {FREIGHT_LABEL[(l.freight ?? 'UNKNOWN') as keyof typeof FREIGHT_LABEL].toLowerCase()}</> : fact.hint)}
+    </>
+  )
+}
+
 export function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; settings: LeadDetail['settings']; canEdit: boolean; onSaved: () => void }) {
   const { addToast } = useToast()
   const [edit, setEdit] = useState(false)
@@ -218,13 +231,7 @@ export function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; sett
           {l.facts.map((fact) => (
             <div key={fact.key} className={cn('rounded-card border p-3', fact.done ? 'border-success/30 bg-success/[0.04]' : 'border-line')}>
               <dt className="flex items-center justify-between text-body-sm font-semibold text-ink"><span>{fact.label}</span>{fact.done ? <CheckCircle2 size={15} className="text-success" /> : <span className="text-[11px] font-normal text-ink-faint">missing</span>}</dt>
-              <dd className="mt-1 text-body-sm text-ink-muted">
-                {fact.key === 'material' && (l.material?.length ? <>{l.material.map((m) => MATERIAL_LABEL[m as keyof typeof MATERIAL_LABEL] ?? m).join(', ')}{l.materialForm?.length ? ` · ${l.materialForm.map((x) => x.toLowerCase()).join(', ')}` : ''} · handles alkaline: {YES_NO_LABEL[l.handlesAlkaline ?? 'UNKNOWN'].toLowerCase()}</> : fact.hint)}
-                {fact.key === 'volume' && (l.lbsPerShipment || l.lbsPerMonth ? <>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb per shipment` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()} lb per month` : ''}{l.belowMin && <span className="ml-1 text-purple-600">(below the {settings?.minLoadLbs.toLocaleString()} lb minimum)</span>}</> : fact.hint)}
-                {fact.key === 'outlet' && (l.currentVendor ? <>{l.currentVendor} · pays {l.paysUnit === 'NONE' ? 'nothing' : l.paysToday != null ? `$${l.paysToday}${l.paysUnit === 'DRUM' ? ' per drum' : '/lb'}` : 'unknown'}{l.usesBatteryNetwork ? ' · The Battery Network' : ''}{l.vendorRelatedParty ? ' · related party' : ''}</> : fact.hint)}
-                {fact.key === 'decisionMaker' && (l.decisionMakerName ? <>{l.decisionMakerName}{l.contactRole ? `, ${l.contactRole}` : ''} · will talk to Jesse: {YES_NO_LABEL[l.dmAgreed ?? 'UNKNOWN'].toLowerCase()}</> : fact.hint)}
-                {fact.key === 'timing' && (l.pickupCity || l.nextShipmentDate ? <>{l.nextShipmentDate ? `next shipment ${fmtDate(l.nextShipmentDate)}` : 'no shipment date'} · {l.pickupCity ?? 'pickup city?'} · {FREIGHT_LABEL[(l.freight ?? 'UNKNOWN') as keyof typeof FREIGHT_LABEL].toLowerCase()}</> : fact.hint)}
-              </dd>
+              <dd className="mt-1 text-body-sm text-ink-muted"><FactValue fact={fact} l={l} settings={settings} /></dd>
             </div>
           ))}
         </dl>
@@ -241,7 +248,7 @@ export function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; sett
           <TextField label="3 · Current vendor" value={f.currentVendor ?? ''} onChange={(e) => setF({ ...f, currentVendor: e.target.value })} placeholder="Who takes their batteries today" />
           <div className="grid grid-cols-2 gap-2">
             <label><Label>They pay</Label><Select value={f.paysUnit ?? 'UNKNOWN'} onChange={(e) => setF({ ...f, paysUnit: e.target.value })} className="w-full">{PAYS_UNITS.map((u) => <option key={u} value={u}>{PAYS_LABEL[u]}</option>)}</Select></label>
-            <TextField label="Amount ($)" inputMode="decimal" disabled={f.paysUnit === 'NONE' || f.paysUnit === 'UNKNOWN'} value={f.paysToday ?? ''} onChange={(e) => setF({ ...f, paysToday: num(e.target.value) })} />
+            <PaysAmount unit={f.paysUnit ?? 'UNKNOWN'} disabled={f.paysUnit === 'NONE' || f.paysUnit === 'UNKNOWN'} value={f.paysToday} onChange={(v) => setF({ ...f, paysToday: v })} />
           </div>
           <label className="flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" checked={!!f.usesBatteryNetwork} onChange={(e) => setF({ ...f, usesBatteryNetwork: e.target.checked })} />Uses The Battery Network / Call2Recycle</label>
           <label className="flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" checked={!!f.vendorRelatedParty} onChange={(e) => setF({ ...f, vendorRelatedParty: e.target.checked })} />Vendor is a related party (Integritrade)</label>
@@ -327,7 +334,7 @@ const DRAFT_LABEL: Record<string, string> = { contactName: 'Contact', contactRol
 const ENUM_KEYS = new Set(['material', 'materialForm', 'paysUnit', 'freight', 'decisionMaker', 'outcome'])
 const draftValue = (k: string, v: unknown): string => {
   if (Array.isArray(v)) return v.map((x) => String(x).replace(/_/g, ' ').toLowerCase()).join(', ')
-  if (k === 'paysToday') return `$${v}`
+  if (k === 'paysToday') return typeof v === 'number' ? money$(v) : `$${v}`
   if (k === 'paysUnit') return ({ LB: 'pound', DRUM: 'drum', NONE: 'nothing (they pay or get nothing)', UNKNOWN: 'unknown' } as Record<string, string>)[String(v)] ?? String(v)
   if (typeof v === 'number') return v.toLocaleString()
   if (ENUM_KEYS.has(k)) return String(v).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (ch) => ch.toUpperCase())
@@ -613,7 +620,7 @@ function LogCallModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => vo
               <TextField label="Lbs per month" inputMode="decimal" value={f.lbsPerMonth ?? ''} onChange={(e) => setF({ ...f, lbsPerMonth: num(e.target.value) })} />
               <TextField label="Current vendor" value={f.currentVendor} onChange={(e) => setF({ ...f, currentVendor: e.target.value })} />
               <label><Label>They pay</Label><Select value={f.paysUnit} onChange={(e) => setF({ ...f, paysUnit: e.target.value })} className="w-full">{PAYS_UNITS.map((u) => <option key={u} value={u}>{PAYS_LABEL[u]}</option>)}</Select></label>
-              <TextField label="Amount ($)" inputMode="decimal" disabled={f.paysUnit === 'NONE' || f.paysUnit === 'UNKNOWN'} value={f.paysToday ?? ''} onChange={(e) => setF({ ...f, paysToday: num(e.target.value) })} />
+              <PaysAmount unit={f.paysUnit ?? 'UNKNOWN'} disabled={f.paysUnit === 'NONE' || f.paysUnit === 'UNKNOWN'} value={f.paysToday} onChange={(v) => setF({ ...f, paysToday: v })} />
               <TextField label="Decision maker" value={f.decisionMakerName} onChange={(e) => setF({ ...f, decisionMakerName: e.target.value })} />
               <label><Label>Will talk to Jesse</Label>{yesNoSel(f.dmAgreed, (v) => setF({ ...f, dmAgreed: v }))}</label>
             </div>
@@ -680,7 +687,7 @@ function CloseModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void
   return (
     <Modal open onClose={onClose} title="Close out" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !status} onClick={go}>Close lead</Button></>}>
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-1.5">{closed.map((s) => <button key={s.key} type="button" onClick={() => setStatus(s.key)} className={cn('h-8 rounded-full border px-3 text-body-sm font-medium', status === s.key ? 'border-ink bg-ink text-card' : 'border-line text-ink-muted hover:text-ink')}>{s.label}</button>)}</div>
+        <div className="flex flex-wrap gap-1.5">{closed.map((s) => <button key={s.key} type="button" onClick={() => { setStatus(s.key); if (s.key === 'DNS' && d.can.cmr) setReason('DO_NOT_SOLICIT') }} className={cn('h-8 rounded-full border px-3 text-body-sm font-medium', status === s.key ? 'border-ink bg-ink text-card' : 'border-line text-ink-muted hover:text-ink')}>{s.label}</button>)}</div>
         {d.can.cmr && <label><Label>Reason</Label><Select value={reason} onChange={(e) => setReason(e.target.value)} className="w-full">{CLOSE_REASONS.map((r) => <option key={r} value={r}>{CLOSE_REASON_LABEL[r]}</option>)}</Select></label>}
         <TextArea label={d.can.cmr ? 'Note' : 'Reason / note'} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         {d.can.cmr && status === 'EXISTING_CUSTOMER' && !can.decide && <p className="text-body-sm text-ink-muted">Existing Customer is Jesse's call: this goes to him as a flag to confirm.</p>}
@@ -725,7 +732,7 @@ function DecideModal({ l, onClose, onDone }: { l: LeadFull; onClose: () => void;
         )}
         {action === 'CLOSE' && (
           <div className="grid gap-2 sm:grid-cols-2">
-            <label><Label>Status</Label><Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full"><option value="NOT_A_FIT">Not a Fit</option><option value="EXISTING_CUSTOMER">Existing Customer</option><option value="REFERRAL_PARTNER">Referral Partner</option><option value="CLOSED_LOST">Closed Lost</option></Select></label>
+            <label><Label>Status</Label><Select value={status} onChange={(e) => { setStatus(e.target.value); if (e.target.value === 'DNS') setReason('DO_NOT_SOLICIT') }} className="w-full"><option value="NOT_A_FIT">Not a Fit</option><option value="DNS">DNS (do not solicit)</option><option value="EXISTING_CUSTOMER">Existing Customer</option><option value="REFERRAL_PARTNER">Referral Partner</option><option value="CLOSED_LOST">Closed Lost</option></Select></label>
             <label><Label>Reason</Label><Select value={reason} onChange={(e) => setReason(e.target.value)} className="w-full">{CLOSE_REASONS.map((r) => <option key={r} value={r}>{CLOSE_REASON_LABEL[r]}</option>)}</Select></label>
           </div>
         )}
@@ -778,7 +785,7 @@ function InviteModal({ l, copyName, head, onClose, onDone }: { l: LeadFull; copy
 
 function ReconfirmModal({ l, onClose, onDone }: { l: LeadFull; onClose: () => void; onDone: () => void }) {
   const { addToast } = useToast()
-  const [brief, setBrief] = useState(`Who: ${l.decisionMakerName || l.name}${l.contactRole ? ` (${l.contactRole})` : ''}, ${l.organization ?? ''}.\nWhat: ${l.material?.length ? l.material.map((m) => MATERIAL_LABEL[m as keyof typeof MATERIAL_LABEL] ?? m).join(', ') : 'material?'}, ${l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb/load` : ''}${l.lbsPerMonth ? `, ${l.lbsPerMonth.toLocaleString()} lb/month` : ''}; vendor ${l.currentVendor ?? '?'} pays ${l.paysUnit === 'NONE' ? 'nothing' : l.paysToday != null ? `$${l.paysToday}/lb` : '?'}.\nAsk: ${l.jesseAsk ?? ''}`)
+  const [brief, setBrief] = useState(`Who: ${l.decisionMakerName || l.name}${l.contactRole ? ` (${l.contactRole})` : ''}, ${l.organization ?? ''}.\nWhat: ${l.material?.length ? l.material.map((m) => MATERIAL_LABEL[m as keyof typeof MATERIAL_LABEL] ?? m).join(', ') : 'material?'}, ${l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb/load` : ''}${l.lbsPerMonth ? `, ${l.lbsPerMonth.toLocaleString()} lb/month` : ''}; vendor ${l.currentVendor ?? '?'} pays ${paysText(l.paysUnit, l.paysToday) ?? '?'}.\nAsk: ${l.jesseAsk ?? ''}`)
   const [busy, setBusy] = useState(false)
   const go = async () => { setBusy(true); try { await leadsApi.reconfirm(l.id, brief.trim()); addToast({ type: 'success', message: 'Reconfirmed. The brief went to Jesse.' }); onDone() } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
   return (

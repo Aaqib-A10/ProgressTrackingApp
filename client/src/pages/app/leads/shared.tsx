@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from 'react'
+import { TextField } from '../../../components/ui/Input'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Ban, CheckCircle2, Info } from 'lucide-react'
 import { cn } from '../../../lib/cn'
@@ -73,6 +74,48 @@ export function BusinessPicker({ allowAll }: { allowAll?: boolean }) {
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={cn('h-9 rounded-btn border border-line bg-card px-2.5 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-[3px] focus:ring-primary/15 disabled:opacity-60', className)}>{children}</select>
+}
+
+/**
+ * What they are paid, typed in dollars or in cents ("0.25" dollars or "25" cents: the same 25¢).
+ * Saved in dollars. Per lb starts in cents (rates are cents a pound); per drum in dollars.
+ * The typed text is kept as typed, so "0." and "0.2" can be typed on the way to "0.25".
+ */
+export function PaysAmount({ unit, value, onChange, disabled }: { unit: string; value: number | null | undefined; onChange: (dollars: number | null) => void; disabled?: boolean }) {
+  const [cents, setCents] = useState(() => unit !== 'DRUM' && (value == null || value < 1))
+  const shown = (v: number | null | undefined, c: boolean) => (v == null ? '' : String(c ? Number((v * 100).toFixed(4)) : Number(v.toFixed(6))))
+  const [txt, setTxt] = useState(() => shown(value, cents))
+  const parse = (t: string, c: boolean): number | null => {
+    const n = Number.parseFloat(t.replace(/[^0-9.]/g, ''))
+    if (t.trim() === '' || !Number.isFinite(n)) return null
+    return c ? Math.round(n * 10000) / 1_000_000 : n
+  }
+  const type = (t: string) => { setTxt(t); onChange(parse(t, cents)) }
+  // Filled from elsewhere (an AI draft of the call): show the new amount.
+  useEffect(() => {
+    const now = parse(txt, cents)
+    if ((value ?? null) === null ? now !== null : now === null || Math.abs(now - (value as number)) > 1e-9) setTxt(shown(value, cents))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+  const switchTo = (c: boolean) => { if (c === cents) return; setCents(c); const v = parse(txt, cents); setTxt(shown(v, c)) }
+  return (
+    <TextField
+      label={`Amount (${cents ? '¢' : '$'})`}
+      inputMode="decimal"
+      disabled={disabled}
+      value={txt}
+      onChange={(e) => type(e.target.value)}
+      placeholder={cents ? '25' : '0.25'}
+      className="pr-[4.75rem]"
+      rightSlot={
+        <span className="inline-flex overflow-hidden rounded-full border border-line text-[12px] font-semibold" role="group" aria-label="Dollars or cents">
+          {([[false, '$'], [true, '¢']] as const).map(([c, t]) => (
+            <button key={t} type="button" disabled={disabled} aria-pressed={cents === c} onClick={() => switchTo(c)} className={cn('h-6 w-7', cents === c ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>{t}</button>
+          ))}
+        </span>
+      }
+    />
+  )
 }
 
 export function Label({ children, hint }: { children: ReactNode; hint?: string }) {

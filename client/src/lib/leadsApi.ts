@@ -21,7 +21,18 @@ export const MATERIALS = ['ALKALINE_SORTED', 'MIXED_DRY_CELL', 'LITHIUM', 'NIMH'
 export const MATERIAL_LABEL: Record<(typeof MATERIALS)[number], string> = { ALKALINE_SORTED: 'Sorted alkaline', MIXED_DRY_CELL: 'Mixed dry cell', LITHIUM: 'Lithium', NIMH: 'NiMH', NICD: 'NiCd', LEAD_ACID: 'Lead acid' }
 export const MATERIAL_FORMS = ['LOOSE', 'TAPED', 'BAGGED'] as const
 export const PAYS_UNITS = ['LB', 'DRUM', 'NONE', 'UNKNOWN'] as const
-export const PAYS_LABEL: Record<(typeof PAYS_UNITS)[number], string> = { LB: '$ per lb', DRUM: '$ per drum', NONE: 'Nothing', UNKNOWN: 'Unknown' }
+export const PAYS_LABEL: Record<(typeof PAYS_UNITS)[number], string> = { LB: 'Per lb', DRUM: 'Per drum', NONE: 'Nothing', UNKNOWN: 'Unknown' }
+/** An amount in dollars the way people say it: under a dollar in cents (0.25 → "25¢"), else "$1.50". */
+export function money$(v: number): string {
+  if (v > 0 && v < 1) return `${Number((v * 100).toFixed(2))}¢`
+  return `$${Number(v.toFixed(4)).toLocaleString('en-US', { maximumFractionDigits: 4 })}`
+}
+/** What they are paid today: "25¢/lb", "$40 per drum", "nothing", or null when not known. */
+export function paysText(unit: string | null | undefined, amount: number | null | undefined): string | null {
+  if (unit === 'NONE') return 'nothing'
+  if (amount == null || unit === 'UNKNOWN' || !unit) return null
+  return `${money$(amount)}${unit === 'DRUM' ? ' per drum' : '/lb'}`
+}
 export const FREIGHT = ['BOOKS', 'NEEDS_QUOTE', 'UNKNOWN'] as const
 export const FREIGHT_LABEL: Record<(typeof FREIGHT)[number], string> = { BOOKS: 'They book freight', NEEDS_QUOTE: 'They need a quote', UNKNOWN: 'Unknown' }
 export const DISPOSITIONS = ['CONNECTED', 'VOICEMAIL', 'NO_ANSWER', 'BUSY', 'WRONG_NUMBER', 'GATEKEEPER'] as const
@@ -29,10 +40,10 @@ export type Disposition = (typeof DISPOSITIONS)[number]
 export const DISPOSITION_LABEL: Record<Disposition, string> = { CONNECTED: 'Connected', VOICEMAIL: 'Voicemail', NO_ANSWER: 'No answer', BUSY: 'Busy', WRONG_NUMBER: 'Wrong number', GATEKEEPER: 'Gatekeeper' }
 export const MEETING_OUTCOMES = ['QUOTE_SENT', 'SHIPMENT_BOOKED', 'NURTURE', 'CLOSED_LOST'] as const
 export const OUTCOME_LABEL: Record<(typeof MEETING_OUTCOMES)[number], string> = { QUOTE_SENT: 'Quote sent', SHIPMENT_BOOKED: 'Shipment booked', NURTURE: 'Nurture', CLOSED_LOST: 'Closed Lost' }
-export const CLOSE_REASONS = ['OTHER_CHEMISTRY', 'BATTERY_NETWORK', 'RELATED_PARTY', 'PROHIBITED', 'NOT_COLLECTOR', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'NO_VOLUME', 'PRICE', 'NO_RESPONSE', 'NOT_INTERESTED', 'OTHER'] as const
+export const CLOSE_REASONS = ['OTHER_CHEMISTRY', 'BATTERY_NETWORK', 'RELATED_PARTY', 'PROHIBITED', 'NOT_COLLECTOR', 'EXISTING_CUSTOMER', 'REFERRAL_PARTNER', 'NO_VOLUME', 'PRICE', 'NO_RESPONSE', 'NOT_INTERESTED', 'DO_NOT_SOLICIT', 'OTHER'] as const
 export const CLOSE_REASON_LABEL: Record<(typeof CLOSE_REASONS)[number], string> = {
   OTHER_CHEMISTRY: 'Only lithium / NiMH / NiCd / lead acid', BATTERY_NETWORK: 'Uses The Battery Network (Call2Recycle)', RELATED_PARTY: 'Vendor is a related party', PROHIBITED: 'On the Prohibited list',
-  NOT_COLLECTOR: 'Not a battery collector', EXISTING_CUSTOMER: 'Already a customer', REFERRAL_PARTNER: 'Referral partner', NO_VOLUME: 'Not enough volume', PRICE: 'Price', NO_RESPONSE: 'No response', NOT_INTERESTED: 'Not interested', OTHER: 'Other',
+  NOT_COLLECTOR: 'Not a battery collector', EXISTING_CUSTOMER: 'Already a customer', REFERRAL_PARTNER: 'Referral partner', NO_VOLUME: 'Not enough volume', PRICE: 'Price', NO_RESPONSE: 'No response', NOT_INTERESTED: 'Not interested', DO_NOT_SOLICIT: 'Asked not to be contacted (DNS)', OTHER: 'Other',
 }
 export const TASK_KIND_LABEL: Record<string, string> = {
   FOLLOW_UP: 'Follow up', NEXT_STEP: 'Next step', APPROVE: 'Approve', HEAD_REVIEW: 'Jesse review', SEND_INVITE: 'Send invite', RELAY: 'Relay Jesse’s answer', RECONFIRM: 'Reconfirm + brief', OUTCOME: 'Log outcome', REPLY: 'Reply to Jesse', CALL: 'Call', CUSTOM: 'Task',

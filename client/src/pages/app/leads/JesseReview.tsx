@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, Clock, ListChecks } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Clock, ListChecks, ShieldCheck, Tag, UserCheck } from 'lucide-react'
 import { Badge } from '../../../components/ui/Badge'
 import { useAuth } from '../../../lib/auth'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { ago, fmtDate, inZone, leadsApi, leadTitle, type LeadDetail } from '../../../lib/leadsApi'
-import { Avatar, StatusPill } from './shared'
-import { CallsCard, CommentsCard, ContactsCard, DetailsCard, FactsCard, TimelineCard } from './LeadPage'
+import { ago, fmtDate, inZone, leadsApi, leadTitle, YES_NO_LABEL, type LeadDetail } from '../../../lib/leadsApi'
+import { Avatar, FactsMeter, StatusPill } from './shared'
+import { CommentsCard, FactValue } from './LeadPage'
 
 /**
- * One submission, the way Jesse reads it: the form the SDR filled (the ask, the five facts, the
- * details, the calls with recordings and notes) and the chat. His message in the chat is his
+ * One submission, the way Jesse reads it: the ask, everything about the lead in one card (who,
+ * how to reach them, the five facts, other contacts, notes) and the chat. His message in the chat is his
  * answer: the lead leaves "waiting", the SDR gets it as a task and carries the lead on. Jesse
  * never sets statuses here; he sees them.
  */
@@ -48,7 +48,7 @@ export default function JesseReview() {
               {waiting ? <Badge tone="warning" dot>Waiting for you{l.waitingDays != null ? ` · ${l.waitingDays} business day${l.waitingDays === 1 ? '' : 's'}` : ''}</Badge> : l.jesseDecidedAt ? <Badge tone="success">You answered {ago(l.jesseDecidedAt)}</Badge> : null}
               {l.belowMin && <Badge tone="accent">Below minimum</Badge>}
             </div>
-            <p className="mt-1 text-body-sm text-ink-muted">Submitted by <b className="text-ink">{from}</b>{l.flaggedAt ? ` ${ago(l.flaggedAt)}` : ''}{[l.industry, l.state].filter(Boolean).length ? ` · ${[l.industry, l.state].filter(Boolean).join(', ')}` : ''}{l.name && l.organization ? ` · contact ${l.name}${l.contactRole ? `, ${l.contactRole}` : ''}` : ''}{l.phone ? ` · ${l.phone}` : ''}</p>
+            <p className="mt-1 text-body-sm text-ink-muted">Submitted by <b className="text-ink">{from}</b>{l.flaggedAt ? ` ${ago(l.flaggedAt)}` : ''}</p>
           </div>
         </div>
         {l.jesseAsk && (
@@ -82,15 +82,69 @@ export default function JesseReview() {
             </dl>
           </div>
         </div>
-        {/* The form the SDR filled. */}
-        <div className="space-y-4 lg:order-1 lg:col-span-3">
-          {d.can.cmr && <FactsCard l={l} settings={d.settings} canEdit={false} onSaved={load} />}
-          <CallsCard l={l} canEdit={false} onLog={() => undefined} onChanged={load} />
-          {l.contacts.length > 0 && <ContactsCard l={l} cmr={d.can.cmr} canEdit={false} onChanged={load} />}
-          <DetailsCard l={l} cmr={d.can.cmr} onEdit={null} />
-          <TimelineCard l={l} canNote={false} onNoted={load} />
+        {/* Everything about the lead, in one place. */}
+        <div className="lg:order-1 lg:col-span-3">
+          <LeadDetailsAll d={d} />
         </div>
       </div>
     </div>
+  )
+}
+
+/** The lead in one card for Jesse: who and how to reach them, the five facts, other contacts and notes. */
+function LeadDetailsAll({ d }: { d: LeadDetail }) {
+  const { lead: l, settings } = d
+  const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (v ? <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-3 py-1.5 text-body-sm"><dt className="text-ink-muted">{k}</dt><dd className="min-w-0 break-words text-ink">{v}</dd></div> : null)
+  const Head = ({ icon, first, children }: { icon: React.ReactNode; first?: boolean; children: React.ReactNode }) => <h3 className={cn('mb-1 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-ink-muted', !first && 'mt-4 border-t border-line pt-3')}><span className="text-ink-faint">{icon}</span>{children}</h3>
+  const site = l.website ? <a href={/^https?:/.test(l.website) ? l.website : `https://${l.website}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">{l.website}</a> : null
+  const place = [l.city, l.state].filter(Boolean).join(', ')
+  return (
+    <section className="rounded-card border border-line bg-card p-4 shadow-xs sm:p-5">
+      <h2 className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-ink"><Tag size={15} className="text-ink-faint" />Lead details</h2>
+      <Head icon={<UserCheck size={14} />} first>Company and contact</Head>
+      <dl>
+        <Row k="Company" v={l.organization} />
+        <Row k="Contact" v={l.name ? `${l.name}${l.contactRole ? `, ${l.contactRole}` : l.jobTitle ? `, ${l.jobTitle}` : ''}` : null} />
+        <Row k="Phone" v={l.phone ? `${l.phone}${l.ext ? ` x${l.ext}` : ''}` : null} />
+        <Row k="Mobile" v={l.mobile} />
+        <Row k="Email" v={l.email} />
+        <Row k="Second email" v={l.secondaryEmail} />
+        <Row k="Second contact" v={l.secondaryContact} />
+        <Row k="Website" v={site} />
+        <Row k={d.can.cmr ? 'Segment' : 'Industry'} v={l.industry} />
+        <Row k="Location" v={place || null} />
+        <Row k="Employees" v={l.employees} />
+        {d.can.cmr && <Row k="Decision maker" v={l.decisionMaker && l.decisionMaker !== 'UNKNOWN' ? YES_NO_LABEL[l.decisionMaker] : null} />}
+        <Row k="Tags" v={l.tags.length ? l.tags.join(', ') : null} />
+      </dl>
+      {d.can.cmr && l.facts.length > 0 && (
+        <>
+          <Head icon={<ShieldCheck size={14} />}>The five facts <FactsMeter facts={l.facts} size="sm" /></Head>
+          <dl>
+            {l.facts.map((f) => (
+              <div key={f.key} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-3 py-1.5 text-body-sm">
+                <dt className="flex items-start gap-1.5 text-ink-muted">{f.done ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-success" /> : <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-line-strong" />}{f.label}</dt>
+                <dd className={cn('min-w-0 break-words', f.done ? 'text-ink' : 'text-ink-faint')}><FactValue fact={f} l={l} settings={settings} /></dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      )}
+      {l.contacts.length > 0 && (
+        <>
+          <Head icon={<UserCheck size={14} />}>Other contacts</Head>
+          <ul className="space-y-1.5">
+            {l.contacts.map((c) => <li key={c.id} className="text-body-sm text-ink"><b>{c.name}</b>{c.role ? `, ${c.role}` : ''}{c.decisionMaker ? ' · decision maker' : ''}<span className="text-ink-muted">{[c.phone, c.mobile, c.email].filter(Boolean).length ? ` · ${[c.phone, c.mobile, c.email].filter(Boolean).join(' · ')}` : ''}</span>{c.notes ? <span className="block text-ink-muted">{c.notes}</span> : null}</li>)}
+          </ul>
+        </>
+      )}
+      {(l.message || l.productInfo) && (
+        <>
+          <Head icon={<Tag size={14} />}>Notes</Head>
+          {l.message && <p className="whitespace-pre-wrap text-body-sm text-ink">{l.message}</p>}
+          {l.productInfo && <p className="mt-1 whitespace-pre-wrap text-body-sm text-ink">{l.productInfo}</p>}
+        </>
+      )}
+    </section>
   )
 }

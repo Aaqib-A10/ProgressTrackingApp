@@ -129,6 +129,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
     navigate('/login', { replace: true })
   }
 
+  const headDesk = !!user?.leadsHead && user.role !== 'SUPER_ADMIN'
   // Signature includes the body so a changing count (e.g. 1→2 unread) re-dots.
   const notifKey = notifs.map((n) => `${n.id}|${n.body}`).join(';')
   const hasUnread = notifs.length > 0 && notifKey !== seenKey
@@ -158,14 +159,15 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
 
       <div className="min-w-0 md:hidden" />
 
-      <RangeSelector value={range} onChange={onRangeChange} custom={custom} onApplyCustom={onApplyCustom} />
+      {/* Jesse's desk (the head of a business who works no leads) has no dates to pick and no attendance. */}
+      {!headDesk && <RangeSelector value={range} onChange={onRangeChange} custom={custom} onApplyCustom={onApplyCustom} />}
 
       <div className="ml-auto flex items-center gap-1">
         {/* Department switcher (only for multi-department users) */}
         <DepartmentSwitcher user={user} />
 
         {/* Attendance clock */}
-        <ClockWidget />
+        {!headDesk && <ClockWidget />}
 
         <div className="mx-1 hidden h-5 w-px bg-line md:block" />
 
