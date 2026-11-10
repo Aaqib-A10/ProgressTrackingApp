@@ -3,7 +3,11 @@
 # so you hear about it even when the whole app server is down.
 #
 # What it does each minute:
-#   * Opens https://pulsetrack.online/api/health. Two misses in a row = the site is down.
+#   * Opens https://pulsetrack.online/api/health. A miss is tried again once (after 5 seconds,
+#     over IPv4); only then it counts. Three misses in a row = the site is down.
+#   * On a miss it also asks the app on this server directly (LOCAL_URL, default
+#     http://127.0.0.1:4000/api/health). That tells "the app stopped" apart from "the app is fine
+#     but the way in from the internet (Cloudflare) is cut", and the report says which.
 #   * Down: emails ALERT_EMAIL straight away (through Mailtrap), and again every 30 minutes.
 #   * Back up: emails "back up", and reports the outage to Metriq, which puts it on the
 #     System Health page and sends the developers a bell and phone alert.
@@ -20,7 +24,9 @@
 #        MAILTRAP_API_TOKEN=<the same Mailtrap token the app uses>
 #        MAIL_FROM=noreply@pulsetrack.online
 #      then:  sudo chmod 600 /etc/metriq-uptime.env
+#      (optional) LOCAL_URL=http://127.0.0.1:4000/api/health   when the app runs on another port
 #   4. Test it:   sudo /usr/local/bin/metriq-uptime --test
+#      What happened lately:   sudo /usr/local/bin/metriq-uptime --why
 #   5. Every minute:   sudo crontab -e   and add the line
 #        * * * * * /usr/local/bin/metriq-uptime >/dev/null 2>&1
 set -uo pipefail
@@ -29,12 +35,18 @@ CONF=/etc/metriq-uptime.env
 STATE_DIR=/var/tmp/metriq-uptime
 TEST=0
 [ "${1:-}" = "--test" ] && TEST=1
+if [ "${1:-}" = "--why" ]; then
+  echo "== Last 40 lines of the uptime log ($STATE_DIR/log, times in UTC)"
+  tail -n 40 "$STATE_DIR/log" 2>/dev/null || echo "(no log yet)"
+  exit 0
+fi
 
 if [ ! -f "$CONF" ]; then echo "Missing $CONF (see the steps at the top of this file)."; exit 1; fi
 # shellcheck disable=SC1090
 set -a; . "$CONF"; set +a
 SITE_URL="${SITE_URL:-https://pulsetrack.online}"
 SITE_URL="${SITE_URL%/}"
+LOCAL_URL="${LOCAL_URL:-http://127.0.0.1:4000/api/health}"
 if [ -z "${UPTIME_TOKEN:-}" ]; then echo "UPTIME_TOKEN is missing in $CONF."; exit 1; fi
 
 mkdir -p "$STATE_DIR"
@@ -65,17 +77,36 @@ tell_metriq() { # json body
 # --- Look at the site ---------------------------------------------------------------------
 BODY="$STATE_DIR/body"
 HEADERS="$STATE_DIR/headers"
-CODE=$(curl -sS -m 15 -D "$HEADERS" -o "$BODY" -w '%{http_code}' -H "User-Agent: MetriqUptime/1.0" "$SITE_URL/api/health" 2>"$STATE_DIR/err" || true)
-[ -z "$CODE" ] && CODE=000
-OK=0
-grep -q '"status":"ok"' "$BODY" 2>/dev/null && grep -q '"db":"up"' "$BODY" 2>/dev/null && [ "$CODE" = 200 ] && OK=1
-DETAIL="HTTP $CODE"
-[ "$CODE" = 000 ] && DETAIL="No answer: $(clean "$(cat "$STATE_DIR/err" 2>/dev/null)")"
-[ "$CODE" = 200 ] && [ "$OK" = 0 ] && DETAIL="Answered but the database is down"
+# --connect-timeout: when one Cloudflare address does not answer, curl moves on to the next.
+look() { # extra curl options
+  : > "$BODY"; : > "$HEADERS"
+  CODE=$(curl -sS --connect-timeout 5 -m 15 "$@" -D "$HEADERS" -o "$BODY" -w '%{http_code}' -H "User-Agent: MetriqUptime/1.0" "$SITE_URL/api/health" 2>"$STATE_DIR/err" || true)
+  [ -z "$CODE" ] && CODE=000
+  OK=0
+  grep -q '"status":"ok"' "$BODY" 2>/dev/null && grep -q '"db":"up"' "$BODY" 2>/dev/null && [ "$CODE" = 200 ] && OK=1
+  DETAIL="HTTP $CODE"
+  [ "$CODE" = 000 ] && DETAIL="No answer: $(clean "$(cat "$STATE_DIR/err" 2>/dev/null)")"
+  [ "$CODE" = 200 ] && [ "$OK" = 0 ] && DETAIL="Answered but the database is down"
+  return 0
+}
+look
+if [ "$OK" = 0 ] && [ "$TEST" = 0 ]; then
+  FIRST="$DETAIL"
+  sleep 5
+  look -4
+  [ "$OK" = 1 ] && log "a short miss, fine on the second try ($FIRST)"
+fi
 if [ "$OK" = 0 ] && grep -qi '^cf-mitigated' "$HEADERS" 2>/dev/null; then
   # Cloudflare's bot check stopped us: that says nothing about the site.
   log "Cloudflare stopped the check (bot protection). Add a Cloudflare rule that skips bot checks for /api/health and /api/system-health/uptime."
   exit 0
+fi
+APP_UP=""
+if [ "$OK" = 0 ]; then
+  # Is the app itself answering on this server? (yes = only the way in from the internet is cut)
+  LC=$(curl -sS -m 5 -o "$STATE_DIR/local" -w '%{http_code}' "$LOCAL_URL" 2>/dev/null || true)
+  if [ "$LC" = 200 ] && grep -q '"db":"up"' "$STATE_DIR/local" 2>/dev/null; then APP_UP=1; DETAIL="$DETAIL (the app on the server was answering)"
+  else APP_UP=0; DETAIL="$DETAIL (the app on the server was not answering either)"; fi
 fi
 
 STATUS=$(cat "$STATE_DIR/status" 2>/dev/null || echo up)
@@ -92,11 +123,13 @@ if [ "$OK" = 1 ]; then
   if [ "$STATUS" = down ]; then
     DOWN_AT=$(cat "$STATE_DIR/down_at" 2>/dev/null || now_iso)
     WHY=$(cat "$STATE_DIR/why" 2>/dev/null || echo "")
-    echo "{\"event\":\"outage\",\"downAt\":\"$DOWN_AT\",\"upAt\":\"$(now_iso)\",\"detail\":\"$(clean "$WHY")\"}" > "$STATE_DIR/pending_outage"
+    # appUp: true only when the app answered on this server at every miss of this outage.
+    APPUP=true; [ -f "$STATE_DIR/app_down_seen" ] && APPUP=false
+    echo "{\"event\":\"outage\",\"downAt\":\"$DOWN_AT\",\"upAt\":\"$(now_iso)\",\"appUp\":$APPUP,\"detail\":\"$(clean "$WHY")\"}" > "$STATE_DIR/pending_outage"
     send_mail "Metriq is back up" "$SITE_URL answers again (it went down at $DOWN_AT UTC: $WHY)."
     log "back up (was down since $DOWN_AT)"
   fi
-  echo up > "$STATE_DIR/status"; echo 0 > "$STATE_DIR/fails"
+  echo up > "$STATE_DIR/status"; echo 0 > "$STATE_DIR/fails"; rm -f "$STATE_DIR/app_down_seen"
   # Report the outage to Metriq (kept until Metriq has it).
   if [ -f "$STATE_DIR/pending_outage" ]; then
     C=$(tell_metriq "$(cat "$STATE_DIR/pending_outage")")
@@ -109,9 +142,10 @@ if [ "$OK" = 1 ]; then
 fi
 
 FAILS=$((FAILS + 1)); echo "$FAILS" > "$STATE_DIR/fails"
-[ "$FAILS" = 1 ] && { now_iso > "$STATE_DIR/first_fail"; echo "$DETAIL" > "$STATE_DIR/why"; }
+[ "$FAILS" = 1 ] && { now_iso > "$STATE_DIR/first_fail"; echo "$DETAIL" > "$STATE_DIR/why"; rm -f "$STATE_DIR/app_down_seen"; }
+[ "$APP_UP" = 0 ] && touch "$STATE_DIR/app_down_seen"
 log "check failed ($FAILS in a row): $DETAIL"
-if [ "$STATUS" = up ] && [ "$FAILS" -ge 2 ]; then
+if [ "$STATUS" = up ] && [ "$FAILS" -ge 3 ]; then
   echo down > "$STATE_DIR/status"
   cp "$STATE_DIR/first_fail" "$STATE_DIR/down_at" 2>/dev/null || now_iso > "$STATE_DIR/down_at"
   send_mail "Metriq is DOWN" "$SITE_URL is not answering since $(cat "$STATE_DIR/down_at") UTC. Reason: $DETAIL. Check: ssh erp@<server>, then pm2 status and pm2 logs pulsetrack-api."

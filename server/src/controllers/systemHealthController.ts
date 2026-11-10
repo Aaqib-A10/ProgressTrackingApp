@@ -288,7 +288,7 @@ export async function reportClientError(req: Request, res: Response): Promise<vo
 
 const uptimeBody = z.discriminatedUnion('event', [
   z.object({ event: z.literal('ping') }),
-  z.object({ event: z.literal('outage'), downAt: z.coerce.date(), upAt: z.coerce.date(), detail: z.string().max(300).optional() }),
+  z.object({ event: z.literal('outage'), downAt: z.coerce.date(), upAt: z.coerce.date(), detail: z.string().max(300).optional(), appUp: z.boolean().optional() }),
 ])
 
 /** POST /uptime: the outside checker says it is alive, or reports an outage once the site is back. */
@@ -298,6 +298,6 @@ export async function uptimeReport(req: Request, res: Response): Promise<void> {
   if (!p.success) { res.status(400).json({ error: 'Bad report' }); return }
   if (p.data.event === 'ping') { recordPing(); res.json({ ok: true }); return }
   if (p.data.upAt.getTime() < p.data.downAt.getTime()) { res.status(400).json({ error: 'upAt is before downAt' }); return }
-  const r = await recordOutage({ downAt: p.data.downAt, upAt: p.data.upAt, detail: p.data.detail })
-  res.status(201).json(r)
+  const r = await recordOutage({ downAt: p.data.downAt, upAt: p.data.upAt, detail: p.data.detail, appUp: p.data.appUp })
+  res.status(201).json({ id: r.id, minutes: r.minutes })
 }
