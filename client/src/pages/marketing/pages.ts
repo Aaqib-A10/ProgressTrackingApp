@@ -3,7 +3,7 @@
  * Metriq today; no invented customers, quotes or numbers.
  */
 
-export type FeatureKey = 'attendance' | 'projects' | 'chat' | 'reports' | 'sales'
+export type FeatureKey = 'attendance' | 'projects' | 'chat' | 'reports' | 'crm' | 'sales'
 export type Hue = { a: string; b: string }
 
 export interface Feature {
@@ -121,6 +121,32 @@ export const FEATURES: Feature[] = [
     ],
   },
   {
+    key: 'crm', slug: 'crm', name: 'CRM', menu: 'Deal board, contacts, calls and lead capture',
+    title: 'Every deal, every person, every call',
+    accent: 'every call',
+    lead: 'Leads from your website, inbox, files and calls land in one pipeline with an owner and a next step. A deal board shows what every stage is worth, and each lead keeps its people, calls, notes and tasks.',
+    image: 'app-crm.webp', darkImage: 'app-crm-dark.webp', hue: { a: '20 184 166', b: '59 130 246' },
+    highlights: [
+      { title: 'Deal board', text: 'One column per stage, with the count and the value. Drag a deal along; closing it asks for the reason.' },
+      { title: 'Your stages, your currency', text: 'Start from the sales pipeline (New to Won) or name your own stages. Pick the currency deals are counted in.' },
+      { title: 'Contacts', text: 'Everyone behind your leads, by name: role, phone, email and who decides. Search, call, email or export.' },
+      { title: 'Calls on the lead', text: 'One tap to call from your phone or softphone, two to log the outcome. Every try stays on the lead.' },
+      { title: 'Leads from everywhere', text: 'A form for your website, an email inbox that turns mail into leads, a CSV or Excel file, or typed in after a call.' },
+      { title: 'Nobody forgotten', text: 'A manager gives each lead to a rep. Alerts fire when a new lead waits too long, and next steps turn into tasks.' },
+    ],
+    steps: [
+      { title: 'Make your pipeline', text: 'Name it, pick the stages and add the people who work its leads.' },
+      { title: 'Let the leads in', text: 'Paste the form on your website, connect the inbox or import a file.' },
+      { title: 'Work the board', text: 'Call, log, set the next step and drag the deal along until it is won.' },
+    ],
+    faqs: [
+      { q: 'Can we have more than one pipeline?', a: 'Yes. Each pipeline has its own stages, people, website form and inbox, and a rep only sees the pipelines they work in.' },
+      { q: 'Can we bring our leads from another CRM?', a: 'Yes. Export them to a CSV or Excel file and import it; the columns are matched for you, and people already there are not added twice.' },
+      { q: 'Does it send email campaigns?', a: 'No. Metriq keeps the deals, the people and the calls. For campaigns, keep the email tool you use.' },
+      { q: 'Does Metriq place the calls?', a: 'Reps call from their own phone or softphone with one tap and log the outcome. Calls are logged by the rep; automatic logging from a phone system is not offered yet.' },
+    ],
+  },
+  {
     key: 'sales', slug: 'lead-dialer', name: 'Lead Dialer', menu: 'Who to call now, follow-ups and tasks',
     title: 'Call the right lead at the right time',
     accent: 'at the right time',
@@ -140,7 +166,7 @@ export const FEATURES: Feature[] = [
       { title: 'Follow up on time', text: 'Tasks and reminders for the leads that went quiet.' },
     ],
     faqs: [
-      { q: 'Does it replace our CRM?', a: 'No. Your CRM stays the record; Metriq reads its export and helps the team decide who to call.' },
+      { q: 'Do we need another CRM for it?', a: 'No. The Lead Dialer works from any list you import, so it sits next to the CRM you have. If you want the deals and contacts in Metriq too, that is the CRM part.' },
       { q: 'Does it dial for us?', a: 'Reps dial from their phone or dialer. Metriq copies the number and keeps the follow-ups; a predictive dialer can report its calls back.' },
     ],
   },
@@ -151,8 +177,8 @@ export const featureBySlug = (slug?: string) => FEATURES.find((f) => f.slug === 
 export const EXTRAS = [
   { key: 'studio', title: 'Department Studio', text: 'Each department’s menu and dashboard, by drag and drop, for members and team leads apart.' },
   { key: 'roles', title: 'Roles and permissions', text: 'Members see their work, leads their team, admins the company. You decide who sees finance.' },
-  { key: 'ai', title: 'Works with your AI', text: 'Connect Claude and ask about tasks, leads and reports in plain words.' },
-  { key: 'mobile', title: 'On the phone', text: 'Works in any phone browser today, check-in included. Apps are on the way.' },
+  { key: 'ai', title: 'Works with your AI', text: 'Connect Claude, ChatGPT or Gemini and ask about tasks, leads and to-dos in plain words.' },
+  { key: 'mobile', title: 'On the phone', text: 'Add it to your home screen and it opens like an app, check-in and notifications included. Store apps are on the way.' },
 ] as const
 
 export interface Solution {
@@ -179,7 +205,7 @@ export const SOLUTIONS: Solution[] = [
       { before: 'Follow-ups go quiet', after: 'Quiet leads become tasks with reminders' },
       { before: 'Call numbers in a spreadsheet', after: 'A daily calls log with targets, totals by month' },
     ],
-    features: ['sales', 'reports', 'attendance', 'chat'],
+    features: ['sales', 'crm', 'reports', 'attendance'],
     day: [
       { time: '7:00 PM', text: 'Check in for the night shift; Eastern leads open first.' },
       { time: '7:15 PM', text: 'Import the CRM export; follow-ups and tasks update.' },

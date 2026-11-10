@@ -5,6 +5,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { TextField, TextArea } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
+import { flagOn } from '../../../lib/flags'
 import { leadsApi, type MetaBusiness } from '../../../lib/leadsApi'
 import { Label, Select } from './shared'
 
@@ -13,7 +14,7 @@ export function AddLeadModal({ business, onClose, onAdded, initial }: { business
   const { addToast } = useToast()
   const cmr = business.kind === 'CMR'
   const canManage = business.myRole === 'MANAGER'
-  const [f, setF] = useState({ organization: '', name: '', contactRole: '', phone: initial?.phone ?? '', email: '', website: '', industry: '', state: '', message: '', assignTo: canManage ? '' : 'me' })
+  const [f, setF] = useState({ organization: '', name: '', contactRole: '', phone: initial?.phone ?? '', email: '', website: '', industry: '', state: '', message: '', value: '', assignTo: canManage ? '' : 'me' })
   const [busy, setBusy] = useState(false)
   const [check, setCheck] = useState<Awaited<ReturnType<typeof leadsApi.check>> | null>(null)
   const timer = useRef<number>()
@@ -28,7 +29,7 @@ export function AddLeadModal({ business, onClose, onAdded, initial }: { business
   const go = async (force = false) => {
     setBusy(true)
     try {
-      const r = await leadsApi.add({ businessId: business.id, organization: f.organization.trim() || null, name: f.name.trim(), phone: f.phone.trim() || null, email: f.email.trim() || null, website: f.website.trim() || null, industry: f.industry || null, state: f.state || null, message: f.message.trim() || null, ...(cmr ? { contactRole: f.contactRole.trim() || null } : {}), assignTo: f.assignTo === '' ? undefined : f.assignTo === 'none' ? null : f.assignTo, force })
+      const r = await leadsApi.add({ businessId: business.id, organization: f.organization.trim() || null, name: f.name.trim(), phone: f.phone.trim() || null, email: f.email.trim() || null, website: f.website.trim() || null, industry: f.industry || null, state: f.state || null, message: f.message.trim() || null, ...(f.value.trim() && Number.isFinite(Number(f.value.replace(/[^0-9.]/g, ''))) ? { value: Number(f.value.replace(/[^0-9.]/g, '')) } : {}), ...(cmr ? { contactRole: f.contactRole.trim() || null } : {}), assignTo: f.assignTo === '' ? undefined : f.assignTo === 'none' ? null : f.assignTo, force })
       onAdded(r.lead.id)
     } catch (e) {
       const dupId = (() => { try { return (JSON.parse((e as Error).message) as { duplicateId?: string }).duplicateId ?? null } catch { return null } })()
@@ -55,6 +56,7 @@ export function AddLeadModal({ business, onClose, onAdded, initial }: { business
           <TextField label="Website" value={f.website} onChange={set('website')} placeholder="acme.com" />
           <label><Label>{cmr ? 'Segment' : 'Industry'}</Label><Select value={f.industry} onChange={set('industry')} className="w-full"><option value="">—</option>{business.settings.segments.map((s) => <option key={s} value={s}>{s}</option>)}</Select></label>
           <label><Label>State</Label><Select value={f.state} onChange={set('state')} className="w-full"><option value="">—</option>{business.settings.states.map((s) => <option key={s} value={s}>{s}</option>)}</Select></label>
+          {!cmr && flagOn('deal-board') && <TextField label={`Deal value (${business.settings.currency ?? 'USD'})`} inputMode="decimal" value={f.value} onChange={set('value')} placeholder="Optional" />}
           {canManage && (
             <label className="sm:col-span-2"><Label>Give it to</Label><Select value={f.assignTo} onChange={set('assignTo')} className="w-full"><option value="">Nobody yet (I will assign it)</option><option value="me">Me</option>{business.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></label>
           )}

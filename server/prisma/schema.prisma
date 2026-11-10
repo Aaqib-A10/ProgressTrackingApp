@@ -3650,6 +3650,7 @@ model Company {
   leadCallRows             LeadCall[]
   leadUnmatchedCallRows    LeadUnmatchedCall[]
   leadCommentRows          LeadComment[]
+  leadContactRows          LeadContact[]
   leadTaskRows             LeadTask[]
   leadListRows             LeadListEntry[]
   leadDailyReportRows      LeadDailyReport[]
@@ -4191,6 +4192,8 @@ model Lead {
   cmr               LeadCmr?
   calls             LeadCall[]
   comments          LeadComment[]
+  /// More people at this company (the first contact stays on the lead itself).
+  contacts          LeadContact[]
   tasks             LeadTask[]
 
   @@unique([businessId, externalId])
@@ -4359,6 +4362,35 @@ model LeadUnmatchedCall {
 }
 
 /// Comments on a lead (CMR: Jesse's comments and the SDRs' replies), with @mentions; a comment can point at a call and a second in it.
+/// CRM contacts: more people at a lead's company (the buyer, the accountant, the owner…). The
+/// first contact stays in the lead's own name / email / phone fields, so nothing that reads those
+/// changes; "Make primary" swaps one of these with it. Calls to these numbers land on the lead too.
+model LeadContact {
+  id            String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String   @default("")
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leadId        String
+  lead          Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  businessId    String
+  name          String
+  role          String?
+  email         String?
+  phone         String?
+  /// The phone as +15551234567, for matching calls.
+  phoneE164     String?
+  mobile        String?
+  decisionMaker Boolean  @default(false)
+  notes         String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([companyId, phoneE164])
+  @@index([companyId, businessId, name])
+}
+
 model LeadComment {
   id        String   @id @default(cuid())
   companyId String   @default("")

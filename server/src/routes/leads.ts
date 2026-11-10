@@ -6,6 +6,7 @@ import { leadInLimiter } from '../middleware/rateLimit'
 import * as L from '../controllers/leadsController'
 import * as W from '../controllers/leadsWorkController'
 import * as T from '../controllers/leadsTalkloopController'
+import * as C from '../controllers/leadsCrmController'
 
 /** Lead Management (signed in). Who sees what is decided in lib/leads/access.ts. */
 export const leadsRouter = Router()
@@ -34,6 +35,13 @@ leadsRouter.get('/report', h(W.myReport))
 leadsRouter.post('/report', h(W.submitReport))
 leadsRouter.get('/report/team', h(W.teamReport))
 leadsRouter.get('/export.csv', h(W.exportLeads))
+// CRM views: the deal board and contacts (before '/:id', which would swallow them).
+leadsRouter.get('/board', h(C.dealBoard))
+leadsRouter.get('/contacts.csv', h(C.exportContacts))
+leadsRouter.get('/contacts', h(C.listContacts))
+leadsRouter.patch('/contacts/:contactId', h(C.updateContact))
+leadsRouter.delete('/contacts/:contactId', h(C.removeContact))
+leadsRouter.post('/contacts/:contactId/primary', h(C.makePrimaryContact))
 leadsRouter.get('/check', h(W.checkLead))
 leadsRouter.get('/businesses', h(L.listBusinesses))
 leadsRouter.post('/businesses', h(L.createBusiness))
@@ -61,6 +69,7 @@ leadsRouter.post('/:id/events', h(W.addLeadEvent))
 leadsRouter.post('/:id/calls', h(W.addCall))
 leadsRouter.post('/:id/dial', h(T.dialLead))
 leadsRouter.post('/:id/comments', h(W.addComment))
+leadsRouter.post('/:id/contacts', h(C.addContact))
 leadsRouter.post('/:id/send-info', h(W.sendInfo))
 leadsRouter.post('/:id/qualify', h(W.qualifyLead))
 leadsRouter.post('/:id/approve', h(W.approveLead))

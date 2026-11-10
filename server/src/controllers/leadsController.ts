@@ -9,9 +9,9 @@ import { parse } from '../lib/pm/http'
 import { isOn } from '../lib/flags'
 import { runAsCompany } from '../lib/tenancy'
 import { canManage, isMemberOf, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
-import { cleanInput, fromFields, hasSubstance, OPEN_STATUSES, receiveLead, type LeadInput } from '../lib/leads/intake'
+import { cleanInput, fromFields, hasSubstance, receiveLead, type LeadInput } from '../lib/leads/intake'
 import { syncCmrMembers } from '../lib/leads/members'
-import { KINDS, PROMISE_WORDS, pipelineOf, settingsOf, type CmrSettings } from '../lib/leads/pipeline'
+import { CURRENCIES, KINDS, openStatusesOf, PROMISE_WORDS, pipelineOf, settingsOf, shownSettings, type CmrSettings } from '../lib/leads/pipeline'
 import { leadManagers, tellAboutLead } from '../lib/leads/notify'
 import { encryptSecret, decryptSecret, testInbox } from '../lib/leads/inbox'
 
@@ -52,7 +52,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
   const { me: m, s } = await ctx(req)
   const b = parse(importSchema, req.body)
   if (!isMemberOf(s, b.businessId)) throw new HttpError(403, 'You do not work leads for that business.')
-  const business = await prisma.leadBusiness.findFirst({ where: { id: b.businessId, isActive: true }, select: { id: true, name: true } })
+  const business = await prisma.leadBusiness.findFirst({ where: { id: b.businessId, isActive: true }, select: { id: true, name: true, kind: true, pipeline: true } })
   if (!business) throw new HttpError(404, 'Business not found')
   // A rep's import is their own list: every lead is theirs, whatever the form said.
   if (!canManage(s, b.businessId)) b.assigneeId = m.id
@@ -78,7 +78,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
     const or: Prisma.LeadWhereInput[] = []
     if (c.email) or.push({ email: c.email })
     if (c.phone) or.push({ phone: c.phone })
-    if (or.length && await prisma.lead.findFirst({ where: { businessId: business.id, status: { in: OPEN_STATUSES }, OR: or }, select: { id: true } })) { already++; continue }
+    if (or.length && await prisma.lead.findFirst({ where: { businessId: business.id, status: { in: openStatusesOf(business) }, OR: or }, select: { id: true } })) { already++; continue }
     await receiveLead(business, input, { source: 'IMPORT', createdById: m.id, assigneeId: b.assigneeId ?? null, notify: false })
     added++
   }
@@ -93,6 +93,7 @@ export async function importLeads(req: AuthedRequest, res: Response): Promise<vo
 // ------------------------------------------------------------------ businesses (Super Admin)
 
 const settingsSchema = z.object({
+  currency: z.enum(CURRENCIES),
   copyEmail: z.string().trim().max(254),
   copyName: z.string().trim().max(100),
   consentStates: z.array(z.string().trim().min(2).max(10)).max(60),
@@ -140,7 +141,7 @@ async function checkBiz(b: Partial<z.infer<typeof bizSchema>>, companyId: string
 
 function bizOut(b: Prisma.LeadBusinessGetPayload<{ include: { members: { include: { user: { select: { id: true; name: true; email: true; isActive: true } } } }; head: { select: { id: true; name: true; email: true } } } }> & { _open?: number }) {
   const { inboxPassEnc, members, settings: _s, ...rest } = b
-  return { ...rest, settings: settingsOf(b), pipeline: pipelineOf(b), ownPipeline: !!b.pipeline, inboxHasPassword: !!inboxPassEnc, formUrl: formUrl(b.formKey), members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, isActive: x.user.isActive, role: x.role })) }
+  return { ...rest, settings: shownSettings(b, b.companyId), pipeline: pipelineOf(b), ownPipeline: !!b.pipeline, inboxHasPassword: !!inboxPassEnc, formUrl: formUrl(b.formKey), members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, isActive: x.user.isActive, role: x.role })) }
 }
 const BIZ_INCLUDE = { members: { include: { user: { select: { id: true, name: true, email: true, isActive: true } } }, orderBy: { createdAt: 'asc' as const } }, head: { select: { id: true, name: true, email: true } } }
 
@@ -150,11 +151,13 @@ export async function listBusinesses(req: AuthedRequest, res: Response): Promise
   requireLeadAdmin(s)
   await syncCmrMembers().catch(() => 0)
   const list = await prisma.leadBusiness.findMany({ include: BIZ_INCLUDE, orderBy: { name: 'asc' } })
-  const open = await prisma.lead.groupBy({ by: ['businessId'], where: { status: { in: OPEN_STATUSES } }, _count: { _all: true } })
+  // Open = in a stage the business's own pipeline calls open (a sales pipeline has Proposal and Negotiation too).
+  const byStage = await prisma.lead.groupBy({ by: ['businessId', 'status'], _count: { _all: true } })
+  const openOf = (b: (typeof list)[number]) => { const open = new Set(openStatusesOf(b)); return byStage.filter((x) => x.businessId === b.id && open.has(x.status)).reduce((n, x) => n + x._count._all, 0) }
   const every = await prisma.lead.groupBy({ by: ['businessId'], _count: { _all: true } })
   const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, role: true, department: { select: { name: true, type: true } } }, orderBy: { name: 'asc' } })
   res.json({
-    businesses: list.map((b) => ({ ...bizOut(b), openLeads: open.find((o) => o.businessId === b.id)?._count._all ?? 0, leadCount: every.find((o) => o.businessId === b.id)?._count._all ?? 0 })),
+    businesses: list.map((b) => ({ ...bizOut(b), openLeads: openOf(b), leadCount: every.find((o) => o.businessId === b.id)?._count._all ?? 0 })),
     people: people.map((p) => ({ id: p.id, name: p.name, email: p.email, role: p.role, department: p.department?.name ?? null, departmentType: p.department?.type ?? null })),
     cmrOn: await isOn('cmr', m.companyId),
   })
@@ -222,7 +225,7 @@ export async function removeMember(req: AuthedRequest, res: Response): Promise<v
   const cur = await bizById(String(req.params.id))
   const userId = String(req.params.userId)
   await prisma.leadBusinessMember.deleteMany({ where: { businessId: cur.id, userId } })
-  const back = await prisma.lead.findMany({ where: { businessId: cur.id, assigneeId: userId, status: { in: OPEN_STATUSES } }, select: { id: true } })
+  const back = await prisma.lead.findMany({ where: { businessId: cur.id, assigneeId: userId, status: { in: openStatusesOf(cur) } }, select: { id: true } })
   if (back.length) {
     await prisma.lead.updateMany({ where: { id: { in: back.map((x) => x.id) } }, data: { assigneeId: null, assignedAt: null, assignedById: null, slaAssignAlertAt: null, slaContactAlertAt: null } })
     await prisma.leadEvent.createMany({ data: back.map((x) => ({ leadId: x.id, userId: m.id, kind: 'ASSIGNED', text: 'Taken back (the rep left this business)' })) })

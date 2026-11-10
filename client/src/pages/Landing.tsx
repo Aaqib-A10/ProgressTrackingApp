@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '../lib/cn'
-import { MarketingLayout, Container, SectionHead, Eyebrow, PrimaryCta, SecondaryCta, AppFrame, Reveal, usePageTitle, useInView, useLaunch } from './marketing/MarketingLayout'
-import { BENTO, DAY, PLANS, SECURITY, STEPS, TEAMS, TOUR, faqsFor, site } from './marketing/content'
+import { MarketingLayout, Container, SectionHead, Eyebrow, PrimaryCta, SecondaryCta, AppFrame, PhoneFrame, Reveal, usePageTitle, useInView, useLaunch } from './marketing/MarketingLayout'
+import { AI_APPS, BENTO, CRM_POINTS, DAY, FIT, PLANS, SECURITY, STEPS, TEAMS, TOUR, faqsFor, site } from './marketing/content'
 import { HeroBackdrop, HeroStage, trackPointer } from './marketing/HeroStage'
 import { SOLUTIONS } from './marketing/pages'
 import { AskArt, ClocksArt, ConsolidateArt, NotesArt, OrbitArt, PhoneArt, RolesArt, StepArt, TeamsArt, ShieldArt } from './marketing/Pictures'
 import {
   IconArrow, IconAttendance, IconBackup, IconBoard, IconChat, IconCheck, IconConnect, IconDepartments, IconDialer, IconExport, IconGlobeClock,
-  IconKey, IconLock, IconNotes, IconPhone, IconReport, IconRoles, IconSupport, IconWalls,
+  IconForm, IconKey, IconLock, IconNotes, IconPhone, IconPipeline, IconReport, IconRoles, IconSupport, IconWalls,
 } from './marketing/icons'
 
 /**
@@ -17,7 +17,8 @@ import {
  * marketing/HeroStage.tsx and marketing/Pictures.tsx.
  */
 
-const TOUR_ICON = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, sales: IconDialer } as const
+const TOUR_ICON = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, crm: IconPipeline, sales: IconDialer } as const
+const CRM_ICON = { board: IconPipeline, contacts: IconRoles, calls: IconDialer, capture: IconForm } as const
 const BENTO_ICON = { sections: IconDepartments, roles: IconRoles, ai: IconNotes, claude: IconConnect, timezones: IconGlobeClock, mobile: IconPhone } as const
 const BENTO_ART = { sections: TeamsArt, roles: RolesArt, ai: NotesArt, claude: AskArt, timezones: ClocksArt, mobile: PhoneArt } as const
 export const SECURITY_ICONS = [IconWalls, IconLock, IconBackup, IconKey, IconSupport, IconExport]
@@ -25,16 +26,19 @@ const DAY_ICON = { attendance: IconAttendance, sales: IconDialer, projects: Icon
 
 export default function Landing() {
   const { free } = useLaunch()
-  usePageTitle('Metriq: attendance, projects, chat and daily reports in one app', `Run your whole team from one app: attendance and hours, projects and tasks, chat and calls, and a daily report your team fills in under a minute. ${free ? 'Free while we launch.' : '14-day free trial.'}`)
+  usePageTitle('Metriq: attendance, projects, chat, CRM and daily reports in one app', `Run your whole team from one app: attendance and hours, projects and tasks, chat and calls, a CRM with a deal board, and a daily report your team fills in under a minute. ${free ? 'Free while we launch.' : '14-day free trial.'}`)
   return (
     <MarketingLayout>
       <Hero free={free} />
       <Replaces />
       <Tour />
+      <Crm />
+      <Reach />
       <Bento />
       <Teams />
       <Steps />
       <SecurityPreview />
+      <Fit />
       <PricingPreview free={free} />
       <Origin />
       <Faq free={free} />
@@ -59,7 +63,7 @@ function Hero({ free }: { free: boolean }) {
           <Words text="from" start={280} /><span className="mk-word" style={{ '--mk-delay': '360ms' } as CSSProperties}><span className="mk-shine">one app</span></span><span className="mk-word" style={{ '--mk-delay': '420ms' } as CSSProperties}>.</span>
         </h1>
         <p className="mk-up mx-auto mt-6 max-w-2xl text-pretty text-[17px] leading-relaxed text-ink-muted sm:text-[19px]" style={{ '--mk-delay': '550ms' } as CSSProperties}>
-          Metriq puts attendance, projects, team chat and calls, and a daily report in one place, so you stop chasing people across WhatsApp groups, spreadsheets and forms.
+          Metriq puts attendance, projects, team chat and calls, a CRM and a daily report in one place, so you stop chasing people across WhatsApp groups, spreadsheets and forms.
         </p>
         <div className="mk-up mt-9 flex flex-wrap justify-center gap-3" style={{ '--mk-delay': '680ms' } as CSSProperties}>
           <PrimaryCta />
@@ -98,6 +102,7 @@ const TOUR_HUE: Record<string, { a: string; b: string }> = {
   projects: { a: '99 102 241', b: '168 85 247' },
   chat: { a: '14 165 233', b: '99 102 241' },
   reports: { a: '245 158 11', b: '239 68 68' },
+  crm: { a: '20 184 166', b: '59 130 246' },
   sales: { a: '139 92 246', b: '236 72 153' },
 }
 
@@ -115,7 +120,7 @@ function Tour() {
     return () => clearTimeout(timer)
   }, [i, auto, hover, seen])
   const pick = (n: number) => { setI(n); setAuto(false) }
-  const dark = t.key === 'projects' ? site('app-board-dark.webp') : t.key === 'sales' ? site('app-dialer-dark.webp') : undefined
+  const dark = t.key === 'projects' ? site('app-board-dark.webp') : t.key === 'crm' ? site('app-crm-dark.webp') : t.key === 'sales' ? site('app-dialer-dark.webp') : undefined
   // A gentle tilt that follows the pointer over the screen.
   const stage = useRef<HTMLDivElement>(null)
   const tilt = (e: PointerEvent<HTMLDivElement>) => {
@@ -129,7 +134,7 @@ function Tour() {
   return (
     <section id="tour" className="scroll-mt-20 overflow-x-clip py-20 sm:py-28">
       <Container>
-        <Reveal><SectionHead center eyebrow="The product" title="Everything your team does in a day" text="Five parts that work together. Turn on the ones you need; every screen here is Metriq as it is today." /></Reveal>
+        <Reveal><SectionHead center eyebrow="The product" title="Everything your team does in a day" text="Six parts that work together. Turn on the ones you need; every screen here is Metriq as it is today." /></Reveal>
         <div ref={ref} className="mt-14 grid items-stretch gap-6 lg:grid-cols-[0.78fr_1.22fr] lg:gap-8" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
           <div role="tablist" aria-label="Parts of Metriq" aria-orientation="vertical" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
             {TOUR.map((x, n) => {
@@ -174,6 +179,83 @@ function Tour() {
               <h3 className="text-[19px] font-semibold leading-tight tracking-[-0.02em] text-ink">{t.title}</h3>
             </div>
           </div>
+        </div>
+      </Container>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ CRM */
+
+function Crm() {
+  return (
+    <section id="crm" className="relative scroll-mt-20 overflow-hidden border-y border-line bg-card py-20 sm:py-28">
+      <div aria-hidden className="pointer-events-none absolute -left-40 top-10 h-[420px] w-[420px] rounded-full bg-teal-400/10 blur-3xl" />
+      <Container className="relative">
+        <div className="grid items-center gap-12 lg:grid-cols-[0.82fr_1.18fr] lg:gap-14">
+          <div>
+            <Reveal><SectionHead eyebrow="CRM" title={<>Every deal, every person,<br className="hidden sm:block" /> every call</>} text="Your leads sit next to your team's tasks and chat, not in a separate tool. Each one has an owner, a next step and a value, from the first call to the signed deal." /></Reveal>
+            <ul className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
+              {CRM_POINTS.map((c, i) => {
+                const Icon = CRM_ICON[c.key]
+                return (
+                  <Reveal as="li" key={c.key} delay={i * 80} className="flex gap-3.5">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-b from-teal-500/15 to-blue-500/5 text-teal-600 ring-1 ring-teal-500/20 dark:text-teal-300"><Icon size={20} /></span>
+                    <span><span className="block text-[15.5px] font-semibold text-ink">{c.title}</span><span className="mt-1 block text-[14px] leading-relaxed text-ink-muted">{c.text}</span></span>
+                  </Reveal>
+                )
+              })}
+            </ul>
+            <Reveal delay={200} className="mt-9 flex flex-wrap gap-3"><SecondaryCta to="/product/crm">See the CRM <IconArrow size={16} /></SecondaryCta></Reveal>
+          </div>
+          <Reveal delay={120} className="relative">
+            <div aria-hidden className="absolute -inset-6 rounded-[32px] bg-gradient-to-br from-teal-400/20 via-transparent to-blue-500/20 blur-2xl" />
+            <AppFrame src={site('app-crm-lead.webp')} darkSrc={site('app-crm-lead-dark.webp')} alt="A lead in Metriq: its calls, next step, tasks and the people at the company" className="relative shadow-[0_30px_60px_-20px_rgb(var(--shadow)/0.45)]" />
+          </Reveal>
+        </div>
+      </Container>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ on the phone, and in your AI */
+
+function Reach() {
+  return (
+    <section className="py-20 sm:py-28">
+      <Container>
+        <Reveal><SectionHead center eyebrow="Wherever you work" title="On your phone, and inside your AI" text="The same Metriq at your desk, in your pocket and in the assistant you already talk to." /></Reveal>
+        <div className="mt-14 grid gap-5 lg:grid-cols-2">
+          <Reveal className="relative flex flex-col overflow-hidden rounded-[22px] border border-line bg-card">
+            <div className="p-7 pb-0">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><IconPhone size={22} /></span>
+                <h3 className="text-[19px] font-semibold tracking-[-0.015em] text-ink">The whole app on your phone</h3>
+              </div>
+              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">Check in, move a deal, call a contact and answer the team chat from your phone. Add Metriq to your home screen and it opens like an app, with notifications. iPhone and Android store apps are on the way.</p>
+            </div>
+            <div className="relative mt-8 flex flex-1 items-end justify-center gap-5 px-6 sm:gap-8">
+              <div aria-hidden className="absolute inset-x-10 bottom-0 top-10 rounded-t-[40px] bg-gradient-to-b from-primary/10 to-transparent" />
+              <PhoneFrame src={site('phone-crm.webp')} alt="The deal board on a phone" className="relative -mb-14 w-[46%] max-w-[230px] sm:-mb-32" />
+              <PhoneFrame src={site('phone-contacts.webp')} alt="Contacts on a phone, with call and email buttons" className="relative -mb-28 w-[46%] max-w-[230px] sm:-mb-48" />
+            </div>
+          </Reveal>
+          <Reveal delay={120} className="relative flex flex-col overflow-hidden rounded-[22px] border border-line bg-card">
+            <div className="p-7 pb-0">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><IconConnect size={22} /></span>
+                <h3 className="text-[19px] font-semibold tracking-[-0.015em] text-ink">Connected to the AI you use</h3>
+              </div>
+              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">Ask your assistant who to call first, add a lead or tick off a to-do. It works as you: it sees only what you can see, and everything it does shows under your name.</p>
+              <ul className="mt-4 flex flex-wrap gap-1.5">{AI_APPS.map((a) => <li key={a} className="rounded-full border border-line bg-bg px-3 py-1 text-[12.5px] font-medium text-ink">{a}</li>)}</ul>
+            </div>
+            <div className="relative mt-8 flex-1 pl-7">
+              <div className="h-[300px] overflow-hidden rounded-tl-[14px] border-l border-t border-line shadow-overlay sm:h-[340px]">
+                <img src={site('app-connectors.webp')} alt="Connectors in Metriq: Claude, ChatGPT, Gemini and more" loading="lazy" decoding="async" width={1680} height={1050} className="block w-[820px] max-w-none dark:hidden" style={{ marginLeft: -140, marginTop: -40 }} />
+                <img src={site('app-connectors-dark.webp')} alt="" aria-hidden loading="lazy" decoding="async" width={1680} height={1050} className="hidden w-[820px] max-w-none dark:block" style={{ marginLeft: -140, marginTop: -40 }} />
+              </div>
+            </div>
+          </Reveal>
         </div>
       </Container>
     </section>
@@ -333,6 +415,28 @@ function SecurityPreview() {
 }
 
 /* ------------------------------------------------------------------ pricing */
+
+/* ------------------------------------------------------------------ an honest fit check */
+
+function Fit() {
+  return (
+    <section className="py-20 sm:py-24">
+      <Container>
+        <Reveal><SectionHead center eyebrow="Is it for you?" title="Where Metriq fits, and where it does not" text="We would rather you know now than find out in week three." /></Reveal>
+        <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
+          <Reveal className="rounded-[20px] border border-success/30 bg-success/[0.05] p-7">
+            <h3 className="text-[17px] font-semibold text-ink">A good fit</h3>
+            <ul className="mt-4 space-y-3">{FIT.good.map((t) => <li key={t} className="flex gap-2.5 text-[14.5px] leading-relaxed text-ink"><IconCheck size={17} className="mt-0.5 shrink-0 text-success" />{t}</li>)}</ul>
+          </Reveal>
+          <Reveal delay={120} className="rounded-[20px] border border-line bg-card p-7">
+            <h3 className="text-[17px] font-semibold text-ink">Not the right fit yet</h3>
+            <ul className="mt-4 space-y-3">{FIT.notYet.map((t) => <li key={t} className="flex gap-2.5 text-[14.5px] leading-relaxed text-ink-muted"><span aria-hidden className="mt-[9px] h-[2px] w-3 shrink-0 rounded bg-ink-faint" />{t}</li>)}</ul>
+          </Reveal>
+        </div>
+      </Container>
+    </section>
+  )
+}
 
 export function PlanCards({ yearly }: { yearly: boolean }) {
   const { free } = useLaunch()

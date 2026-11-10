@@ -68,8 +68,8 @@ export interface NavItem {
   financeOnly?: boolean
   /** Only for people with this power (e.g. Company settings), when the switch of the same name is on. */
   power?: string
-  /** Hidden while this owner switch (company-wise) is off. */
-  flag?: string
+  /** Hidden while this owner switch (company-wise) is off (several: all must be on). */
+  flag?: string | string[]
   /** Not for 99 Technologies (e.g. Billing: they are never billed). */
   notHome?: boolean
   /** System Health: Super Admins and developers (User.isDeveloper) only. */
@@ -267,6 +267,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Lead Dashboard', to: '/app/leads/dashboard', icon: LayoutDashboard, flag: 'lead-management', leadsOnly: true },
       { label: 'Leads', to: '/app/leads', icon: Inbox, flag: 'lead-management', leadsOnly: true },
+      // The CRM views: the pipeline as a board with deal values, and the people behind the leads.
+      { label: 'Deal Board', to: '/app/leads/board', icon: KanbanSquare, flag: ['lead-management', 'deal-board'], leadsOnly: true },
+      { label: 'Contacts', to: '/app/leads/contacts', icon: Users, flag: ['lead-management', 'deal-board'], leadsOnly: true },
       { label: 'Agent Tasks', to: '/app/leads/tasks', icon: ListChecks, flag: 'lead-management', leadsOnly: true },
       { label: 'Calls', to: '/app/leads/calls', icon: PhoneCall, flag: 'lead-management', leadsOnly: true },
       // The CMR flow (switch "cmr"): only people who work a CMR-kind business.
@@ -304,7 +307,7 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
   // System Health is Metriq's own engineering view: 99 Technologies only.
   if (item.healthOnly) return inHomeCompany(u) && (u.role === 'SUPER_ADMIN' || !!u.isDeveloper)
   // A switched part waits for the switches, so it never shows and then vanishes.
-  if (item.flag && (!flagsLoaded() || !flagOn(item.flag))) return false
+  if (item.flag && (!flagsLoaded() || ![item.flag].flat().every(flagOn))) return false
   if (item.notHome && inHomeCompany(u)) return false
   if (item.leadsOnly && u.role !== 'SUPER_ADMIN' && !u.leadsRole) return false
   if (item.cmrOnly && !u.leadsCmr) return false
@@ -326,7 +329,21 @@ const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/ad
 /** The head of a business who works no leads (Jesse): one inbox, nothing else to learn. */
 const HEAD_ITEMS = new Set(['/app/leads/inbox'])
 
+/**
+ * What the Leads part is called. New companies see it as their CRM (that is what it is: leads,
+ * a deal board, contacts, tasks, calls). 99 Technologies keeps the names its people already know.
+ */
+const CRM_LABELS: Record<string, string> = { '/app/leads/dashboard': 'CRM Dashboard', '/app/leads/tasks': 'Tasks', '/app/leads/settings': 'CRM Settings' }
+function crmNames(groups: NavGroup[], u: NavUser): NavGroup[] {
+  if (inHomeCompany(u)) return groups
+  return groups.map((g) => (g.title === 'Leads' ? { ...g, title: 'CRM', items: g.items.map((i) => (CRM_LABELS[i.to] ? { ...i, label: CRM_LABELS[i.to] } : i)) } : g))
+}
+
 export function filterNav(u: NavUser): NavGroup[] {
+  return crmNames(navFor(u), u)
+}
+
+function navFor(u: NavUser): NavGroup[] {
   // Jesse's desk: the queue and the summary, nothing else to learn.
   if (u.leadsHead && u.role !== 'SUPER_ADMIN') return NAV_GROUPS.filter((g) => g.title === 'Leads').map((g) => ({ ...g, title: undefined, items: g.items.filter((i) => HEAD_ITEMS.has(i.to) && itemVisible(i, u)).map((i) => ({ ...i, badge: undefined })) })).filter((g) => g.items.length)
   // Department Studio: the department has its own menu for this person's role.
@@ -428,7 +445,7 @@ export function blockNav(u: NavUser, blocks: string[]): NavGroup[] {
     const b = blockByKey(key)
     const item = navItemOfBlock(key)
     if (!b || !item) continue
-    if (item.flag && (!flagsLoaded() || !flagOn(item.flag))) continue
+    if (item.flag && (!flagsLoaded() || ![item.flag].flat().every(flagOn))) continue
     if (areaBlocked(u, item.to)) continue
     let g = out.find((x) => x.key === b.group)
     if (!g) { g = { key: b.group, ...navGroupOf(b.group), items: [] }; out.push(g) }

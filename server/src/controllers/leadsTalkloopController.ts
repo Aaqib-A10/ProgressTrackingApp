@@ -6,7 +6,7 @@ import { HttpError } from '../lib/pm/access'
 import { parse } from '../lib/pm/http'
 import { isOn } from '../lib/flags'
 import { canManage, leadFor, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
-import { talkloopClient, talkloopConfigured, talkloopDialOn } from '../lib/talkloop/client'
+import { talkloopClient, talkloopCompanyId, talkloopConfigured, talkloopDialOn } from '../lib/talkloop/client'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
 import { attachUnmatched, unmatchedScope } from '../lib/talkloop/unmatched'
 import { dialSetting, saveDialSetting } from '../lib/leads/dial'
@@ -24,11 +24,22 @@ async function ctx(req: AuthedRequest): Promise<{ me: LeadViewer; s: LeadScope }
   return { me: m, s: await leadScope(m) }
 }
 
+/**
+ * The phone system on the server (TALKLOOP_TOKEN) is 99 Technologies' own account: its users, calls
+ * and recordings are theirs. No other company may see it, link people to it or call through it.
+ */
+const ownsTalkloop = (companyId: string | null | undefined): boolean => companyId === talkloopCompanyId()
+const NO_SYNC = { lastRunAt: null, lastCallAt: null, synced: 0, unmatched: 0, lastError: null, lastRunSynced: 0, lastRunUnmatched: 0 }
+function requireTalkloop(companyId: string | null | undefined): void {
+  if (!ownsTalkloop(companyId)) throw new HttpError(403, 'A phone system link is not available for your company yet.')
+}
+
 /** GET /api/leads/talkloop — status, this company's people with their TalkLoop link, and TalkLoop's users (name, email, extension only). */
 export async function talkloopInfo(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
   requireLeadAdmin(s)
-  const configured = talkloopConfigured()
+  const available = ownsTalkloop(m.companyId)
+  const configured = available && talkloopConfigured()
   const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, talkloopUserId: true, talkloopExt: true }, orderBy: { name: 'asc' } })
   let talkloopUsers: { id: number; name: string; email: string | null; extension: string | null; status: string | null }[] = []
   let error: string | null = null
@@ -41,15 +52,16 @@ export async function talkloopInfo(req: AuthedRequest, res: Response): Promise<v
       pbxDomain = raw.find((u) => u.extension_id?.includes('-'))?.extension_id?.split('-').slice(1).join('-') ?? null
     } catch (e) { error = e instanceof Error ? e.message : 'Could not reach TalkLoop' }
   }
-  res.json({ configured, status: await syncStatus(), people, talkloopUsers, error, dial: await dialSetting(m.companyId), pbxDomain })
+  res.json({ available, configured, status: available ? await syncStatus() : NO_SYNC, people: available ? people : [], talkloopUsers, error, dial: await dialSetting(m.companyId), pbxDomain })
 }
 
 const linkSchema = z.object({ userId: z.string().max(60).optional(), talkloopUserId: z.number().int().nullable().optional(), auto: z.boolean().optional() })
 
 /** PATCH /api/leads/talkloop/link { userId, talkloopUserId } — or { auto: true } to match everyone by email. */
 export async function talkloopLink(req: AuthedRequest, res: Response): Promise<void> {
-  const { s } = await ctx(req)
+  const { me: m, s } = await ctx(req)
   requireLeadAdmin(s)
+  requireTalkloop(m.companyId)
   const b = parse(linkSchema, req.body)
   const client = talkloopClient()
   if (!client) throw new HttpError(422, 'TalkLoop is not connected: set TALKLOOP_TOKEN on the server first.')
@@ -83,8 +95,9 @@ export async function talkloopLink(req: AuthedRequest, res: Response): Promise<v
 
 /** POST /api/leads/talkloop/sync — read the whole last week now (the 3-minute sync only reads what is new). */
 export async function talkloopSyncNow(req: AuthedRequest, res: Response): Promise<void> {
-  const { s } = await ctx(req)
+  const { me: m, s } = await ctx(req)
   requireLeadAdmin(s)
+  requireTalkloop(m.companyId)
   if (!talkloopConfigured()) throw new HttpError(422, 'TalkLoop is not connected: set TALKLOOP_TOKEN on the server first.')
   res.json({ status: await runTalkLoopSync(talkloopClient(), new Date(), true) })
 }
@@ -156,6 +169,7 @@ export async function setDial(req: AuthedRequest, res: Response): Promise<void> 
 /** POST /api/leads/:id/dial — click-to-call: TalkLoop rings my extension, then the lead's number. The call record arrives with the next sync and fills the placeholder. */
 export async function dialLead(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
+  requireTalkloop(m.companyId)
   const client = talkloopClient()
   if (!client?.originate) throw new HttpError(422, 'Click-to-call is not switched on: TalkLoop has not provided the endpoint yet.')
   const me = await prisma.user.findUniqueOrThrow({ where: { id: m.id }, select: { talkloopUserId: true } })

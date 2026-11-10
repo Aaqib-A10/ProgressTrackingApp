@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { HOME_COMPANY_ID } from '../company'
 import type { LeadBusiness } from '@prisma/client'
 
 /**
@@ -29,6 +30,17 @@ export const CMR_PIPELINE: PipelineStatus[] = [
   { key: 'NOT_A_FIT', label: 'Not a Fit', color: '#EF4444', open: false },
   { key: 'CLOSED_WON', label: 'Closed Won', color: '#059669', open: false },
   { key: 'CLOSED_LOST', label: 'Closed Lost', color: '#DC2626', open: false },
+]
+/** A ready-made sales pipeline with Proposal and Negotiation, offered in Lead Settings (the deal board reads any pipeline). */
+export const SALES_PIPELINE: PipelineStatus[] = [
+  { key: 'NEW', label: 'New', color: '#4F46E5', open: true },
+  { key: 'CONTACTED', label: 'Contacted', color: '#0EA5E9', open: true },
+  { key: 'QUALIFIED', label: 'Qualified', color: '#14B8A6', open: true },
+  { key: 'PROPOSAL', label: 'Proposal', color: '#F59E0B', open: true },
+  { key: 'NEGOTIATION', label: 'Negotiation', color: '#8B5CF6', open: true },
+  { key: 'WON', label: 'Won', color: '#059669', open: false },
+  { key: 'LOST', label: 'Lost', color: '#EF4444', open: false },
+  { key: 'SPAM', label: 'Spam', color: '#94A3B8', open: false },
 ]
 export const PIPELINES: Record<BusinessKind, PipelineStatus[]> = { GENERAL: GENERAL_PIPELINE, CMR: CMR_PIPELINE }
 
@@ -78,6 +90,8 @@ export const PUBLISHED_RATE = 0.25
 
 /** CMR settings kept in LeadBusiness.settings. */
 export interface CmrSettings {
+  /** The money deal values are in (the board and the lead show it). */
+  currency: string
   copyEmail: string
   copyName: string
   consentStates: string[]
@@ -104,13 +118,27 @@ I will follow up in two business days. If you have questions before then, reply 
 Best regards,
 {{sdr}}
 CMR`
+/** Currencies a business can count its deals in. */
+export const CURRENCIES = ['USD', 'PKR', 'EUR', 'GBP', 'AED', 'SAR', 'CAD', 'AUD', 'INR'] as const
 export const DEFAULT_CMR_SETTINGS: CmrSettings = {
-  copyEmail: '', copyName: 'Aaqib', consentStates: DEFAULT_CONSENT_STATES, segments: DEFAULT_SEGMENTS, states: DEFAULT_STATES,
+  currency: 'USD', copyEmail: '', copyName: 'Aaqib', consentStates: DEFAULT_CONSENT_STATES, segments: DEFAULT_SEGMENTS, states: DEFAULT_STATES,
   infoSubject: DEFAULT_INFO_SUBJECT, infoBody: DEFAULT_INFO_BODY, publishedRate: PUBLISHED_RATE, minLoadLbs: MIN_LOAD_LBS, connectedSecs: 30,
 }
 export function settingsOf(b: Pick<LeadBusiness, 'settings'>): CmrSettings {
   const raw = (b.settings && typeof b.settings === 'object' && !Array.isArray(b.settings) ? b.settings : {}) as Partial<CmrSettings>
   return { ...DEFAULT_CMR_SETTINGS, ...Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined && v !== null)) } as CmrSettings
+}
+
+/** Everyday industries for a usual pipeline (CMR's segments are CMR's own words). */
+export const GENERAL_INDUSTRIES = ['Agriculture', 'Automotive', 'Construction', 'Education', 'Finance', 'Food & Beverage', 'Healthcare', 'Hospitality', 'Logistics', 'Manufacturing', 'Professional Services', 'Real Estate', 'Retail', 'Technology', 'Other']
+/**
+ * Settings as the screens show them. A usual pipeline outside 99 Technologies that never set its
+ * own list offers everyday industries, not CMR's segments. Nothing is stored differently.
+ */
+export function shownSettings(b: Pick<LeadBusiness, 'settings' | 'kind'>, companyId: string | null | undefined): CmrSettings {
+  const set = settingsOf(b)
+  const untouched = set.segments.length === DEFAULT_SEGMENTS.length && set.segments.every((x, i) => x === DEFAULT_SEGMENTS[i])
+  return b.kind !== 'CMR' && companyId !== HOME_COMPANY_ID && untouched ? { ...set, segments: GENERAL_INDUSTRIES } : set
 }
 
 // ------------------------------------------------------------------ time

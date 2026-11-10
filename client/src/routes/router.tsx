@@ -67,6 +67,8 @@ const LeadPage = lazy(pageModule(() => import('../pages/app/leads/LeadPage')))
 const LeadTasks = lazy(pageModule(() => import('../pages/app/leads/LeadTasks')))
 const LeadCalls = lazy(pageModule(() => import('../pages/app/leads/LeadCalls')))
 const JesseQueue = lazy(pageModule(() => import('../pages/app/leads/JesseQueue')))
+const DealBoard = lazy(pageModule(() => import('../pages/app/leads/DealBoard')))
+const LeadContacts = lazy(pageModule(() => import('../pages/app/leads/Contacts')))
 const JesseInbox = lazy(pageModule(() => import('../pages/app/leads/JesseInbox')))
 const JesseReview = lazy(pageModule(() => import('../pages/app/leads/JesseReview')))
 const LeadReport = lazy(pageModule(() => import('../pages/app/leads/LeadReport')))
@@ -216,6 +218,8 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Leads /> },
           { path: 'dashboard', element: <LeadsDashboard /> },
+          { path: 'board', element: <DealBoard /> },
+          { path: 'contacts', element: <LeadContacts /> },
           { path: 'tasks', element: <LeadTasks /> },
           { path: 'calls', element: <LeadCalls /> },
           { path: 'queue', element: <RequireFlag flag="cmr"><JesseQueue /></RequireFlag> },

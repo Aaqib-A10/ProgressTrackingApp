@@ -76,6 +76,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  'deal-board': {
+    label: 'Deal board and contacts',
+    description: 'The CRM views inside Lead Management: the deal board with deal values, the contacts list, more people on one lead, deal value and currency. Off for 99 Technologies until you want them to have it: their Leads menu and lead page stay as they are.',
+    default: true,
+    client: true,
+    scope: 'company',
+  },
   'social-sign-in': {
     label: 'Sign in with Google and Microsoft',
     description: 'The Google and Microsoft buttons on the sign-in and sign-up pages work (when their keys are on the server). Off: the buttons show "coming soon" and nobody can sign in or sign up with them.',

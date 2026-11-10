@@ -1,3 +1,4 @@
+import { HOME_COMPANY_ID } from '../company'
 /**
  * TalkLoop, the phone system (api.talkloop.ai). One account token, kept in the server's .env as
  * TALKLOOP_TOKEN (never in code, never sent to the browser). The token sees the whole account, so
@@ -31,7 +32,14 @@ export interface TalkLoopClient {
 
 /** Tests put a stub here, so nothing touches the network. */
 let override: TalkLoopClient | null = null
-export function useTalkLoopClientForTests(c: TalkLoopClient | null): void { override = c }
+let ownerOverride: string | null = null
+export function useTalkLoopClientForTests(c: TalkLoopClient | null, companyId: string | null = null): void { override = c; ownerOverride = c ? companyId : null }
+
+/**
+ * The company whose phone system this is. The one token on the server is one company's account
+ * (99 Technologies), so its users, calls and recordings are never shown or offered to another.
+ */
+export const talkloopCompanyId = (): string => ownerOverride ?? process.env.TALKLOOP_COMPANY_ID ?? HOME_COMPANY_ID
 
 export const talkloopConfigured = (): boolean => !!override || !!process.env.TALKLOOP_TOKEN
 /** Click-to-call is on when the client can originate (the stub in tests, or TALKLOOP_ORIGINATE=1 on the server). */

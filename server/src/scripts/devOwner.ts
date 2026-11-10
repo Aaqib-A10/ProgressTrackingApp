@@ -8,6 +8,7 @@
 import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../lib/auth'
 import { isLocalDatabase } from './demoCompanies'
+import { DEMO_REPS, seedDemoSales } from './demoSales'
 
 export const TEST_PASSWORD = 'test123'
 export const TEST_OWNER = { username: 'testuser', email: 'testuser@local.test', name: 'Test User' }
@@ -56,8 +57,11 @@ async function main() {
         update: { username: u.username, passwordHash, companyId, role, isActive: true, status: 'ACTIVE', sessionsValidFrom: null, emailCheckPending: false },
         create: { ...u, passwordHash, companyId, role, status: 'ACTIVE', isActive: true, emailVerifiedAt: new Date() },
       })
-    await person(TEST_COMPANY_ADMIN, TEST_COMPANY.id, 'SUPER_ADMIN')
+    const admin = await person(TEST_COMPANY_ADMIN, TEST_COMPANY.id, 'SUPER_ADMIN')
     await person(TEST_COMPANY_USER, TEST_COMPANY.id)
+    // A made-up Sales pipeline with two reps, so the CRM (deal board, contacts) has something to show.
+    const reps = [await person(DEMO_REPS[0], TEST_COMPANY.id), await person(DEMO_REPS[1], TEST_COMPANY.id)]
+    const added = await seedDemoSales(prisma, TEST_COMPANY.id, admin.id, [reps[0].id, reps[1].id])
     // On their own, the solo person runs their workspace.
     await person(SOLO_USER, SOLO_WORKSPACE.id, 'SUPER_ADMIN')
 
@@ -65,6 +69,8 @@ async function main() {
     console.log('  testuser          owner console          http://localhost:5173/owner')
     console.log('  testcompanyadmin  Test Company (admin)   http://localhost:5173/login')
     console.log('  testcompanyuser   Test Company           http://localhost:5173/login')
+    console.log('  zara, daniel      Test Company sales reps http://localhost:5173/login')
+    console.log(added ? `  CRM: added the made-up "Sales" pipeline with ${added} deals to Test Company.` : '  CRM: the made-up "Sales" pipeline is already there.')
     console.log('  solouser          on their own           http://localhost:5173/login')
   } finally {
     await prisma.$disconnect()

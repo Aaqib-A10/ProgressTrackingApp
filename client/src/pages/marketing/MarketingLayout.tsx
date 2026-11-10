@@ -7,7 +7,7 @@ import { api } from '../../lib/api'
 import './marketing.css'
 import { EXTRAS, FEATURES, SOLUTIONS } from './pages'
 import { site } from './content'
-import { IconAttendance, IconBoard, IconChat, IconDialer, IconReport } from './icons'
+import { IconAttendance, IconBoard, IconChat, IconDialer, IconPipeline, IconReport } from './icons'
 import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 
@@ -20,7 +20,7 @@ const LINKS: { to: string; label: string; menu?: 'product' | 'solutions' }[] = [
   { to: '/security', label: 'Security' },
 ]
 const TEAM_KINDS = ['General', 'Sales calling', 'Lead Generation', 'Marketing', 'E-commerce', 'Inventory', 'Customer service']
-const FEATURE_ICON = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, sales: IconDialer } as const
+const FEATURE_ICON = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, crm: IconPipeline, sales: IconDialer } as const
 
 function Tile({ hue, children, size = 34 }: { hue: { a: string; b: string }; children: ReactNode; size?: number }) {
   return <span className="flex shrink-0 items-center justify-center rounded-[30%] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]" style={{ width: size, height: size, backgroundImage: `linear-gradient(to bottom, rgb(${hue.a}), rgb(${hue.b}))` }}>{children}</span>
@@ -326,6 +326,15 @@ export function PrimaryCta({ to = '/start', children = 'Start free' }: { to?: st
 }
 export function SecondaryCta({ to, children }: { to: string; children: ReactNode }) {
   return <Link to={to} className="inline-flex h-11 items-center gap-2 rounded-btn border border-line bg-card px-5 text-[15px] font-semibold text-ink transition-colors hover:bg-slate-50">{children}</Link>
+}
+
+/** A phone screenshot in a plain handset. */
+export function PhoneFrame({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  return (
+    <div className={cn('overflow-hidden rounded-[30px] border-[7px] border-slate-900 bg-slate-900 shadow-overlay dark:border-slate-700', className)}>
+      <img src={src} alt={alt} className="block w-full rounded-[22px]" loading="lazy" decoding="async" width={780} height={1688} />
+    </div>
+  )
 }
 
 /** A screenshot of the app in a quiet window frame. */

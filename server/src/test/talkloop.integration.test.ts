@@ -50,7 +50,7 @@ beforeAll(async () => {
   await setCompanyFlag('cmr', C, true, 'test')
   await setCompanyFlag('lead-management', C, true, 'test')
   await prisma.platformSetting.deleteMany({ where: { key: 'talkloop-sync' } })
-  useTalkLoopClientForTests(stub)
+  useTalkLoopClientForTests(stub, C) // in this test, TL Co is the company whose phone system it is
 })
 afterAll(async () => {
   useTalkLoopClientForTests(null)

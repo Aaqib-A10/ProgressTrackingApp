@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, ArrowRight, CalendarClock, Flag, Inbox, PhoneCall, PhoneMissed, Sparkles, UserPlus, Users } from 'lucide-react'
 import { TextField } from '../../../components/ui/Input'
 import { apiErrorText } from '../../../lib/api'
+import { flagOn } from '../../../lib/flags'
 import { cn } from '../../../lib/cn'
-import { leadsApi, type Dashboard } from '../../../lib/leadsApi'
+import { leadsApi, money, type Dashboard } from '../../../lib/leadsApi'
 import { BusinessPicker, DATE_RANGES, PageHeader, useBusiness, useLeadsMeta } from './shared'
 
 /**
@@ -78,7 +79,7 @@ export default function LeadsDashboard() {
           <div className="grid gap-3 lg:grid-cols-3">
             {/* Pipeline */}
             <section className="rounded-card border border-line bg-card p-5 shadow-xs lg:col-span-2">
-              <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold text-ink">Pipeline</h2><span className="text-body-sm text-ink-faint">{all ? 'Across businesses' : business?.name} · {Object.values(d.byStatus).reduce((a, b) => a + b, 0)} leads</span></div>
+              <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold text-ink">Pipeline</h2><span className="text-right text-body-sm text-ink-faint">{all ? 'Across businesses' : business?.name} · {Object.values(d.byStatus).reduce((a, b) => a + b, 0)} leads{!all && d.openValue && flagOn('deal-board') ? <> · <Link to="/app/leads/board" className="font-semibold text-ink hover:text-primary" title="Open the deal board">{money(d.openValue, d.currency ?? 'USD')} open</Link></> : null}</span></div>
               <PipelineBar d={d} pipeline={pipeline} />
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                 {(pipeline.length ? pipeline : Object.keys(d.byStatus).map((k) => ({ key: k, label: k, color: '#64748B', open: true }))).map((st) => {

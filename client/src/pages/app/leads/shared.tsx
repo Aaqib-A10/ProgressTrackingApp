@@ -3,9 +3,25 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Ban, CheckCircle2, Info } from 'lucide-react'
 import { cn } from '../../../lib/cn'
 import { apiErrorText } from '../../../lib/api'
-import { leadsApi, type Fact, type LeadRow, type LeadsMeta, type MetaBusiness, type PipelineStatus, type Warning } from '../../../lib/leadsApi'
+import { leadsApi, OWNER_LABEL, type Fact, type LeadRow, type LeadsMeta, type MetaBusiness, type Owner, type PipelineStatus, type Warning } from '../../../lib/leadsApi'
+import { useAuth } from '../../../lib/auth'
+import { inHomeCompany } from '../../../lib/types'
 
 /** Small parts shared by the Lead Management screens. */
+
+/** The words for this part of Metriq: new companies know it as their CRM; 99 Technologies keeps "Lead Management". */
+export function useCrmWords(): { product: string; settings: string } {
+  const { user } = useAuth()
+  return inHomeCompany(user) ? { product: 'Lead Management', settings: 'Lead Settings' } : { product: 'CRM', settings: 'CRM Settings' }
+}
+
+/** Who a next step is on. 99 Technologies keeps its own names (SDR, Jesse, Aaqib); other companies get plain ones. */
+export function useOwners(): { label: Record<Owner, string>; keys: Owner[] } {
+  const { user } = useAuth()
+  return inHomeCompany(user)
+    ? { label: OWNER_LABEL, keys: Object.keys(OWNER_LABEL) as Owner[] }
+    : { label: { REP: 'Rep', MANAGER: 'Manager', HEAD: 'Head of the business', COPY: 'Someone else' }, keys: ['REP', 'MANAGER', 'HEAD'] }
+}
 
 // ------------------------------------------------------------------ meta (the businesses I work in)
 
@@ -63,9 +79,9 @@ export function Label({ children, hint }: { children: ReactNode; hint?: string }
   return <span className="mb-1.5 block text-body-sm font-medium text-ink">{children}{hint && <span className="ml-1 font-normal text-ink-faint">{hint}</span>}</span>
 }
 
-export function StatusPill({ status, pipeline, label, size = 'md' }: { status: string; pipeline?: PipelineStatus[]; label?: string; size?: 'sm' | 'md' }) {
+export function StatusPill({ status, pipeline, label, color: own, size = 'md' }: { status: string; pipeline?: PipelineStatus[]; label?: string; color?: string; size?: 'sm' | 'md' }) {
   const st = pipeline?.find((s) => s.key === status)
-  const color = st?.color ?? '#64748B'
+  const color = st?.color ?? own ?? '#64748B'
   return (
     <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-semibold', size === 'sm' ? 'h-5 px-2 text-[11px]' : 'h-6 px-2.5 text-[12px]')} style={{ background: `${color}1a`, color }}>
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />{label ?? st?.label ?? status}

@@ -63,6 +63,8 @@ export interface LeadRow {
 export interface CallDraftFacts { contactName?: string; contactRole?: string; email?: string; decisionMaker?: YesNo; decisionMakerName?: string; material?: string[]; materialForm?: string[]; lbsPerMonth?: number; lbsPerShipment?: number; currentVendor?: string; paysToday?: number; paysUnit?: string; nextShipmentDate?: string; pickupCity?: string; freight?: string; nextStep?: string; nextStepDate?: string; jesseAsk?: string; outcome?: string; error?: string }
 export interface LeadCall { id: string; leadId: string; userId: string | null; user: Person | null; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; summary: string; outcome: string | null; consentGiven: boolean | null; recordingUrl: string | null; hasRecording: boolean; recordingKept: boolean; provider?: string | null; phone?: string | null; transcript?: string | null; externalId?: string | null; aiSummary?: string | null; aiFacts?: CallDraftFacts | null; aiAt?: string | null; aiAppliedAt?: string | null; pending?: boolean }
 export interface TalkLoopInfo {
+  /** False for a company that has no phone system link (only the call-button setting applies). */
+  available?: boolean
   dial?: DialSetting; pbxDomain?: string | null
   configured: boolean
   status: { lastRunAt: string | null; lastCallAt: string | null; synced: number; unmatched: number; lastError: string | null; lastRunSynced: number; lastRunUnmatched: number; lastRunRead?: number; lastRunFrom?: string | null; waiting?: number }
@@ -76,15 +78,40 @@ export interface LeadEvent { id: string; kind: string; text: string; data: Recor
 export interface UnmatchedCall { id: string; at: string; direction: 'OUT' | 'IN'; durationSec: number; disposition: Disposition; user: { id: string; name: string }; recordingUrl: string | null }
 /** A phone number TalkLoop reached that no lead has yet, with its calls. */
 export interface UnmatchedNumber { phone: string; calls: number; connected: number; lastAt: string; firstAt: string; people: { id: string; name: string }[]; items: UnmatchedCall[] }
-export interface LeadFull extends LeadRow { calls: LeadCall[]; comments: LeadComment[]; tasks: LeadTask[]; events: LeadEvent[]; assignedBy: Person | null; createdBy: Person | null; raw: Record<string, unknown> | null }
-export interface LeadDetail { lead: LeadFull; listHits: { kind: string; name: string; on: string }[]; can: { manage: boolean; decide: boolean; approve: boolean; edit: boolean; cmr: boolean; headOnly?: boolean }; head: Person | null; mentionable: (Person & { role: string })[]; pipeline: PipelineStatus[]; settings: CmrSettings | null }
+/** Another person at a lead's company (the first contact stays on the lead itself). */
+export interface LeadContact { id: string; leadId: string; name: string; role: string | null; email: string | null; phone: string | null; phoneE164: string | null; mobile: string | null; decisionMaker: boolean; notes: string | null; createdAt: string }
+export type ContactInput = Partial<Pick<LeadContact, 'name' | 'role' | 'email' | 'phone' | 'mobile' | 'decisionMaker' | 'notes'>>
+/** One row of the Contacts page: a lead's main contact (primary) or one of the others. */
+export interface ContactRow {
+  id: string; contactId: string | null; leadId: string; primary: boolean
+  name: string; role: string | null; email: string | null; phone: string | null; mobile: string | null; decisionMaker: boolean
+  company: string | null; industry: string | null; state: string | null; status: string; statusLabel: string; statusColor: string; open: boolean
+  business: { id: string; name: string }; assignee: { id: string; name: string } | null; lastCallAt: string | null
+}
+/** The deal board: one column per stage of the business's pipeline. */
+export interface BoardColumn extends PipelineStatus { count: number; value: number; leads: LeadRow[] }
+export interface DealBoard { business: { id: string; name: string; kind: BusinessKind }; currency: string; closedDays: number; canManage: boolean; columns: BoardColumn[]; totals: { open: { count: number; value: number }; won: { count: number; value: number } } }
+export const CURRENCIES = ['USD', 'PKR', 'EUR', 'GBP', 'AED', 'SAR', 'CAD', 'AUD', 'INR'] as const
+/** A deal value in the business's currency: 120000 → "$120,000", "PKR 120,000". Short form for cards: "$120K". */
+export function money(v: number | null | undefined, currency = 'USD', short = false): string {
+  if (v == null) return ''
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0, ...(short && Math.abs(v) >= 10000 ? { notation: 'compact', maximumFractionDigits: 1 } : {}) }).format(v) } catch { return `${currency} ${Math.round(v).toLocaleString()}` }
+}
+/** The ready-made sales pipeline (Lead Settings offers it; mirrors the server's SALES_PIPELINE). */
+export const SALES_PIPELINE: PipelineStatus[] = [
+  { key: 'NEW', label: 'New', color: '#4F46E5', open: true }, { key: 'CONTACTED', label: 'Contacted', color: '#0EA5E9', open: true }, { key: 'QUALIFIED', label: 'Qualified', color: '#14B8A6', open: true },
+  { key: 'PROPOSAL', label: 'Proposal', color: '#F59E0B', open: true }, { key: 'NEGOTIATION', label: 'Negotiation', color: '#8B5CF6', open: true },
+  { key: 'WON', label: 'Won', color: '#059669', open: false }, { key: 'LOST', label: 'Lost', color: '#EF4444', open: false }, { key: 'SPAM', label: 'Spam', color: '#94A3B8', open: false },
+]
+export interface LeadFull extends LeadRow { calls: LeadCall[]; comments: LeadComment[]; tasks: LeadTask[]; events: LeadEvent[]; contacts: LeadContact[]; assignedBy: Person | null; createdBy: Person | null; raw: Record<string, unknown> | null }
+export interface LeadDetail { lead: LeadFull; listHits: { kind: string; name: string; on: string }[]; can: { manage: boolean; decide: boolean; approve: boolean; edit: boolean; cmr: boolean; /** The deal board and contacts are on for this company. */ crm?: boolean; headOnly?: boolean }; /** The industries this business picks from. */ industries?: string[]; head: Person | null; mentionable: (Person & { role: string })[]; pipeline: PipelineStatus[]; settings: CmrSettings | null; currency: string }
 
-export interface CmrSettings { copyEmail: string; copyName: string; consentStates: string[]; segments: string[]; states: string[]; infoSubject: string; infoBody: string; publishedRate: number; minLoadLbs: number; connectedSecs: number }
+export interface CmrSettings { currency: string; copyEmail: string; copyName: string; consentStates: string[]; segments: string[]; states: string[]; infoSubject: string; infoBody: string; publishedRate: number; minLoadLbs: number; connectedSecs: number }
 export interface MetaBusiness {
   id: string; name: string; color: string; kind: BusinessKind; pipeline: PipelineStatus[]; headId: string | null; head: Person | null; isActive: boolean; slaAssignMins: number; slaContactMins: number
   myRole: 'MANAGER' | 'REP' | null; isHead: boolean
   members: (Person & { role: 'MANAGER' | 'REP' })[]
-  settings: Pick<CmrSettings, 'segments' | 'states' | 'consentStates' | 'minLoadLbs' | 'publishedRate' | 'copyName' | 'connectedSecs'>
+  settings: Pick<CmrSettings, 'segments' | 'states' | 'consentStates' | 'minLoadLbs' | 'publishedRate' | 'copyName' | 'connectedSecs' | 'currency'>
 }
 export type DialScheme = 'tel' | 'sip' | 'callto' | 'custom'
 /** How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop). */
@@ -132,6 +159,9 @@ export interface Dashboard {
   cards: Record<'total' | 'newThisWeek' | 'recentlyUpdated' | 'noStatus' | 'assigned' | 'unassigned' | 'waiting' | 'overdue' | 'prohibited' | 'belowMin' | 'calls' | 'late', number> & { connected?: number; kept?: number }
   tasks: { today: number; overdue: number; total: number }
   byStatus: Record<string, number>
+  /** What the open deals add up to, and the business's currency (one business chosen). */
+  openValue?: number
+  currency?: string | null
 }
 export interface Summary {
   business: { id: string; name: string }
@@ -167,6 +197,13 @@ export const leadsApi = {
   exportUrl: (p: ListParams) => `/api/leads/export.csv${qs(p)}`,
   check: (p: { business: string; organization?: string; phone?: string; email?: string; website?: string; except?: string }) => api.get<{ duplicates: { id: string; name: string; organization: string | null; status: string; statusLabel: string; assignee: Person | null; lastActivityAt: string }[]; prohibited: boolean; existingCustomer: boolean; hits: { kind: string; name: string; on: string }[] }>(`/leads/check${qs(p)}`),
   get: (id: string) => api.get<LeadDetail>(`/leads/${id}`),
+  board: (p: { business: string; assignee?: string; q?: string }) => api.get<DealBoard>(`/leads/board${qs(p)}`),
+  contacts: (p: { business?: string; q?: string; page?: number; pageSize?: number }) => api.get<{ contacts: ContactRow[]; total: number; page: number; pageSize: number; capped: boolean }>(`/leads/contacts${qs(p)}`),
+  contactsExportUrl: (p: { business?: string; q?: string }) => `/api/leads/contacts.csv${qs(p)}`,
+  addContact: (leadId: string, b: ContactInput & { name: string }) => api.post<{ contact: LeadContact; moved: number }>(`/leads/${leadId}/contacts`, b),
+  updateContact: (id: string, b: ContactInput) => api.patch<{ contact: LeadContact }>(`/leads/contacts/${id}`, b),
+  removeContact: (id: string) => api.del<{ ok: true }>(`/leads/contacts/${id}`),
+  makePrimaryContact: (id: string) => api.post<{ ok: true }>(`/leads/contacts/${id}/primary`, {}),
   add: (b: LeadInput & { businessId: string; assignTo?: string | null; force?: boolean }) => api.post<{ lead: LeadRow; listHits: { kind: string; name: string; on: string }[] }>('/leads', b),
   update: (id: string, b: LeadInput & { status?: string }) => api.patch<{ lead: LeadRow }>(`/leads/${id}`, b),
   assign: (id: string, assigneeId: string | null) => api.post<{ lead: LeadRow }>(`/leads/${id}/assign`, { assigneeId }),

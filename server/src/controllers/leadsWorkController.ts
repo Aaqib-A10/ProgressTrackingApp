@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client'
 import { DateTime } from 'luxon'
 import { prisma } from '../lib/prisma'
 import { pipeTalkLoopRecording } from '../lib/talkloop/stream'
-import { talkloopDialOn } from '../lib/talkloop/client'
+import { talkloopCompanyId, talkloopDialOn } from '../lib/talkloop/client'
 import { unmatchedScope } from '../lib/talkloop/unmatched'
 import { dialSetting } from '../lib/leads/dial'
 import { draftCallNotes, DRAFT_FACT_KEYS, type CallDraft } from '../lib/talkloop/notes'
@@ -23,7 +23,7 @@ import { OPEN_STATUSES, receiveLead, sourceText, type LeadInput as IntakeInput }
 import { keysOf, listMatches, reflagLeads } from '../lib/leads/lists'
 import {
   ALL_STATUSES, CLOSE_REASONS, DISPOSITIONS, FREIGHT, MATERIAL_FORMS, MATERIALS, MEETING_OUTCOMES, OWNERS, PAYS_UNITS, PHOENIX, PROMISE_WORDS, YES_NO,
-  addBusinessDays, businessDaysBetween, composeSummary, emailKey, fiveFacts, kindOf, leadWarnings, normalizePhone, openStatusesOf, orgKey, pipelineOf, settingsOf, statusFromText, statusLabel, threeTimes, websiteKey, yesNoFromText, zoneOfState, type CmrSettings,
+  addBusinessDays, businessDaysBetween, composeSummary, emailKey, fiveFacts, kindOf, leadWarnings, normalizePhone, openStatusesOf, orgKey, pipelineOf, settingsOf, shownSettings, statusFromText, statusLabel, threeTimes, websiteKey, yesNoFromText, zoneOfState, type CmrSettings,
 } from '../lib/leads/pipeline'
 import { atPhoenix, closeTasks, makeTask } from '../lib/leads/tasks'
 import { leadManagers, tellAboutLead } from '../lib/leads/notify'
@@ -36,7 +36,7 @@ import { sendMeetingInvite } from '../lib/leads/meeting'
  * the daily report, lists and the sheet import). Businesses themselves: leadsController.ts.
  */
 
-const PERSON = { select: { id: true, name: true, email: true } } as const
+export const PERSON = { select: { id: true, name: true, email: true } } as const
 const BIZ = { select: { id: true, name: true, color: true, kind: true, pipeline: true, settings: true, headId: true, slaAssignMins: true, slaContactMins: true } } as const
 type Biz = Prisma.LeadBusinessGetPayload<typeof BIZ>
 const CMR_DEFAULT = { contactRole: null, decisionMaker: 'UNKNOWN', decisionMakerName: null, dmAgreed: 'UNKNOWN', handlesAlkaline: 'UNKNOWN', material: [] as string[], materialForm: [] as string[], lbsPerMonth: null, lbsPerShipment: null, currentVendor: null, paysToday: null, paysUnit: 'UNKNOWN', vendorRelatedParty: false, usesBatteryNetwork: false, sortsAlkaline: 'UNKNOWN', shipsLtl: 'UNKNOWN', nextShipmentDate: null, pickupCity: null, freight: 'UNKNOWN', jesseInputNeeded: false, jesseAsk: null, jesseComment: null, flaggedAt: null, qualifyRequestedAt: null, qualifiedAt: null, qualifiedById: null, jesseDecision: null, jesseDecidedAt: null, meetingSlots: null, meetingAt: null, meetingTz: null, meetingLink: null, inviteSentAt: null, reconfirmedAt: null, meetingBrief: null, meetingOutcome: null, meetingOutcomeAt: null, infoSentAt: null }
@@ -45,7 +45,7 @@ function me(req: AuthedRequest): LeadViewer & { name: string } {
   if (!req.user) throw new HttpError(401, 'Not authenticated')
   return { id: req.user.id, role: req.user.role, companyId: req.user.companyId, name: '' }
 }
-async function ctx(req: AuthedRequest): Promise<{ me: LeadViewer & { name: string }; s: LeadScope }> {
+export async function ctx(req: AuthedRequest): Promise<{ me: LeadViewer & { name: string }; s: LeadScope }> {
   const m = me(req)
   if (!(await isOn('lead-management', m.companyId))) throw new HttpError(403, 'Lead Management is not switched on for your company.')
   const [s, u] = await Promise.all([leadScope(m), prisma.user.findUnique({ where: { id: m.id }, select: { name: true } })])
@@ -58,9 +58,9 @@ async function cmrOn(b: Biz, companyId: string): Promise<void> {
   if (!(await isOn('cmr', companyId))) throw new HttpError(403, 'The CMR flow is not switched on for your company.')
 }
 
-const event = (leadId: string, userId: string | null, kind: string, text = '', data?: Prisma.InputJsonValue) => prisma.leadEvent.create({ data: { leadId, userId, kind, text, data } })
+export const event = (leadId: string, userId: string | null, kind: string, text = '', data?: Prisma.InputJsonValue) => prisma.leadEvent.create({ data: { leadId, userId, kind, text, data } })
 const isoDate = (d: Date | null) => (d ? DateTime.fromJSDate(d, { zone: PHOENIX }).toISODate() : null)
-const startOfTodayPhx = () => DateTime.now().setZone(PHOENIX).startOf('day').toJSDate()
+export const startOfTodayPhx = () => DateTime.now().setZone(PHOENIX).startOf('day').toJSDate()
 const dateOrNull = (s: string | null | undefined): Date | null | undefined => (s === undefined ? undefined : s ? DateTime.fromISO(s, { zone: PHOENIX }).startOf('day').toJSDate() : null)
 const emailOk = (e: string) => /^[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]{2,}$/.test(e)
 
@@ -72,11 +72,11 @@ function lateness(l: { status: string; assigneeId: string | null; createdAt: Dat
   return null
 }
 
-const LEAD_INCLUDE = { business: BIZ, assignee: PERSON, cmr: true } as const
-type LeadRow = Prisma.LeadGetPayload<{ include: typeof LEAD_INCLUDE }>
+export const LEAD_INCLUDE = { business: BIZ, assignee: PERSON, cmr: true } as const
+export type LeadRow = Prisma.LeadGetPayload<{ include: typeof LEAD_INCLUDE }>
 
 /** A lead as the app sees it: the CMR part folded in, the facts, the warnings, late and overdue. */
-function leadOut(l: LeadRow, openTasks = 0) {
+export function leadOut(l: LeadRow, openTasks = 0) {
   const b = l.business
   const cmr = l.cmr ?? CMR_DEFAULT
   const set = settingsOf(b)
@@ -107,7 +107,7 @@ async function bizFor(id: string): Promise<Biz> {
   if (!b) throw new HttpError(404, 'Business not found')
   return b
 }
-async function fullLead(me: LeadViewer, s: LeadScope, id: string): Promise<LeadRow> {
+export async function fullLead(me: LeadViewer, s: LeadScope, id: string): Promise<LeadRow> {
   const base = await leadFor(me, s, id)
   return prisma.lead.findUniqueOrThrow({ where: { id: base.id }, include: LEAD_INCLUDE })
 }
@@ -130,14 +130,14 @@ export async function leadsMeta(req: AuthedRequest, res: Response): Promise<void
     // How the Call buttons dial on this company's PCs (Lead Settings → TalkLoop).
     dial: await dialSetting(m.companyId),
     // Click-to-call through TalkLoop: on when TalkLoop can originate and I am linked to a TalkLoop user.
-    talkloopDial: talkloopDialOn() && !!(await prisma.user.findUnique({ where: { id: m.id }, select: { talkloopUserId: true } }))?.talkloopUserId,
+    talkloopDial: m.companyId === talkloopCompanyId() && talkloopDialOn() && !!(await prisma.user.findUnique({ where: { id: m.id }, select: { talkloopUserId: true } }))?.talkloopUserId,
     businesses: businesses.map((b) => {
-      const set = settingsOf(b)
+      const set = shownSettings(b, m.companyId)
       const { settings: _s, ...rest } = b
       return {
         ...rest, kind: isCmr(b) && cmr ? 'CMR' : 'GENERAL', pipeline: pipelineOf(b), myRole: s.admin ? 'MANAGER' : s.roles.get(b.id) ?? null, isHead: s.headOf.includes(b.id),
         members: b.members.map((x) => ({ ...x.user, role: x.role })),
-        settings: { segments: set.segments, states: set.states, consentStates: set.consentStates, minLoadLbs: set.minLoadLbs, publishedRate: set.publishedRate, copyName: set.copyName, connectedSecs: set.connectedSecs },
+        settings: { segments: set.segments, states: set.states, consentStates: set.consentStates, minLoadLbs: set.minLoadLbs, publishedRate: set.publishedRate, copyName: set.copyName, connectedSecs: set.connectedSecs, currency: set.currency },
       }
     }),
     cmrOn: cmr,
@@ -169,9 +169,21 @@ const listQuery = z.object({
   pageSize: z.coerce.number().int().min(10).max(200).optional(),
   sort: z.enum(['newest', 'oldest', 'activity', 'nextStep', 'name', 'company', 'calls']).optional(),
 })
-type ListQuery = z.infer<typeof listQuery>
+export type ListQuery = z.infer<typeof listQuery>
 
-function listWhere(m: LeadViewer, s: LeadScope, q: ListQuery): Prisma.LeadWhereInput {
+/**
+ * Which statuses count as open, and which exist at all. A business may have its own pipeline
+ * (say with Proposal and Negotiation): one business → its own; several → the built-in ones plus
+ * every own pipeline's (the company walls keep this to my company).
+ */
+export async function statusSets(businessId?: string): Promise<{ open: string[]; all: string[] }> {
+  const rows = await prisma.leadBusiness.findMany({ where: businessId ? { id: businessId } : {}, select: { kind: true, pipeline: true } })
+  if (businessId && rows[0]) return { open: openStatusesOf(rows[0]), all: pipelineOf(rows[0]).map((x) => x.key) }
+  return { open: [...new Set([...OPEN_STATUSES, ...rows.flatMap((b) => openStatusesOf(b))])], all: [...new Set([...ALL_STATUSES, ...rows.flatMap((b) => pipelineOf(b).map((x) => x.key))])] }
+}
+
+export function listWhere(m: LeadViewer, s: LeadScope, q: ListQuery, st: { open: string[]; all: string[] } = { open: OPEN_STATUSES, all: ALL_STATUSES }): Prisma.LeadWhereInput {
+  const OPEN_STATUSES = st.open, ALL_STATUSES = st.all // eslint-disable-line @typescript-eslint/no-shadow
   const and: Prisma.LeadWhereInput[] = [leadWhere(m, s)]
   if (q.business) and.push({ businessId: q.business })
   if (q.status === 'open' || q.active === '1') and.push({ status: { in: OPEN_STATUSES } })
@@ -196,7 +208,7 @@ function listWhere(m: LeadViewer, s: LeadScope, q: ListQuery): Prisma.LeadWhereI
   if (q.q?.trim()) {
     const t = q.q.trim()
     const { e164 } = normalizePhone(t)
-    and.push({ OR: [{ name: { contains: t, mode: 'insensitive' } }, { email: { contains: t, mode: 'insensitive' } }, { phone: { contains: t } }, ...(e164 ? [{ phoneE164: e164 }] : []), { organization: { contains: t, mode: 'insensitive' } }, { website: { contains: t, mode: 'insensitive' } }, { city: { contains: t, mode: 'insensitive' } }, { message: { contains: t, mode: 'insensitive' } }, { cmr: { is: { currentVendor: { contains: t, mode: 'insensitive' } } } }] })
+    and.push({ OR: [{ name: { contains: t, mode: 'insensitive' } }, { email: { contains: t, mode: 'insensitive' } }, { phone: { contains: t } }, ...(e164 ? [{ phoneE164: e164 }] : []), { organization: { contains: t, mode: 'insensitive' } }, { website: { contains: t, mode: 'insensitive' } }, { city: { contains: t, mode: 'insensitive' } }, { message: { contains: t, mode: 'insensitive' } }, { cmr: { is: { currentVendor: { contains: t, mode: 'insensitive' } } } }, { contacts: { some: { OR: [{ name: { contains: t, mode: 'insensitive' } }, { email: { contains: t, mode: 'insensitive' } }, { phone: { contains: t } }, ...(e164 ? [{ phoneE164: e164 }] : [])] } } }] })
   }
   return { AND: and }
 }
@@ -205,17 +217,19 @@ function listWhere(m: LeadViewer, s: LeadScope, q: ListQuery): Prisma.LeadWhereI
 export async function listLeads(req: AuthedRequest, res: Response): Promise<void> {
   const { me: m, s } = await ctx(req)
   const q = parse(listQuery, req.query)
+  const st = await statusSets(q.business)
+  const OPEN_STATUSES = st.open // eslint-disable-line @typescript-eslint/no-shadow
   const page = q.page ?? 1, pageSize = q.pageSize ?? 50
   const orderBy: Prisma.LeadOrderByWithRelationInput[] =
     q.sort === 'oldest' ? [{ createdAt: 'asc' }] : q.sort === 'activity' ? [{ lastActivityAt: 'desc' }] : q.sort === 'nextStep' ? [{ nextStepDate: { sort: 'asc', nulls: 'last' } }] : q.sort === 'name' ? [{ name: 'asc' }] : q.sort === 'company' ? [{ organization: 'asc' }] : q.sort === 'calls' ? [{ callsCount: 'desc' }] : [{ createdAt: 'desc' }]
   let rows: LeadRow[], total: number
   if (q.late) {
-    const all = await prisma.lead.findMany({ where: { AND: [listWhere(m, s, q), { status: 'NEW' }] }, include: LEAD_INCLUDE, orderBy: { createdAt: 'asc' }, take: 2000 })
+    const all = await prisma.lead.findMany({ where: { AND: [listWhere(m, s, q, st), { status: 'NEW' }] }, include: LEAD_INCLUDE, orderBy: { createdAt: 'asc' }, take: 2000 })
     const late = all.filter((l) => lateness(l, l.business))
     total = late.length
     rows = late.slice((page - 1) * pageSize, page * pageSize)
   } else {
-    const where = listWhere(m, s, q)
+    const where = listWhere(m, s, q, st)
     ;[rows, total] = await Promise.all([prisma.lead.findMany({ where, include: LEAD_INCLUDE, orderBy, skip: (page - 1) * pageSize, take: pageSize }), prisma.lead.count({ where })])
   }
   const openTasks = rows.length ? await prisma.leadTask.groupBy({ by: ['leadId'], where: { leadId: { in: rows.map((r) => r.id) }, doneAt: null }, _count: { _all: true } }) : []
@@ -242,16 +256,19 @@ export async function exportLeads(req: AuthedRequest, res: Response): Promise<vo
   if (!s.admin && !s.roles.size) throw new HttpError(403, 'You do not work leads for any business.')
   const q = parse(listQuery, req.query)
   // Managers download their businesses; a rep downloads the leads they see (their own).
-  const rows = await prisma.lead.findMany({ where: { AND: [listWhere(m, s, q), s.admin ? {} : { OR: [{ businessId: { in: s.managerOf } }, { assigneeId: m.id }] }] }, include: LEAD_INCLUDE, orderBy: { createdAt: 'desc' }, take: 20000 })
+  const rows = await prisma.lead.findMany({ where: { AND: [listWhere(m, s, q, await statusSets(q.business)), s.admin ? {} : { OR: [{ businessId: { in: s.managerOf } }, { assigneeId: m.id }] }] }, include: LEAD_INCLUDE, orderBy: { createdAt: 'desc' }, take: 20000 })
   const last = new Map((await prisma.leadCall.findMany({ where: { leadId: { in: rows.map((r) => r.id) } }, orderBy: { at: 'desc' }, distinct: ['leadId'], select: { leadId: true, summary: true } })).map((c) => [c.leadId, c.summary]))
   const yn = (v: string) => (v === 'YES' ? 'Yes' : v === 'NO' ? 'No' : 'Unknown')
   const head = ['Date', 'Business', 'SDR / Assigned to', 'Company', 'Segment / Industry', 'State', 'Contact', 'Role', 'Decision Maker', 'Phone', 'Email', 'Website', 'Handles Alkaline', 'Est. Volume (lbs/month)', 'Lbs per shipment', 'Current Vendor', 'Pays Today ($/lb)', 'Status', 'Call Summary', 'Next Step', 'Next Step Date', 'Owner', 'Jesse Input Needed', 'Jesse Comment', 'Calls', 'Last call', 'Source', 'From', 'Campaign', 'City', 'Tags', 'Lost reason', 'Message', 'Created']
+  // The deal value column comes with the deal board (switch "deal-board"); without it the file is as it always was.
+  const crm = await isOn('deal-board', m.companyId)
+  if (crm) head.push('Deal value')
   if (rows.length) await event(rows[0].id, m.id, 'EXPORT', `Exported ${rows.length} leads`)
   sendCsv(res, 'leads.csv', [head, ...rows.map((l) => {
     const c = l.cmr ?? CMR_DEFAULT
     return [isoDate(l.lastCallAt ?? l.createdAt) ?? '', l.business.name, l.assignee?.name ?? '', l.organization ?? '', l.industry ?? '', l.state ?? '', l.name, c.contactRole ?? l.jobTitle ?? '', yn(c.decisionMaker), l.phone ?? '', l.email ?? '', l.website ?? '', yn(c.handlesAlkaline),
       c.lbsPerMonth ?? '', c.lbsPerShipment ?? '', c.currentVendor ?? '', c.paysToday ?? '', statusLabel(l.business, l.status), last.get(l.id) ?? '', l.nextStep ?? '', isoDate(l.nextStepDate) ?? '', l.owner, c.jesseInputNeeded ? 'Yes' : 'No', c.jesseComment ?? '',
-      l.callsCount, l.lastCallAt?.toISOString() ?? '', sourceText(l.source), l.sourceDetail ?? '', l.utmCampaign ?? '', l.city ?? '', l.tags.join('; '), l.lostReason ?? '', l.message ?? '', l.createdAt.toISOString()]
+      l.callsCount, l.lastCallAt?.toISOString() ?? '', sourceText(l.source), l.sourceDetail ?? '', l.utmCampaign ?? '', l.city ?? '', l.tags.join('; '), l.lostReason ?? '', l.message ?? '', l.createdAt.toISOString(), ...(crm ? [l.value ?? ''] : [])]
   })])
 }
 
@@ -331,7 +348,7 @@ export async function addLead(req: AuthedRequest, res: Response): Promise<void> 
     if (data.orgKey) or.push({ orgKey: String(data.orgKey) })
     if (data.phoneE164) or.push({ phoneE164: String(data.phoneE164) })
     if (data.websiteKey) or.push({ websiteKey: String(data.websiteKey) })
-    const dup = or.length ? await prisma.lead.findFirst({ where: { businessId, status: { in: OPEN_STATUSES }, OR: or }, select: { id: true, name: true, organization: true, status: true } }) : null
+    const dup = or.length ? await prisma.lead.findFirst({ where: { businessId, status: { in: openStatusesOf(business) }, OR: or }, select: { id: true, name: true, organization: true, status: true } }) : null
     if (dup) { res.status(409).json({ error: `${dup.organization || dup.name} is already here (${statusLabel(business, dup.status)}). Open it and log the call there, or add anyway.`, duplicateId: dup.id }); return }
   }
   let assigneeId: string | null = null
@@ -367,6 +384,7 @@ export async function getLead(req: AuthedRequest, res: Response): Promise<void> 
       comments: { orderBy: { createdAt: 'asc' }, include: { user: PERSON } },
       tasks: { orderBy: [{ doneAt: 'asc' }, { dueAt: 'asc' }], include: { assignee: PERSON } },
       events: { orderBy: { createdAt: 'desc' }, take: 300, include: { user: PERSON } },
+      contacts: { orderBy: [{ decisionMaker: 'desc' }, { name: 'asc' }] },
     },
   })
   const b = lead.business
@@ -379,7 +397,7 @@ export async function getLead(req: AuthedRequest, res: Response): Promise<void> 
   const members = await prisma.leadBusinessMember.findMany({ where: { businessId: b.id, user: { isActive: true } }, select: { role: true, user: PERSON } })
   const head = b.headId ? await prisma.user.findUnique({ where: { id: b.headId }, select: { id: true, name: true, email: true } }) : null
   const mentionable = [...members.map((x) => ({ ...x.user, role: x.role })), ...(head && !members.some((x) => x.user.id === head.id) ? [{ ...head, role: 'HEAD' }] : [])]
-  const { calls, comments, tasks, events, ...rest } = lead
+  const { calls, comments, tasks, events, contacts, ...rest } = lead
   res.json({
     lead: {
       ...leadOut(rest, tasks.filter((t) => !t.doneAt).length),
@@ -388,11 +406,12 @@ export async function getLead(req: AuthedRequest, res: Response): Promise<void> 
       calls: calls.map((c) => ({ ...c, recordingUrl: c.recordingUrl && c.recordingKept && canHear(c) ? `/api/leads/calls/${c.id}/recording` : null, hasRecording: !!c.recordingUrl && c.recordingKept })),
       comments: comments.map((c) => ({ ...c, mentionNames: c.mentions.map((id) => names.get(id) ?? '') })),
       tasks,
+      contacts,
       events: events.map((e) => ({ ...e, toName: (e.data as { to?: string } | null)?.to ? names.get((e.data as { to: string }).to) ?? null : undefined })),
     },
     listHits: (await listMatches(b.id, lead)).hits,
-    can: { manage, decide: canDecide(s, b.id), approve: manage, edit: manage || lead.assigneeId === m.id, cmr: isCmr(b) && (await isOn('cmr', m.companyId)), headOnly: !s.admin && b.headId === m.id && !s.repOf.includes(b.id) && !(await prisma.leadBusinessMember.count({ where: { businessId: b.id, userId: m.id } })) },
-    head, mentionable, pipeline: pipelineOf(b), settings: isCmr(b) ? settingsOf(b) : null,
+    can: { manage, decide: canDecide(s, b.id), approve: manage, edit: manage || lead.assigneeId === m.id, cmr: isCmr(b) && (await isOn('cmr', m.companyId)), crm: await isOn('deal-board', m.companyId), headOnly: !s.admin && b.headId === m.id && !s.repOf.includes(b.id) && !(await prisma.leadBusinessMember.count({ where: { businessId: b.id, userId: m.id } })) },
+    head, mentionable, pipeline: pipelineOf(b), settings: isCmr(b) ? settingsOf(b) : null, industries: shownSettings(b, m.companyId).segments, currency: settingsOf(b).currency,
   })
 }
 
@@ -1038,6 +1057,7 @@ export async function dashboard(req: AuthedRequest, res: Response): Promise<void
   const { me: m, s } = await ctx(req)
   const q = parse(z.object({ business: z.string().max(60).optional(), range: z.string().max(20).optional(), from: z.string().max(10).optional(), to: z.string().max(10).optional() }), req.query)
   const r = rangeOf(q)
+  const OPEN_STATUSES = (await statusSets(q.business)).open // eslint-disable-line @typescript-eslint/no-shadow
   const mine: Prisma.LeadWhereInput = { AND: [leadWhere(m, s), q.business ? { businessId: q.business } : {}] }
   const now = DateTime.now().setZone(PHOENIX)
   const startOfToday = now.startOf('day').toJSDate(), endOfToday = now.endOf('day').toJSDate()
@@ -1053,16 +1073,21 @@ export async function dashboard(req: AuthedRequest, res: Response): Promise<void
     prisma.leadCall.count({ where: callWhere }),
     prisma.lead.findMany({ where: { AND: [mine, { status: 'NEW' }] }, select: { status: true, assigneeId: true, createdAt: true, assignedAt: true, firstContactAt: true, business: { select: { slaAssignMins: true, slaContactMins: true } } }, take: 5000 }),
   ])
-  const [connected, kept] = await Promise.all([
+  const [connected, kept, openValue, biz] = await Promise.all([
     prisma.leadCall.count({ where: { AND: [callWhere, { disposition: 'CONNECTED' }] } }),
     // Phone-system calls to numbers that are not a lead yet (Calls → No lead yet).
     prisma.leadUnmatchedCall.count({ where: await unmatchedScope(m, s) }),
+    // What the open deals add up to (one business: one currency).
+    q.business ? prisma.lead.aggregate({ where: { AND: [mine, { status: { in: OPEN_STATUSES } }] }, _sum: { value: true } }) : null,
+    q.business ? prisma.leadBusiness.findUnique({ where: { id: q.business }, select: { settings: true } }) : null,
   ])
   res.json({
     range: r.label,
     cards: { total, newThisWeek, recentlyUpdated, noStatus, assigned, unassigned, waiting, overdue: overdueN, prohibited, belowMin, calls, connected, kept, late: late.filter((l) => lateness(l, l.business)).length },
     tasks: { today: tasksToday, overdue: tasksOverdue, total: tasksToday + tasksOverdue },
     byStatus: Object.fromEntries(byStatus.map((x) => [x.status, x._count._all])),
+    openValue: openValue?._sum.value ?? 0,
+    currency: biz ? settingsOf(biz).currency : null,
   })
 }
 

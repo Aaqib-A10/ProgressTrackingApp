@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Sparkles, Tag, UserCheck, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Sparkles, Star, Tag, Trash2, UserCheck, Users, Wallet, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { Modal } from '../../../components/ui/Modal'
@@ -12,10 +12,10 @@ import { cn } from '../../../lib/cn'
 import { useAuth } from '../../../lib/auth'
 import {
   CLOSE_REASON_LABEL, CLOSE_REASONS, DISPOSITION_LABEL, DISPOSITIONS, fmtDate, fmtDur, fmtWhen, FREIGHT, FREIGHT_LABEL, inZone, leadsApi, leadTitle, MATERIAL_FORMS, MATERIAL_LABEL, MATERIALS, MEETING_OUTCOMES, OUTCOME_LABEL, OWNER_LABEL, PAYS_LABEL, PAYS_UNITS, plusBusinessDays, SOURCE_LABEL, TASK_KIND_LABEL, toYmd, YES_NO_LABEL,
-  type Disposition, type LeadCall, type LeadDetail, type LeadFull, type LeadInput, type Owner, type YesNo,
-  dialHref,
+  type Disposition, type LeadCall, type LeadContact, type LeadDetail, type LeadFull, type LeadInput, type Owner, type YesNo,
+  dialHref, money,
 } from '../../../lib/leadsApi'
-import { Avatar, Done, FactsMeter, Label, Select, StatusPill, WarningList, useLeadsMeta } from './shared'
+import { Avatar, Done, FactsMeter, Label, Select, StatusPill, WarningList, useLeadsMeta, useOwners } from './shared'
 
 /**
  * One lead: the details (contact, address, product), the five facts and the flow for a CMR
@@ -61,6 +61,7 @@ export default function LeadPage() {
                 <StatusPill status={l.status} pipeline={pipeline} label={l.statusLabel} />
                 {l.jesseInputNeeded && <Badge tone="warning" dot>Waiting on Jesse{l.waitingDays != null ? ` · ${l.waitingDays} business day${l.waitingDays === 1 ? '' : 's'}` : ''}</Badge>}
                 {l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Existing customer</Badge>}{l.belowMin && <Badge tone="accent">Below minimum</Badge>}
+                {l.value != null && l.value > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-0.5 text-body-sm font-bold tabular-nums text-success" title="Deal value"><Wallet size={13} />{money(l.value, d.currency)}</span>}
               </div>
               <p className="mt-1 text-body-md text-ink-muted">
                 {l.organization && l.name ? <>{l.name}{l.contactRole ? `, ${l.contactRole}` : l.jobTitle ? `, ${l.jobTitle}` : ''} · </> : null}
@@ -108,6 +109,7 @@ export default function LeadPage() {
         </div>
         <div className="space-y-4">
           <TasksCard l={l} canEdit={can.edit} onAdd={() => setModal('task')} onChanged={load} />
+          {(can.crm || l.contacts.length > 0) && <ContactsCard l={l} cmr={cmr} canEdit={!!can.crm && can.edit && !can.headOnly} onChanged={load} />}
           <DetailsCard l={l} cmr={cmr} onEdit={can.edit && !can.headOnly ? () => setModal('edit') : null} />
           <TimelineCard l={l} canNote={can.edit} onNoted={load} />
         </div>
@@ -258,6 +260,7 @@ export function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; sett
 }
 
 function NextStepCard({ l, canEdit, onSaved }: { l: LeadFull; canEdit: boolean; onSaved: () => void }) {
+  const owners = useOwners()
   const { addToast } = useToast()
   const [edit, setEdit] = useState(false)
   const [step, setStep] = useState(l.nextStep ?? '')
@@ -271,10 +274,10 @@ function NextStepCard({ l, canEdit, onSaved }: { l: LeadFull; canEdit: boolean; 
         <div className="grid gap-3 sm:grid-cols-[1fr_160px_150px]">
           <TextField label="Next step" value={step} onChange={(e) => setStep(e.target.value)} placeholder="Follow up on volume" />
           <TextField label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <label><Label>Owner</Label><Select value={owner} onChange={(e) => setOwner(e.target.value as Owner)} className="w-full">{(Object.keys(OWNER_LABEL) as Owner[]).map((k) => <option key={k} value={k}>{OWNER_LABEL[k]}</option>)}</Select></label>
+          <label><Label>Owner</Label><Select value={owner} onChange={(e) => setOwner(e.target.value as Owner)} className="w-full">{[...new Set([...owners.keys, owner])].map((k) => <option key={k} value={k}>{owners.label[k]}</option>)}</Select></label>
         </div>
       ) : l.nextStep ? (
-        <div className="flex flex-wrap items-center gap-3"><span className="text-body-md font-medium text-ink">{l.nextStep}</span>{l.nextStepDate && <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-body-sm font-semibold', l.overdue ? 'bg-danger/10 text-danger' : 'bg-slate-100 text-ink dark:bg-white/10')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}{l.overdue ? ' · overdue' : ''}</span>}<span className="text-body-sm text-ink-muted">Owner: {OWNER_LABEL[l.owner]}</span></div>
+        <div className="flex flex-wrap items-center gap-3"><span className="text-body-md font-medium text-ink">{l.nextStep}</span>{l.nextStepDate && <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-body-sm font-semibold', l.overdue ? 'bg-danger/10 text-danger' : 'bg-slate-100 text-ink dark:bg-white/10')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}{l.overdue ? ' · overdue' : ''}</span>}<span className="text-body-sm text-ink-muted">Owner: {owners.label[l.owner]}</span></div>
       ) : <p className="text-body-sm text-ink-muted">{l.open ? 'No next step yet. Every open lead needs one: log a call or set it here.' : 'Closed.'}</p>}
     </Card>
   )
@@ -427,6 +430,88 @@ export function TasksCard({ l, canEdit, onAdd, onChanged }: { l: LeadFull; canEd
   )
 }
 
+/** The people at this company: the main contact (the one the list and the dialer use) and anyone else added. */
+export function ContactsCard({ l, cmr, canEdit, onChanged }: { l: LeadFull; cmr: boolean; canEdit: boolean; onChanged: () => void }) {
+  const { addToast } = useToast()
+  const { meta } = useLeadsMeta()
+  const [editing, setEditing] = useState<LeadContact | 'new' | null>(null)
+  const run = async (fn: () => Promise<unknown>, ok: string) => { try { await fn(); addToast({ type: 'success', message: ok }); onChanged() } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } }
+  const mainRole = cmr ? l.contactRole : l.jobTitle
+  const hasMain = !!(l.name || l.email || l.phone)
+  const Line = ({ phone, mobile, email }: { phone: string | null; mobile?: string | null; email: string | null }) => (
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px]">
+      {phone && <a href={dialHref(phone, meta?.dial) ?? '#'} className="inline-flex items-center gap-1 font-medium text-primary hover:underline"><Phone size={11} />{phone}</a>}
+      {mobile && <a href={dialHref(mobile, meta?.dial) ?? '#'} className="inline-flex items-center gap-1 text-primary hover:underline"><Phone size={11} />{mobile}</a>}
+      {email && <a href={`mailto:${email}`} className="inline-flex min-w-0 items-center gap-1 text-ink-muted hover:underline"><Mail size={11} className="shrink-0" /><span className="truncate">{email}</span></a>}
+      {!phone && !mobile && !email && <span className="text-ink-faint">No phone or email yet</span>}
+    </div>
+  )
+  return (
+    <Card title={`People (${(hasMain ? 1 : 0) + l.contacts.length})`} icon={<Users size={15} />} action={canEdit && <Button size="sm" variant="ghost" aria-label="Add a person" leadingIcon={<Plus size={14} />} onClick={() => setEditing('new')}>Add</Button>}>
+      <div id="people" />
+      <ul className="space-y-2">
+        {hasMain && (
+          <li className="rounded-card border border-primary/25 bg-primary/[0.03] p-2.5">
+            <div className="flex flex-wrap items-center gap-1.5"><span className="text-body-sm font-semibold text-ink">{l.name || l.email || l.phone}</span>{mainRole && <span className="text-[11.5px] text-ink-muted">· {mainRole}</span>}<Badge tone="primary">Main contact</Badge>{cmr && l.decisionMaker === 'YES' && <Badge tone="success">Decision maker</Badge>}</div>
+            <Line phone={l.phone} mobile={l.mobile} email={l.email} />
+          </li>
+        )}
+        {l.contacts.map((c) => (
+          <li key={c.id} className="rounded-card border border-line p-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5"><span className="text-body-sm font-semibold text-ink">{c.name}</span>{c.role && <span className="text-[11.5px] text-ink-muted">· {c.role}</span>}{c.decisionMaker && <Badge tone="success">Decision maker</Badge>}</div>
+                <Line phone={c.phone} mobile={c.mobile} email={c.email} />
+                {c.notes && <p className="mt-1 text-[11.5px] text-ink-muted">{c.notes}</p>}
+              </div>
+              {canEdit && (
+                <span className="flex shrink-0 items-center gap-0.5">
+                  <button type="button" onClick={() => run(() => leadsApi.makePrimaryContact(c.id), `${c.name} is now the main contact`)} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title="Make main contact (the list and the Call button use this person)" aria-label={`Make ${c.name} the main contact`}><Star size={14} /></button>
+                  <button type="button" onClick={() => setEditing(c)} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-ink" title="Edit" aria-label={`Edit ${c.name}`}><Pencil size={14} /></button>
+                  <button type="button" onClick={() => { if (window.confirm(`Remove ${c.name} from this company?`)) void run(() => leadsApi.removeContact(c.id), 'Removed') }} className="rounded-btn p-1.5 text-ink-faint hover:bg-danger/10 hover:text-danger" title="Remove" aria-label={`Remove ${c.name}`}><Trash2 size={14} /></button>
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {!hasMain && !l.contacts.length && <p className="text-body-sm text-ink-muted">Nobody yet. Add the person you talk to.</p>}
+      {hasMain && !l.contacts.length && canEdit && <p className="mt-2 text-[11.5px] text-ink-faint">Add the buyer, the owner or the accountant too, so everyone at this company is in one place.</p>}
+      {editing && <ContactModal leadId={l.id} contact={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); onChanged() }} />}
+    </Card>
+  )
+}
+
+function ContactModal({ leadId, contact, onClose, onDone }: { leadId: string; contact: LeadContact | null; onClose: () => void; onDone: () => void }) {
+  const { addToast } = useToast()
+  const [f, setF] = useState({ name: contact?.name ?? '', role: contact?.role ?? '', email: contact?.email ?? '', phone: contact?.phone ?? '', mobile: contact?.mobile ?? '', notes: contact?.notes ?? '' })
+  const [decisionMaker, setDecisionMaker] = useState(contact?.decisionMaker ?? false)
+  const [busy, setBusy] = useState(false)
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value })
+  const go = async () => {
+    setBusy(true)
+    const body = { name: f.name.trim(), role: f.role.trim() || null, email: f.email.trim() || null, phone: f.phone.trim() || null, mobile: f.mobile.trim() || null, notes: f.notes.trim() || null, decisionMaker }
+    try {
+      if (contact) await leadsApi.updateContact(contact.id, body)
+      else { const r = await leadsApi.addContact(leadId, body); if (r.moved) addToast({ type: 'success', message: `${r.moved} earlier call${r.moved === 1 ? '' : 's'} to that number moved under this lead` }) }
+      onDone()
+    } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) }
+  }
+  return (
+    <Modal open onClose={onClose} title={contact ? `Edit ${contact.name}` : 'Add a person'} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !f.name.trim()} onClick={go}>{contact ? 'Save' : 'Add person'}</Button></>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField label="Name" autoFocus value={f.name} onChange={set('name')} placeholder="Sara Ahmed" />
+        <TextField label="Role" value={f.role} onChange={set('role')} placeholder="Procurement manager" />
+        <TextField label="Phone" value={f.phone} onChange={set('phone')} />
+        <TextField label="Mobile" value={f.mobile} onChange={set('mobile')} />
+        <div className="sm:col-span-2"><TextField label="Email" type="email" value={f.email} onChange={set('email')} /></div>
+        <label className="flex items-center gap-2 text-body-sm text-ink sm:col-span-2"><input type="checkbox" checked={decisionMaker} onChange={(e) => setDecisionMaker(e.target.checked)} className="h-4 w-4 rounded border-line" />Decision maker</label>
+        <div className="sm:col-span-2"><TextArea label="Notes" rows={2} value={f.notes} onChange={set('notes')} placeholder="Best time to call, what they care about…" /></div>
+      </div>
+    </Modal>
+  )
+}
+
 export function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: (() => void) | null }) {
   const [open, setOpen] = useState<Record<string, boolean>>({ contact: true, address: false, product: false })
   const Row = ({ k, v }: { k: string; v: ReactNode }) => v ? <div className="flex justify-between gap-3 py-1 text-body-sm"><dt className="text-ink-muted">{k}</dt><dd className="text-right text-ink">{v}</dd></div> : null
@@ -493,6 +578,7 @@ export function TimelineCard({ l, canNote, onNoted }: { l: LeadFull; canNote: bo
 // ------------------------------------------------------------------ modals
 
 function LogCallModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void; onDone: () => void }) {
+  const owners = useOwners()
   const { addToast } = useToast()
   const { lead: l, can } = d
   const cmr = can.cmr
@@ -539,7 +625,7 @@ function LogCallModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => vo
         <div className="grid gap-3 sm:grid-cols-[1fr_150px_150px]">
           <TextField label="Next step" value={f.nextStep} onChange={(e) => setF({ ...f, nextStep: e.target.value })} placeholder="Send info · Follow up · Ask for volume" />
           <TextField label="Date" type="date" value={f.nextStepDate} onChange={(e) => setF({ ...f, nextStepDate: e.target.value })} />
-          <label><Label>Owner</Label><Select value={f.owner} onChange={(e) => setF({ ...f, owner: e.target.value as Owner })} className="w-full">{(Object.keys(OWNER_LABEL) as Owner[]).map((k) => <option key={k} value={k}>{OWNER_LABEL[k]}</option>)}</Select></label>
+          <label><Label>Owner</Label><Select value={f.owner} onChange={(e) => setF({ ...f, owner: e.target.value as Owner })} className="w-full">{[...new Set([...owners.keys, f.owner])].map((k) => <option key={k} value={k}>{owners.label[k]}</option>)}</Select></label>
         </div>
       </div>
     </Modal>
@@ -746,6 +832,7 @@ function EditModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void;
   const keys = ['organization', 'name', 'contactRole', 'jobTitle', 'employees', 'industry', 'phone', 'ext', 'mobile', 'email', 'secondaryEmail', 'secondaryContact', 'website', 'recipientName', 'recipientEmail', 'street', 'city', 'state', 'zip', 'country', 'productInfo', 'message'] as const
   const [f, setF] = useState<Record<string, string>>(() => Object.fromEntries(keys.map((k) => [k, String((l as unknown as Record<string, unknown>)[k] ?? '')])))
   const [tags, setTags] = useState(l.tags.join(', '))
+  const [value, setValue] = useState(l.value != null ? String(l.value) : '')
   const [decisionMaker, setDecisionMaker] = useState<YesNo>(l.decisionMaker ?? 'UNKNOWN')
   const [busy, setBusy] = useState(false)
   const settings = useMemo(() => d.settings, [d.settings])
@@ -753,7 +840,8 @@ function EditModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void;
   const go = async () => {
     setBusy(true)
     try {
-      const body: LeadInput = { tags: tags.split(/[,;]/).map((t) => t.trim()).filter(Boolean) }
+      const v = value.trim() === '' ? null : Number(value.replace(/[^0-9.]/g, ''))
+      const body: LeadInput = { tags: tags.split(/[,;]/).map((t) => t.trim()).filter(Boolean), value: v != null && Number.isFinite(v) ? v : null }
       for (const k of keys) { if (k === 'contactRole' && !cmr) continue; (body as Record<string, unknown>)[k] = k === 'name' ? f[k] : f[k].trim() || null }
       if (cmr) body.decisionMaker = decisionMaker
       await leadsApi.update(l.id, body); onDone()
@@ -766,9 +854,10 @@ function EditModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void;
         <div><p className="mb-2 text-body-sm font-semibold text-ink">Contact information</p>
           <div className="grid gap-3 sm:grid-cols-3">
             {T('organization', 'Company')}{T('name', 'Contact name')}{cmr ? T('contactRole', 'Role') : T('jobTitle', 'Job title')}{T('employees', 'No. of employees')}
-            <label><Label>{cmr ? 'Segment' : 'Industry'}</Label><Select value={f.industry} onChange={set('industry')} className="w-full"><option value="">—</option>{(settings?.segments ?? (f.industry ? [f.industry] : [])).map((s) => <option key={s} value={s}>{s}</option>)}{!settings && <option value={f.industry}>{f.industry}</option>}</Select></label>
+            <label><Label>{cmr ? 'Segment' : 'Industry'}</Label><Select value={f.industry} onChange={set('industry')} className="w-full"><option value="">—</option>{[...new Set([...(settings?.segments ?? d.industries ?? []), ...(f.industry ? [f.industry] : [])])].map((s) => <option key={s} value={s}>{s}</option>)}</Select></label>
             {T('phone', 'Phone')}{T('ext', 'Ext')}{T('mobile', 'Mobile')}{T('email', 'Email', { type: 'email' })}{T('secondaryEmail', 'Secondary email', { type: 'email' })}{T('secondaryContact', 'Secondary contact')}{T('website', 'Website')}{T('recipientName', 'Recipient name')}{T('recipientEmail', 'Recipient email', { type: 'email' })}
             <TextField label="Tags (comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
+            {d.can.crm && <TextField label={`Deal value (${d.currency})`} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="What this deal is worth" />}
             {cmr && <label><Label>Decision maker</Label>{yesNoSel(decisionMaker, setDecisionMaker)}</label>}
           </div></div>
         <div><p className="mb-2 text-body-sm font-semibold text-ink">Address information</p>

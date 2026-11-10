@@ -2,6 +2,7 @@ import { Prisma, type Lead, type LeadBusiness } from '@prisma/client'
 import { prisma } from '../prisma'
 import { keysOf, listMatches } from './lists'
 import { leadManagers, tellAboutLead } from './notify'
+import { openStatusesOf } from './pipeline'
 
 /**
  * Lead Management: turning what arrives (a website form, an email, a CSV row, a phone call) into
@@ -115,7 +116,9 @@ async function openTwin(businessId: string, i: LeadInput): Promise<Lead | null> 
   if (i.email) or.push({ email: i.email })
   if (i.phone) or.push({ phone: i.phone })
   if (!or.length) return null
-  return prisma.lead.findFirst({ where: { businessId, status: { in: OPEN_STATUSES }, createdAt: { gte: new Date(Date.now() - 60 * 86400_000) }, OR: or }, orderBy: { createdAt: 'desc' } })
+  // Open = a stage this business's own pipeline calls open (its own stages count too).
+  const business = await prisma.leadBusiness.findUnique({ where: { id: businessId }, select: { kind: true, pipeline: true } })
+  return prisma.lead.findFirst({ where: { businessId, status: { in: business ? openStatusesOf(business) : OPEN_STATUSES }, createdAt: { gte: new Date(Date.now() - 60 * 86400_000) }, OR: or }, orderBy: { createdAt: 'desc' } })
 }
 
 export interface ReceiveOptions {

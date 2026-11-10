@@ -7,7 +7,7 @@ import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
 import { ago, fmtDate, inZone, leadsApi, leadTitle, type LeadDetail } from '../../../lib/leadsApi'
 import { Avatar, StatusPill } from './shared'
-import { CallsCard, CommentsCard, DetailsCard, FactsCard, TimelineCard } from './LeadPage'
+import { CallsCard, CommentsCard, ContactsCard, DetailsCard, FactsCard, TimelineCard } from './LeadPage'
 
 /**
  * One submission, the way Jesse reads it: the form the SDR filled (the ask, the five facts, the
@@ -86,6 +86,7 @@ export default function JesseReview() {
         <div className="space-y-4 lg:order-1 lg:col-span-3">
           {d.can.cmr && <FactsCard l={l} settings={d.settings} canEdit={false} onSaved={load} />}
           <CallsCard l={l} canEdit={false} onLog={() => undefined} onChanged={load} />
+          {l.contacts.length > 0 && <ContactsCard l={l} cmr={d.can.cmr} canEdit={false} onChanged={load} />}
           <DetailsCard l={l} cmr={d.can.cmr} onEdit={null} />
           <TimelineCard l={l} canNote={false} onNoted={load} />
         </div>

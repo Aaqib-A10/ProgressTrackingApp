@@ -8,9 +8,10 @@ import { EmptyState } from '../../../components/ui/EmptyState'
 import { TextField, TextArea } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
+import { flagOn } from '../../../lib/flags'
 import { cn } from '../../../lib/cn'
-import { ago, dialHref, leadsApi, type BusinessKind, type BusinessRow, type CmrSettings, type DialSetting, type InboxInput, type Person, type PipelineStatus, type TalkLoopInfo } from '../../../lib/leadsApi'
-import { Label, Select, Tile, useLeadsMeta } from './shared'
+import { ago, CURRENCIES, dialHref, leadsApi, SALES_PIPELINE, type BusinessKind, type BusinessRow, type CmrSettings, type DialSetting, type InboxInput, type Person, type PipelineStatus, type TalkLoopInfo } from '../../../lib/leadsApi'
+import { Label, Select, Tile, useCrmWords, useLeadsMeta } from './shared'
 import { useAuth } from '../../../lib/auth'
 import { readFile } from '../itad/dialer/ImportModal'
 import { CreateBusinessWizard, SetupChecklist, SetupSteps, WhoSeesWhat, type SetupPerson } from './SetupGuide'
@@ -26,6 +27,8 @@ const slaText = (m: number) => (m === 0 ? 'Never' : m < 60 ? `${m} minutes` : m 
 
 export default function LeadSettings() {
   const { addToast } = useToast()
+  const words = useCrmWords()
+  const plain = words.product === 'CRM'
   const { reload: reloadMeta } = useLeadsMeta()
   const { refresh: refreshMe } = useAuth()
   const [list, setList] = useState<BusinessRow[] | null>(null)
@@ -35,7 +38,7 @@ export default function LeadSettings() {
   const [creating, setCreating] = useState(false)
   const [err, setErr] = useState('')
 
-  const load = () => leadsApi.businesses().then((r) => { setList(r.businesses); setPeople(r.people); setCmrOn(r.cmrOn); setSel((s) => s ?? r.businesses[0]?.id ?? null) }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
+  const load = () => leadsApi.businesses().then((r) => { setList(r.businesses); setPeople(r.people); setCmrOn(r.cmrOn && (!plain || r.businesses.some((b) => b.kind === 'CMR'))); setSel((s) => s ?? r.businesses[0]?.id ?? null) }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
   useEffect(() => { void load() }, [])
   /** Every change here also refreshes the Leads screens (which business, who is in it) and the menu (Jesse Queue appears once a CMR business has me). */
   const sync = () => { reloadMeta(); void refreshMe() }
@@ -49,14 +52,14 @@ export default function LeadSettings() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link to="/app/leads" className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><ArrowLeft size={14} />Leads</Link>
-          <h1 className="mt-1 text-headline-lg text-ink">Lead Settings</h1>
-          <p className="mt-0.5 text-body-md text-ink-muted">Each business gets its own pipeline, people, website form and inbox. A CMR business adds Jesse, the five facts and the flow.</p>
+          <h1 className="mt-1 text-headline-lg text-ink">{words.settings}</h1>
+          <p className="mt-0.5 text-body-md text-ink-muted">{plain && !cmrOn ? 'Each pipeline has its own stages, people, website form and inbox.' : 'Each business gets its own pipeline, people, website form and inbox. A CMR business adds Jesse, the five facts and the flow.'}</p>
         </div>
-        <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setCreating(true)}>Add business</Button>
+        <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setCreating(true)}>{plain && !cmrOn ? 'Add pipeline' : 'Add business'}</Button>
       </div>
 
       {list && !list.length ? (
-        <SetupSteps cmrOn={cmrOn} onCreate={() => setCreating(true)} />
+        <SetupSteps cmrOn={cmrOn} plain={plain} onCreate={() => setCreating(true)} />
       ) : (
         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
           <nav className="space-y-1.5">
@@ -68,13 +71,13 @@ export default function LeadSettings() {
               </button>
             ))}
           </nav>
-          {biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} onSaved={put} onDeleted={() => { setSel(null); void load(); sync() }} toast={addToast} />}
+          {biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} plain={plain} onSaved={put} onDeleted={() => { setSel(null); void load(); sync() }} toast={addToast} />}
         </div>
       )}
 
       {list && <TalkLoopSection toast={addToast} />}
 
-      {creating && <CreateBusinessWizard cmrOn={cmrOn} people={people} onClose={() => setCreating(false)} onCreated={(b, note) => { setCreating(false); setList((l) => [...(l ?? []).filter((x) => x.id !== b.id), { ...b, openLeads: 0, leadCount: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id); sync(); addToast({ type: 'success', message: note }) }} />}
+      {creating && <CreateBusinessWizard cmrOn={cmrOn} plain={plain} people={people} onClose={() => setCreating(false)} onCreated={(b, note) => { setCreating(false); setList((l) => [...(l ?? []).filter((x) => x.id !== b.id), { ...b, openLeads: 0, leadCount: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id); sync(); addToast({ type: 'success', message: note }) }} />}
     </div>
   )
 }
@@ -96,7 +99,7 @@ function Section({ icon, title, hint, children, action }: { icon: React.ReactNod
   )
 }
 
-function BusinessEditor({ biz, people, cmrOn, onSaved, onDeleted, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; onSaved: (b: BusinessRow) => void; onDeleted: () => void; toast: Toast }) {
+function BusinessEditor({ biz, people, cmrOn, plain, onSaved, onDeleted, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; plain: boolean; onSaved: (b: BusinessRow) => void; onDeleted: () => void; toast: Toast }) {
   const [f, setF] = useState({ name: biz.name, website: biz.website ?? '', color: biz.color, slaAssignMins: biz.slaAssignMins, slaContactMins: biz.slaContactMins })
   const [busy, setBusy] = useState(false)
   const dirty = f.name !== biz.name || f.website !== (biz.website ?? '') || f.color !== biz.color || f.slaAssignMins !== biz.slaAssignMins || f.slaContactMins !== biz.slaContactMins
@@ -107,12 +110,12 @@ function BusinessEditor({ biz, people, cmrOn, onSaved, onDeleted, toast }: { biz
   const [who, setWho] = useState(false)
   return (
     <div className="space-y-5">
-      <SetupChecklist biz={biz} cmrOn={cmrOn} />
+      <SetupChecklist biz={biz} cmrOn={cmrOn} plain={plain} />
       <div className="rounded-card border border-line bg-card">
         <button type="button" onClick={() => setWho((v) => !v)} className="flex w-full items-center justify-between px-5 py-3 text-left text-body-sm font-semibold text-ink"><span>Who sees what in {biz.name}</span><span className="text-ink-faint">{who ? 'Hide' : 'Show'}</span></button>
-        {who && <div className="border-t border-line p-4"><WhoSeesWhat compact /></div>}
+        {who && <div className="border-t border-line p-4"><WhoSeesWhat compact plain={plain && biz.kind !== 'CMR'} /></div>}
       </div>
-      <Section icon={<Globe size={17} />} title="Business" action={<div className="flex items-center gap-3"><Toggle checked={biz.isActive} onChange={(v) => run(() => leadsApi.updateBusiness(biz.id, { isActive: v }), v ? 'Switched on' : 'Switched off: its form and inbox stop')} label={biz.isActive ? 'On' : 'Off'} /></div>}>
+      <Section icon={<Globe size={17} />} title={plain ? 'Details' : 'Business'} action={<div className="flex items-center gap-3"><Toggle checked={biz.isActive} onChange={(v) => run(() => leadsApi.updateBusiness(biz.id, { isActive: v }), v ? 'Switched on' : 'Switched off: its form and inbox stop')} label={biz.isActive ? 'On' : 'Off'} /></div>}>
         <div className="grid gap-3 sm:grid-cols-2">
           <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
           <TextField label="Website" placeholder="https://example.com" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} />
@@ -128,12 +131,12 @@ function BusinessEditor({ biz, people, cmrOn, onSaved, onDeleted, toast }: { biz
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <button type="button" className="inline-flex items-center gap-1.5 text-body-sm text-danger hover:underline" onClick={() => { if (window.confirm(`Delete ${biz.name}? Only a business with no leads can be deleted.`)) void leadsApi.deleteBusiness(biz.id).then(onDeleted).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not delete') })) }}><Trash2 size={14} />Delete business</button>
+          <button type="button" className="inline-flex items-center gap-1.5 text-body-sm text-danger hover:underline" onClick={() => { if (window.confirm(`Delete ${biz.name}? Only a business with no leads can be deleted.`)) void leadsApi.deleteBusiness(biz.id).then(onDeleted).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not delete') })) }}><Trash2 size={14} />{plain ? 'Delete pipeline' : 'Delete business'}</button>
           <Button size="sm" disabled={!dirty || busy || !f.name.trim()} onClick={() => run(() => leadsApi.updateBusiness(biz.id, { name: f.name.trim(), website: f.website.trim() || null, color: f.color, slaAssignMins: f.slaAssignMins, slaContactMins: f.slaContactMins }), 'Saved')}>Save changes</Button>
         </div>
       </Section>
 
-      <KindSection biz={biz} people={people} cmrOn={cmrOn} onSaved={onSaved} toast={toast} />
+      <KindSection biz={biz} people={people} cmrOn={cmrOn} plain={plain} onSaved={onSaved} toast={toast} />
       <PeopleSection biz={biz} people={people} onSaved={onSaved} toast={toast} />
       <PipelineSection biz={biz} onSaved={onSaved} toast={toast} />
       {biz.kind === 'CMR' && <CmrSection biz={biz} onSaved={onSaved} toast={toast} />}
@@ -297,6 +300,12 @@ function TalkLoopSection({ toast }: { toast: Toast }) {
   if (err) return null
   if (!info) return <div className="h-24 animate-pulse rounded-card border border-line bg-card" />
   const st = info.status
+  // A company without a phone system link: only how the Call buttons dial.
+  if (info.available === false) return (
+    <Section icon={<PhoneCall size={17} />} title="Calling" hint="How the Call buttons on a lead and a contact dial. Reps call from their own phone or softphone, then log the call on the lead.">
+      <DialCard plain dial={info.dial ?? { scheme: 'tel', domain: null, template: null }} pbxDomain={null} onSaved={() => { void load(); reloadMeta() }} toast={toast} />
+    </Section>
+  )
   return (
     <Section icon={<PhoneCall size={17} />} title="TalkLoop (phone system)" hint="Calls made in TalkLoop land on the matching lead by phone number: who called, how long, answered or voicemail, the recording and the transcript. The SDR only adds the summary and the facts."
       action={info.configured ? <div className="flex items-center gap-2"><Button size="sm" variant="secondary" disabled={busy} leadingIcon={<RefreshCw size={14} />} onClick={() => run(() => leadsApi.talkloopSync(), (r) => { const s = (r as { status: TalkLoopInfo['status'] }).status; return `Synced: ${s.lastRunSynced} new call${s.lastRunSynced === 1 ? '' : 's'}${s.lastRunUnmatched ? `, ${s.lastRunUnmatched} to numbers no lead has` : ''}` })}>Sync now</Button></div> : <Badge tone="warning">Not connected</Badge>}>
@@ -337,14 +346,27 @@ function TalkLoopSection({ toast }: { toast: Toast }) {
 
 // ------------------------------------------------------------------ kind, head, pipeline, CMR settings, lists
 
-function KindSection({ biz, people, cmrOn, onSaved, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; onSaved: (b: BusinessRow) => void; toast: Toast }) {
+function KindSection({ biz, people, cmrOn, plain, onSaved, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; plain: boolean; onSaved: (b: BusinessRow) => void; toast: Toast }) {
   const save = (b: Parameters<typeof leadsApi.updateBusiness>[1], ok: string) => leadsApi.updateBusiness(biz.id, b).then((r) => { onSaved(r.business); toast({ type: 'success', message: ok }) }).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
+  // Another company with no CMR flow: no kind to pick, and its own list of industries.
+  const simple = plain && !cmrOn && biz.kind !== 'CMR'
+  const [industries, setIndustries] = useState(biz.settings.segments.join('\n'))
+  useEffect(() => setIndustries(biz.settings.segments.join('\n')), [biz.settings.segments])
+  const industryList = industries.split(/[\n,]/).map((x) => x.trim()).filter(Boolean)
+  const industriesChanged = industryList.join('|') !== biz.settings.segments.join('|')
   return (
-    <Section icon={<Flag size={17} />} title="Kind and head" hint="The kind decides the pipeline and the flow. The head (CMR: Jesse) sees every lead, decides on flagged ones and hears every call.">
+    <Section icon={<Flag size={17} />} title={simple ? 'Head, currency and industries' : 'Kind and head'} hint={simple ? 'The head sees every lead of this pipeline. Deals are counted in the currency you pick.' : 'The kind decides the pipeline and the flow. The head (CMR: Jesse) sees every lead, decides on flagged ones and hears every call.'}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label><Label>Kind</Label><Select value={biz.kind} onChange={(e) => { if (window.confirm(`Change ${biz.name} to the ${e.target.value === 'CMR' ? 'CMR flow' : 'usual pipeline'}? Existing leads keep their status.`)) void save({ kind: e.target.value as BusinessKind }, 'Kind changed') }} className="w-full"><option value="GENERAL">Usual pipeline</option><option value="CMR" disabled={!cmrOn}>CMR flow{cmrOn ? '' : ' (switched off for your company)'}</option></Select></label>
+        {!simple && <label><Label>Kind</Label><Select value={biz.kind} onChange={(e) => { if (window.confirm(`Change ${biz.name} to the ${e.target.value === 'CMR' ? 'CMR flow' : 'usual pipeline'}? Existing leads keep their status.`)) void save({ kind: e.target.value as BusinessKind }, 'Kind changed') }} className="w-full"><option value="GENERAL">Usual pipeline</option><option value="CMR" disabled={!cmrOn}>CMR flow{cmrOn ? '' : ' (switched off for your company)'}</option></Select></label>}
         <label><Label>Head{biz.kind === 'CMR' ? ' (Jesse)' : ''}</Label><Select value={biz.headId ?? ''} onChange={(e) => void save({ headId: e.target.value || null }, e.target.value ? 'Head set' : 'Head removed')} className="w-full"><option value="">Nobody</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name}{p.department ? ` · ${p.department}` : ''}</option>)}</Select></label>
       </div>
+      {flagOn('deal-board') && <label className="mt-3 block sm:max-w-[calc(50%-0.375rem)]"><Label hint="deal values on the board and the lead">Currency</Label><Select value={biz.settings.currency ?? 'USD'} onChange={(e) => void save({ settings: { currency: e.target.value } }, `Deal values are in ${e.target.value}`)} className="w-full" aria-label="Currency">{CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}</Select></label>}
+      {simple && (
+        <div className="mt-3">
+          <TextArea label="Industries (one per line)" rows={4} value={industries} onChange={(e) => setIndustries(e.target.value)} />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3"><span className="text-[11.5px] text-ink-muted">What people pick from when they add or edit a lead, and the filter on the Leads page.</span>{industriesChanged && industryList.length > 0 && <Button size="sm" onClick={() => void save({ settings: { segments: industryList } }, 'Industries saved')}>Save industries</Button>}</div>
+        </div>
+      )}
       {biz.kind === 'CMR' && !biz.headId && <p className="mt-3 rounded-btn bg-warning/10 px-3 py-2 text-body-sm text-amber-800">Set Jesse as the head so flagged leads reach him. If he is not in Metriq yet, invite him under Admin → Users first.</p>}
     </Section>
   )
@@ -358,7 +380,7 @@ function PipelineSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (
   const save = (p: PipelineStatus[] | null) => leadsApi.updateBusiness(biz.id, { pipeline: p }).then((r) => { onSaved(r.business); setEdit(false); toast({ type: 'success', message: p ? 'Pipeline saved' : 'Back to the standard pipeline' }) }).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
   const keyOf = (label: string) => label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30) || 'STATUS'
   return (
-    <Section icon={<ListOrdered size={17} />} title="Pipeline" hint="The statuses leads move through, in order. Open statuses count as active; the rest close a lead." action={<div className="flex gap-2">{biz.ownPipeline && <Button size="sm" variant="ghost" onClick={() => save(null)}>Use the standard one</Button>}{edit ? <><Button size="sm" variant="ghost" onClick={() => { setRows(biz.pipeline); setEdit(false) }}>Cancel</Button><Button size="sm" onClick={() => save(rows)}>Save</Button></> : <Button size="sm" variant="secondary" onClick={() => setEdit(true)}>Edit</Button>}</div>}>
+    <Section icon={<ListOrdered size={17} />} title="Pipeline" hint="The statuses leads move through, in order. Open statuses count as active; the rest close a lead." action={<div className="flex flex-wrap gap-2">{flagOn('deal-board') && biz.kind !== 'CMR' && !biz.pipeline.some((x) => x.key === 'PROPOSAL') && !edit && <Button size="sm" variant="ghost" title="New → Contacted → Qualified → Proposal → Negotiation → Won / Lost" onClick={() => { if (window.confirm('Use the sales pipeline (adds Proposal and Negotiation)? Leads keep their status.')) void save(SALES_PIPELINE) }}>Use the sales pipeline</Button>}{biz.ownPipeline && <Button size="sm" variant="ghost" onClick={() => save(null)}>Use the standard one</Button>}{edit ? <><Button size="sm" variant="ghost" onClick={() => { setRows(biz.pipeline); setEdit(false) }}>Cancel</Button><Button size="sm" onClick={() => save(rows)}>Save</Button></> : <Button size="sm" variant="secondary" onClick={() => setEdit(true)}>Edit</Button>}</div>}>
       {!edit ? (
         <div className="flex flex-wrap gap-2">{biz.pipeline.map((s) => <span key={s.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-body-sm font-semibold" style={{ background: `${s.color}1a`, color: s.color }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />{s.label}{!s.open && <span className="font-normal opacity-70">· closes</span>}</span>)}</div>
       ) : (
@@ -447,7 +469,7 @@ function ListsSection({ biz, toast }: { biz: BusinessRow; toast: Toast }) {
 }
 
 /** How the Call buttons dial: the link the SDR's phone app on the PC opens. */
-function DialCard({ dial, pbxDomain, onSaved, toast }: { dial: DialSetting; pbxDomain: string | null; onSaved: () => void; toast: Toast }) {
+function DialCard({ plain, dial, pbxDomain, onSaved, toast }: { plain?: boolean; dial: DialSetting; pbxDomain: string | null; onSaved: () => void; toast: Toast }) {
   const [f, setF] = useState<DialSetting>(dial)
   const [test, setTest] = useState('')
   const [busy, setBusy] = useState(false)
@@ -460,20 +482,20 @@ function DialCard({ dial, pbxDomain, onSaved, toast }: { dial: DialSetting; pbxD
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-[14px] font-semibold text-ink">Call buttons</h3>
-          <p className="mt-0.5 max-w-2xl text-body-sm text-ink-muted">Metriq cannot place the call itself yet, so a Call button opens the phone app on the SDR's PC with the number filled in. Pick the link that app understands; Windows must have that app set as the handler (Settings → Apps → Default apps → by link type).</p>
+          <p className="mt-0.5 max-w-2xl text-body-sm text-ink-muted">Metriq cannot place the call itself yet, so a Call button opens the phone app on the {plain ? 'rep’s computer or phone' : 'SDR\'s PC'} with the number filled in. Pick the link that app understands; Windows must have that app set as the handler (Settings → Apps → Default apps → by link type).</p>
         </div>
         {changed && <Button size="sm" disabled={busy} onClick={save}>Save</Button>}
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <label><Label>Link type</Label>
           <Select value={f.scheme} onChange={(e) => setF({ ...f, scheme: e.target.value as DialSetting['scheme'], domain: e.target.value === 'sip' ? f.domain || pbxDomain : f.domain })} className="w-full">
-            <option value="tel">tel: — most softphones and the TalkLoop app</option>
+            <option value="tel">{plain ? 'tel: — phones and most softphones' : 'tel: — most softphones and the TalkLoop app'}</option>
             <option value="sip">sip: — a softphone registered to the PBX</option>
             <option value="callto">callto: — older softphones</option>
             <option value="custom">Custom link</option>
           </Select></label>
-        {f.scheme === 'sip' && <TextField label="PBX domain" value={f.domain ?? ''} onChange={(e) => setF({ ...f, domain: e.target.value })} placeholder={pbxDomain ?? 'cmr.talkloop.ai'} />}
-        {f.scheme === 'custom' && <div className="sm:col-span-2"><TextField label="Link with {number} (or {digits})" value={f.template ?? ''} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder="talkloop://call?to={number}" /></div>}
+        {f.scheme === 'sip' && <TextField label="PBX domain" value={f.domain ?? ''} onChange={(e) => setF({ ...f, domain: e.target.value })} placeholder={pbxDomain ?? (plain ? 'pbx.yourcompany.com' : 'cmr.talkloop.ai')} />}
+        {f.scheme === 'custom' && <div className="sm:col-span-2"><TextField label="Link with {number} (or {digits})" value={f.template ?? ''} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder={plain ? 'myphone://call?to={number}' : 'talkloop://call?to={number}'} /></div>}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-body-sm">
         <span className="text-ink-muted">A Call button will open:</span><code className="rounded bg-card px-2 py-1 text-[12px] text-ink">{example}</code>

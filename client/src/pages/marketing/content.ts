@@ -35,6 +35,7 @@ export const COMPARE: { label: string; group: string; values: [string | boolean,
   { group: 'Everyday work', label: 'Chat, calls and meetings', values: [true, true, true] },
   { group: 'Everyday work', label: 'Daily report you design', values: [true, true, true] },
   { group: 'Everyday work', label: 'To-do lists', values: [true, true, true] },
+  { group: 'Everyday work', label: 'CRM: deal board, contacts and lead capture', values: [true, true, true] },
   { group: 'Teams', label: 'Departments, roles and sections', values: [false, true, true] },
   { group: 'Teams', label: 'Team reports and analytics', values: [false, true, true] },
   { group: 'Teams', label: 'Feedback from the team', values: [false, true, true] },
@@ -69,6 +70,12 @@ export const TOUR = [
     points: ['One form for everyone, or one per department', 'Targets turn numbers green or red', 'The month in one table, ready to send'],
   },
   {
+    key: 'crm', tab: 'CRM', image: 'app-crm.webp',
+    title: 'Every deal on one board, with what it is worth',
+    text: 'Leads from your website, inbox, files and calls land in one pipeline. Drag a deal from New to Won, see the value of every stage, and keep everyone at each company in one contacts list.',
+    points: ['A deal board with your own stages and currency', 'Contacts by name, with one tap to call or email', 'Calls, notes and the next step on every lead'],
+  },
+  {
     key: 'sales', tab: 'Sales calling', image: 'app-dialer.webp',
     title: 'Call the right lead at the right time',
     text: "For calling teams: import your CRM list and the Lead Dialer shows who is open right now by time zone, who needs a follow-up, and how the funnel is moving.",
@@ -82,13 +89,13 @@ export const BENTO = [
   { key: 'sections', title: 'Shaped to each team', text: 'Make departments, pick what kind of work each one does, and turn on only the screens it uses.' },
   { key: 'roles', title: 'Roles you define', text: 'Start from Member, Team Lead or Admin and decide what each role sees and can do.' },
   { key: 'ai', title: 'AI meeting notes', text: 'Record a meeting and get the notes and action items written for you.' },
-  { key: 'claude', title: 'Works with your AI', text: 'Connect Claude and ask about your team’s tasks, leads and reports in plain words.' },
+  { key: 'claude', title: 'Works with your AI', text: 'Connect Claude, ChatGPT or Gemini and ask about your team’s tasks, leads and to-dos in plain words.' },
   { key: 'timezones', title: 'Your time zone', text: 'Days, shifts and reports follow your company’s clock, wherever your people are.' },
-  { key: 'mobile', title: 'On the phone too', text: 'Works in any phone browser today. iPhone and Android apps are on the way.' },
+  { key: 'mobile', title: 'On the phone too', text: 'Add Metriq to your phone’s home screen and it opens like an app, with notifications. Store apps are on the way.' },
 ] as const
 
 export const TEAMS = [
-  { key: 'sales', image: 'team-sales.webp', title: 'Sales and call centres', text: 'Daily call numbers, the Lead Dialer, deals and call quality scoring in one place.', includes: ['Lead Dialer', 'Daily calls log', 'Deals', 'Call quality scoring'] },
+  { key: 'sales', image: 'team-sales.webp', title: 'Sales and call centres', text: 'A CRM with a deal board, the Lead Dialer, daily call numbers and call quality scoring in one place.', includes: ['CRM and deal board', 'Lead Dialer', 'Daily calls log', 'Call quality scoring'] },
   { key: 'ops', image: 'team-ops.webp', title: 'Operations and logistics', text: 'Shifts, attendance and inventory requests, with tasks that do not get lost.', includes: ['Shifts and attendance', 'Inventory requests', 'Tasks with owners'] },
   { key: 'remote', image: 'team-remote.webp', title: 'Remote and hybrid teams', text: 'See who is working and what got done, without asking everyone every day.', includes: ['Who is working now', 'Daily reports', 'Chat and calls'] },
   { key: 'agency', image: 'team-agency.webp', title: 'Agencies and studios', text: 'Projects per client, content plans and marketing work, with reviews before anything ships.', includes: ['Projects per client', 'Content calendar', 'Reviews before it ships'] },
@@ -101,6 +108,33 @@ export const DAY = [
   { time: '14:40', title: 'Moves a task to Done', text: 'The person who asked for it reviews and signs it off.', icon: 'projects' },
   { time: '18:05', title: 'Sends the daily report', text: 'Numbers against target, in under a minute.', icon: 'reports' },
 ] as const
+
+/** The CRM on the home page: four things it does, next to a real lead. */
+export const CRM_POINTS = [
+  { key: 'board', title: 'A deal board with value', text: 'Your own stages, your own currency. Drag a deal along and every stage shows what it is worth.' },
+  { key: 'contacts', title: 'Everyone at the company', text: 'The buyer, the owner, the person who signs: all on the lead, and in one contacts list by name.' },
+  { key: 'calls', title: 'Calls and the next step', text: 'One tap to call, two to log it. Each lead keeps its calls, notes, tasks and what happens next.' },
+  { key: 'capture', title: 'Leads arrive by themselves', text: 'From your website form, an email inbox or a file, to the right pipeline, with an alert if nobody picks one up.' },
+] as const
+
+/** AI apps that connect today (Connectors in the app). Names only. */
+export const AI_APPS = ['Claude', 'ChatGPT', 'Gemini', 'Perplexity', 'Cursor', 'VS Code'] as const
+
+/** An honest fit check, before the prices. */
+export const FIT = {
+  good: [
+    'Teams of 2 to 50 who want attendance, tasks, chat, daily reports and a CRM in one place',
+    'Sales and calling teams that live on the phone',
+    'Companies moving off WhatsApp groups, spreadsheets and forms',
+    'Teams that want their AI assistant to read and update their work',
+  ],
+  notYet: [
+    'You need accounting, invoicing or payroll',
+    'You need email campaigns and marketing automation',
+    'You have hundreds of people and need single sign-on today',
+    'You need apps from the App Store or Google Play today (they are on the way)',
+  ],
+} as const
 
 export const STEPS = [
   { title: 'Make your company', text: 'Name it and pick your time zone. No card, nothing to install.' },
@@ -126,7 +160,9 @@ export const FAQS = [
   { cat: 'Teams', q: 'Can each team have different screens?', a: 'Yes. A department has a kind of work (General, Sales calling, Lead Generation, Marketing, E-commerce, Inventory or Customer service) and you turn its screens on or off. Nothing is deleted when you turn one off.' },
   { cat: 'Getting started', q: 'Can I bring my people and lists from Excel?', a: 'Paste or upload your people when you invite them. Calling teams import their lead lists from a CSV or Excel export of their CRM.' },
   { cat: 'Data and security', q: 'Is our data safe and private?', a: 'Each company only ever sees its own records, everything travels encrypted, and the database is backed up every night. Our team can only look inside your Metriq when you allow it, for a set time, and every visit is logged.' },
-  { cat: 'Getting started', q: 'Is there a mobile app?', a: 'Metriq works in any phone browser today, check-in included. iPhone and Android apps are on the way.' },
+  { cat: 'Getting started', q: 'Is there a mobile app?', a: 'Metriq works in any phone browser today, check-in included. Add it to your home screen and it opens like an app and sends notifications. iPhone and Android store apps are on the way.' },
+  { cat: 'Teams', q: 'Does Metriq have a CRM?', a: 'Yes, on every plan. Leads come in from your website form, an email inbox, a file or a phone call, each with an owner, a next step and a deal value. A deal board shows every stage and what it is worth, and a contacts list keeps everyone at each company.' },
+  { cat: 'Teams', q: 'Does Metriq place the phone calls?', a: 'Reps call from their own phone or softphone with one tap, then log the outcome in two. Every try sits on the lead with its notes. Calls are logged by the rep; automatic logging from a phone system is not offered yet.' },
   { cat: 'Pricing', q: 'Can we cancel?', a: 'Any time. A plan runs to the end of what is paid, and you can ask us for a full export of your data.' },
 ] as const
 

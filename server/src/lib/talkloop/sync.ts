@@ -3,7 +3,7 @@ import { prisma } from '../prisma'
 import { runAsCompany } from '../tenancy'
 import { runTracked } from '../health/jobs'
 import { settingsOf } from '../leads/pipeline'
-import { talkloopClient, type TalkLoopCdr, type TalkLoopClient } from './client'
+import { talkloopClient, talkloopCompanyId, type TalkLoopCdr, type TalkLoopClient } from './client'
 import { rematchUnmatched } from './unmatched'
 import { draftPendingCallNotes } from './notes'
 
@@ -61,7 +61,8 @@ export async function runTalkLoopSync(client: TalkLoopClient | null = talkloopCl
 }
 
 async function syncOnce(client: TalkLoopClient, status: SyncStatus, now: Date, fromScratch: boolean): Promise<SyncStatus> {
-  const linked = await prisma.user.findMany({ where: { talkloopUserId: { not: null }, isActive: true }, select: { id: true, companyId: true, talkloopUserId: true } })
+  // The phone system is 99 Technologies' own account: only their people's calls are filed.
+  const linked = await prisma.user.findMany({ where: { talkloopUserId: { not: null }, isActive: true, companyId: talkloopCompanyId() }, select: { id: true, companyId: true, talkloopUserId: true } })
   const byTl = new Map(linked.map((u) => [u.talkloopUserId!, u]))
   // Overlap the last run by ten minutes: a call that ends late still arrives once (externalId is unique).
   const since = status.lastCallAt && !fromScratch ? new Date(new Date(status.lastCallAt).getTime() - 10 * 60_000) : new Date(now.getTime() - 7 * 86400_000)
@@ -159,7 +160,8 @@ async function fileCalls(companyId: string, list: TalkLoopCdr[], byTl: Map<numbe
     const outgoing = (c.direction || '').toLowerCase() !== 'incoming'
     const phone = e164Of(outgoing ? c.dst : c.src)
     if (!phone) { unmatched++; continue }
-    const leads = await prisma.lead.findMany({ where: { phoneE164: phone, businessId: { in: businesses.map((b) => b.id) } }, select: { id: true, businessId: true, state: true, status: true, firstCallAt: true, assigneeId: true }, orderBy: { lastActivityAt: 'desc' } })
+    // The lead's own number, or the number of one of its other contacts (CRM contacts).
+    const leads = await prisma.lead.findMany({ where: { OR: [{ phoneE164: phone }, { contacts: { some: { phoneE164: phone } } }], businessId: { in: businesses.map((b) => b.id) } }, select: { id: true, businessId: true, state: true, status: true, firstCallAt: true, assigneeId: true }, orderBy: { lastActivityAt: 'desc' } })
     if (!leads.length) {
       // Kept aside for the SDR to turn into a lead (once per call; the unique key makes a second run a no-op).
       const kept = await prisma.leadUnmatchedCall.createMany({ data: [{ companyId, userId: user.id, at: new Date(c.calldate), direction: outgoing ? 'OUT' : 'IN', phone, durationSec: c.billsec ?? 0, disposition: dispositionOf(c, connectedSecsOf(businesses)), externalId: c.uniqueid, recordingFile: c.recording_file || null }], skipDuplicates: true })

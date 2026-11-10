@@ -2,14 +2,14 @@ import { useRef, type PointerEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { AppFrame, Container, useLaunch } from './MarketingLayout'
-import { IconArrow, IconAttendance, IconBoard, IconChat, IconDialer, IconReport } from './icons'
+import { IconArrow, IconAttendance, IconBoard, IconChat, IconDialer, IconPipeline, IconReport } from './icons'
 import { OrbitArt } from './Pictures'
 import { site } from './content'
 import type { FeatureKey, Hue } from './pages'
 
 /** Pieces shared by the Product and Solutions pages. */
 
-export const FEATURE_ICON: Record<FeatureKey, typeof IconAttendance> = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, sales: IconDialer }
+export const FEATURE_ICON: Record<FeatureKey, typeof IconAttendance> = { attendance: IconAttendance, projects: IconBoard, chat: IconChat, reports: IconReport, crm: IconPipeline, sales: IconDialer }
 
 /** A tile in a part's own colours. */
 export function HueTile({ hue, children, size = 40, className }: { hue: Hue; children: ReactNode; size?: number; className?: string }) {

@@ -7,7 +7,7 @@ import { TextField } from '../../../components/ui/Input'
 import { useToast } from '../../../components/ui/Toast'
 import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
-import { leadsApi, type BusinessKind, type BusinessRow, type Person } from '../../../lib/leadsApi'
+import { leadsApi, SALES_PIPELINE, type BusinessKind, type BusinessRow, type Person } from '../../../lib/leadsApi'
 import { Label } from './shared'
 
 /**
@@ -25,10 +25,17 @@ const WHO_SEES: { icon: React.ReactNode; who: string; what: string }[] = [
   { icon: <Headset size={15} />, who: 'SDR (Rep)', what: 'Only the leads given to them: logs calls, sends the info email, qualifies, offers slots, writes the Daily Report.' },
 ]
 
-export function WhoSeesWhat({ compact }: { compact?: boolean }) {
+/** The same, for a company without the CMR flow (any company using Metriq as its CRM). */
+const WHO_SEES_PLAIN: typeof WHO_SEES = [
+  { icon: <ShieldCheck size={15} />, who: 'Super Admin', what: 'Every pipeline, every lead and every screen: the dashboard, leads, the deal board, contacts, tasks, calls and these settings.' },
+  { icon: <UserCog size={15} />, who: 'Manager', what: 'Every lead of their pipeline. Imports lists, gives leads to the reps, marks deals as won, sees the whole board.' },
+  { icon: <Headset size={15} />, who: 'Rep', what: 'Only the leads given to them: calls, notes, next steps, their own deals on the board and their own contacts.' },
+]
+
+export function WhoSeesWhat({ compact, plain }: { compact?: boolean; plain?: boolean }) {
   return (
-    <div className={cn('grid gap-2', compact ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-4')}>
-      {WHO_SEES.map((r) => (
+    <div className={cn('grid gap-2', compact ? 'sm:grid-cols-2' : plain ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
+      {(plain ? WHO_SEES_PLAIN : WHO_SEES).map((r) => (
         <div key={r.who} className="rounded-card border border-line bg-card p-3.5">
           <span className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink"><span className="text-primary">{r.icon}</span>{r.who}</span>
           <p className="mt-1 text-[12px] leading-5 text-ink-muted">{r.what}</p>
@@ -52,7 +59,34 @@ function Step({ n, done, title, children, action }: { n: number; done: boolean; 
 }
 
 /** The first screen when the company has no business yet. */
-export function SetupSteps({ cmrOn, onCreate }: { cmrOn: boolean; onCreate: () => void }) {
+export function SetupSteps({ cmrOn, onCreate, plain }: { cmrOn: boolean; onCreate: () => void; plain?: boolean }) {
+  // A company using Metriq as its CRM (no CMR flow): the plain four steps.
+  if (plain && !cmrOn) return (
+    <div className="space-y-5">
+      <section className="rounded-card border border-line bg-gradient-to-br from-primary/[0.06] to-accent/[0.06] p-6">
+        <h2 className="text-headline-md text-ink">Set up your CRM in four steps</h2>
+        <p className="mt-1 max-w-3xl text-body-md text-ink-muted">A <strong className="font-semibold text-ink">pipeline</strong> is one team or brand that receives leads (for example "Sales"). Each has its own stages, people and settings. Make the pipeline first, put its people on it, then bring the leads in.</p>
+      </section>
+      <ol className="space-y-3">
+        <Step n={1} done={false} title="Add your first pipeline" action={<Button size="sm" onClick={onCreate}>Add pipeline</Button>}>
+          Name it (e.g. "Sales") and pick its stages: the standard ones, or the <strong className="font-medium text-ink">sales pipeline</strong> with Proposal and Negotiation. You can rename, add or reorder stages any time.
+        </Step>
+        <Step n={2} done={false} title="Put your people on it">
+          Tick <strong className="font-medium text-ink">Manager</strong> for whoever gives the leads out and <strong className="font-medium text-ink">Rep</strong> for each person who works them. Anyone not in Metriq yet is invited under <Link to="/app/admin/users" className="text-primary hover:underline">Admin → Users</Link> first.
+        </Step>
+        <Step n={3} done={false} title="Bring your leads in">
+          On the Leads page press <strong className="font-medium text-ink">Import</strong> for a CSV or Excel list, or <strong className="font-medium text-ink">Add lead</strong> for one. Later, the website form and the inbox in these settings bring new leads in by themselves.
+        </Step>
+        <Step n={4} done={false} title="Work from the board">
+          The <strong className="font-medium text-ink">Deal Board</strong> shows every stage and what it is worth; drag a deal along as it moves. <strong className="font-medium text-ink">Contacts</strong> has the people, <strong className="font-medium text-ink">Tasks</strong> the follow-ups, <strong className="font-medium text-ink">Calls</strong> the call log.
+        </Step>
+      </ol>
+      <section>
+        <h2 className="mb-2 inline-flex items-center gap-2 text-[15px] font-semibold text-ink"><Eye size={16} className="text-ink-faint" />Who sees what</h2>
+        <WhoSeesWhat plain />
+      </section>
+    </div>
+  )
   return (
     <div className="space-y-5">
       <section className="rounded-card border border-line bg-gradient-to-br from-primary/[0.06] to-accent/[0.06] p-6">
@@ -82,15 +116,16 @@ export function SetupSteps({ cmrOn, onCreate }: { cmrOn: boolean; onCreate: () =
 }
 
 /** The checklist on top of one business until it is ready. */
-export function SetupChecklist({ biz, cmrOn }: { biz: BusinessRow; cmrOn: boolean }) {
+export function SetupChecklist({ biz, cmrOn, plain }: { biz: BusinessRow; cmrOn: boolean; plain?: boolean }) {
   const cmr = biz.kind === 'CMR'
+  const usual = !!plain && !cmr
   const managers = biz.members.filter((m) => m.role === 'MANAGER'), reps = biz.members.filter((m) => m.role === 'REP')
   const items: { key: string; done: boolean; text: string; hint?: string; to?: string; toText?: string }[] = [
     ...(cmr && !cmrOn ? [{ key: 'flag', done: false, text: 'The CMR flow switch is off for this company', hint: 'Owner console → Switches → your company → CMR flow. Until then the CMR screens stay hidden.', to: '/owner/switches', toText: 'Open Switches' }] : []),
     ...(cmr ? [{ key: 'head', done: !!biz.headId, text: biz.head ? `Head: ${biz.head.name}` : 'Set Jesse as the head', hint: 'Below, under "Kind and head". Flagged leads and qualify requests go to him.' }] : []),
-    { key: 'manager', done: managers.length > 0, text: managers.length ? `Team lead: ${managers.map((m) => m.name).join(', ')}` : 'Add the team lead as a Manager', hint: 'Under "People". A manager sees every lead of this business and gives them out.' },
-    { key: 'reps', done: reps.length > 0, text: reps.length ? `SDRs: ${reps.map((m) => m.name).join(', ')}` : 'Add the SDRs as Reps', hint: 'Under "People". The sheet\'s SDR column must match their first names (Matthew, Mark) for the import to assign leads.' },
-    { key: 'leads', done: biz.leadCount > 0, text: biz.leadCount ? `${biz.leadCount} lead${biz.leadCount === 1 ? '' : 's'} in` : 'Import the sheet (or add the first lead)', hint: 'Leads → Import → pick the CSV of the Leads tab.', to: `/app/leads?business=${biz.id}&import=1`, toText: 'Import now' },
+    { key: 'manager', done: managers.length > 0, text: managers.length ? `${usual ? 'Manager' : 'Team lead'}: ${managers.map((m) => m.name).join(', ')}` : usual ? 'Add a Manager' : 'Add the team lead as a Manager', hint: 'Under "People". A manager sees every lead of this business and gives them out.' },
+    { key: 'reps', done: reps.length > 0, text: reps.length ? `${usual ? 'Reps' : 'SDRs'}: ${reps.map((m) => m.name).join(', ')}` : usual ? 'Add the people who work the leads as Reps' : 'Add the SDRs as Reps', hint: usual ? 'Under "People". A rep sees the leads given to them.' : 'Under "People". The sheet\'s SDR column must match their first names (Matthew, Mark) for the import to assign leads.' },
+    { key: 'leads', done: biz.leadCount > 0, text: biz.leadCount ? `${biz.leadCount} lead${biz.leadCount === 1 ? '' : 's'} in` : usual ? 'Import a list (or add the first lead)' : 'Import the sheet (or add the first lead)', hint: usual ? 'Leads → Import → pick a CSV or Excel file.' : 'Leads → Import → pick the CSV of the Leads tab.', to: `/app/leads?business=${biz.id}&import=1`, toText: 'Import now' },
   ]
   const left = items.filter((i) => !i.done)
   if (!left.length) return null
@@ -119,12 +154,15 @@ export function SetupChecklist({ biz, cmrOn }: { biz: BusinessRow; cmrOn: boolea
 const COLORS = ['#6366F1', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6']
 
 /** Add a business with its head, team lead and reps in one go. */
-export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated }: { cmrOn: boolean; people: SetupPerson[]; onClose: () => void; onCreated: (b: BusinessRow, note: string) => void }) {
+export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated, plain }: { cmrOn: boolean; people: SetupPerson[]; onClose: () => void; onCreated: (b: BusinessRow, note: string) => void; plain?: boolean }) {
   const { addToast } = useToast()
   const [name, setName] = useState('')
   const [website, setWebsite] = useState('')
   const [kind, setKind] = useState<BusinessKind>(cmrOn ? 'CMR' : 'GENERAL')
   const [headId, setHeadId] = useState('')
+  // New CRM companies start on the sales pipeline (Proposal, Negotiation); 99 Technologies keeps the standard one by default.
+  const [stages, setStages] = useState<'standard' | 'sales'>(plain ? 'sales' : 'standard')
+  const word = plain && !cmrOn ? 'pipeline' : 'business'
   const [managerIds, setManagerIds] = useState<string[]>([])
   const [repIds, setRepIds] = useState<string[]>([])
   const [filter, setFilter] = useState('')
@@ -139,27 +177,38 @@ export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated }: { cm
     try {
       const r = await leadsApi.createBusiness({ name: name.trim(), website: website.trim() || null, color: kind === 'CMR' ? '#059669' : COLORS[Math.floor(Math.random() * COLORS.length)], kind, headId: kind === 'CMR' && headId ? headId : null })
       let biz = r.business
+      if (kind === 'GENERAL' && stages === 'sales') { try { biz = (await leadsApi.updateBusiness(biz.id, { pipeline: SALES_PIPELINE })).business } catch { /* the standard stages stay; change them under Pipeline */ } }
       const failed: string[] = []
       for (const id of managerIds) { try { biz = (await leadsApi.setMember(biz.id, id, 'MANAGER')).business } catch { failed.push(people.find((p) => p.id === id)?.name ?? id) } }
       for (const id of repIds) { try { biz = (await leadsApi.setMember(biz.id, id, 'REP')).business } catch { failed.push(people.find((p) => p.id === id)?.name ?? id) } }
-      onCreated(biz, failed.length ? `Added, but could not add ${failed.join(', ')}: add them under People.` : `${biz.name} is ready. Next: import the sheet.`)
+      onCreated(biz, failed.length ? `Added, but could not add ${failed.join(', ')}: add them under People.` : plain ? `${biz.name} is ready. Next: import your leads, or add the first one.` : `${biz.name} is ready. Next: import the sheet.`)
     } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not add') }) } finally { setBusy(false) }
   }
   const cmr = kind === 'CMR'
   return (
-    <Modal open onClose={onClose} title="Add a business" size="lg" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !name.trim()} onClick={go}>{busy ? 'Adding…' : 'Add business'}</Button></>}>
+    <Modal open onClose={onClose} title={`Add a ${word}`} size="lg" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !name.trim()} onClick={go}>{busy ? 'Adding…' : `Add ${word}`}</Button></>}>
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <TextField label="Name" autoFocus placeholder={cmr ? 'CMR' : 'Recycle Technologies'} value={name} onChange={(e) => setName(e.target.value)} />
+          <TextField label="Name" autoFocus placeholder={cmr ? 'CMR' : plain ? 'Sales' : 'Recycle Technologies'} value={name} onChange={(e) => setName(e.target.value)} />
           <TextField label="Website (optional)" placeholder="https://example.com" value={website} onChange={(e) => setWebsite(e.target.value)} />
         </div>
-        <div><Label>Kind</Label>
+        {(cmrOn || !plain) && <div><Label>Kind</Label>
           <div className="grid gap-2 sm:grid-cols-2">
             {([['GENERAL', 'Usual pipeline', 'New → Contacted → Qualified → Won / Lost. Website forms, inbox, assignment, tasks.'], ['CMR', 'CMR flow', 'The sheet\'s pipeline, five facts, Jesse\'s queue and decisions, meeting handoff, daily report.']] as const).map(([k, t, h]) => (
               <button key={k} type="button" disabled={k === 'CMR' && !cmrOn} onClick={() => setKind(k)} className={cn('rounded-card border p-3 text-left disabled:opacity-50', kind === k ? 'border-primary bg-primary/[0.06]' : 'border-line')}><span className="block text-body-sm font-semibold text-ink">{t}</span><span className="block text-[11.5px] text-ink-muted">{h}{k === 'CMR' && !cmrOn ? ' Switched off for your company (owner console → Switches).' : ''}</span></button>
             ))}
           </div>
-        </div>
+        </div>}
+        {!cmr && (
+          <div><Label>Stages</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([['sales', 'Sales pipeline', 'New → Contacted → Qualified → Proposal → Negotiation → Won / Lost.'], ['standard', 'Standard', 'New → Contacted → Qualified → Won / Lost.']] as const).map(([k, t, h]) => (
+                <button key={k} type="button" onClick={() => setStages(k)} className={cn('rounded-card border p-3 text-left', stages === k ? 'border-primary bg-primary/[0.06]' : 'border-line')}><span className="block text-body-sm font-semibold text-ink">{t}</span><span className="block text-[11.5px] text-ink-muted">{h}</span></button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11.5px] text-ink-faint">You can rename, add or reorder stages later under Pipeline.</p>
+          </div>
+        )}
         {cmr && (
           <label className="block"><Label hint="Jesse. He gets the flagged leads and decides.">Head</Label>
             <select value={headId} onChange={(e) => setHeadId(e.target.value)} className="h-9 w-full rounded-btn border border-line bg-card px-2.5 text-body-md text-ink">
@@ -170,7 +219,7 @@ export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated }: { cm
         )}
         <div>
           <div className="flex flex-wrap items-end justify-between gap-2">
-            <Label hint="Tick Manager for the team lead, Rep for each SDR. You can change this any time under People.">People</Label>
+            <Label hint={plain && !cmr ? 'Tick Manager for whoever gives leads out, Rep for each person who works them. You can change this any time under People.' : 'Tick Manager for the team lead, Rep for each SDR. You can change this any time under People.'}>People</Label>
             <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Find a person…" className="h-8 w-44 rounded-btn border border-line bg-card px-2.5 text-body-sm" aria-label="Find a person" />
           </div>
           <div className="max-h-60 overflow-auto rounded-card border border-line">
@@ -191,7 +240,7 @@ export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated }: { cm
           </div>
           <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-ink-muted"><Users size={12} />{managerIds.length} manager{managerIds.length === 1 ? '' : 's'}, {repIds.length} rep{repIds.length === 1 ? '' : 's'}{cmr && headId ? `, head ${people.find((p) => p.id === headId)?.name ?? ''}` : ''}</p>
         </div>
-        <p className="flex items-start gap-2 rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted dark:bg-white/[0.03]"><Upload size={15} className="mt-0.5 shrink-0 text-primary" /><span>Next: on the Leads page press <strong className="font-medium text-ink">Import</strong> and pick the CSV of the sheet. Later, the <Globe size={12} className="inline" /> website form and <ToggleRight size={12} className="inline" /> inbox below bring new leads in by themselves.</span></p>
+        <p className="flex items-start gap-2 rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted dark:bg-white/[0.03]"><Upload size={15} className="mt-0.5 shrink-0 text-primary" /><span>Next: on the Leads page press <strong className="font-medium text-ink">Import</strong> and pick {plain ? 'a CSV or Excel list' : 'the CSV of the sheet'}. Later, the <Globe size={12} className="inline" /> website form and <ToggleRight size={12} className="inline" /> inbox below bring new leads in by themselves.</span></p>
       </div>
     </Modal>
   )

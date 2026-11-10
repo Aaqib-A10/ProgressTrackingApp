@@ -60,6 +60,17 @@ export const IconDialer = (p: P) => (
   </Svg>
 )
 
+/** CRM: deals moving along stages (three columns, the last one won). */
+export const IconPipeline = (p: P) => (
+  <Svg {...p}>
+    <Tint d="M3.5 4.5h4.6v15H3.5zM9.7 4.5h4.6v10H9.7zM15.9 4.5h4.6v6h-4.6z" />
+    <rect x="3.5" y="4.5" width="4.6" height="15" rx="1.4" />
+    <rect x="9.7" y="4.5" width="4.6" height="10" rx="1.4" />
+    <rect x="15.9" y="4.5" width="4.6" height="6" rx="1.4" />
+    <path d="m15.6 17.2 2 2 3.4-3.8" />
+  </Svg>
+)
+
 export const IconDepartments = (p: P) => (
   <Svg {...p}>
     <Tint d="M4 4h7v7H4z" />

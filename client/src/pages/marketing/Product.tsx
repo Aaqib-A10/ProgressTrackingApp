@@ -28,7 +28,7 @@ function Overview() {
         <Container className="relative pb-10 pt-16 text-center sm:pt-24">
           <div className="flex justify-center"><Crumbs items={[{ to: '/', label: 'Home' }, { label: 'Product' }]} /></div>
           <h1 className="mk-up mx-auto mt-6 max-w-3xl text-balance text-[40px] font-semibold leading-[1.04] tracking-[-0.045em] text-ink sm:text-[60px]">One app for the whole working day</h1>
-          <p className="mk-up mx-auto mt-5 max-w-2xl text-pretty text-[17px] leading-relaxed text-ink-muted sm:text-[19px]" style={{ animationDelay: '120ms' }}>Five parts that share the same people, the same clock and the same day. Turn on the ones each team needs.</p>
+          <p className="mk-up mx-auto mt-5 max-w-2xl text-pretty text-[17px] leading-relaxed text-ink-muted sm:text-[19px]" style={{ animationDelay: '120ms' }}>Six parts that share the same people, the same clock and the same day. Turn on the ones each team needs.</p>
           <div className="mk-up mt-8 flex flex-wrap justify-center gap-3" style={{ animationDelay: '220ms' }}><PrimaryCta /><SecondaryCta to="/pricing">See pricing</SecondaryCta></div>
           <p className="mt-4 text-[13.5px] text-ink-muted">{free ? 'Free while we launch' : '14 days free'} · No card needed</p>
         </Container>
@@ -37,7 +37,7 @@ function Overview() {
             {FEATURES.map((f, i) => {
               const Icon = FEATURE_ICON[f.key]
               return (
-                <Reveal key={f.key} delay={(i % 3) * 90} className={cn(i < 2 ? 'md:col-span-3' : 'md:col-span-2')}>
+                <Reveal key={f.key} delay={(i % 3) * 90} className="md:col-span-3 lg:col-span-2">
                   <Link to={`/product/${f.slug}`} className="group relative flex h-full flex-col overflow-hidden rounded-[20px] border border-line bg-card transition-shadow duration-300 hover:shadow-[0_24px_60px_-30px_rgb(var(--shadow)/0.5)]">
                     <div className="p-6">
                       <div className="flex items-center gap-3"><HueTile hue={f.hue}><Icon size={20} /></HueTile><span className="text-[17px] font-semibold text-ink">{f.name}</span></div>
@@ -163,7 +163,7 @@ function FeaturePage({ slug }: { slug: string }) {
       <section className="py-20 sm:py-24">
         <Container>
           <Reveal><SectionHead eyebrow="Works with" title="The rest of Metriq" /></Reveal>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {others.map((o) => {
               const OIcon = FEATURE_ICON[o.key]
               return (
