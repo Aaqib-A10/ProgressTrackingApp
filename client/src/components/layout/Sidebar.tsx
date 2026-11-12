@@ -8,7 +8,8 @@ import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
 import { getQaUnreadCount } from '../../lib/qaApi'
-import { filterNav, type NavGroup } from './navConfig'
+import { filterNav, sidebarNav, type NavGroup } from './navConfig'
+import { useChatUnread } from '../chat/useChatUnread'
 import { useFlags } from '../../lib/flags'
 import { visiblePoll } from '../../lib/chatApi'
 import { projectsApi } from '../../lib/projectsApi'
@@ -54,9 +55,10 @@ function useIsProjectAdmin(user: CurrentUser): boolean {
 export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
   useFlags() // the menu re-draws once the owner's switches are in
   const isProjectAdmin = useIsProjectAdmin(user)
-  const groups = filterNav(user)
+  const chatUnread = useChatUnread().total
+  const groups = sidebarNav(filterNav(user)
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.projectAdminOnly || isProjectAdmin) }))
-    .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
+    .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0))
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
   const [unreadQa, setUnreadQa] = useState(0)
@@ -171,6 +173,11 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                   {item.to === '/app/feedback' && unreadFeedback > 0 && (
                     <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-white">
                       {unreadFeedback > 9 ? '9+' : unreadFeedback}
+                    </span>
+                  )}
+                  {item.to === '/app/chat' && chatUnread > 0 && (
+                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-white" aria-label={`${chatUnread} unread`}>
+                      {chatUnread > 99 ? '99+' : chatUnread}
                     </span>
                   )}
                   {item.to === '/app/qa/my' && unreadQa > 0 && (

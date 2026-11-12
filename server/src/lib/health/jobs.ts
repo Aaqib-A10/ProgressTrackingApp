@@ -24,6 +24,8 @@ export const JOBS: { name: string; label: string; everyMs: number | null }[] = [
   { name: 'health-audit', label: 'Hourly self check', everyMs: 60 * MIN },
   { name: 'monthly-report', label: 'Monthly report email (1st and 2nd of the month)', everyMs: null },
   { name: 'billing-reminders', label: 'Trial ending emails', everyMs: 60 * MIN },
+  { name: 'metra-index', label: 'Metra search index (full check)', everyMs: 6 * 60 * MIN },
+  { name: 'metra-insights', label: 'Metra next steps and shift briefs', everyMs: 60 * MIN },
 ]
 
 /** Run one tick of a job and record how it went. Errors are logged and passed on as before. */

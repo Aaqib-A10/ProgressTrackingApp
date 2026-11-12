@@ -4,7 +4,8 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { assignedToFromRaw, contactNameFor, industryFromRaw, titleFromRaw, websiteFromRaw } from '../lib/dialerRaw'
 import { planImportTouches, saveImportTouches, touchStats, lastTouchedAt, type ImportCompare } from '../lib/dialer/touches'
-import { syncAutoTasks, taskSelect, taskView, tasksFor } from '../lib/dialer/tasks'
+import { autoClosedAt, quietFromOf, syncAutoTasks, taskSelect, taskView, tasksFor } from '../lib/dialer/tasks'
+import { contactView, suggestContactsFromNote } from '../lib/dialer/contacts'
 import { OUTCOMES, type Outcome } from '../lib/dialer/calls'
 import type { AuthedRequest } from '../middleware/auth'
 import { findState, stateFromPhone } from '../lib/dialer/states'
@@ -73,6 +74,8 @@ export interface DialerPrefs {
   fuViews: SavedView[]
   /** The filters pinned to the bar, per page (dashboard, followups, leads...); a page missing here uses the defaults. */
   filterPins: Record<string, string[]>
+  /** Follow-ups list: the columns this agent picked, in their order (empty = the standard set). */
+  fuColumns: string[]
 }
 export function readPrefs(data: unknown): DialerPrefs {
   const d = (data && typeof data === 'object' ? data : {}) as Partial<DialerPrefs>
@@ -82,6 +85,7 @@ export function readPrefs(data: unknown): DialerPrefs {
     views: Array.isArray(d.views) ? d.views : [], followUp: d.followUp && typeof d.followUp === 'object' ? d.followUp : {},
     columns: Array.isArray(d.columns) ? d.columns.filter((c) => typeof c === 'string') : [], fuViews: Array.isArray(d.fuViews) ? d.fuViews : [],
     filterPins: pins,
+    fuColumns: Array.isArray(d.fuColumns) ? d.fuColumns.filter((c) => typeof c === 'string') : [],
   }
 }
 
@@ -403,7 +407,7 @@ export async function dialerData(req: AuthedRequest, res: Response): Promise<voi
         lastActionAt: true, createdAt: true, website: true, companySize: true, listName: true, externalId: true,
         phone2: true, email2: true, linkedin: true, decisionMaker: true, bestTime: true, tags: true,
         needsCrmUpdate: true, crmUpdateWhat: true, followUpDropped: true, backlogKeptAt: true, lastImportId: true, firstImportId: true, doNotCall: true, wrongNumber: true,
-        jobTitle: true, assignedTo: true,
+        jobTitle: true, assignedTo: true, altPhones: true,
         _count: { select: { actions: true, notes: true } },
       },
     }),
@@ -419,13 +423,14 @@ export async function dialerData(req: AuthedRequest, res: Response): Promise<voi
   const leadIds = leads.map((l) => l.id)
   const dayStart = shiftDayStart(new Date())
   const [pinned, prefsRows, actedActions, actedNotes, stats, tasks] = await Promise.all([
-    prisma.dialerNote.findMany({ where: { leadId: { in: leadIds }, pinned: true }, orderBy: { createdAt: 'desc' }, select: { leadId: true, text: true } }),
+    prisma.dialerNote.findMany({ where: { leadId: { in: leadIds }, pinned: true, deletedAt: null }, orderBy: { createdAt: 'desc' }, select: { leadId: true, text: true } }),
     prisma.dialerUserPrefs.findMany({ where: { userId: { in: [...new Set([...owners, me.id])] } } }),
     prisma.dialerAction.findMany({ where: { leadId: { in: leadIds }, createdAt: { gte: dayStart } }, select: { leadId: true, userId: true, kind: true, createdAt: true } }),
-    prisma.dialerNote.findMany({ where: { leadId: { in: leadIds }, createdAt: { gte: dayStart } }, select: { leadId: true, userId: true, createdAt: true } }),
-    touchStats(leads),
+    prisma.dialerNote.findMany({ where: { leadId: { in: leadIds }, createdAt: { gte: dayStart }, deletedAt: null, userId: { not: null } }, select: { leadId: true, userId: true, createdAt: true } }),
+    touchStats(leads, { touchesFromNotes: settings.touchesFromNotes, manualTouchesCount: settings.manualTouchesCount }),
     tasksFor(owners, dayStart),
   ])
+  const closedAt = settings.touchesFromNotes ? await autoClosedAt(leadIds) : new Map<string, Date>()
   const pinnedBy = new Map<string, string>()
   for (const n of pinned) if (!pinnedBy.has(n.leadId)) pinnedBy.set(n.leadId, n.text)
   const prefsOf = (id: string) => readPrefs(prefsRows.find((p) => p.userId === id)?.data)
@@ -437,7 +442,7 @@ export async function dialerData(req: AuthedRequest, res: Response): Promise<voi
     // Follow-up days in force for each rep (company defaults with the rep's own changes).
     followUpByOwner: Object.fromEntries(owners.map((o) => [o, { ...settings.followUp, ...prefsOf(o).followUp }])),
     // What was done today (since noon Pakistan time, so a night shift is one day): the Done tab and "cleared today".
-    actedToday: [...actedActions.map((a) => ({ leadId: a.leadId, userId: a.userId, kind: a.kind, at: a.createdAt.toISOString() })), ...actedNotes.map((n) => ({ leadId: n.leadId, userId: n.userId, kind: 'NOTE', at: n.createdAt.toISOString() }))],
+    actedToday: [...actedActions.map((a) => ({ leadId: a.leadId, userId: a.userId, kind: a.kind, at: a.createdAt.toISOString() })), ...actedNotes.map((n) => ({ leadId: n.leadId, userId: n.userId!, kind: 'NOTE', at: n.createdAt.toISOString() }))],
     dayStart: dayStart.toISOString(),
     me: { id: me.id, name: me.name, isManager: me.isManager },
     scope: owners.length === 1 ? (owners[0] === me.id ? 'me' : owners[0]) : 'all',
@@ -458,6 +463,7 @@ export async function dialerData(req: AuthedRequest, res: Response): Promise<voi
       backlogKeptAt: l.backlogKeptAt?.toISOString() ?? null,
       suggestedState: !l.state && !l.stateOverride ? stateFromPhone(l.phone) : null,
       lastTouchedAt: lastTouchedAt(l.lastActivityAt, stats.get(l.id))?.toISOString() ?? null,
+      quietFrom: quietFromOf(lastTouchedAt(l.lastActivityAt, stats.get(l.id)), closedAt.get(l.id))?.toISOString() ?? null,
       attempts: stats.get(l.id)?.attempts ?? 0,
       tries: stats.get(l.id)?.tries ?? 0,
       reAttempts: stats.get(l.id)?.reAttempts ?? 0,
@@ -505,7 +511,7 @@ export async function leadDetail(req: AuthedRequest, res: Response): Promise<voi
   const [actions, changes, notes, calls, touches, tasks] = await Promise.all([
     prisma.dialerAction.findMany({ where: { leadId: got.lead.id }, orderBy: { createdAt: 'desc' }, take: 200, select: { id: true, kind: true, note: true, at: true, createdAt: true, user: { select: { name: true } } } }),
     prisma.dialerStatusChange.findMany({ where: { leadId: got.lead.id }, orderBy: { createdAt: 'asc' }, select: { id: true, fromStatus: true, toStatus: true, createdAt: true, importId: true, byName: true } }),
-    prisma.dialerNote.findMany({ where: { leadId: got.lead.id }, orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }], select: noteSelect }),
+    prisma.dialerNote.findMany({ where: { leadId: got.lead.id, deletedAt: null }, orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }], select: noteSelect }),
     // Calls the predictive dialer reported for this lead.
     prisma.dialerCall.findMany({ where: { leadId: got.lead.id }, orderBy: { calledAt: 'desc' }, take: 200, select: { id: true, calledAt: true, disposition: true, outcome: true, notes: true, durationSec: true, agentRaw: true, effect: true, agent: { select: { name: true } } } }),
     // Touches as dates only: how each was found is kept for corrections, never shown.
@@ -513,8 +519,14 @@ export async function leadDetail(req: AuthedRequest, res: Response): Promise<voi
     prisma.workLogEntry.findMany({ where: { dialerLeadId: got.lead.id, cancelledAt: null }, orderBy: [{ status: 'asc' }, { dueAt: 'asc' }], take: 100, select: taskSelect }),
   ])
   const { raw, ...lead } = got.lead
+  // Second contacts found in notes (offered, accepted) and how many Earth Zone notes were deleted here.
+  const [contacts, deletedEz] = await Promise.all([
+    prisma.dialerContact.findMany({ where: { leadId: got.lead.id, state: { in: ['SUGGESTED', 'ACCEPTED'] } }, orderBy: { createdAt: 'asc' } }),
+    prisma.dialerNote.count({ where: { leadId: got.lead.id, deletedAt: { not: null }, ezKey: { not: null } } }),
+  ])
   res.json({
     lead: { ...lead, suggestedState: !lead.state && !lead.stateOverride ? stateFromPhone(lead.phone) : null }, raw, actions, changes, notes: notes.map(noteView),
+    contacts: contacts.map(contactView), deletedEzNotes: deletedEz,
     touches: touches.map((t) => ({ id: t.id, at: t.at.toISOString(), statusChange: t.kind === 'STATUS_CHANGE', outcome: t.outcome })),
     tasks: tasks.map(taskView),
     canEdit: got.lead.ownerId === got.me.id,
@@ -522,9 +534,21 @@ export async function leadDetail(req: AuthedRequest, res: Response): Promise<voi
   })
 }
 
-const noteSelect = { id: true, leadId: true, text: true, pinned: true, nextActionAt: true, editedAt: true, createdAt: true, user: { select: { id: true, name: true } } } as const
+export const noteSelect = { id: true, leadId: true, text: true, pinned: true, nextActionAt: true, editedAt: true, createdAt: true, source: true, authorName: true, ezKey: true, ezText: true, user: { select: { id: true, name: true } } } as const
 type NoteRow = Prisma.DialerNoteGetPayload<{ select: typeof noteSelect }>
-const noteView = (n: NoteRow) => ({ id: n.id, leadId: n.leadId, text: n.text, pinned: n.pinned, nextActionAt: n.nextActionAt?.toISOString() ?? null, editedAt: n.editedAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString(), author: n.user.name, authorId: n.user.id })
+/**
+ * A note as the screens show it: who wrote it (a Metriq person, or the Earth Zone author as written), its source,
+ * and for an Earth Zone note edited here, Earth Zone's own text (the "differs from Earth Zone" marker).
+ */
+export const noteView = (n: NoteRow) => ({
+  id: n.id, leadId: n.leadId, text: n.text, pinned: n.pinned, nextActionAt: n.nextActionAt?.toISOString() ?? null, editedAt: n.editedAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString(),
+  author: n.user?.name ?? n.authorName ?? 'Earth Zone', authorId: n.user?.id ?? null,
+  source: n.source as 'METRIQ' | 'EARTHZONE' | 'CLAUDE',
+  ezText: n.ezKey && n.ezText != null && n.ezText !== n.text ? n.ezText : null,
+})
+
+/** Where a note or change comes from: the Claude connector (Claude log) or Metriq itself. */
+export const writeSource = (req: AuthedRequest): 'CLAUDE' | 'METRIQ' => (req.user?.via === 'connector' ? 'CLAUDE' : 'METRIQ')
 
 const actionSchema = z.object({
   kind: z.enum(['CALL_NOW', 'CALL_LATER', 'SNOOZE', 'NOTE', 'CLEAR']),
@@ -558,7 +582,7 @@ export async function leadAction(req: AuthedRequest, res: Response): Promise<voi
     prisma.dialerLead.update({ where: { id: got.lead.id }, data }),
     // A note is kept as a note (author, time, pin); the other actions in the action log.
     kind === 'NOTE'
-      ? prisma.dialerNote.create({ data: { leadId: got.lead.id, userId: got.me.id, text: note! } })
+      ? prisma.dialerNote.create({ data: { leadId: got.lead.id, userId: got.me.id, text: note!, source: writeSource(req) } })
       : prisma.dialerAction.create({ data: { leadId: got.lead.id, userId: got.me.id, kind, note: note ?? null, at } }),
   ])
   // Call later makes (or moves) the call-back task; a snooze or clear closes what no longer applies.
@@ -607,7 +631,7 @@ export async function changeStatus(req: AuthedRequest, res: Response): Promise<v
   await prisma.$transaction([
     prisma.dialerLead.update({ where: { id: lead.id }, data }),
     prisma.dialerStatusChange.create({ data: { leadId: lead.id, fromStatus: lead.status, toStatus: status, fromStage: lead.stage, toStage: stage, byName: me.name } }),
-    ...(note ? [prisma.dialerNote.create({ data: { leadId: lead.id, userId: me.id, text: `Status ${lead.status} → ${status}: ${note}` } })] : []),
+    ...(note ? [prisma.dialerNote.create({ data: { leadId: lead.id, userId: me.id, text: `Status ${lead.status} → ${status}: ${note}`, source: writeSource(req) } })] : []),
   ])
   res.json({ ok: true, status, stage })
 }
@@ -620,12 +644,14 @@ const fixSchema = z.object({
   // Added here: kept by the dialer, never touched by an import.
   phone2: opt(40), email2: opt(200), linkedin: opt(300), decisionMaker: opt(120), bestTime: opt(80),
   tags: z.array(z.string().trim().min(1).max(30)).max(20).optional(),
+  /** Alternative numbers (Earth Zone sync, or added by the agent or Claude), each its own copy button. */
+  altPhones: z.array(z.string().trim().min(3).max(40)).max(20).optional(),
   /** false = this change does not need to go into Earthzone. Default: it does (when the tick is on). */
   needsCrm: z.boolean().optional(),
   /** "Done in Earthzone": clears the marker. */
   crmDone: z.boolean().optional(),
 })
-const ADDED_FIELDS = { phone2: 'second phone', email2: 'second email', linkedin: 'LinkedIn', decisionMaker: 'decision maker', bestTime: 'best time to call', tags: 'tags' } as const
+const ADDED_FIELDS = { phone2: 'second phone', email2: 'second email', linkedin: 'LinkedIn', decisionMaker: 'decision maker', bestTime: 'best time to call', tags: 'tags', altPhones: 'alternative numbers' } as const
 
 /** PATCH /api/dialer/leads/:id — Fix data: set the state, pick the zone of a split state, send back to lead gen. */
 export async function fixLead(req: AuthedRequest, res: Response): Promise<void> {
@@ -660,6 +686,10 @@ export async function fixLead(req: AuthedRequest, res: Response): Promise<void> 
     if (parsed.data.sentToLeadGen) log.push({ kind: 'BACK_TO_LEADGEN', note: 'Sent back to lead gen to find the state' })
   }
   const changedWhat: string[] = []
+  // Values the Claude connector writes are kept one per row (field + value), so the Claude log can show,
+  // edit or remove each of them (ITAD update 12 Nov, section 3).
+  const viaClaude = writeSource(req) === 'CLAUDE'
+  const claudeRows: { kind: string; note: string; field: string; value: string }[] = []
   for (const [k, label] of Object.entries(ADDED_FIELDS) as [keyof typeof ADDED_FIELDS, string][]) {
     const v = parsed.data[k]
     if (v === undefined) continue
@@ -668,7 +698,16 @@ export async function fixLead(req: AuthedRequest, res: Response): Promise<void> 
     if (same) continue
     ;(data as Record<string, unknown>)[k] = Array.isArray(v) ? v : v || null
     changedWhat.push(label)
-    log.push({ kind: 'EDIT', note: `${label[0].toUpperCase()}${label.slice(1)} ${Array.isArray(v) ? `set to ${v.join(', ') || 'none'}` : v ? `set to ${v}` : 'removed'}` })
+    const note = `${label[0].toUpperCase()}${label.slice(1)} ${Array.isArray(v) ? `set to ${v.join(', ') || 'none'}` : v ? `set to ${v}` : 'removed'}`
+    if (!viaClaude) { log.push({ kind: 'EDIT', note }); continue }
+    if (k === 'altPhones' && Array.isArray(v)) {
+      // Each alternative number its own row, so the Claude log can correct or remove one.
+      const had = new Set((before as string[] | null) ?? [])
+      const added = v.filter((x) => !had.has(x))
+      for (const x of added) claudeRows.push({ kind: 'EDIT', note: `${label[0].toUpperCase()}${label.slice(1)}: added ${x}`, field: k, value: x })
+      if (!added.length) log.push({ kind: 'EDIT', note })
+    } else if (v && !Array.isArray(v)) claudeRows.push({ kind: 'EDIT', note, field: k, value: v })
+    else log.push({ kind: 'EDIT', note })
   }
   if (log.some((l) => l.kind === 'STATE_FIX')) changedWhat.push('state')
   // Something added here that Earthzone should also have: mark the lead until the rep ticks "Done in Earthzone".
@@ -684,7 +723,8 @@ export async function fixLead(req: AuthedRequest, res: Response): Promise<void> 
   }
   await prisma.$transaction([
     prisma.dialerLead.update({ where: { id: got.lead.id }, data }),
-    ...log.map((l) => prisma.dialerAction.create({ data: { leadId: got.lead.id, userId: got.me.id, kind: l.kind, note: l.note } })),
+    ...log.map((l) => prisma.dialerAction.create({ data: { leadId: got.lead.id, userId: got.me.id, kind: l.kind, note: l.note, source: viaClaude ? 'CLAUDE' : null } })),
+    ...claudeRows.map((l) => prisma.dialerAction.create({ data: { leadId: got.lead.id, userId: got.me.id, kind: l.kind, note: l.note, source: 'CLAUDE', field: l.field, value: l.value } })),
   ])
   res.json({ ok: true })
 }
@@ -709,6 +749,10 @@ const settingsSchema = z.object({
   bulkUpdatePct: z.number().min(1).max(100).optional(),
   outcomeChipStatuses: z.array(z.string().min(1).max(60)).max(20).optional(),
   taskReminders: z.array(z.number().int().min(0).max(1440)).max(4).optional(),
+  touchesFromNotes: z.boolean().optional(),
+  manualTouchesCount: z.boolean().optional(),
+  noteOnlyStatuses: z.array(z.string().min(1).max(60)).max(20).optional(),
+  ezMatchOrder: z.array(z.enum(['ezId', 'email', 'phone', 'companyLastName'])).min(1).max(4).optional(),
 })
 
 export async function getSettings(_req: AuthedRequest, res: Response): Promise<void> {
@@ -794,27 +838,34 @@ export async function addNote(req: AuthedRequest, res: Response): Promise<void> 
     leadData.crmUpdateWhat = [...new Set([...(got.lead.crmUpdateWhat?.split(', ').filter(Boolean) ?? []), 'note'])].join(', ')
   }
   const [note] = await prisma.$transaction([
-    prisma.dialerNote.create({ data: { leadId: got.lead.id, userId: got.me.id, text: d.text, pinned: !!d.pinned, nextActionAt: next }, select: noteSelect }),
+    prisma.dialerNote.create({ data: { leadId: got.lead.id, userId: got.me.id, text: d.text, pinned: !!d.pinned, nextActionAt: next, source: writeSource(req) }, select: noteSelect }),
     ...(d.pinned ? [prisma.dialerNote.updateMany({ where: { leadId: got.lead.id, pinned: true }, data: { pinned: false } })] : []),
     prisma.dialerLead.update({ where: { id: got.lead.id }, data: leadData }),
   ])
   // The new note is the pinned one (the update above unpinned the others first).
   if (d.pinned) await prisma.dialerNote.update({ where: { id: note.id }, data: { pinned: true } })
-  if (next) await syncAutoTasks([got.lead.ownerId])
+  // A new person named in the note (with an email, phone or LinkedIn link) is offered as a second contact.
+  await suggestContactsFromNote(got.lead, note).catch(() => 0)
+  // The agent's own note is a contact: a follow-up waiting on this lead closes by itself (section 4).
+  await syncAutoTasks([got.lead.ownerId])
   res.status(201).json({ note: noteView({ ...note, pinned: !!d.pinned }) })
 }
 
-/** PATCH /api/dialer/notes/:id — edit (author only, shown as edited) or pin / unpin. */
+/**
+ * PATCH /api/dialer/notes/:id — edit (shown as edited) or pin / unpin. The note's author or the lead's agent may
+ * edit (ITAD update 12 Nov, section 2: every note is editable, Earth Zone notes included; Earth Zone's own text
+ * stays in ezText, so a later sync never overwrites the edit).
+ */
 export async function updateNote(req: AuthedRequest, res: Response): Promise<void> {
   const me = await whoAmI(req)
   const note = await prisma.dialerNote.findUnique({ where: { id: req.params.id }, include: { lead: { select: { ownerId: true } } } })
-  if (!note) { res.status(404).json({ error: 'Note not found' }); return }
+  if (!note || note.deletedAt) { res.status(404).json({ error: 'Note not found' }); return }
   const canSee = note.lead.ownerId === me.id || (me.isManager && (await itadUserIds(me)).includes(note.lead.ownerId))
   if (!canSee) { res.status(404).json({ error: 'Note not found' }); return }
   const parsed = z.object({ text: z.string().trim().min(1).max(4000).optional(), pinned: z.boolean().optional() }).safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid note' }); return }
   const d = parsed.data
-  if (d.text !== undefined && note.userId !== me.id) { res.status(403).json({ error: 'Only the person who wrote a note can edit it.' }); return }
+  if (d.text !== undefined && note.userId !== me.id && note.lead.ownerId !== me.id) { res.status(403).json({ error: 'Only the person who wrote a note, or the lead\'s agent, can edit it.' }); return }
   const ops: Prisma.PrismaPromise<unknown>[] = []
   if (d.pinned) ops.push(prisma.dialerNote.updateMany({ where: { leadId: note.leadId, pinned: true }, data: { pinned: false } }))
   ops.push(prisma.dialerNote.update({
@@ -836,6 +887,7 @@ export async function listNotes(req: AuthedRequest, res: Response): Promise<void
   const rows = await prisma.dialerNote.findMany({
     where: {
       lead: { ownerId: { in: owners } },
+      deletedAt: null,
       ...(req.query.leadId ? { leadId: String(req.query.leadId) } : {}),
       ...(from || to ? { createdAt: { ...(from && !Number.isNaN(from.getTime()) ? { gte: from } : {}), ...(to && !Number.isNaN(to.getTime()) ? { lte: to } : {}) } } : {}),
     },
@@ -884,6 +936,7 @@ const prefsSchema = z.object({
   columns: z.array(z.string().min(1).max(40)).max(30).optional(),
   fuViews: z.array(viewSchema).max(20).optional(),
   filterPins: z.record(z.string().min(1).max(30), z.array(z.string().min(1).max(40)).max(40)).optional(),
+  fuColumns: z.array(z.string().min(1).max(40)).max(30).optional(),
 })
 
 export async function getPrefs(req: AuthedRequest, res: Response): Promise<void> {
@@ -897,7 +950,7 @@ export async function putPrefs(req: AuthedRequest, res: Response): Promise<void>
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid settings' }); return }
   const row = await prisma.dialerUserPrefs.findUnique({ where: { userId: req.user!.id } })
   const cur = readPrefs(row?.data)
-  const next = { views: parsed.data.views ?? cur.views, followUp: parsed.data.followUp ?? cur.followUp, columns: parsed.data.columns ?? cur.columns, fuViews: parsed.data.fuViews ?? cur.fuViews, filterPins: parsed.data.filterPins ? { ...cur.filterPins, ...parsed.data.filterPins } : cur.filterPins }
+  const next = { views: parsed.data.views ?? cur.views, followUp: parsed.data.followUp ?? cur.followUp, columns: parsed.data.columns ?? cur.columns, fuViews: parsed.data.fuViews ?? cur.fuViews, filterPins: parsed.data.filterPins ? { ...cur.filterPins, ...parsed.data.filterPins } : cur.filterPins, fuColumns: parsed.data.fuColumns ?? cur.fuColumns }
   await prisma.dialerUserPrefs.upsert({ where: { userId: req.user!.id }, update: { data: next as unknown as Prisma.InputJsonValue }, create: { userId: req.user!.id, data: next as unknown as Prisma.InputJsonValue } })
   res.json({ prefs: next })
 }

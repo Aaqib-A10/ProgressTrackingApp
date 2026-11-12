@@ -82,6 +82,8 @@ export interface DialerLead {
   jobTitle?: string | null
   assignedTo?: string | null
   lastTouchedAt?: string | null
+  /** When a follow-up closed by itself after the last touch (a status change...): the quiet clock restarts there. */
+  quietFrom?: string | null
   attempts?: number
   tries?: number
   reAttempts?: number
@@ -553,7 +555,7 @@ export const lastTouched = (l: DialerLead) => l.lastTouchedAt ?? l.lastActivityA
 export const neverWorked = (l: DialerLead) => l.status === 'Assigned' && !l.manualTouches
 /** Days quiet: from the assignment (Created At) for a lead never worked, else from the last touch. */
 export function daysQuiet(l: DialerLead, now: Date): number {
-  return daysSince(neverWorked(l) ? l.leadDate ?? l.createdAt : lastTouched(l), now)
+  return daysSince(neverWorked(l) ? l.leadDate ?? l.createdAt : l.quietFrom ?? lastTouched(l), now)
 }
 /** The follow-up rule for a lead (days), or null when its status has none. */
 export const ruleDays = (l: DialerLead, s: DialerSettings, by?: FollowUpDays): number | null => thresholdOf(l, s, by) ?? null

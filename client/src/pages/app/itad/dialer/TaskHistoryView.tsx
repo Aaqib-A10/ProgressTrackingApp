@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Circle, Clock3 } from 'lucide-react'
+import { CheckCircle2, Circle, Clock3, RotateCcw } from 'lucide-react'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerData, type TaskHistory, type TaskHistoryRow } from '../../../../lib/dialerApi'
@@ -37,6 +37,10 @@ export function TaskHistoryView({ data, showOwner, onOpenLead }: { data: DialerD
   async function tick(t: TaskHistoryRow) {
     try { await dialerApi.updateTask(t.id, { done: true }); setReload((r) => r + 1) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save') }) }
   }
+  // A follow-up that closed by itself can be opened again in one tap (only a later contact closes it again).
+  async function reopen(t: TaskHistoryRow) {
+    try { await dialerApi.updateTask(t.id, { done: false }); addToast({ type: 'success', message: 'Reopened.' }); setReload((r) => r + 1) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not reopen') }) }
+  }
   const field = 'h-8 rounded-full border border-line bg-card px-3 text-body-sm text-ink focus:border-primary focus:outline-none'
   return (
     <div className="space-y-4">
@@ -54,7 +58,7 @@ export function TaskHistoryView({ data, showOwner, onOpenLead }: { data: DialerD
       <div className="grid gap-4 lg:grid-cols-3">
         <Column title="Overdue" tone="text-rose-600 dark:text-rose-300" rows={cols.overdue} showOwner={showOwner} onOpen={onOpenLead} onTick={tick} me={data.me.id} />
         <Column title="Due today / upcoming" tone="text-ink" rows={cols.next} showOwner={showOwner} onOpen={onOpenLead} onTick={tick} me={data.me.id} />
-        <Column title="Completed" tone="text-success" rows={cols.done} showOwner={showOwner} onOpen={onOpenLead} me={data.me.id} />
+        <Column title="Completed" tone="text-success" rows={cols.done} showOwner={showOwner} onOpen={onOpenLead} onReopen={reopen} me={data.me.id} />
       </div>
     </div>
   )
@@ -66,7 +70,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'no date')
 
-function Column({ title, tone, rows, showOwner, onOpen, onTick, me }: { title: string; tone: string; rows: TaskHistoryRow[]; showOwner: boolean; onOpen: (id: string) => void; onTick?: (t: TaskHistoryRow) => void; me: string }) {
+function Column({ title, tone, rows, showOwner, onOpen, onTick, onReopen, me }: { title: string; tone: string; rows: TaskHistoryRow[]; showOwner: boolean; onOpen: (id: string) => void; onTick?: (t: TaskHistoryRow) => void; onReopen?: (t: TaskHistoryRow) => void; me: string }) {
   const [n, setN] = useState(30)
   return (
     <section className="flex min-h-[200px] flex-col rounded-card border border-line bg-slate-50/60 dark:bg-white/[0.02]">
@@ -88,6 +92,12 @@ function Column({ title, tone, rows, showOwner, onOpen, onTick, me }: { title: s
                 {t.note && <span className="mt-0.5 block truncate text-[12px] text-ink-muted">{t.note}</span>}
               </button>
             </div>
+            {t.status === 'DONE' && t.autoClosedBy && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-line pt-1.5 text-[12px]">
+                <span className="min-w-0 flex-1 text-ink-muted">Completed automatically — {t.autoClosedBy}</span>
+                {onReopen && t.ownerId === me && <button type="button" onClick={() => onReopen(t)} className="inline-flex items-center gap-1 font-semibold text-primary"><RotateCcw size={12} />Reopen</button>}
+              </div>
+            )}
           </li>
         ))}
         {rows.length > n && <li><button type="button" onClick={() => setN(n + 30)} className="w-full py-1.5 text-center text-body-sm font-semibold text-primary">Show more</button></li>}

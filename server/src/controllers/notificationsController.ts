@@ -3,8 +3,39 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { companyToday, dbDateFromString } from '../lib/time'
 import { countUnreadFeedback } from './feedbackController'
+import { z } from 'zod'
+import type { NotificationType } from '@prisma/client'
+import { NOTIFY_CATEGORIES, NOTIFY_CATEGORY_KEYS, categoryOf, categoryOfDerived, isNotifyCategory, leadStatusRank, typesOf, type NotifyCategory } from '../lib/notifyCategories'
 
-type Notif = { id: string; type: 'reminder' | 'alert' | 'info'; title: string; body: string; date: string; link?: string; persistent?: boolean }
+type Notif = {
+  id: string
+  type: 'reminder' | 'alert' | 'info'
+  title: string
+  body: string
+  date: string
+  link?: string
+  persistent?: boolean
+  /** The tab it belongs to (lib/notifyCategories). */
+  category: NotifyCategory
+  /** A Lead Dialer follow-up: the lead's status (Pipeline, Interested, Connected, …). */
+  leadStatus?: string | null
+}
+
+/** A person's muted categories, only the ones that still exist. */
+function cleanMuted(muted: string[] | null | undefined): NotifyCategory[] {
+  return (muted ?? []).filter(isNotifyCategory)
+}
+
+/**
+ * Lead Dialer follow-up notifications point at the follow-up (entityType 'DialerTask', entityId =
+ * the To-Do entry); the lead's status ranks them (Pipeline first). One query for the whole list.
+ */
+async function dialerLeadStatuses(rows: { entityType: string | null; entityId: string | null }[]): Promise<Map<string, string | null>> {
+  const ids = [...new Set(rows.filter((r) => r.entityType === 'DialerTask' && r.entityId).map((r) => r.entityId!))]
+  if (!ids.length) return new Map()
+  const tasks = await prisma.workLogEntry.findMany({ where: { id: { in: ids } }, select: { id: true, dialerLead: { select: { status: true, statusHere: true } } } })
+  return new Map(tasks.map((t) => [t.id, t.dialerLead ? t.dialerLead.statusHere ?? t.dialerLead.status : null]))
+}
 
 /** Has the user submitted today for their department/sub-department? */
 async function submittedToday(userId: string, dept?: string | null, sub?: string | null): Promise<boolean> {
@@ -82,7 +113,11 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
     deptType === 'ECOMMERCE' ? prisma.stockRequest.count({ where: { assignedToId: me.id, status: 'ASSIGNED' } }) : none,
   ])
 
-  for (const m of mentions) {
+  // Lead Dialer follow-ups first, by lead value (Pipeline, Interested, Connected); then newest first.
+  const statuses = await dialerLeadStatuses(mentions)
+  const stored = mentions.map((m, i) => ({ m, i, leadStatus: m.entityType === 'DialerTask' && m.entityId ? statuses.get(m.entityId) ?? null : undefined }))
+  stored.sort((a, b) => (a.leadStatus === undefined ? 99 : leadStatusRank(a.leadStatus)) - (b.leadStatus === undefined ? 99 : leadStatusRank(b.leadStatus)) || a.i - b.i)
+  for (const { m, leadStatus } of stored) {
     notifications.push({
       id: m.id,
       type: m.type === 'TASK_OVERDUE' ? 'alert' : m.type === 'TASK_DUE_SOON' || m.type === 'EXTENSION_REQUESTED' ? 'reminder' : 'info',
@@ -91,20 +126,25 @@ export async function getNotifications(req: AuthedRequest, res: Response): Promi
       date: m.createdAt.toISOString().slice(0, 10),
       link: m.link ?? undefined,
       persistent: true,
+      category: categoryOf(m.type),
+      ...(leadStatus !== undefined ? { leadStatus } : {}),
     })
   }
-  if (needsLog) notifications.push({ id: 'reminder-today', type: 'reminder', title: "Don't forget today's log", body: 'You haven’t submitted your progress for today yet.', date: today })
-  if (missing > 0) notifications.push({ id: 'team-missing', type: 'alert', title: `${missing} not submitted`, body: `${missing} team member${missing > 1 ? 's haven’t' : ' hasn’t'} submitted today.`, date: today })
-  if (unreadFeedback > 0) notifications.push({ id: 'feedback-unread', type: 'info', title: 'New feedback', body: `You have ${unreadFeedback} unread feedback message${unreadFeedback > 1 ? 's' : ''}.`, date: today })
-  if (unreadQa > 0) notifications.push({ id: 'qa-unread', type: 'info', title: 'QA review completed', body: `You have ${unreadQa} new QA evaluation${unreadQa > 1 ? 's' : ''}.`, date: today })
-  if (coaching > 0) notifications.push({ id: 'qa-coaching', type: 'alert', title: 'Coaching needed', body: `${coaching} QA evaluation${coaching > 1 ? 's' : ''} below target in your team.`, date: today })
-  if (pending > 0) notifications.push({ id: 'stock-requests', type: 'alert', title: `${pending} stock request${pending > 1 ? 's' : ''}`, body: `${pending} out-of-stock item${pending > 1 ? 's need' : ' needs'} assignment.`, date: today })
-  if (mine > 0) notifications.push({ id: 'stock-assigned', type: 'info', title: 'Stock task assigned', body: `You have ${mine} stock task${mine > 1 ? 's' : ''} to action.`, date: today })
+  const derived = (n: Omit<Notif, 'category'>) => notifications.push({ ...n, category: categoryOfDerived(n.id) })
+  if (needsLog) derived({ id: 'reminder-today', type: 'reminder', title: "Don't forget today's log", body: 'You haven’t submitted your progress for today yet.', date: today })
+  if (missing > 0) derived({ id: 'team-missing', type: 'alert', title: `${missing} not submitted`, body: `${missing} team member${missing > 1 ? 's haven’t' : ' hasn’t'} submitted today.`, date: today })
+  if (unreadFeedback > 0) derived({ id: 'feedback-unread', type: 'info', title: 'New feedback', body: `You have ${unreadFeedback} unread feedback message${unreadFeedback > 1 ? 's' : ''}.`, date: today })
+  if (unreadQa > 0) derived({ id: 'qa-unread', type: 'info', title: 'QA review completed', body: `You have ${unreadQa} new QA evaluation${unreadQa > 1 ? 's' : ''}.`, date: today })
+  if (coaching > 0) derived({ id: 'qa-coaching', type: 'alert', title: 'Coaching needed', body: `${coaching} QA evaluation${coaching > 1 ? 's' : ''} below target in your team.`, date: today })
+  if (pending > 0) derived({ id: 'stock-requests', type: 'alert', title: `${pending} stock request${pending > 1 ? 's' : ''}`, body: `${pending} out-of-stock item${pending > 1 ? 's need' : ' needs'} assignment.`, date: today })
+  if (mine > 0) derived({ id: 'stock-assigned', type: 'info', title: 'Stock task assigned', body: `You have ${mine} stock task${mine > 1 ? 's' : ''} to action.`, date: today })
 
   // Informational.
-  notifications.push({ id: 'welcome', type: 'info', title: 'Reports update live', body: 'Team totals and dashboards refresh as people submit.', date: today })
+  derived({ id: 'welcome', type: 'info', title: 'Reports update live', body: 'Team totals and dashboards refresh as people submit.', date: today })
 
-  res.json({ notifications, unread: notifications.length })
+  // Muted categories are still listed, but not counted in the badge.
+  const muted = cleanMuted(me.notifyMuted)
+  res.json({ notifications, unread: notifications.filter((n) => !muted.includes(n.category)).length, muted })
 }
 
 const DEPT_LABEL: Record<string, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation', MARKETING: 'Marketing', ECOMMERCE: 'Ecommerce', TALKLOOP: 'Talkloop', CSR: 'CSR', INVENTORY: 'Inventory', CMR: 'CMR' }
@@ -154,17 +194,55 @@ export async function markNotificationRead(req: AuthedRequest, res: Response): P
   res.status(204).end()
 }
 
-/** POST /api/notifications/read-all — clear every stored notification of mine. */
+/** A `category` from the body or the query: undefined = none given, null = not a category. */
+function categoryParam(req: AuthedRequest): NotifyCategory | null | undefined {
+  const raw = (req.body as { category?: unknown } | undefined)?.category ?? req.query.category
+  if (raw === undefined || raw === null || raw === '' || raw === 'all') return undefined
+  return isNotifyCategory(raw) ? raw : null
+}
+
+/** POST /api/notifications/read-all { category? } — clear my stored notifications (of one tab, if given). */
 export async function markAllNotificationsRead(req: AuthedRequest, res: Response): Promise<void> {
-  const r = await prisma.notification.updateMany({ where: { userId: req.user!.id, readAt: null }, data: { readAt: new Date() } })
+  const category = categoryParam(req)
+  if (category === null) {
+    res.status(400).json({ error: 'Unknown category' })
+    return
+  }
+  const typeFilter = category ? { type: { in: typesOf(category) as NotificationType[] } } : {}
+  const r = await prisma.notification.updateMany({ where: { userId: req.user!.id, readAt: null, ...typeFilter }, data: { readAt: new Date() } })
   res.json({ cleared: r.count })
 }
 
-/** GET /api/notifications/history?cursor= — my stored notifications, newest first (read + unread). */
+/** GET /api/notifications/muted — my muted categories, and every category (in tab order). */
+export async function getMutedCategories(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { notifyMuted: true } })
+  res.json({ muted: cleanMuted(me.notifyMuted), categories: NOTIFY_CATEGORIES })
+}
+
+const mutedSchema = z.object({ muted: z.array(z.enum(NOTIFY_CATEGORY_KEYS as [NotifyCategory, ...NotifyCategory[]])).max(NOTIFY_CATEGORY_KEYS.length) })
+
+/** PUT /api/notifications/muted { muted: ['system', …] } — no pop-up or phone push for these; not in the badge. */
+export async function saveMutedCategories(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = mutedSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  const muted = NOTIFY_CATEGORY_KEYS.filter((k) => parsed.data.muted.includes(k))
+  await prisma.user.update({ where: { id: req.user!.id }, data: { notifyMuted: muted } })
+  res.json({ muted, categories: NOTIFY_CATEGORIES })
+}
+
+/** GET /api/notifications/history?cursor=&category= — my stored notifications, newest first (read + unread). */
 export async function getNotificationHistory(req: AuthedRequest, res: Response): Promise<void> {
   const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : null
+  const category = categoryParam(req)
+  if (category === null) {
+    res.status(400).json({ error: 'Unknown category' })
+    return
+  }
   const rows = await prisma.notification.findMany({
-    where: { userId: req.user!.id },
+    where: { userId: req.user!.id, ...(category ? { type: { in: typesOf(category) as NotificationType[] } } : {}) },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: 51,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -172,8 +250,13 @@ export async function getNotificationHistory(req: AuthedRequest, res: Response):
   })
   const hasMore = rows.length > 50
   const page = rows.slice(0, 50)
+  const statuses = await dialerLeadStatuses(page)
   res.json({
-    notifications: page.map((n) => ({ id: n.id, type: n.type, title: n.title, body: n.body, link: n.link, actorName: n.actor?.name ?? null, readAt: n.readAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString() })),
+    notifications: page.map((n) => ({
+      id: n.id, type: n.type, title: n.title, body: n.body, link: n.link, actorName: n.actor?.name ?? null, readAt: n.readAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString(),
+      category: categoryOf(n.type),
+      ...(n.entityType === 'DialerTask' && n.entityId ? { leadStatus: statuses.get(n.entityId) ?? null } : {}),
+    })),
     nextCursor: hasMore ? page[page.length - 1].id : null,
   })
 }

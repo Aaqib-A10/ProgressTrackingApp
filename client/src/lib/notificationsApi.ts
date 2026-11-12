@@ -1,4 +1,7 @@
 import { api } from './api'
+import type { NotifyCategory } from './notifyCategories'
+
+export type { NotifyCategory }
 
 export interface AppNotification {
   id: string
@@ -10,10 +13,15 @@ export interface AppNotification {
   link?: string
   /** True for stored, per-recipient notifications that can be marked read. */
   persistent?: boolean
+  /** The tab it belongs to (lib/notifyCategories). */
+  category: NotifyCategory
+  /** A Lead Dialer follow-up: the lead's status (Pipeline, Interested, Connected, …). */
+  leadStatus?: string | null
 }
 
 export function getNotifications() {
-  return api.get<{ notifications: AppNotification[]; unread: number }>('/notifications')
+  /** `unread` leaves out muted categories; `muted` = my muted categories. */
+  return api.get<{ notifications: AppNotification[]; unread: number; muted: NotifyCategory[] }>('/notifications')
 }
 
 export function markNotificationRead(id: string) {
@@ -46,12 +54,33 @@ export interface StoredNotification {
   actorName: string | null
   readAt: string | null
   createdAt: string
+  category: NotifyCategory
+  leadStatus?: string | null
 }
 
-export function getNotificationHistory(cursor?: string) {
-  return api.get<{ notifications: StoredNotification[]; nextCursor: string | null }>(`/notifications/history${cursor ? `?cursor=${cursor}` : ''}`)
+export function getNotificationHistory(cursor?: string, category?: NotifyCategory) {
+  const q = new URLSearchParams()
+  if (cursor) q.set('cursor', cursor)
+  if (category) q.set('category', category)
+  const qs = q.toString()
+  return api.get<{ notifications: StoredNotification[]; nextCursor: string | null }>(`/notifications/history${qs ? `?${qs}` : ''}`)
 }
 
-export function markAllNotificationsRead() {
-  return api.post<{ cleared: number }>('/notifications/read-all')
+/** Mark my stored notifications read: all of them, or one tab's. */
+export function markAllNotificationsRead(category?: NotifyCategory) {
+  return api.post<{ cleared: number }>('/notifications/read-all', category ? { category } : undefined)
+}
+
+export interface MutedCategories {
+  muted: NotifyCategory[]
+  categories: { key: NotifyCategory; label: string; collapsed: boolean }[]
+}
+
+export function getMutedCategories() {
+  return api.get<MutedCategories>('/notifications/muted')
+}
+
+/** Muted: no pop-up or phone push and not counted in the badge; still listed. */
+export function saveMutedCategories(muted: NotifyCategory[]) {
+  return api.put<MutedCategories>('/notifications/muted', { muted })
 }

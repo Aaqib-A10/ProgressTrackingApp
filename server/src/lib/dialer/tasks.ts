@@ -7,6 +7,7 @@ import { forEachCompany } from '../company'
 import { runTracked } from '../health/jobs'
 import { withDefaults, type DialerSettingsData } from './rules'
 import { lastTouchedAt, touchStats } from './touches'
+import { autoCloseBy } from './noteTouches'
 import { REGION_META, daysQuiet, isBlocked, isClosed, lastTouched, leadRegion, neverWorked, regionWindow, ruleDays, type DialerLead as ViewLead, type DialerSettings as ViewSettings } from './view'
 
 /**
@@ -41,16 +42,18 @@ export function periodStartOf(dueAt: Date): Date {
   return new Date(`${DateTime.fromJSDate(dueAt).setZone(companyTz()).toISODate()}T00:00:00.000Z`)
 }
 
-export function taskView(e: Pick<WorkLogEntry, 'id' | 'dialerLeadId' | 'userId' | 'taskKind' | 'title' | 'details' | 'dueAt' | 'origin' | 'autoReason' | 'status' | 'cancelledAt' | 'doneAt' | 'outcome' | 'remindMinutes'>) {
+export function taskView(e: Pick<WorkLogEntry, 'id' | 'dialerLeadId' | 'userId' | 'taskKind' | 'title' | 'details' | 'dueAt' | 'origin' | 'autoReason' | 'status' | 'cancelledAt' | 'doneAt' | 'outcome' | 'remindMinutes'> & { autoClosedBy?: string | null }) {
   return {
     id: e.id, leadId: e.dialerLeadId ?? '', ownerId: e.userId, kind: (e.taskKind ?? 'TODO') as TaskKind, title: e.title, note: e.details,
     dueAt: e.dueAt?.toISOString() ?? null, origin: (e.origin ?? 'MANUAL') as 'MANUAL' | 'AUTO', reason: (e.autoReason ?? null) as AutoReason | null,
     status: e.cancelledAt ? 'CANCELLED' as const : e.status === 'DONE' ? 'DONE' as const : 'OPEN' as const,
     doneAt: e.doneAt?.toISOString() ?? null, outcome: e.outcome, reminders: e.remindMinutes,
+    /** Closed by itself (ITAD update 12 Nov, section 4): the agent's contact that closed it ("Note on 14 Nov (Earth Zone)"). */
+    autoClosedBy: e.autoClosedBy ?? null,
   }
 }
 export type TaskView = ReturnType<typeof taskView>
-export const taskSelect = { id: true, dialerLeadId: true, userId: true, taskKind: true, title: true, details: true, dueAt: true, origin: true, autoReason: true, status: true, cancelledAt: true, doneAt: true, outcome: true, remindMinutes: true, createdAt: true } as const
+export const taskSelect = { id: true, dialerLeadId: true, userId: true, taskKind: true, title: true, details: true, dueAt: true, origin: true, autoReason: true, status: true, cancelledAt: true, doneAt: true, outcome: true, remindMinutes: true, autoClosedBy: true, createdAt: true } as const
 
 /** Open Lead Dialer tasks of these owners, and the ones done since `since`. */
 export async function tasksFor(ownerIds: string[], since: Date): Promise<TaskView[]> {
@@ -67,8 +70,28 @@ const LEAD_SELECT = {
 } as const
 type LeadRow = Prisma.DialerLeadGetPayload<{ select: typeof LEAD_SELECT }>
 
+/**
+ * When each lead's latest follow-up closed by itself, at the time of the contact that closed it (ITAD update
+ * 12 Nov, section 4): the quiet clock restarts there, so the next follow-up comes one stage interval later even
+ * when the contact was a status change rather than a note.
+ */
+export async function autoClosedAt(leadIds: string[]): Promise<Map<string, Date>> {
+  const out = new Map<string, Date>()
+  if (!leadIds.length) return out
+  for (let i = 0; i < leadIds.length; i += 5000) {
+    const rows = await prisma.workLogEntry.groupBy({ by: ['dialerLeadId'], where: { dialerLeadId: { in: leadIds.slice(i, i + 5000) }, autoClosedBy: { not: null }, status: 'DONE' }, _max: { doneAt: true } })
+    for (const r of rows) if (r.dialerLeadId && r._max.doneAt) out.set(r.dialerLeadId, r._max.doneAt)
+  }
+  return out
+}
+
+/** The quiet clock's start when a closed follow-up restarted it after the last touch; null = Last touched as usual. */
+export function quietFromOf(lastTouched: Date | null, closedAt: Date | undefined): Date | null {
+  return closedAt && (!lastTouched || closedAt > lastTouched) ? closedAt : null
+}
+
 /** The lead as the shared screen logic reads it. */
-function asView(l: LeadRow, extra: { lastTouchedAt: Date | null; manual: number }): ViewLead {
+function asView(l: LeadRow, extra: { lastTouchedAt: Date | null; manual: number; quietFrom?: Date | null }): ViewLead {
   return {
     ...l, ownerName: '', contactName: null, email: null, phone: null, city: null, stateRaw: null, verifyZone: false, industry: null, maxStage: l.stage, source: null,
     leadDate: l.leadDate?.toISOString() ?? null, lastActivityAt: l.lastActivityAt?.toISOString() ?? null, statusChangedAt: l.statusChangedAt?.toISOString() ?? null,
@@ -76,6 +99,7 @@ function asView(l: LeadRow, extra: { lastTouchedAt: Date | null; manual: number 
     sentToLeadGen: false, actionCount: 0, noteCount: 0, pinnedNote: null, suggestedState: null, externalId: null, website: null, companySize: null, listName: 'CRM',
     phone2: null, email2: null, linkedin: null, decisionMaker: null, bestTime: null, tags: [], needsCrmUpdate: false, crmUpdateWhat: null, backlogKeptAt: null,
     lastImportId: null, firstImportId: null, lastTouchedAt: extra.lastTouchedAt?.toISOString() ?? null, manualTouches: extra.manual,
+    quietFrom: extra.quietFrom?.toISOString() ?? null,
   } as unknown as ViewLead
 }
 
@@ -91,8 +115,8 @@ export function nineOnLeadClock(day: string, zone: string): Date {
  * move a call back's due time, close the ones no longer needed. Safe to run any time; runs
  * one owner at a time under a database lock, so two runs never make the same task twice.
  */
-export async function syncAutoTasks(ownerIds: string[], now = new Date()): Promise<{ created: number; updated: number; cancelled: number }> {
-  const total = { created: 0, updated: 0, cancelled: 0 }
+export async function syncAutoTasks(ownerIds: string[], now = new Date()): Promise<{ created: number; updated: number; cancelled: number; autoClosed: number }> {
+  const total = { created: 0, updated: 0, cancelled: 0, autoClosed: 0 }
   if (!ownerIds.length) return total
   const settings = await dialerSettings()
   const prefs = await prisma.dialerUserPrefs.findMany({ where: { userId: { in: ownerIds } }, select: { userId: true, data: true } })
@@ -102,12 +126,49 @@ export async function syncAutoTasks(ownerIds: string[], now = new Date()): Promi
     const r = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`dialer-tasks:${owner}`}))`
       const leads = await tx.dialerLead.findMany({ where: { ownerId: owner, inLatestImport: true, duplicate: false }, select: LEAD_SELECT })
-      const stats = await touchStats(leads)
+      const stats = await touchStats(leads, { touchesFromNotes: settings.touchesFromNotes, manualTouchesCount: settings.manualTouchesCount })
+      const closedAt = settings.touchesFromNotes ? await autoClosedAt(leads.map((l) => l.id)) : new Map<string, Date>()
+      const openAll = await tx.workLogEntry.findMany({ where: { userId: owner, origin: 'AUTO', status: { not: 'DONE' }, cancelledAt: null, dialerLeadId: { not: null } }, select: { id: true, dialerLeadId: true, autoReason: true, dueAt: true, createdAt: true, reopenedAt: true } })
+
+      // 1) Follow-ups the agent already answered (ITAD update 12 Nov, section 4): a contact by the agent after the
+      //    follow-up was made (or reopened) closes it by itself, naming that contact. This runs first, so the
+      //    quiet clock restarts at that contact and the next follow-up comes one stage interval later.
+      const autoDone: { id: string; at: Date; text: string }[] = []
+      const fuOpen = settings.touchesFromNotes ? openAll.filter((t) => t.autoReason === 'FOLLOW_UP_RULE' && t.dialerLeadId) : []
+      if (fuOpen.length) {
+        const ownerName = (await tx.user.findUnique({ where: { id: owner }, select: { name: true } }))?.name ?? null
+        const ids = [...new Set(fuOpen.map((t) => t.dialerLeadId!))]
+        const changes = await tx.dialerStatusChange.findMany({ where: { leadId: { in: ids }, fromStatus: { not: null } }, select: { leadId: true, fromStatus: true, toStatus: true, createdAt: true, byName: true } })
+        const statusOf = new Map(leads.map((l) => [l.id, l.status]))
+        for (const t of fuOpen) {
+          const st = stats.get(t.dialerLeadId!)
+          const r = autoCloseBy({
+            since: t.reopenedAt ?? t.createdAt,
+            leadStatus: statusOf.get(t.dialerLeadId!) ?? '',
+            contacts: st?.contacts ?? [],
+            // An import (no name) or the agent's own change; a manager's change is not the agent's contact.
+            statusChanges: changes.filter((c) => c.leadId === t.dialerLeadId).map((c) => ({ at: c.createdAt, fromStatus: c.fromStatus, toStatus: c.toStatus, byOwner: !c.byName || c.byName === ownerName })),
+            importTouches: st?.importTouches ?? [],
+            noteOnly: settings.noteOnlyStatuses,
+          })
+          if (!r) continue
+          autoDone.push({ id: t.id, at: r.at, text: r.text })
+          const prev = closedAt.get(t.dialerLeadId!)
+          if (!prev || r.at > prev) closedAt.set(t.dialerLeadId!, r.at)
+        }
+        // doneAt is the contact's time: Task history shows when the agent reached the lead, and the clock restarts there.
+        for (const d of autoDone) await tx.workLogEntry.update({ where: { id: d.id }, data: { status: 'DONE', doneAt: d.at, outcome: 'Completed automatically', autoClosedBy: d.text } })
+      }
+      const doneIds = new Set(autoDone.map((d) => d.id))
+      const open = openAll.filter((t) => !doneIds.has(t.id))
+
+      // 2) What should be open now.
       const want = new Map<string, { leadId: string; reason: AutoReason; dueAt: Date; company: string }>()
       const tomorrow = new Date(now.getTime() + 86400000)
       for (const row of leads) {
         const st = stats.get(row.id)
-        const l = asView(row, { lastTouchedAt: lastTouchedAt(row.lastActivityAt, st), manual: st?.manual ?? 0 })
+        const touched = lastTouchedAt(row.lastActivityAt, st)
+        const l = asView(row, { lastTouchedAt: touched, manual: st?.manual ?? 0, quietFrom: quietFromOf(touched, closedAt.get(row.id)) })
         if (isClosed(l, settings as unknown as ViewSettings) || isBlocked(l)) continue
         if (row.callLaterAt) { want.set(`${row.id}|CALL_LATER`, { leadId: row.id, reason: 'CALL_LATER', dueAt: row.callLaterAt, company: row.company }); continue }
         if (row.followUpDropped || (row.snoozeUntil && row.snoozeUntil > now)) continue
@@ -115,17 +176,20 @@ export async function syncAutoTasks(ownerIds: string[], now = new Date()): Promi
         if (rule == null) continue
         // Due now, or by this time tomorrow (so its reminders can come before it is late).
         if (daysQuiet(l, tomorrow) < rule) continue
-        const base = new Date(neverWorked(l) ? l.leadDate ?? l.createdAt : lastTouched(l))
+        const base = new Date(neverWorked(l) ? l.leadDate ?? l.createdAt : l.quietFrom ?? lastTouched(l))
         const breachDay = new Date(base.getTime() + rule * 86400000).toISOString().slice(0, 10)
         want.set(`${row.id}|FOLLOW_UP_RULE`, { leadId: row.id, reason: 'FOLLOW_UP_RULE', dueAt: nineOnLeadClock(breachDay, zoneOf(l, now)), company: row.company })
       }
-      const open = await tx.workLogEntry.findMany({ where: { userId: owner, origin: 'AUTO', status: { not: 'DONE' }, cancelledAt: null, dialerLeadId: { not: null } }, select: { id: true, dialerLeadId: true, autoReason: true, dueAt: true } })
+      // 3) Keep what is still wanted; one no longer due for any other reason (snoozed, dropped, closed status) is
+      //    cancelled as before.
       const have = new Map<string, (typeof open)[number]>()
       const stale: string[] = []
       for (const t of open) {
         const k = `${t.dialerLeadId}|${t.autoReason}`
-        if (!want.has(k) || have.has(k)) stale.push(t.id)
-        else have.set(k, t)
+        if (want.has(k) && !have.has(k)) have.set(k, t)
+        // A follow-up the agent reopened stays open until they finish it or reach the lead again (step 1 above).
+        else if (t.reopenedAt && t.autoReason === 'FOLLOW_UP_RULE' && !have.has(k)) have.set(k, t)
+        else stale.push(t.id)
       }
       const creates: Prisma.WorkLogEntryCreateManyInput[] = []
       let updated = 0
@@ -145,9 +209,9 @@ export async function syncAutoTasks(ownerIds: string[], now = new Date()): Promi
       }
       if (creates.length) await tx.workLogEntry.createMany({ data: creates })
       if (stale.length) await tx.workLogEntry.updateMany({ where: { id: { in: stale } }, data: { cancelledAt: now, cancelReason: 'No longer due (the lead moved on).' } })
-      return { created: creates.length, updated, cancelled: stale.length }
+      return { created: creates.length, updated, cancelled: stale.length, autoClosed: autoDone.length }
     }, { timeout: 60_000, maxWait: 30_000 })
-    total.created += r.created; total.updated += r.updated; total.cancelled += r.cancelled
+    total.created += r.created; total.updated += r.updated; total.cancelled += r.cancelled; total.autoClosed += r.autoClosed
   }
   return total
 }

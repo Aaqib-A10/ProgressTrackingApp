@@ -126,7 +126,8 @@ export async function updateTask(req: AuthedRequest, res: Response): Promise<voi
   const now = new Date()
   const data: Prisma.WorkLogEntryUpdateInput = {}
   if (d.done === true) Object.assign(data, { status: 'DONE', doneAt: t.doneAt ?? now, outcome: d.outcome ?? t.outcome })
-  if (d.done === false) Object.assign(data, { status: 'PLANNED', doneAt: null, outcome: null })
+  // Reopened (one tap in Task history): a follow-up that closed by itself only closes again on a newer contact.
+  if (d.done === false) Object.assign(data, { status: 'PLANNED', doneAt: null, outcome: null, autoClosedBy: null, reopenedAt: now })
   if (d.done === undefined && d.outcome !== undefined) data.outcome = d.outcome
   if (d.dueAt) { const due = new Date(d.dueAt); Object.assign(data, { dueAt: due, periodStart: periodStartOf(due), remindersSent: [] }) }
   if (d.note !== undefined) data.details = d.note || null

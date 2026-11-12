@@ -221,10 +221,11 @@ const TOOLS: Tool[] = [
     async run(u) {
       const r = await invokeAs(P.listProjects, u)
       if (r.status >= 400) return fail(invokedError(r))
-      type Row = { key: string; name: string; workFolder: string | null; myRole: string | null; openCount: number; myOpenCount: number }
+      type Row = { key: string; name: string; workFolder: string | null; myRole: string | null; openCount: number; myOpenCount: number; overdueCount?: number }
       const rows = (r.body as { projects: Row[] }).projects
       if (!rows.length) return text('No projects.')
-      return text(rows.map((p) => `${p.key} | ${p.name} | ${p.myOpenCount} open for me, ${p.openCount} open in total | work lives: ${p.workFolder || 'not set'}`).join('\n'))
+      const overdue = rows.reduce((t, p) => t + (p.overdueCount ?? 0), 0)
+      return text(`${rows.length} projects, ${rows.reduce((t, p) => t + p.openCount, 0)} open tickets, ${overdue} overdue${overdue ? ` (for the overdue ones call list_project_tickets with overdue: true for: ${rows.filter((p) => p.overdueCount).map((p) => p.key).join(', ')})` : ''}.\n${rows.map((p) => `${p.key} | ${p.name} | ${p.myOpenCount} open for me, ${p.openCount} open in total, ${p.overdueCount ?? 0} overdue | work lives: ${p.workFolder || 'not set'}`).join('\n')}`)
     },
   },
   {
@@ -343,6 +344,7 @@ const TOOLS: Tool[] = [
         status: { type: 'string', description: 'Only this column, e.g. In Progress' },
         assignee: { type: 'string', description: 'Only tickets given to this person (name, email, id, "me"), or "unassigned"' },
         include_done: { type: 'boolean', description: 'Also list finished tickets (default false)' },
+        overdue: { type: 'boolean', description: 'Only open tickets past their due date (any column).' },
       },
       required: ['project'],
       additionalProperties: false,
@@ -354,7 +356,10 @@ const TOOLS: Tool[] = [
       const { board, error: e2 } = await loadBoard(u, project.key, a.include_done === true)
       if (!board) return fail(e2!)
       let rows = board.tasks
-      if (str(a.status)) {
+      // "Overdue" is not a column: an assistant asking for it means open tickets past their due date.
+      const overdue = a.overdue === true || /^overdue$/i.test(str(a.status))
+      if (overdue) rows = rows.filter((t) => t.isOverdue && t.category !== 'DONE')
+      else if (str(a.status)) {
         const col = findColumn(board.columns, str(a.status))
         if (!col) return fail(`No column "${str(a.status)}" on ${project.key}. Columns: ${board.columns.map((x) => x.name).join(', ')}.`)
         rows = rows.filter((t) => t.status === col.name)
@@ -371,7 +376,7 @@ const TOOLS: Tool[] = [
           rows = rows.filter((t) => t.assignees.some((x) => x.id === member.userId))
         }
       }
-      if (!rows.length) return text(`No ${a.include_done === true || str(a.status) ? '' : 'open '}tickets in ${project.key} match.`)
+      if (!rows.length) return text(`No ${overdue ? 'overdue ' : a.include_done === true || str(a.status) ? '' : 'open '}tickets in ${project.key} match.`)
       return text(`${rows.length} ticket${rows.length === 1 ? '' : 's'} in ${project.key} (code | status | priority | due | title | given to, given by):\n${rows.map((t) => ticketLine(t, 'both')).join('\n')}\n\nUse get_ticket with a code for the full brief.`)
     },
   },
@@ -610,6 +615,9 @@ const TOOLS: Tool[] = [
   ...DEPARTMENT_TOOLS,
   ...WORK_TOOLS,
 ]
+
+/** The read-only project ticket tools, for Metra (it answers "which tickets are overdue" from these, not from search). */
+export const TICKET_READ_TOOLS = TOOLS.filter((t) => t.annotations?.readOnlyHint && ['list_my_tickets', 'list_projects', 'list_project_tickets', 'get_ticket'].includes(t.name))
 
 // ------------------------------------------------------------------ JSON-RPC over HTTP
 

@@ -55,7 +55,8 @@ describe('company-wise switches', () => {
   it('a company with no setting of its own follows the all-companies setting', async () => {
     const a = await owner()
     const list = (await a.get('/api/owner/companies/sw-a/flags').expect(200)).body.flags
-    expect(list.every((f: { own: unknown; enabled: boolean }) => f.own === null && f.enabled)).toBe(true)
+    // Metra is the one switch that starts off everywhere.
+    expect(list.every((f: { key: string; own: unknown; enabled: boolean }) => f.own === null && f.enabled === (f.key !== 'metra'))).toBe(true)
     await a.get('/api/owner/companies/nope/flags').expect(404)
   })
 

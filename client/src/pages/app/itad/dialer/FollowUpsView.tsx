@@ -1,19 +1,20 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDown, ArrowUp, ListChecks, ListPlus, Plus, Save, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns3, ListChecks, ListPlus, Plus, Save, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { Modal } from '../../../../components/ui/Modal'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead, type DialerSettings, type SavedView } from '../../../../lib/dialerApi'
 import {
   FU_FILTER_KEYS, FU_SORT_FIELDS, DEFAULT_FU_SORT, REGIONS, filterFollowUps, followUpRows, leadState, lastTouched, daysSince, multiLabel, multiOf, toggleMulti,
-  sortFollowUps, sortFromParam, sortToParam, taskBucket, type FollowUpDays, type FuFilters, type FuSort, type TaskBucket,
+  sortFollowUps, sortFromParam, sortToParam, taskBucket, shortDate, type FollowUpDays, type FollowUpRow, type FuFilters, type FuSort, type TaskBucket,
 } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { DownloadLeads, InfoTip, MultiFilter, StatusPill, errMsg } from './ui'
 import { FilterBar, type FilterDef } from './filters'
 import { AddTaskModal, BulkBar, CallNow, LocalTime, OutcomeChips, QuietPill, RowMenu } from './TaskParts'
 import { TaskHistoryView } from './TaskHistoryView'
+import { ColumnPicker } from './LeadColumns'
 
 /**
  * Follow-ups (ITAD revised spec, 30 Oct 2026). One list of the leads that need following up:
@@ -33,6 +34,28 @@ const STRIP: { key: TaskBucket; label: string; tone: string }[] = [
   { key: 'upcoming', label: 'Upcoming', tone: 'text-ink' },
   { key: 'done', label: 'Done today', tone: 'text-success' },
 ]
+
+/**
+ * The list's columns (ITAD update 12 Nov, sections 9 and 11): each agent picks and orders them (Columns button),
+ * saved per agent. Company (with the checkbox) and the actions always show.
+ */
+type FuCol = { key: string; label: string; cell: (r: FollowUpRow, now: Date) => ReactNode; className?: string }
+const FU_COLUMNS: FuCol[] = [
+  { key: 'contact', label: 'Contact', className: 'max-w-[160px]', cell: (r) => <><span className="block truncate text-ink">{r.lead.contactName ?? '—'}</span>{r.lead.jobTitle && <span className="block truncate text-[11.5px] text-ink-muted">{r.lead.jobTitle}</span>}</> },
+  { key: 'phone', label: 'Phone · their time', className: 'whitespace-nowrap', cell: (r, now) => <><span className="block tabular-nums text-ink">{r.lead.phone ?? '—'}</span><LocalTime lead={r.lead} now={now} open={r.callNow} /></> },
+  { key: 'stage', label: 'Stage', cell: (r) => <StatusPill lead={r.lead} /> },
+  { key: 'lastTouched', label: 'Last touched', className: 'whitespace-nowrap text-ink', cell: (r, now) => relDay(lastTouched(r.lead), now) },
+  { key: 'tries', label: 'Tries', className: 'whitespace-nowrap text-ink-muted', cell: (r) => (r.lead.tries ? `${r.lead.tries} ${r.lead.tries === 1 ? 'try' : 'tries'}, same status` : '') },
+  { key: 'daysQuiet', label: 'Days quiet', className: 'max-w-[220px]', cell: (r) => <QuietPill row={r} /> },
+  { key: 'state', label: 'State', className: 'text-ink', cell: (r) => leadState(r.lead) ?? '—' },
+  { key: 'industry', label: 'Industry', className: 'max-w-[160px] truncate text-ink', cell: (r) => r.lead.industry ?? '—' },
+  { key: 'email', label: 'Email', className: 'max-w-[200px] truncate text-ink', cell: (r) => r.lead.email ?? '—' },
+  { key: 'altPhones', label: 'Alternative numbers', className: 'whitespace-nowrap tabular-nums text-ink', cell: (r) => (r.lead.altPhones ?? []).join(', ') || '—' },
+  { key: 'updated', label: 'Updated', className: 'whitespace-nowrap text-ink', cell: (r) => (r.lead.lastActivityAt ? shortDate(r.lead.lastActivityAt) : '—') },
+  { key: 'created', label: 'Created', className: 'whitespace-nowrap text-ink', cell: (r) => (r.lead.leadDate ? shortDate(r.lead.leadDate) : '—') },
+  { key: 'pinned', label: 'Pinned note', className: 'max-w-[220px] truncate text-ink-muted', cell: (r) => r.lead.pinnedNote ?? '' },
+]
+const FU_DEFAULT = ['contact', 'phone', 'stage', 'lastTouched', 'tries', 'daysQuiet']
 
 /** The element that scrolls the page (the app shell's main area, or the window). */
 function scroller(el: HTMLElement | null): HTMLElement {
@@ -63,6 +86,9 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
   const [naming, setNaming] = useState(false)
   const [called, setCalled] = useState<Set<string>>(new Set())
   const [views, setViews] = useState<SavedView[]>(data.prefs.fuViews ?? [])
+  const [fuCols, setFuCols] = useState<string[]>(data.prefs.fuColumns ?? [])
+  const [picking, setPicking] = useState(false)
+  const cols = (fuCols.length ? fuCols : FU_DEFAULT).map((k) => FU_COLUMNS.find((c) => c.key === k)).filter((c): c is FuCol => !!c)
   const dayStart = useMemo(() => new Date(data.dayStart), [data.dayStart])
   const chipStatuses = settings.outcomeChipStatuses ?? ['Pipeline', 'Interested']
 
@@ -211,6 +237,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
               <span className="text-body-sm text-ink-muted"><b className="text-ink tabular-nums">{rows.length.toLocaleString()}</b> lead{rows.length === 1 ? '' : 's'}</span>
               <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setPicking(true)} className="inline-flex h-8 items-center gap-1.5 rounded-btn border border-line px-2.5 text-body-sm font-semibold text-ink hover:bg-slate-50"><Columns3 size={14} />Columns</button>
                 <button type="button" onClick={() => setSorting(true)} className="inline-flex h-8 items-center gap-1.5 rounded-btn border border-line px-2.5 text-body-sm font-semibold text-ink hover:bg-slate-50">
                   <SlidersHorizontal size={14} />Sort: {sort.map((s) => FU_SORT_FIELDS.find((x) => x.key === s.key)!.label).slice(0, 2).join(', ')}{sort.length > 2 ? ` +${sort.length - 2}` : ''}
                 </button>
@@ -229,8 +256,8 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
                   <thead className="text-[11px] uppercase tracking-wide text-ink-muted">
                     <tr className="border-b border-line">
                       <th className="w-9 py-2 pl-4"><input type="checkbox" checked={allPicked} onChange={(e) => setPicked((s) => { const n = new Set(s); pageMine.forEach((id) => (e.target.checked ? n.add(id) : n.delete(id))); return n })} className="h-4 w-4 accent-primary" aria-label="Pick the shown rows" /></th>
-                      <th className="px-2 py-2">Company</th><th className="px-2">Contact</th><th className="px-2">Phone · their time</th><th className="px-2">Stage</th>
-                      <th className="px-2">Last touched</th><th className="px-2">Tries</th><th className="px-2">Days quiet</th>{showOwner && <th className="px-2">Rep</th>}<th className="px-2 pr-4 text-right">Actions</th>
+                      <th className="px-2 py-2">Company</th>{cols.map((c) => <th key={c.key} className="px-2">{c.label}</th>)}
+                      {showOwner && <th className="px-2">Rep</th>}<th className="px-2 pr-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -244,12 +271,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
                             <button type="button" onClick={() => onOpenLead(l.id, ids)} className="block max-w-full truncate text-left font-semibold text-ink hover:underline">{l.company}</button>
                             <span className="block truncate text-[11.5px] text-ink-muted">{[leadState(l), l.industry].filter(Boolean).join(' · ') || ' '}</span>
                           </td>
-                          <td className="max-w-[160px] px-2 py-3"><span className="block truncate text-ink">{l.contactName ?? '—'}</span>{l.jobTitle && <span className="block truncate text-[11.5px] text-ink-muted">{l.jobTitle}</span>}</td>
-                          <td className="whitespace-nowrap px-2 py-3"><span className="block tabular-nums text-ink">{l.phone ?? '—'}</span><LocalTime lead={l} now={now} open={r.callNow} /></td>
-                          <td className="px-2 py-3"><StatusPill lead={l} /></td>
-                          <td className="whitespace-nowrap px-2 py-3 text-ink">{relDay(lastTouched(l), now)}</td>
-                          <td className="whitespace-nowrap px-2 py-3 text-ink-muted">{l.tries ? `${l.tries} ${l.tries === 1 ? 'try' : 'tries'}, same status` : ''}</td>
-                          <td className="max-w-[220px] px-2 py-3"><QuietPill row={r} /></td>
+                          {cols.map((c) => <td key={c.key} className={cn('px-2 py-3', c.className)}>{c.cell(r, now)}</td>)}
                           {showOwner && <td className="px-2 py-3 text-ink-muted">{l.ownerName}</td>}
                           <td className="px-2 py-3 pr-4">
                             <div className="flex items-center justify-end gap-1.5">
@@ -277,6 +299,9 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
       )}
 
       {adding && <AddTaskModal leads={leads.filter(mine)} onClose={() => setAdding(false)} onDone={() => { setAdding(false); onChanged() }} />}
+      {picking && <ColumnPicker columns={fuCols} options={FU_COLUMNS} defaults={FU_DEFAULT} note="Company and the actions always show." onClose={() => setPicking(false)} onSave={async (next) => {
+        try { await dialerApi.savePrefs({ fuColumns: next }); setFuCols(next); setPicking(false); addToast({ type: 'success', message: 'Columns saved.' }) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save') }) }
+      }} />}
       {sorting && <SortModal sort={sort} onClose={() => setSorting(false)} onSave={(s) => { update({ fsort: sortToParam(s) === sortToParam(DEFAULT_FU_SORT) ? null : sortToParam(s) }); setSorting(false) }} />}
       {naming && <NameModal onClose={() => setNaming(false)} onSave={(name) => { const v = { id: `f${Date.now().toString(36)}`, name, filters: viewFilters() }; saveViews([...views, v], `"${name}" saved.`).then(() => setNaming(false)) }} />}
     </div>

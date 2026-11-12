@@ -38,6 +38,8 @@ export interface JwtPayload {
   exp?: number
   /** Help sign-in: the owner who is signed in as this person (see signSupportToken). */
   support?: string
+  /** A connector key (Claude, ChatGPT...) is working as this person (see signConnectorToken). */
+  via?: 'connector'
 }
 
 export function signToken(payload: { sub: string; role: Role }): string {

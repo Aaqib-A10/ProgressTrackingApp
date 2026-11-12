@@ -61,6 +61,13 @@ export function ImportSummaryView({ s, importId, onOpenLead }: { s: ImportSummar
           {s.repeatedInFile > 0 && <> {num(s.repeatedInFile)} row{s.repeatedInFile === 1 ? '' : 's'} appeared twice; the last one was used.</>}
         </p>
       )}
+      {/* Rows vs leads: a lead twice in the file (or a row with nothing to recognise it by) is why the row count can be one or two more. */}
+      {s.rows !== total && (
+        <p className="text-[12px] text-ink-muted">
+          {num(s.rows)} rows in the file = {num(total)} leads{s.skipped ? <> + {num(s.skipped)} skipped</> : null}{s.repeatedInFile ? <> + {num(s.repeatedInFile)} repeated (the same lead again, counted once)</> : null}
+          {s.rows - total - s.skipped - s.repeatedInFile > 0 ? <> + {num(s.rows - total - s.skipped - s.repeatedInFile)} empty</> : null}.
+        </p>
+      )}
 
       {s.activity && <ActivityBlock a={s.activity} before={s.activityBefore ?? null} previousAt={s.previousImportAt} can={can} open={open} active={active} />}
 

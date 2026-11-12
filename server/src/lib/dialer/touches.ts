@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
+import { agentContacts, noteTouchStats, type Contact, type ContactNote, type ContactTouch } from './noteTouches'
 
 /**
  * Touches (attempts) on a lead, ITAD revised spec (30 Oct 2026), section 6.
@@ -88,35 +89,83 @@ export async function saveImportTouches(plan: TouchPlan, importId: string): Prom
   if (plan.merge.length) await prisma.dialerTouch.updateMany({ where: { id: { in: plan.merge } }, data: { mergedImportId: importId } })
 }
 
-export interface TouchStats { lastManualAt: Date | null; attempts: number; tries: number; reAttempts: number; manual: number }
+export interface TouchStats {
+  lastManualAt: Date | null; attempts: number; tries: number; reAttempts: number; manual: number
+  /** ITAD update 12 Nov, section 4: the agent's own latest contact (note or logged call); null = none (Updated At is used). */
+  lastContactAt: Date | null
+  /** The agent's own contacts, oldest first (for follow-ups that close themselves). */
+  contacts: Contact[]
+  /** Import touches (for leads with no notes: new activity in Earth Zone). */
+  importTouches: { at: Date; kind: string }[]
+}
+export interface TouchOptions { touchesFromNotes: boolean; manualTouchesCount: boolean }
+
+const empty = (): TouchStats => ({ lastManualAt: null, attempts: 0, tries: 0, reAttempts: 0, manual: 0, lastContactAt: null, contacts: [], importTouches: [] })
 
 /**
  * Per lead: the latest touch added here, how many touches, how many since the status last
  * changed ("4 tries, same status") and how many were re-attempts. Dismissed touches never count.
+ *
+ * With `touchesFromNotes` (ITAD update 12 Nov, section 4) a lead with contacts by its agent (their own notes,
+ * and their own logged calls) takes Last touched and "tries, same status" from those, two on one day counting
+ * once; a colleague's note never counts. Leads with none keep the import-based numbers.
  */
-export async function touchStats(leads: { id: string; statusChangedAt: Date | null; createdAt: Date }[]): Promise<Map<string, TouchStats>> {
+export async function touchStats(
+  leads: { id: string; ownerId?: string; statusChangedAt: Date | null; createdAt: Date }[],
+  opts: TouchOptions = { touchesFromNotes: false, manualTouchesCount: true },
+): Promise<Map<string, TouchStats>> {
   const out = new Map<string, TouchStats>()
   if (!leads.length) return out
   // Since the status last changed, as Metriq saw it; a status unchanged since the first import counts every touch (the baseline).
   const since = new Map(leads.map((l) => [l.id, l.statusChangedAt && l.statusChangedAt.getTime() - l.createdAt.getTime() > 60_000 ? l.statusChangedAt.getTime() : 0]))
   const ids = leads.map((l) => l.id)
+  const touchRows = new Map<string, ContactTouch[]>()
   for (let i = 0; i < ids.length; i += 5000) {
-    const rows = await prisma.dialerTouch.findMany({ where: { leadId: { in: ids.slice(i, i + 5000) }, dismissedAt: null }, select: { leadId: true, at: true, kind: true, source: true } })
+    const rows = await prisma.dialerTouch.findMany({ where: { leadId: { in: ids.slice(i, i + 5000) }, dismissedAt: null }, select: { leadId: true, at: true, kind: true, source: true, userId: true } })
     for (const t of rows) {
-      const s = out.get(t.leadId) ?? { lastManualAt: null, attempts: 0, tries: 0, reAttempts: 0, manual: 0 }
+      const s = out.get(t.leadId) ?? empty()
       s.attempts++
       if (t.kind === 'RE_ATTEMPT') s.reAttempts++
       if (t.source === 'MANUAL') { s.manual++; if (!s.lastManualAt || t.at > s.lastManualAt) s.lastManualAt = t.at }
+      else s.importTouches.push({ at: t.at, kind: t.kind })
       // A try at the same status: any touch after the status last changed that is not the change itself.
       if (t.kind !== 'STATUS_CHANGE' && t.at.getTime() > (since.get(t.leadId) ?? 0)) s.tries++
       out.set(t.leadId, s)
+      const a = touchRows.get(t.leadId) ?? []
+      a.push(t)
+      touchRows.set(t.leadId, a)
     }
+  }
+  if (!opts.touchesFromNotes) return out
+  const noteRows = new Map<string, ContactNote[]>()
+  for (let i = 0; i < ids.length; i += 5000) {
+    const rows = await prisma.dialerNote.findMany({ where: { leadId: { in: ids.slice(i, i + 5000) }, deletedAt: null, userId: { not: null } }, select: { leadId: true, userId: true, createdAt: true, source: true } })
+    for (const n of rows) {
+      const a = noteRows.get(n.leadId) ?? []
+      a.push({ userId: n.userId, at: n.createdAt, source: n.source })
+      noteRows.set(n.leadId, a)
+    }
+  }
+  for (const l of leads) {
+    if (!l.ownerId) continue
+    const contacts = agentContacts(l.ownerId, noteRows.get(l.id) ?? [], touchRows.get(l.id) ?? [], opts.manualTouchesCount)
+    if (!contacts.length) continue
+    const s = out.get(l.id) ?? empty()
+    const ns = noteTouchStats(contacts, since.get(l.id) ?? 0)
+    s.contacts = contacts
+    s.lastContactAt = ns.lastContactAt
+    s.tries = ns.tries
+    out.set(l.id, s)
   }
   return out
 }
 
-/** The latest touch: the CRM's Updated At, or one added here if that is later. */
+/**
+ * The latest touch. With contacts by the agent: the latest of those (Updated At is only the fallback for leads
+ * with none). Otherwise the CRM's Updated At, or one added here if that is later.
+ */
 export function lastTouchedAt(lastActivityAt: Date | null, s: TouchStats | undefined): Date | null {
+  if (s?.lastContactAt) return s.lastContactAt
   if (!s?.lastManualAt) return lastActivityAt
   return !lastActivityAt || s.lastManualAt > lastActivityAt ? s.lastManualAt : lastActivityAt
 }

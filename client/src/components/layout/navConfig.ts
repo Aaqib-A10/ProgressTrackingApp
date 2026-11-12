@@ -55,6 +55,7 @@ import { flagOn, flagsLoaded } from '../../lib/flags'
 import { inHomeCompany, type Department } from '../../lib/types'
 import { CUSTOM_BLOCK, blockByKey, blocksOfPath, type BlockGroup } from '../../lib/blocks'
 import { iconOf } from '../../lib/customApi'
+import { MetraNavIcon } from '../metra/MetraMark'
 
 export interface NavItem {
   label: string
@@ -119,6 +120,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, hideFor: HIDE_FROM_SA },
       { label: 'Feedback', to: '/app/feedback', icon: MessageSquare },
       { label: 'Connectors', to: '/app/connectors', icon: Plug },
+      { label: 'Ask Metra', to: '/app/metra', icon: MetraNavIcon as unknown as LucideIcon, flag: 'metra' },
     ],
   },
   {
@@ -469,4 +471,26 @@ export function templateBlocks(kind: Department, role: 'MEMBER' | 'TEAM_LEAD'): 
   }
   if (!keys.includes('dashboard')) keys.unshift('dashboard')
   return keys
+}
+
+/**
+ * The side menu's order: Chat sits in the main group, right above Ask Metra (the floating chat bubble is gone).
+ * Only the drawing moves it; filterNav (and the menus the server checks) keep Chat where it was.
+ */
+export function sidebarNav(groups: NavGroup[]): NavGroup[] {
+  const main = groups.findIndex((g) => !g.title)
+  if (main < 0) return groups
+  let chat: NavItem | undefined
+  const out = groups.map((g) => {
+    const i = g.items.findIndex((x) => x.to === '/app/chat')
+    if (i < 0 || chat) return g
+    chat = g.items[i]
+    return { ...g, items: g.items.filter((_, j) => j !== i) }
+  })
+  if (!chat) return groups
+  const items = [...out[main].items]
+  const at = items.findIndex((x) => x.to === '/app/metra')
+  items.splice(at < 0 ? items.length : at, 0, chat)
+  out[main] = { ...out[main], items }
+  return out.filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
 }

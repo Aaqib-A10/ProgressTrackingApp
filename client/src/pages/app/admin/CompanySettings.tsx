@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers, SlidersHorizontal, LayoutGrid } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers, SlidersHorizontal, LayoutGrid, Sparkles } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { flagOn } from '../../../lib/flags'
 import { Card } from '../../../components/ui/Card'
@@ -15,6 +15,8 @@ import {
   companyApi, type CompanyInfo, type CompanyUsage, type CompanyDepartment, type DepartmentKind, type RolesData, type CompanyRoleRow, type CompanyPerson,
 } from '../../../lib/companyApi'
 import { kindFromName } from '../../../lib/sections'
+import { MetraAdmin } from '../../../components/metra/MetraAdmin'
+import { useFlags } from '../../../lib/flags'
 
 /**
  * Company settings (Phase 1, step 4): the company's name and time zone, its departments, its
@@ -32,11 +34,20 @@ const TABS = [
   { key: 'departments', label: 'Departments', icon: Layers },
   { key: 'roles', label: 'Roles', icon: ShieldCheck },
   { key: 'people', label: 'People', icon: Users },
+  { key: 'metra', label: 'Metra', icon: Sparkles },
 ] as const
 type Tab = (typeof TABS)[number]['key']
 
 export default function CompanySettings() {
-  const [tab, setTab] = useState<Tab>('general')
+  // A link can open one tab directly (the "feedback on Metra" notification opens ?tab=metra).
+  const [tab, setTab] = useState<Tab>(() => {
+    const asked = new URLSearchParams(window.location.search).get('tab')
+    return TABS.some((t) => t.key === asked) ? (asked as Tab) : 'general'
+  })
+  const { user } = useAuth()
+  useFlags()
+  // Metra's index and use: Super Admins, while the switch is on for the company.
+  const tabs = TABS.filter((t) => t.key !== 'metra' || (user?.role === 'SUPER_ADMIN' && flagOn('metra')))
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div>
@@ -44,7 +55,7 @@ export default function CompanySettings() {
         <p className="mt-0.5 text-body-md text-ink-muted">Your company's name and time zone, its departments, and roles of your own on top of the built-in ones.</p>
       </div>
       <div role="tablist" className="pt-tabs flex flex-wrap gap-1 border-b border-line">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} type="button" onClick={() => setTab(t.key)}
             className={cn('-mb-px inline-flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-body-md font-medium transition-colors', tab === t.key ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink')}>
             <t.icon size={16} />{t.label}
@@ -55,6 +66,7 @@ export default function CompanySettings() {
       {tab === 'departments' && <DepartmentsTab />}
       {tab === 'roles' && <RolesTab />}
       {tab === 'people' && <PeopleTab />}
+      {tab === 'metra' && tabs.some((t) => t.key === 'metra') && <MetraAdmin />}
     </div>
   )
 }

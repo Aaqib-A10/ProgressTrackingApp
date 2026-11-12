@@ -6,6 +6,7 @@ import { asyncHandler } from '../lib/asyncHandler'
 import { createIntegration, dialerHook, getIntegration, linkCall, revokeIntegration, searchLeads, testIntegration, updateIntegration } from '../controllers/dialerIntegrationController'
 import { dialerHookLimiter } from '../middleware/rateLimit'
 import { addTask, addTouch, bulkAction, dismissTouch, taskHistory, updateTask } from '../controllers/dialerTaskController'
+import { claudeLog, deleteClaudeValue, deleteNote, editClaudeValue, ezSync, updateContact } from '../controllers/dialerNotesController'
 import { importLeads, dialerData, importHistory, leadDetail, leadAction, fixLead, changeStatus, getSettings, putSettings, listDuplicates, resolveDuplicate, addNote, updateNote, listNotes, followUpBulk, getPrefs, putPrefs, importChanges, bulkFill } from '../controllers/dialerController'
 
 /** Lead Dialer (ITAD only; Super Admins too). Each rep sees only their own leads. */
@@ -31,6 +32,13 @@ dialerRouter.get('/prefs', asyncHandler(getPrefs))
 dialerRouter.put('/prefs', asyncHandler(putPrefs))
 dialerRouter.get('/imports/:id/changes', asyncHandler(importChanges))
 dialerRouter.post('/bulk-fill', asyncHandler(bulkFill))
+// ITAD update 12 Nov 2026: the Earth Zone sync, deleting notes, second contacts found in notes, the Claude log.
+dialerRouter.post('/ez-sync', asyncHandler(ezSync))
+dialerRouter.delete('/notes/:id', asyncHandler(deleteNote))
+dialerRouter.patch('/contacts/:id', asyncHandler(updateContact))
+dialerRouter.get('/claude-log', asyncHandler(claudeLog))
+dialerRouter.patch('/claude-log/values/:id', asyncHandler(editClaudeValue))
+dialerRouter.delete('/claude-log/values/:id', asyncHandler(deleteClaudeValue))
 // Touches and tasks (ITAD spec, 30 Oct 2026).
 dialerRouter.post('/leads/:id/touches', asyncHandler(addTouch))
 dialerRouter.delete('/touches/:id', asyncHandler(dismissTouch))

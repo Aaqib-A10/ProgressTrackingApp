@@ -55,6 +55,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  metra: {
+    label: 'Metra (AI assistant)',
+    description: "Ask Metra anything about your own Metriq data: answers come only from what each person can already see, with sources. Off until a company is set up for it (the Groq key, and the first index runs in the background).",
+    default: false,
+    client: true,
+    scope: 'company',
+  },
   'department-studio': {
     label: 'Department Studio',
     description: "The Super Admin shapes each department's menu for its members and team leads by drag and drop (Company Settings, Departments, Open studio). Off for 99 Technologies: their menus stay as they are.",

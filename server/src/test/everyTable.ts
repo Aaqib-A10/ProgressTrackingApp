@@ -37,6 +37,8 @@ function value(field: Prisma.DMMF.Field, marker: string, model: string): unknown
     case 'Boolean': return false
     case 'DateTime': return new Date(Date.UTC(2026, 9, 1 + (n % 27), 10, 0, 0))
     case 'Json': return { marker }
+    // Binary data (Metra's embeddings): a few bytes holding the marker.
+    case 'Bytes': return Buffer.from(marker)
     default: return null
   }
 }

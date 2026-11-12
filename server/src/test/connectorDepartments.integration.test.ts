@@ -117,6 +117,14 @@ describe('the connector reads each team\'s data', () => {
     expect((await call('itad', 'dialer_edit_lead', { lead: 'Lead Of The Lead', second_phone: '305-555-0110' })).isError).toBe(true)
     expect((await call('ecom', 'dialer_edit_lead', { lead: 'Mesa Data', second_phone: '602-555-0100' })).isError).toBe(true)
     expect((await prisma.dialerLead.findFirstOrThrow({ where: { company: 'Lead Of The Lead' } })).phone2).toBeNull()
+    // Alternative numbers are added to the ones the lead has (one it already has is skipped), and land in the Claude log.
+    expect(out(await call('itad', 'dialer_edit_lead', { lead: lead.id, alt_phones: ['602-555-0300', '602.555.0300'] }))).toContain('alternative number 602-555-0300 added')
+    expect(out(await call('itad', 'dialer_edit_lead', { lead: lead.id, alt_phones: ['(602) 555-0300', '602-555-0301'] }))).toContain('alternative number 602-555-0301 added')
+    expect((await prisma.dialerLead.findFirstOrThrow({ where: { company: 'Mesa Data' } })).altPhones).toEqual(['602-555-0300', '602-555-0301'])
+    expect(out(await call('itad', 'dialer_edit_lead', { lead: lead.id, alt_phones: ['602 555 0300'] }))).toContain('nothing changed')
+    expect(out(await call('itad', 'dialer_edit_lead', { lead: lead.id, alt_phones: ['12'] }))).toContain('does not look like a phone')
+    const log = await request(app).get('/api/dialer/claude-log?kind=values').set(...auth(w.itadMember)).expect(200)
+    expect(log.body.items.filter((i: { company: string; label: string }) => i.company === 'Mesa Data' && i.label === 'Alternative number').map((i: { text: string }) => i.text).sort()).toEqual(['602-555-0300', '602-555-0301'])
     // A manager can fix a rep's lead.
     expect((await call('itadLead', 'dialer_edit_lead', { lead: 'Harbor', rep: 'itad member', second_phone: '404-555-0177' })).isError).toBeFalsy()
     expect((await prisma.dialerLead.findFirstOrThrow({ where: { company: 'Harbor Cold Storage' } })).phone2).toBe('404-555-0177')
@@ -140,6 +148,6 @@ describe('the connector reads each team\'s data', () => {
       expect((await call('itad', 'metriq_read', { path: p })).isError).toBe(true)
     expect(readablePath('/api/itad/bids')).toBeNull()
     expect(compact({ a: null, b: [], c: 'x', d: { e: '' } })).toBe('{"c":"x","d":{}}')
-    expect(compact('x'.repeat(50), 10)).toContain('[Cut at 10')
+    expect(compact('x'.repeat(50), 10)).toContain('[CUT at 10')
   })
 })

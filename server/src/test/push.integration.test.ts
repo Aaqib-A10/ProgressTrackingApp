@@ -125,6 +125,40 @@ describe('pop-up notifications when PulseTrack is closed', () => {
     expect(sent.filter((s) => s.payload.title === 'Twice in one save')).toHaveLength(1)
   })
 
+  it('a muted category sends no pop-up and is not counted in the badge, but is still listed', async () => {
+    const me = w.itadMember
+    await request(app).put('/api/notifications/muted').set(...auth(me)).send({ muted: ['nope'] }).expect(400)
+    const saved = await request(app).put('/api/notifications/muted').set(...auth(me)).send({ muted: ['system'] }).expect(200)
+    expect(saved.body.muted).toEqual(['system'])
+    expect((await request(app).get('/api/notifications/muted').set(...auth(me)).expect(200)).body).toMatchObject({ muted: ['system'], categories: [{ key: 'tasks' }, { key: 'imports' }, { key: 'ai' }, { key: 'system', collapsed: true }] })
+    await prisma.notification.updateMany({ where: { userId: me.id, readAt: null }, data: { readAt: new Date() } })
+    sent.length = 0
+    const quiet = await prisma.notification.create({ data: { userId: me.id, type: 'GRACE_EXCEEDED', title: 'Muted late sign-in', body: 'no pop-up' } })
+    const loud = await prisma.notification.create({ data: { userId: me.id, type: 'TASK_DUE_SOON', title: 'Unmuted due now', body: 'pops up' } })
+    await flush()
+    expect(sent.filter((s) => s.payload.title === 'Muted late sign-in')).toHaveLength(0)
+    expect(sent.filter((s) => s.payload.title === 'Unmuted due now')).toHaveLength(1)
+    // The bell still lists the muted one; the badge does not count System.
+    const bell = await request(app).get('/api/notifications').set(...auth(me)).expect(200)
+    const items = bell.body.notifications as { id: string; category: string }[]
+    expect(items.find((n) => n.id === quiet.id)?.category).toBe('system')
+    expect(items.find((n) => n.id === loud.id)?.category).toBe('tasks')
+    expect(bell.body.muted).toEqual(['system'])
+    expect(bell.body.unread).toBe(items.filter((n) => n.category !== 'system').length)
+    expect(bell.body.unread).toBeLessThan(items.length)
+    // History filters by tab.
+    const hist = await request(app).get('/api/notifications/history?category=system').set(...auth(me)).expect(200)
+    expect(hist.body.notifications.every((n: { category: string }) => n.category === 'system')).toBe(true)
+    expect(hist.body.notifications.some((n: { id: string }) => n.id === quiet.id)).toBe(true)
+    // Mark all read on one tab leaves the others unread.
+    await request(app).post('/api/notifications/read-all').set(...auth(me)).send({ category: 'nope' }).expect(400)
+    await request(app).post('/api/notifications/read-all').set(...auth(me)).send({ category: 'tasks' }).expect(200)
+    expect((await prisma.notification.findUniqueOrThrow({ where: { id: loud.id } })).readAt).not.toBeNull()
+    expect((await prisma.notification.findUniqueOrThrow({ where: { id: quiet.id } })).readAt).toBeNull()
+    await request(app).put('/api/notifications/muted').set(...auth(me)).send({ muted: [] }).expect(200)
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: me.id } })).notifyMuted).toEqual([])
+  })
+
   it('the Metriq phone app registers its phone, and gets the same notifications as native push', async () => {
     const TOKEN = 'fcm-token-of-sams-phone_AAAA:1234567890abcdefghij'
     // No push key on the server: the app is told so and does not register.

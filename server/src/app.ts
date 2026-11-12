@@ -45,6 +45,7 @@ import { companyRouter } from './routes/company'
 import { dailyReportRouter } from './routes/dailyReport'
 import { setupRouter } from './routes/setup'
 import { billingRouter } from './routes/billing'
+import { metraRouter } from './routes/metra'
 
 /**
  * Every API router and where it lives. The hourly self check (System Health) walks this list
@@ -84,6 +85,7 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/docs', docsRouter],
   ['/api/claude', claudeRouter],
   ['/api/mcp', mcpRouter],
+  ['/api/metra', metraRouter],
   ['/api/dialer-hook', dialerHookRouter],
   ['/api/leads', leadsRouter],
   ['/api/system-health', systemHealthRouter],
@@ -137,6 +139,8 @@ export function createApp(): Express {
   // Cap JSON bodies to blunt memory-pressure DoS from oversized payloads.
   // Lead Dialer imports carry a whole CRM export (a few thousand rows), so they get a bigger limit.
   app.use('/api/dialer/imports', express.json({ limit: '25mb' }))
+  // The one-time Earth Zone sync carries every lead's notes timeline.
+  app.use('/api/dialer/ez-sync', express.json({ limit: '25mb' }))
   app.use('/api/leads/import', express.json({ limit: '25mb' }))
   app.use('/api/leads/import-sheet', express.json({ limit: '25mb' }))
   app.use('/api/leads/businesses', express.json({ limit: '10mb' }))

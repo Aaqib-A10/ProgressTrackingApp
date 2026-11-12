@@ -194,6 +194,9 @@ model User {
   isActive          Boolean      @default(true)
   /// Sees System Health (error log, hourly checks) and gets its alerts. Super Admins see it too.
   isDeveloper       Boolean      @default(false)
+  /// Notification categories this person muted (no pop-up or phone push, not counted in the badge; still listed):
+  /// tasks, imports, ai, system (lib/notifyCategories.ts; ITAD update 12 Nov, section 6).
+  notifyMuted       String[]     @default([])
   // Permanently remote: exempt from the office-network IP check-in restriction.
   attendanceRemote  Boolean      @default(false)
   // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
@@ -215,22 +218,24 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  itadEntries     ItadDailyEntry[]
-  leadGenEntries  LeadGenDailyEntry[]
-  talkloopEntries TalkloopDailyEntry[]
-  seoEntries      SeoDailyEntry[]
-  socialEntries   SocialDailyEntry[]
-  contentEntries  ContentDailyEntry[]
-  marketingTasks  MarketingTask[]
-  leaveDays       LeaveDay[]
-  attendanceDays  AttendanceDay[]
-  attendanceShift AttendanceShift?     @relation("UserShift")
-  targets         Target[]             @relation("UserTargets")
-  setTargets      Target[]             @relation("TargetSetBy")
-  salaries        SalaryRecord[]       @relation("UserSalaries")
-  setSalaries     SalaryRecord[]       @relation("SalarySetBy")
-  auditLogs       AuditLog[]
-  loginEvents     LoginEvent[]
+  itadEntries        ItadDailyEntry[]
+  leadGenEntries     LeadGenDailyEntry[]
+  talkloopEntries    TalkloopDailyEntry[]
+  metraConversations AiConversation[]     @relation("MetraConversationOwner")
+  metraInsights      AiInsight[]          @relation("MetraInsightOwner")
+  seoEntries         SeoDailyEntry[]
+  socialEntries      SocialDailyEntry[]
+  contentEntries     ContentDailyEntry[]
+  marketingTasks     MarketingTask[]
+  leaveDays          LeaveDay[]
+  attendanceDays     AttendanceDay[]
+  attendanceShift    AttendanceShift?     @relation("UserShift")
+  targets            Target[]             @relation("UserTargets")
+  setTargets         Target[]             @relation("TargetSetBy")
+  salaries           SalaryRecord[]       @relation("UserSalaries")
+  setSalaries        SalaryRecord[]       @relation("SalarySetBy")
+  auditLogs          AuditLog[]
+  loginEvents        LoginEvent[]
 
   feedbackAuthored Feedback[]      @relation("FeedbackAuthored")
   feedbackReceived Feedback[]      @relation("FeedbackReceived")
@@ -1195,6 +1200,8 @@ enum NotificationType {
   LEAD_COMMENT
   LEAD_REVIEW
   LEAD_DECISION
+  // Metra (the AI assistant): a daily brief or an insight
+  AI_INSIGHT
 }
 
 enum BreakType {
@@ -3010,19 +3017,30 @@ model DialerLead {
   /// The contact's job title and the CRM's "Assigned To", from the export (shown in the all-leads columns).
   jobTitle        String?
   assignedTo      String?
+  /// Earth Zone sync (ITAD update 12 Nov, section 1; never touched by an import): the Earth Zone Lead ID saved
+  /// on a matched lead so a later sync matches exactly, the Alternative Numbers (each its own copy button),
+  /// the clickable links (LinkedIn, CFO...) and the remaining text of Earth Zone's Hidden Description.
+  ezLeadId        String?
+  altPhones       String[]  @default([])
+  /// [{ label, url }]
+  ezLinks         Json?
+  description     String?
+  ezSyncedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  actions DialerAction[]
-  changes DialerStatusChange[]
-  notes   DialerNote[]
-  calls   DialerCall[]
-  touches DialerTouch[]
-  tasks   WorkLogEntry[]
+  actions  DialerAction[]
+  contacts DialerContact[]
+  changes  DialerStatusChange[]
+  notes    DialerNote[]
+  calls    DialerCall[]
+  touches  DialerTouch[]
+  tasks    WorkLogEntry[]
 
   @@unique([ownerId, matchKey])
   @@index([matchKey])
   @@index([ownerId, inLatestImport])
+  @@index([ownerId, ezLeadId])
   @@index([companyId])
 }
 
@@ -3082,13 +3100,24 @@ model DialerAction {
   kind      String
   note      String?
   at        DateTime?
+  /// Who wrote it: null = in Metriq; CLAUDE = through the Claude connector (shown in the Claude log).
+  source    String?
+  /// For a value the connector set (an alternative number...): the field and the value, so the Claude log can edit or remove it.
+  field     String?
+  value     String?
+  /// Removed from the Claude log (the value it set was taken off the lead too).
+  removedAt DateTime?
   createdAt DateTime   @default(now())
 
   @@index([leadId, createdAt])
+  @@index([companyId, source, createdAt])
   @@index([companyId])
 }
 
 /// A note on a lead: author, time, pinned, edited, optional next-action date (feeds follow-ups).
+/// ITAD update 12 Nov, section 2: every note has a source (METRIQ, EARTHZONE, CLAUDE). Metriq never writes back
+/// to Earth Zone, so an Earth Zone note that is edited or deleted here is an override: ezText keeps Earth Zone's
+/// text, deletedAt hides it, and ezKey (Earth Zone's entry identity) stops any later sync from adding it again.
 model DialerNote {
   id           String     @id @default(cuid())
   /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
@@ -3096,16 +3125,52 @@ model DialerNote {
   company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   leadId       String
   lead         DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  userId       String
-  user         User       @relation("DialerNoteAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  /// The Metriq person who wrote it; null for an Earth Zone author with no Metriq account (authorName then).
+  userId       String?
+  user         User?      @relation("DialerNoteAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  /// The author as Earth Zone wrote it (doubled spaces cleaned).
+  authorName   String?
+  source       String     @default("METRIQ")
   text         String
   pinned       Boolean    @default(false)
   nextActionAt DateTime?
   editedAt     DateTime?
+  ezKey        String?
+  ezText       String?
+  deletedAt    DateTime?
   createdAt    DateTime   @default(now())
 
+  @@unique([leadId, ezKey])
   @@index([leadId, createdAt])
   @@index([userId, createdAt])
+  @@index([companyId, source, createdAt])
+  @@index([companyId])
+}
+
+/// Another person at a lead's company (ITAD update 12 Nov, section 2): offered from a note that names someone
+/// with an email, phone or LinkedIn link (SUGGESTED), then accepted or ignored by the agent.
+model DialerContact {
+  id        String     @id @default(cuid())
+  /// The company this belongs to. Filled in by lib/tenancy.
+  companyId String     @default("")
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leadId    String
+  lead      DialerLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  name      String?
+  title     String?
+  email     String?
+  phone     String?
+  linkedin  String?
+  /// SUGGESTED, ACCEPTED or IGNORED.
+  state     String     @default("SUGGESTED")
+  /// The note it was found in (kept as a plain id: the note may be deleted later).
+  noteId    String?
+  /// What identifies it, so the same person in two notes is offered once.
+  key       String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([leadId, key])
   @@index([companyId])
 }
 
@@ -3292,6 +3357,10 @@ model WorkLogEntry {
   /// No longer needed (an automatic task whose lead moved on): kept, but not counted as done.
   cancelledAt   DateTime?
   cancelReason  String?
+  /// Closed by itself (ITAD update 12 Nov, section 4): the agent's own contact that closed it ("Note on 14 Nov").
+  autoClosedBy  String?
+  /// Reopened from Task history: only contacts after this close it again.
+  reopenedAt    DateTime?
   /// Reminders, in minutes before dueAt (0 = at the due time), and the ones already sent.
   remindMinutes Int[]         @default([])
   remindersSent Int[]         @default([])
@@ -3691,6 +3760,12 @@ model Company {
   customRecords            CustomRecord[]
   subscription             Subscription?
   invoices                 Invoice[]
+  dialerContactRows        DialerContact[]
+  aiChunkRows              AiChunk[]
+  aiConversationRows       AiConversation[]
+  aiMessageRows            AiMessage[]
+  aiInsightRows            AiInsight[]
+  aiIndexStateRows         AiIndexState[]
 }
 
 model PlatformOwner {
@@ -4501,4 +4576,124 @@ model LeadDailyReport {
 
   @@unique([businessId, userId, date])
   @@index([companyId, date])
+}
+
+/// ---------------------------------------------------------------------------
+/// Metra, the AI assistant (docs/metra/DESIGN.md). Every table is walled by company like the rest.
+/// ---------------------------------------------------------------------------
+
+/// One piece of indexed text (a note, a comment, a chat day...) with its embedding and the access labels
+/// that decide who may retrieve it (lib/metra/access.ts). Rebuilt from the source records at any time.
+model AiChunk {
+  id         String   @id @default(cuid())
+  companyId  String   @default("")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// The source adapter (lib/metra/sources): DIALER_NOTE, CHAT_DAY, PM_TASK...
+  sourceType String
+  sourceId   String
+  part       Int      @default(0)
+  title      String
+  text       String
+  /// Hash of title + text + labels + embedding model: an unchanged record is not embedded again.
+  hash       String
+  labels     String[]
+  /// When the thing happened (the note's date, the message day...), for "last week" questions.
+  occurredAt DateTime
+  /// Where it opens in the app.
+  link       String?
+  /// Small extras for the answer card (who, status...) and the detectors (a stated next step...).
+  meta       Json?
+  /// float32 x dimensions, normalised.
+  embedding  Bytes
+  model      String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([sourceType, sourceId, part])
+  @@index([companyId, sourceType])
+  @@index([companyId, updatedAt])
+}
+
+/// A conversation with Metra. Only its owner reads it.
+model AiConversation {
+  id        String      @id @default(cuid())
+  companyId String      @default("")
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation("MetraConversationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  title     String      @default("New chat")
+  pinned    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  messages  AiMessage[]
+
+  @@index([userId, updatedAt])
+  @@index([companyId])
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  companyId      String         @default("")
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// USER or ASSISTANT.
+  role           String
+  content        String
+  /// The numbered sources the answer used: [{ n, sourceType, sourceId, title, snippet, link, occurredAt }].
+  sources        Json?
+  /// The tools Metra called: [{ name, args, ok }] (no results stored: they may hold other people's data later).
+  tools          Json?
+  /// Proposed action cards: [{ id, kind, label, args, state }].
+  actions        Json?
+  /// UP or DOWN, with an optional note.
+  feedback       String?
+  feedbackNote   String?
+  tokensIn       Int?
+  tokensOut      Int?
+  latencyMs      Int?
+  model          String?
+  error          String?
+  createdAt      DateTime       @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([companyId, createdAt])
+}
+
+/// Something Metra noticed for one person: the daily brief, a lead with a stated next step and nothing logged since...
+model AiInsight {
+  id        String   @id @default(cuid())
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("MetraInsightOwner", fields: [userId], references: [id], onDelete: Cascade)
+  /// BRIEF or NEXT_STEP.
+  kind      String
+  /// The work day it is for (YYYY-MM-DD) and what it is about (a lead id...), so it is made once.
+  day       String
+  subjectId String   @default("")
+  title     String
+  payload   Json
+  /// NEW, DONE or DISMISSED.
+  state     String   @default("NEW")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, kind, day, subjectId])
+  @@index([companyId])
+}
+
+/// How far the indexer got, per company and source (System Health and Admin -> Metra show it).
+model AiIndexState {
+  id         String    @id @default(cuid())
+  companyId  String    @default("")
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceType String
+  watermark  DateTime?
+  chunks     Int       @default(0)
+  lastRunAt  DateTime?
+  lastError  String?
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([companyId, sourceType])
 }

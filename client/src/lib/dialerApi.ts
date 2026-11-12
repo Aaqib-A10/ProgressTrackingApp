@@ -28,7 +28,16 @@ export interface DialerSettings {
   outcomeChipStatuses?: string[]
   /** Lead Dialer task reminders, minutes before the due time (default 15 and at the due time). */
   taskReminders?: number[]
+  /** ITAD update 12 Nov (section 4): Last touched and tries come from the agent's own notes; follow-ups close themselves. */
+  touchesFromNotes?: boolean
+  /** The agent's own logged calls (outcome chips, Add touch) count as contacts next to their notes. */
+  manualTouchesCount?: boolean
+  /** Statuses where a status change alone does not close a follow-up (the agent's note is needed). */
+  noteOnlyStatuses?: string[]
+  /** Earth Zone sync: how a row finds its lead, in this order. */
+  ezMatchOrder?: EzMatchKey[]
 }
+export type EzMatchKey = 'ezId' | 'email' | 'phone' | 'companyLastName'
 
 export interface DialerLead {
   id: string
@@ -88,11 +97,19 @@ export interface DialerLead {
   assignedTo?: string | null
   /** Touches (attempts): the latest one (import or added here), how many, and how many since the status last changed. */
   lastTouchedAt?: string | null
+  /** When a follow-up closed by itself after the last touch (a status change...): the quiet clock restarts there. */
+  quietFrom?: string | null
   attempts?: number
   tries?: number
   reAttempts?: number
   /** A touch added here (an outcome or Add touch): the lead was worked even if the CRM still says Assigned. */
   manualTouches?: number
+  /** From the Earth Zone sync (or added by the agent or Claude): each its own copy button. */
+  altPhones?: string[]
+  /** Clickable links from Earth Zone's Hidden Description (LinkedIn, CFO...), and the rest of its text. */
+  ezLinks?: { label: string; url: string }[] | null
+  description?: string | null
+  ezLeadId?: string | null
 }
 
 /** A Lead Dialer task: a My To-Do entry about one lead, owned by the lead's owner (ITAD spec, 30 Oct 2026). */
@@ -110,6 +127,8 @@ export interface DialerTask {
   doneAt: string | null
   outcome: string | null
   reminders: number[]
+  /** Closed by itself: the contact that closed it ("Note on 3 Nov (Claude)"). */
+  autoClosedBy?: string | null
 }
 
 export interface FunnelNumbers {
@@ -160,6 +179,8 @@ export interface DialerPrefs {
   fuViews?: SavedView[]
   /** The filters pinned to the bar, per page; a page missing here uses the defaults. */
   filterPins?: Record<string, string[]>
+  /** Follow-ups list: the columns picked, in order (empty = the standard set). */
+  fuColumns?: string[]
 }
 export interface ActedToday { leadId: string; userId: string; kind: string; at: string }
 
@@ -185,7 +206,38 @@ export interface DialerData {
 
 export interface ImportRecord { id: string; createdAt: string; fileName: string; rowCount: number; summary: ImportSummary; funnel: FunnelNumbers; user: { id: string; name: string } }
 
-export interface DialerNote { id: string; leadId: string; text: string; pinned: boolean; nextActionAt: string | null; editedAt: string | null; createdAt: string; author: string; authorId: string }
+export type NoteSource = 'METRIQ' | 'EARTHZONE' | 'CLAUDE'
+export interface DialerNote {
+  id: string; leadId: string; text: string; pinned: boolean; nextActionAt: string | null; editedAt: string | null; createdAt: string
+  /** A Metriq person, or the Earth Zone author as written (no Metriq account: authorId null). */
+  author: string; authorId: string | null
+  source?: NoteSource
+  /** An Earth Zone note edited here: Earth Zone's own text (the "differs from Earth Zone" marker). */
+  ezText?: string | null
+}
+/** A second person found in a note (an email, phone or LinkedIn next to a name), offered to the agent. */
+export interface DialerContact { id: string; name: string | null; title: string | null; email: string | null; phone: string | null; linkedin: string | null; state: 'SUGGESTED' | 'ACCEPTED' | 'IGNORED'; noteId: string | null; createdAt: string }
+export type ContactEdit = { state?: 'ACCEPTED' | 'IGNORED'; name?: string | null; title?: string | null; email?: string | null; phone?: string | null; linkedin?: string | null }
+
+/** Earth Zone sync: one row of the agent's Earth Zone pull, as the browser read it. */
+export interface EzRow { ezId?: string | null; firstName?: string | null; lastName?: string | null; company?: string | null; phone?: string | null; altPhones?: string | null; email?: string | null; email2?: string | null; jobTitle?: string | null; hiddenDescription?: string | null; notes?: string | null }
+export interface EzSyncSummary {
+  rows: number; matched: number; unmatchedCount: number; ambiguousCount: number; leadsToUpdate: number
+  fields: { altPhones: number; email2: number; jobTitle: number; description: number; links: number; notes: number; ezLeadId: number }
+  notesInFile: number; notesAlreadyHere: number; conflictCount: number; matchOrder: EzMatchKey[]
+  authors: { name: string; matched: boolean; isMe: boolean; notes: number }[]
+}
+export interface EzSyncPreview extends EzSyncSummary {
+  unmatched: { row: number; company: string | null; reason: string }[]
+  ambiguous: { row: number; company: string | null; by: string; leads: string[] }[]
+  conflicts: { leadId: string; company: string; field: string; current: string; incoming: string }[]
+  sample: { leadId: string; company: string; altPhones: string[]; set: Record<string, string>; links: { label: string; url: string }[]; notes: number }[]
+}
+export interface EzSyncDone extends EzSyncSummary { applied: true; updated: number; notesAdded: number; contactsOffered: number }
+
+/** The Claude log: what a source (default Claude) wrote to leads. */
+export type LogSource = 'CLAUDE' | 'EARTHZONE' | 'METRIQ' | 'ALL'
+export interface ClaudeLogItem { id: string; kind: 'NOTE' | 'VALUE'; leadId: string; company: string; contactName: string | null; label: string; text: string; source: NoteSource; at: string; editedAt: string | null; author: string; canEdit: boolean }
 export interface LeadDetail {
   lead: Omit<DialerLead, 'ownerName' | 'actionCount' | 'noteCount' | 'pinnedNote'> & { ownerName?: string
     /** Changed in Metriq and not yet in Earthzone: Metriq keeps statusHere while imports still bring statusHereFrom. */
@@ -194,6 +246,10 @@ export interface LeadDetail {
   actions: { id: string; kind: string; note: string | null; at: string | null; createdAt: string; user: { name: string } }[]
   changes: { id: string; fromStatus: string | null; toStatus: string; createdAt: string; importId: string | null; byName?: string | null }[]
   notes: DialerNote[]
+  /** Second contacts found in notes: offered (SUGGESTED) and accepted. */
+  contacts?: DialerContact[]
+  /** Earth Zone notes deleted here (kept deleted after any sync). */
+  deletedEzNotes?: number
   /** Calls the predictive dialer reported for this lead, newest first. */
   calls?: DialerCallRow[]
   /** Touches as dates: "20 Aug touched", "3 Sep status changed". */
@@ -210,7 +266,7 @@ export interface DialerCallRow { id: string; calledAt: string; disposition: stri
 export interface NoteExportRow extends DialerNote { company: string; contactName: string | null; phone: string | null; crmId: string | null; status: string; rep: string }
 export interface FillRow { matchKey?: string | null; crmId?: string | null; email?: string | null; company?: string | null; contactName?: string | null; phone?: string | null; phone2?: string | null; email2?: string | null; linkedin?: string | null; decisionMaker?: string | null; bestTime?: string | null; note?: string | null }
 export interface FillPreview { matched: number; willUpdate: number; notes: number; unmatched: { row: number; company: string | null; reason: string }[]; unmatchedCount: number; conflicts: { leadId: string; company: string; field: string; current: string; incoming: string }[]; conflictCount: number }
-export interface LeadEdit { state?: string | null; zone?: RegionCode | null; sentToLeadGen?: boolean; phone2?: string | null; email2?: string | null; linkedin?: string | null; decisionMaker?: string | null; bestTime?: string | null; tags?: string[]; needsCrm?: boolean; crmDone?: boolean }
+export interface LeadEdit { state?: string | null; zone?: RegionCode | null; sentToLeadGen?: boolean; phone2?: string | null; email2?: string | null; linkedin?: string | null; decisionMaker?: string | null; bestTime?: string | null; tags?: string[]; altPhones?: string[]; needsCrm?: boolean; crmDone?: boolean }
 
 export interface DuplicateGroup {
   matchKey: string
@@ -272,6 +328,12 @@ export const dialerApi = {
   updateTask: (id: string, body: { done?: boolean; outcome?: string | null; dueAt?: string; note?: string | null; reminders?: number[] }) => api.patch<{ task: DialerTask }>(`/dialer/tasks/${id}`, body),
   taskHistory: (q: { from?: string; to?: string; kind?: string; rep?: string }) => api.get<TaskHistory>(`/dialer/tasks/history?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()}`),
   bulk: (body: { leadIds: string[]; action: BulkAction; at?: string; kind?: DialerTask['kind']; outcome?: Outcome | null; note?: string }) => api.post<{ updated: number; skipped: number }>('/dialer/bulk', body),
+  ezSync: (body: { rows: EzRow[]; apply: boolean; replace?: boolean; fileName?: string }) => api.post<EzSyncPreview | EzSyncDone>('/dialer/ez-sync', body),
+  deleteNote: (id: string) => api.del(`/dialer/notes/${id}`),
+  updateContact: (id: string, body: ContactEdit) => api.patch<{ contact: DialerContact }>(`/dialer/contacts/${id}`, body),
+  claudeLog: (q: { rep?: string; leadId?: string; from?: string; to?: string; source?: LogSource; kind?: 'all' | 'notes' | 'values' }) => api.get<{ items: ClaudeLogItem[]; source: LogSource; kind: string }>(`/dialer/claude-log?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()}`),
+  editClaudeValue: (id: string, value: string) => api.patch<{ ok: true }>(`/dialer/claude-log/values/${id}`, { value }),
+  deleteClaudeValue: (id: string) => api.del(`/dialer/claude-log/values/${id}`),
   resolveDuplicate: (matchKey: string, keepOwnerId: string) => api.post<{ ok: true }>('/dialer/duplicates/resolve', { matchKey, keepOwnerId }),
 }
 

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessagesSquare, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing } from 'lucide-react'
+import { Bell, MessagesSquare, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing, BellOff, ChevronUp } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { DEPARTMENTS } from '../../lib/departments'
 import { useAuth } from '../../lib/auth'
-import { getNotifications, markNotificationRead, markAllNotificationsRead, type AppNotification } from '../../lib/notificationsApi'
+import { getNotifications, markNotificationRead, markAllNotificationsRead, saveMutedCategories, type AppNotification } from '../../lib/notificationsApi'
+import { NOTIFY_CATEGORIES, type NotifyCategory } from '../../lib/notifyCategories'
+import { NotifyTabs } from './NotifyTabs'
 import * as desktop from '../../lib/desktopAlerts'
 import { NotificationPrefsModal } from '../projects/NotificationPrefsModal'
 import { useChatUnread } from '../chat/useChatUnread'
@@ -41,6 +43,10 @@ const NOTIF_LINK: Record<string, string> = {
   'stock-assigned': '/app/ecommerce/stock',
 }
 
+/** Short tab names for the narrow bell; the full name shows on hover. */
+const BELL_TAB_LABEL: Record<NotifyCategory, string> = { tasks: 'Follow ups', imports: 'Imports', ai: 'AI', system: 'System' }
+type BellTab = 'all' | NotifyCategory
+
 export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMenu }: TopBarProps) {
   const { logout } = useAuth()
   const navigate = useNavigate()
@@ -48,6 +54,10 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifs, setNotifs] = useState<AppNotification[]>([])
   const [seenKey, setSeenKey] = useState('')
+  const [muted, setMuted] = useState<NotifyCategory[]>([])
+  const [bellTab, setBellTab] = useState<BellTab>('all')
+  // System is collapsed by default in the All tab.
+  const [systemOpen, setSystemOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
   const chatUnread = useChatUnread()
@@ -72,11 +82,14 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         .then((r) => {
           if (!active) return
           setNotifs((cur) => (JSON.stringify(cur) === JSON.stringify(r.notifications) ? cur : r.notifications))
+          const mutedNow = r.muted ?? []
+          setMuted((cur) => (cur.join() === mutedNow.join() ? cur : mutedNow))
           // Pop up stored alerts that arrived since the last check (never the ones already there on load).
           const stored = r.notifications.filter((n) => n.persistent)
           if (seenIds.current) {
             // A chat @mention already pops up as the chat message itself: don't show it twice.
-            const fresh = stored.filter((n) => !seenIds.current!.has(n.id) && !(n.link?.startsWith('/app/chat') && desktop.active('chat')))
+            // A muted category never pops up.
+            const fresh = stored.filter((n) => !seenIds.current!.has(n.id) && !mutedNow.includes(n.category) && !(n.link?.startsWith('/app/chat') && desktop.active('chat')))
             // One notification pops up once on this browser: another tab, or the push that came for it, may have shown it already.
             if (fresh.length && desktop.wouldPopup('tasks')) {
               void Promise.all(fresh.map((n) => desktop.claimOnce(`n-${n.id}`))).then((firsts) => {
@@ -130,9 +143,69 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
   }
 
   const headDesk = !!user?.leadsHead && user.role !== 'SUPER_ADMIN'
-  // Signature includes the body so a changing count (e.g. 1→2 unread) re-dots.
-  const notifKey = notifs.map((n) => `${n.id}|${n.body}`).join(';')
-  const hasUnread = notifs.length > 0 && notifKey !== seenKey
+  // Signature includes the body so a changing count (e.g. 1→2 unread) re-dots. Muted categories never light the dot.
+  const loud = notifs.filter((n) => !muted.includes(n.category))
+  const notifKey = loud.map((n) => `${n.id}|${n.body}`).join(';')
+  const hasUnread = loud.length > 0 && notifKey !== seenKey
+
+  const tabItems = notifs.filter((n) => bellTab === 'all' || n.category === bellTab)
+  // In All, System sits in a collapsed section at the bottom.
+  const mainItems = bellTab === 'all' ? tabItems.filter((n) => n.category !== 'system') : tabItems
+  const systemItems = bellTab === 'all' ? tabItems.filter((n) => n.category === 'system') : []
+  const bellTabs = [
+    { key: 'all' as BellTab, label: 'All', count: loud.length },
+    ...NOTIFY_CATEGORIES.map((c) => ({ key: c.key as BellTab, label: BELL_TAB_LABEL[c.key], title: c.label, count: notifs.filter((n) => n.category === c.key).length, muted: muted.includes(c.key) })),
+  ]
+  const tabMuted = bellTab !== 'all' && muted.includes(bellTab)
+  const toggleMute = (c: NotifyCategory) => {
+    const before = muted
+    const next = muted.includes(c) ? muted.filter((x) => x !== c) : [...muted, c]
+    setMuted(next)
+    saveMutedCategories(next).then((r) => setMuted(r.muted)).catch(() => setMuted(before))
+  }
+  const markTabRead = () => {
+    const cat = bellTab === 'all' ? undefined : bellTab
+    setNotifs((ns) => ns.filter((x) => !(x.persistent && (!cat || x.category === cat))))
+    markAllNotificationsRead(cat).catch(() => undefined)
+  }
+  const renderItem = (n: AppNotification) => {
+    const target = n.link ?? NOTIF_LINK[n.id]
+    const isMuted = muted.includes(n.category)
+    const open = () => {
+      setNotifOpen(false)
+      if (n.persistent) {
+        setNotifs((ns) => ns.filter((x) => x.id !== n.id)) // clear locally
+        markNotificationRead(n.id).catch(() => undefined)
+      }
+      if (target) navigate(target)
+    }
+    const text = (
+      <div className="min-w-0 flex-1">
+        <p className={'text-body-md font-medium ' + (isMuted ? 'text-ink-muted' : 'text-ink')}>{n.title}</p>
+        <p className="text-body-sm text-ink-muted">{n.body}</p>
+        {(n.leadStatus || isMuted) && (
+          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
+            {n.leadStatus && <span className="rounded-full bg-primary/10 px-1.5 font-semibold text-primary">{n.leadStatus}</span>}
+            {isMuted && <span className="inline-flex items-center gap-1"><BellOff size={11} /> muted</span>}
+          </p>
+        )}
+      </div>
+    )
+    return target ? (
+      <li key={n.id}>
+        <button onClick={open} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50">
+          <span className="mt-0.5 shrink-0">{NOTIF_ICON[n.type]}</span>
+          {text}
+          <ChevronRight size={16} className="shrink-0 text-ink-muted" />
+        </button>
+      </li>
+    ) : (
+      <li key={n.id} className="flex gap-3 px-4 py-3 hover:bg-slate-50">
+        <span className="mt-0.5 shrink-0">{NOTIF_ICON[n.type]}</span>
+        {text}
+      </li>
+    )
+  }
 
   return (
     <header className="relative z-30 flex h-[calc(52px+env(safe-area-inset-top))] shrink-0 items-center gap-1.5 border-b border-line bg-bg/85 px-2.5 pt-[env(safe-area-inset-top)] backdrop-blur-md sm:gap-3 sm:px-4">
@@ -194,16 +267,29 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           </button>
           {notifOpen && (
             <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-80 animate-scale-in overflow-hidden rounded-xl border border-line bg-card shadow-overlay">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <span className="text-body-md font-semibold text-ink">Notifications</span>
-                {notifs.some((n) => n.persistent) && (
-                  <button
-                    onClick={() => { setNotifs((ns) => ns.filter((x) => !x.persistent)); markAllNotificationsRead().catch(() => undefined) }}
-                    className="text-body-sm font-medium text-primary hover:underline"
-                  >
-                    Mark all read
-                  </button>
-                )}
+              <div className="border-b border-line px-4 pb-2.5 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-body-md font-semibold text-ink">Notifications</span>
+                  <div className="flex items-center gap-2">
+                    {tabItems.some((n) => n.persistent) && (
+                      <button onClick={markTabRead} className="text-body-sm font-medium text-primary hover:underline">
+                        Mark all read
+                      </button>
+                    )}
+                    {bellTab !== 'all' && (
+                      <button
+                        onClick={() => toggleMute(bellTab)}
+                        className={'rounded-btn p-1 hover:bg-slate-100 ' + (tabMuted ? 'text-primary' : 'text-ink-muted hover:text-ink')}
+                        title={tabMuted ? 'Muted: no pop-ups, not in the badge. Click to unmute.' : 'Mute this tab: no pop-ups, not in the badge'}
+                        aria-label={tabMuted ? 'Unmute' : 'Mute'}
+                        aria-pressed={tabMuted}
+                      >
+                        {tabMuted ? <BellOff size={15} /> : <Bell size={15} />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <NotifyTabs className="-mx-4 mt-2 px-4" tabs={bellTabs} value={bellTab} onChange={setBellTab} />
               </div>
               {!alertsOn && desktop.permission() !== 'unsupported' && (
                 <button
@@ -214,47 +300,29 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                   <span className="text-body-sm text-ink"><b>Turn on pop-up alerts</b> so you don't miss tasks and messages</span>
                 </button>
               )}
-              {notifs.length === 0 ? (
+              {tabMuted && <p className="flex items-center gap-1.5 border-b border-line px-4 py-2 text-body-sm text-ink-muted"><BellOff size={13} /> Muted: no pop-ups and not in the badge.</p>}
+              {tabItems.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                   <CheckCircle2 size={22} className="text-success" />
                   <p className="text-body-sm text-ink-muted">You're all caught up.</p>
                 </div>
               ) : (
                 <ul className="max-h-80 divide-y divide-line overflow-y-auto">
-                  {notifs.map((n) => {
-                    const target = n.link ?? NOTIF_LINK[n.id]
-                    const open = () => {
-                      setNotifOpen(false)
-                      if (n.persistent) {
-                        setNotifs((ns) => ns.filter((x) => x.id !== n.id)) // clear locally
-                        markNotificationRead(n.id).catch(() => undefined)
-                      }
-                      if (target) navigate(target)
-                    }
-                    return target ? (
-                      <li key={n.id}>
-                        <button
-                          onClick={open}
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
-                        >
-                          <span className="mt-0.5 shrink-0">{NOTIF_ICON[n.type]}</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-body-md font-medium text-ink">{n.title}</p>
-                            <p className="text-body-sm text-ink-muted">{n.body}</p>
-                          </div>
-                          <ChevronRight size={16} className="shrink-0 text-ink-muted" />
-                        </button>
-                      </li>
-                    ) : (
-                      <li key={n.id} className="flex gap-3 px-4 py-3 hover:bg-slate-50">
-                        <span className="mt-0.5 shrink-0">{NOTIF_ICON[n.type]}</span>
-                        <div className="min-w-0">
-                          <p className="text-body-md font-medium text-ink">{n.title}</p>
-                          <p className="text-body-sm text-ink-muted">{n.body}</p>
-                        </div>
-                      </li>
-                    )
-                  })}
+                  {mainItems.map(renderItem)}
+                  {systemItems.length > 0 && (
+                    <li>
+                      <button
+                        onClick={() => setSystemOpen((o) => !o)}
+                        aria-expanded={systemOpen}
+                        className="flex w-full items-center gap-2 bg-slate-50 px-4 py-2 text-left text-body-sm font-semibold text-ink-muted hover:text-ink dark:bg-white/[0.03]"
+                      >
+                        {muted.includes('system') && <BellOff size={12} />}
+                        <span className="flex-1">System · {systemItems.length}</span>
+                        {systemOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </li>
+                  )}
+                  {systemOpen && systemItems.map(renderItem)}
                 </ul>
               )}
               <div className="flex border-t border-line">

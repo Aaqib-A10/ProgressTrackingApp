@@ -58,6 +58,17 @@ export interface DialerSettingsData {
   outcomeChipStatuses: string[]
   /** Reminders for Lead Dialer tasks, in minutes before the due time (0 = at the due time). */
   taskReminders: number[]
+  /**
+   * ITAD update 12 Nov, section 4: Last touched and "tries, same status" come from the agent's own notes
+   * (Updated At only for leads with none), and a follow-up closes by itself on the agent's next contact.
+   */
+  touchesFromNotes: boolean
+  /** The agent's own logged calls (outcome chips, Add touch) count as contacts next to their notes. */
+  manualTouchesCount: boolean
+  /** Statuses where a status change alone does not close a follow-up (the agent's note is needed). */
+  noteOnlyStatuses: string[]
+  /** Earth Zone sync (section 1): how a row finds its lead, in this order. */
+  ezMatchOrder: ('ezId' | 'email' | 'phone' | 'companyLastName')[]
 }
 
 /** Each rep may set their own follow-up days within these limits. */
@@ -78,7 +89,8 @@ export const DEFAULT_SETTINGS: DialerSettingsData = {
   version: 2,
   stageMap: DEFAULT_STAGE_MAP,
   closed: ['Not Interested', 'Not Qualified', 'DNC', 'Working On'],
-  followUp: { Connected: 30, Interested: 14, Pipeline: 7 },
+  // ITAD update 12 Nov: Pipeline 30, Interested 15, Connected 7 days. A company's saved setting is kept.
+  followUp: { Pipeline: 30, Interested: 15, Connected: 7 },
   highlight: { amberPct: 30, redPct: 50, redCount: 50 },
   slots: LOCAL_9_TO_5,
   clockMode: 'FIXED_LOCAL',
@@ -90,6 +102,10 @@ export const DEFAULT_SETTINGS: DialerSettingsData = {
   bulkUpdatePct: 20,
   outcomeChipStatuses: ['Pipeline', 'Interested'],
   taskReminders: [15, 0],
+  touchesFromNotes: true,
+  manualTouchesCount: true,
+  noteOnlyStatuses: ['Pipeline', 'Interested'],
+  ezMatchOrder: ['ezId', 'email', 'phone', 'companyLastName'],
 }
 
 const CANON = new Map<string, string>(STATUSES.map((s) => [s.toLowerCase(), s]))

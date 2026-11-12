@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, FileUp, PhoneCall } from 'lucide-react'
+import { AlertTriangle, FileUp, PhoneCall, RefreshCcw } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead } from '../../../../lib/dialerApi'
@@ -13,6 +13,8 @@ import { FunnelView, IndustriesView } from './FunnelViews'
 import { FixDataView } from './FixDataView'
 import { DuplicatesView, HistoryView, SettingsView } from './AdminViews'
 import { ImportModal } from './ImportModal'
+import { EzSyncModal } from './EzSyncModal'
+import { ClaudeLogView } from './ClaudeLogView'
 import { LeadsView } from './LeadsView'
 import { LeadPanel } from './LeadPanel'
 import { DownloadLeads, InfoTip, LeadsListModal, MultiFilter, errMsg } from './ui'
@@ -24,7 +26,7 @@ import { DownloadLeads, InfoTip, LeadsListModal, MultiFilter, errMsg } from './u
  * answers one question; the rest sits behind a click.
  */
 
-type View = 'dashboard' | 'leads' | 'followups' | 'funnel' | 'industries' | 'fix' | 'history' | 'duplicates' | 'settings'
+type View = 'dashboard' | 'leads' | 'followups' | 'funnel' | 'industries' | 'fix' | 'history' | 'claude' | 'duplicates' | 'settings'
 
 /** "a, b" for a multi-value filter, through a label function. */
 const multiOfLabel = (v: string, label: (x: string) => string) => multiLabel(v).split(', ').filter(Boolean).map(label).join(', ')
@@ -40,6 +42,7 @@ export default function LeadDialer() {
   // Filters live in the address bar, shared with Follow-ups: tabs, Back and a refresh keep them.
   const { filters, set: setFilter, update: updateFilters, clear: clearFilters, on: filtersOn } = useSharedFilters()
   const [importing, setImporting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [listModal, setListModal] = useState<{ title: string; leads: DialerLead[] } | null>(null)
   // The open lead is in the address (?lead=), so the browser's Back closes it and the list stays as it was.
   const navigate = useNavigate()
@@ -105,6 +108,7 @@ export default function LeadDialer() {
     { key: 'industries', label: 'Industries' },
     { key: 'fix', label: 'Fix data', count: noStateCount, tone: 'amber' },
     { key: 'history', label: 'History' },
+    { key: 'claude', label: 'Claude log' },
     { key: 'duplicates', label: 'Duplicates', count: dupCount, tone: 'red', manager: true },
     { key: 'settings', label: 'Settings' },
   ]
@@ -128,6 +132,7 @@ export default function LeadDialer() {
               {data.reps.filter((r) => r.id !== data.me.id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           )}
+          {rep === 'me' && leads.length > 0 && <Button variant="secondary" leadingIcon={<RefreshCcw size={15} />} onClick={() => setSyncing(true)} title="Fill alternative numbers, emails, job titles and the notes timeline from your Earth Zone pull">Earth Zone sync</Button>}
           <Button leadingIcon={<FileUp size={15} />} onClick={() => setImporting(true)}>Import my leads</Button>
         </div>
       </div>
@@ -151,7 +156,7 @@ export default function LeadDialer() {
 
       {loading && !data ? (
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-card bg-slate-100" />)}</div>
-      ) : !data ? null : leads.length === 0 && view !== 'settings' && view !== 'history' && view !== 'duplicates' ? (
+      ) : !data ? null : leads.length === 0 && view !== 'settings' && view !== 'history' && view !== 'duplicates' && view !== 'claude' ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-card px-6 py-16 text-center">
           <FileUp size={32} className="text-primary" />
           <p className="text-body-lg font-semibold text-ink">{rep === 'me' ? 'Import your leads to start' : 'No leads imported yet for this view'}</p>
@@ -187,6 +192,7 @@ export default function LeadDialer() {
           {view === 'industries' && <IndustriesView leads={filtered} settings={data.settings} now={now} showReps={showOwner} picked={filters.industry} onPickIndustry={(k) => setFilter('industry', toggleMulti(filters.industry, k))} />}
           {view === 'fix' && <FixDataView leads={leads} onOpenLead={openLead} onChanged={load} showOwner={showOwner} />}
           {view === 'history' && <HistoryView rep={rep} refreshKey={`${data.lastImport?.id ?? ''}-${refreshKey}`} onOpenLead={(id) => { if (byId.has(id)) openLead(id); else addToast({ type: 'info', message: 'That lead is not in the latest import any more.' }) }} />}
+          {view === 'claude' && <ClaudeLogView rep={rep} leads={leads} showOwner={showOwner} refreshKey={refreshKey} onOpenLead={(id) => { if (byId.has(id)) openLead(id); else addToast({ type: 'info', message: 'That lead is not in your list any more.' }) }} onChanged={load} />}
           {view === 'duplicates' && isManager && <DuplicatesView onChanged={load} />}
           {view === 'settings' && <SettingsView canEdit={isManager} onSaved={load} extraStatuses={unknownStatuses} />}
         </>
@@ -197,6 +203,7 @@ export default function LeadDialer() {
           // Refresh everything at once, so the dashboard and funnel match the "Import done" summary.
           onImported={() => { clearFilters(); setRefreshKey((k) => k + 1); if (rep !== 'me') setParam('rep', null); load() }} />
       )}
+      {syncing && <EzSyncModal onClose={() => setSyncing(false)} onDone={() => { setRefreshKey((k) => k + 1); load() }} />}
       {listModal && <LeadsListModal title={listModal.title} leads={listModal.leads} now={now} showOwner={showOwner} onClose={() => setListModal(null)} onOpen={(id, ids) => openLead(id, ids)} />}
       {panel && data && <LeadPanel id={panel.id} ids={panel.ids} lookup={(id) => byId.get(id)} leads={leads} now={now} settings={data.settings} meId={data.me.id} onNavigate={(id) => setParam('lead', id)} onClose={closeLead} onChanged={load} />}
     </div>

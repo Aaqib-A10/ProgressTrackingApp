@@ -14,12 +14,16 @@
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "seed:test-users": "tsx prisma/test-users.ts",
-    "import:rdp": "tsx prisma/importRdp.ts"
+    "import:rdp": "tsx prisma/importRdp.ts",
+    "metra:demo": "tsx src/scripts/metraDemo.ts",
+    "metra:eval": "tsx src/scripts/metraEval.ts",
+    "metra:models": "tsx -e \"require('./src/lib/metra/embed').embedQuery('warm up').then(()=>require('./src/lib/metra/embed').rerank('a',['b'])).then(()=>console.log('Metra models ready'))\""
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.2",
     "@prisma/client": "^6.1.0",
     "@types/papaparse": "^5.5.2",
     "bcryptjs": "^2.4.3",

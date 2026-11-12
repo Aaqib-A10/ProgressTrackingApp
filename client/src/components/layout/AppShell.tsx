@@ -7,7 +7,7 @@ import type { CurrentUser } from '../../lib/types'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import type { RangeKey, CustomRange } from './RangeSelector'
-import { FloatingChat } from '../chat/FloatingChat'
+import { MetraLauncher } from '../metra/MetraLauncher'
 import { CallProvider } from '../calls/CallProvider'
 import { SilentUpdater } from './SilentUpdater'
 import { PushBanner } from './PushControls'
@@ -156,7 +156,7 @@ export function AppShell({ user, children }: AppShellProps) {
         <BottomTabs user={user} onMore={() => setNavOpen(true)} />
         <QuickLogWidget user={user} />
         <CommandPalette />
-        <FloatingChat meId={user.id} />
+        <MetraLauncher firstName={user.name?.split(' ')[0]} />
         <SilentUpdater />
       </CallProvider>
     </RangeContext.Provider>

@@ -2,6 +2,7 @@ import webpush from 'web-push'
 import { prisma, onNotificationSaved, type NotificationRow } from './prisma'
 import { inAudit } from './health/auditContext'
 import { sendNativePush } from './nativePush'
+import { isMuted } from './notifyCategories'
 
 /**
  * Pop-up notifications that reach people even when PulseTrack is closed (Web Push):
@@ -178,14 +179,31 @@ export async function pushMissed(input: { callId: string; conversationId: string
  * tap opens the same place the bell does. People looking at Metriq right now are skipped (sendPush).
  */
 onNotificationSaved((rows: NotificationRow[]) => {
+  if (process.env.NODE_ENV === 'test' && !process.env.PUSH_IN_TESTS) return
+  if (inAudit()) return
   // One pop-up per person per notification. The same alert saved twice for one person in one go is sent once.
   const seen = new Set<string>()
+  const unique: NotificationRow[] = []
   for (const row of rows) {
     if (!row.userId) continue
     const same = `${row.userId}|${row.type}|${row.entityType ?? ''}|${row.entityId ?? ''}|${row.title}|${row.body}`
     if (seen.has(same)) continue
     seen.add(same)
-    const tag = `n-${row.entityType ?? row.type}-${row.entityId ?? row.title}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)
-    void sendPush([row.userId], { kind: 'alert', type: row.type, title: row.title.slice(0, 120), body: row.body.slice(0, 200), tag, url: row.link || '/app/notifications', nid: row.id }, { evenIfActive: row.type === 'SYSTEM_HEALTH' }).catch(() => undefined)
+    unique.push(row)
   }
+  if (!unique.length) return
+  void (async () => {
+    // A category the person muted (Settings, ITAD update 12 Nov §6) sends no pop-up or phone push.
+    // One query for the whole save; if it fails, the pop-ups still go.
+    const muted = new Map<string, string[]>()
+    try {
+      const people = await prisma.user.findMany({ where: { id: { in: [...new Set(unique.map((r) => r.userId))] } }, select: { id: true, notifyMuted: true } })
+      for (const p of people) if (p.notifyMuted.length) muted.set(p.id, p.notifyMuted)
+    } catch { /* send as if nothing is muted */ }
+    for (const row of unique) {
+      if (isMuted(row.type, muted.get(row.userId))) continue
+      const tag = `n-${row.entityType ?? row.type}-${row.entityId ?? row.title}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)
+      void sendPush([row.userId], { kind: 'alert', type: row.type, title: row.title.slice(0, 120), body: row.body.slice(0, 200), tag, url: row.link || '/app/notifications', nid: row.id }, { evenIfActive: row.type === 'SYSTEM_HEALTH' }).catch(() => undefined)
+    }
+  })().catch(() => undefined)
 })

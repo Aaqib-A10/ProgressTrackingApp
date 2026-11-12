@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
 import { guardWrite } from './health/auditContext'
-import { applyWalls, setTimeZoneLoader } from './tenancy'
+import { applyWalls, maybeCompanyId, setTimeZoneLoader } from './tenancy'
 
 // Single shared Prisma client for the process. The query hook does two things:
 //  - company walls (lib/tenancy): inside a signed-in request every read and write is limited
@@ -30,6 +30,25 @@ function withNotificationIds<T>(args: T): T {
   return { ...a, data: Array.isArray(a.data) ? a.data.map(withId) : withId(a.data) } as T
 }
 
+/**
+ * A record was saved or deleted (Metra keeps its search index in step, lib/metra/indexer). ids is null for a bulk
+ * change (createMany, updateMany, deleteMany), when the rows are not known. Registered late, like the pop-ups.
+ */
+export type RecordWritten = (model: string, ids: string[] | null, companyId: string | null) => void
+let afterWrite: RecordWritten | null = null
+export function onRecordWritten(fn: RecordWritten): void { afterWrite = fn }
+const WRITES = new Set(['create', 'update', 'upsert', 'delete', 'createMany', 'updateMany', 'deleteMany', 'createManyAndReturn', 'updateManyAndReturn'])
+function reportWrite(model: string, operation: string, args: unknown, result: unknown): void {
+  if (!afterWrite || !WRITES.has(operation) || model === 'AiChunk' || model === 'AiIndexState') return
+  try {
+    const r = result as { id?: unknown; companyId?: unknown } | null
+    const company = maybeCompanyId() ?? (typeof r?.companyId === 'string' ? r.companyId : null)
+    if (operation.endsWith('Many') || operation.endsWith('AndReturn')) { afterWrite(model, null, company); return }
+    const id = typeof r?.id === 'string' ? r.id : (args as { where?: { id?: unknown } } | undefined)?.where?.id
+    afterWrite(model, typeof id === 'string' ? [id] : null, company)
+  } catch { /* indexing never breaks a save */ }
+}
+
 const client = base.$extends({
   query: {
     $allModels: {
@@ -41,6 +60,7 @@ const client = base.$extends({
         if (saving && afterNotification) {
           try { afterNotification(notificationRows(args)) } catch { /* a pop-up never breaks the save */ }
         }
+        reportWrite(model, operation, args, result)
         return result
       },
     },

@@ -80,16 +80,16 @@ function SortRow({ id, label, onRemove }: { id: string; label: string; onRemove:
   )
 }
 
-/** Pick the columns and drag them into order. */
-export function ColumnPicker({ columns, onClose, onSave }: { columns: string[]; onClose: () => void; onSave: (cols: string[]) => void }) {
-  const [list, setList] = useState<string[]>(columns.length ? columns : DEFAULT_COLUMNS)
+/** Pick the columns and drag them into order (All leads by default; Follow-ups passes its own list). */
+export function ColumnPicker({ columns, onClose, onSave, options = LEAD_COLUMNS, defaults = DEFAULT_COLUMNS, note }: { columns: string[]; onClose: () => void; onSave: (cols: string[]) => void; options?: { key: string; label: string }[]; defaults?: string[]; note?: string }) {
+  const [list, setList] = useState<string[]>((columns.length ? columns : defaults).filter((k) => options.some((c) => c.key === k)))
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))
   const end = (e: DragEndEvent) => { if (e.over && e.active.id !== e.over.id) setList((l) => arrayMove(l, l.indexOf(String(e.active.id)), l.indexOf(String(e.over!.id)))) }
-  const label = (k: string) => LEAD_COLUMNS.find((c) => c.key === k)?.label ?? k
-  const off = LEAD_COLUMNS.filter((c) => !list.includes(c.key))
+  const label = (k: string) => options.find((c) => c.key === k)?.label ?? k
+  const off = options.filter((c) => !list.includes(c.key))
   return (
-    <Modal open onClose={onClose} title="Columns" size="sm" footer={<><Button variant="secondary" onClick={() => setList(DEFAULT_COLUMNS)}>Standard set</Button><Button disabled={!list.length} onClick={() => onSave(list)}>Save</Button></>}>
-      <p className="mb-2 text-body-sm text-ink-muted">Drag to change the order. Saved for you only.</p>
+    <Modal open onClose={onClose} title="Columns" size="sm" footer={<><Button variant="secondary" onClick={() => setList(defaults)}>Standard set</Button><Button disabled={!list.length} onClick={() => onSave(list)}>Save</Button></>}>
+      <p className="mb-2 text-body-sm text-ink-muted">Drag to change the order. Saved for you only.{note ? ` ${note}` : ''}</p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={end}>
         <SortableContext items={list} strategy={verticalListSortingStrategy}>
           <ul className="space-y-1.5">{list.map((k) => <SortRow key={k} id={k} label={label(k)} onRemove={() => setList((l) => l.filter((x) => x !== k))} />)}</ul>

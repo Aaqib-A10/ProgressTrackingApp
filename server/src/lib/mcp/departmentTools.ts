@@ -2,6 +2,7 @@ import { DateTime } from 'luxon'
 import type { Role } from '@prisma/client'
 import { apiAs, apiError } from './api'
 import { LEADS_GUIDE, WORK_GUIDE } from './workTools'
+import { dealMoney } from '../dealMoney'
 import {
   REGION_META, clock, filterLeads, followUpTabs, funnelOf, isDialable, lastActivity, latestActedToday, leadRegion, leadState,
   daysSince, pct, regionWindow, REGIONS, PRESET_VIEWS, fmtSpan,
@@ -51,22 +52,31 @@ export function readablePath(path: string): string | null {
   return null
 }
 
-/** JSON made short for the assistant: no nulls, no empty lists, cut at a size it can read. */
+/**
+ * JSON made short for the assistant: no nulls, no empty lists, cut at a size it can read. Totals and other single
+ * values come before lists, and each list says how many items it has, so a cut never loses the summary numbers and
+ * nobody has to count rows.
+ */
 export function compact(v: unknown, max = 40_000): string {
   const prune = (x: unknown): unknown => {
     if (Array.isArray(x)) return x.map(prune)
     if (x && typeof x === 'object') {
-      const o: Record<string, unknown> = {}
+      const single: [string, unknown][] = [], lists: [string, unknown][] = []
       for (const [k, val] of Object.entries(x)) {
         if (val == null || (Array.isArray(val) && val.length === 0) || val === '') continue
-        o[k] = prune(val)
+        if (Array.isArray(val)) {
+          // A list of people or things with names also gets a plain "names" line, so "who..." is answered with names.
+          const names = val.every((x) => x && typeof x === 'object' && typeof (x as { name?: unknown }).name === 'string') ? val.map((x) => (x as { name: string }).name.trim()) : []
+          if (names.length) single.push([`${k} names`, names.join(', ')])
+          lists.push([`${k} (${val.length} items)`, prune(val)])
+        } else single.push([k, prune(val)])
       }
-      return o
+      return Object.fromEntries([...single, ...lists])
     }
     return x
   }
   const s = typeof v === 'string' ? v : JSON.stringify(prune(v))
-  return s.length > max ? `${s.slice(0, max)}\n\n[Cut at ${max.toLocaleString()} characters of ${s.length.toLocaleString()}. Ask for a smaller range, a date, or one item.]` : s
+  return s.length > max ? `${s.slice(0, max)}\n\n[CUT at ${max.toLocaleString()} characters of ${s.length.toLocaleString()}: the lists above are incomplete, so do not count them; use the totals and "(N items)" counts, or ask for a smaller range.]` : s
 }
 
 interface Me { id: string; name: string; role: Role; department: string | null; subDepartment: string | null; isDeveloper?: boolean; memberships?: { department: string }[]; leadsRole?: 'MANAGER' | 'REP' | null }
@@ -103,11 +113,11 @@ const AREAS: { title: string; for: (m: Me) => boolean; lines: string[] }[] = [
     title: 'ITAD',
     for: (m) => inDept(m, 'ITAD'),
     lines: [
-      'Lead Dialer: use dialer_summary, dialer_leads (follow-ups, who to call now, hot leads, filters) and dialer_lead; dialer_update_lead to log a note, call later or snooze; dialer_edit_lead to set the second phone, second email, LinkedIn, decision maker, best time or tags.',
+      'Lead Dialer: use dialer_summary, dialer_leads (follow-ups, who to call now, hot leads, filters) and dialer_lead; dialer_update_lead to log a note, call later or snooze; dialer_edit_lead to set the second phone, second email, LinkedIn, decision maker, best time or tags, or add alternative numbers.',
       '/api/itad/entries?date=YYYY-MM-DD : my daily log for a day',
       '/api/itad/team?range=week : the team\'s daily logs (team leads)',
       '/api/itad/analytics?range=month : calls, connects and results over time',
-      '/api/itad/bids : Deal Tracker (bids and deals)',
+      'Deal Tracker (bids and deals): use deal_tracker for counts, totals, win rate, overdue and lists (it counts every deal; never count them yourself).',
       '/api/docs : ITAD Docs & Links',
     ],
   },
@@ -164,6 +174,7 @@ const AREAS: { title: string; for: (m: Me) => boolean; lines: string[] }[] = [
     lines: [
       '/api/attendance/team?range=today : who is in, late or on leave',
       '/api/attendance/register?range=month : every member x every day',
+      '/api/admin/leave : leave days off and work from home (date and type for each person)',
       '/api/dashboard/team?range=week : team dashboard',
       '/api/feedback : feedback threads',
       '/api/notifications/not-submitted : who has not submitted today\'s report',
@@ -178,6 +189,96 @@ const AREAS: { title: string; for: (m: Me) => boolean; lines: string[] }[] = [
 
 function inDept(m: Me, dept: string): boolean {
   return m.role === 'SUPER_ADMIN' || m.department === dept || !!m.memberships?.some((x) => x.department === dept)
+}
+
+// ------------------------------------------------------------------ Deal Tracker
+
+interface DealRow {
+  number: number; title: string; company: string; type: string; district: string; agentName: string; status: 'ACTIVE' | 'SUBMITTED' | 'WON' | 'LOST'
+  dueDate: string; submissionType: string | null; priceQuoted: number | null; awardedPrice: number | null; bidBond: boolean; bidBondAmount: number | null; closedDate: string | null; reminderSet: boolean
+}
+export interface DealTrackerData { bids: DealRow[]; summary: { active: number; submitted: number; won: number; lost: number; wonValue: number } }
+
+const STATUS_WORD: Record<DealRow['status'], string> = { ACTIVE: 'Active', SUBMITTED: 'Submitted', WON: 'Won', LOST: 'Lost' }
+
+/**
+ * The Deal Tracker as text for an assistant: the page's own summary cards first (exact, every deal the person can
+ * see), then totals for the asked filter, per agent, and the deals. Counting is done here, never by the model.
+ */
+export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, now: Date): string {
+  const s = d.summary
+  // A value that is not real (type "deal", status "pending") is ignored rather than turning every count into 0.
+  const st = str(a.status).toLowerCase()
+  const status = ['open', 'active', 'submitted', 'won', 'lost', 'closed'].includes(st) ? st : 'all'
+  const agent = str(a.agent).toLowerCase()
+  const words = str(a.search).toLowerCase()
+  const type = ['RFQ', 'RFP', 'BID', 'PO'].includes(str(a.type).toUpperCase()) ? str(a.type).toUpperCase() : ''
+  const ymd = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(str(v)) ? str(v) : '')
+  // "Overdue" already means "due before now": a from/to (often today's date) would hide them, so it is ignored.
+  const from = a.overdue === true ? '' : ymd(a.from), to = a.overdue === true ? '' : ymd(a.to)
+  const pkDay = (iso: string) => DateTime.fromISO(iso).setZone(PKT_ZONE).toISODate()!
+  const fmtDay = (iso: string) => DateTime.fromISO(iso).setZone(PKT_ZONE).toFormat('ccc d LLL yyyy, h:mm a')
+  const open = (b: DealRow) => b.status === 'ACTIVE' || b.status === 'SUBMITTED'
+  const byStatus = (b: DealRow) => {
+    if (status === 'open' && !open(b)) return false
+    if (status === 'closed' && open(b)) return false
+    if (['active', 'submitted', 'won', 'lost'].includes(status) && b.status !== status.toUpperCase()) return false
+    return true
+  }
+  // Everything but the status filter: the win rate is always won / (won + lost), even when only won deals are asked for.
+  const sameScope = d.bids.filter((b) => {
+    if (agent && !b.agentName.toLowerCase().includes(agent)) return false
+    if (type && b.type !== type) return false
+    if (words && !`${b.title} ${b.company} ${b.district}`.toLowerCase().includes(words)) return false
+    const when = pkDay(b.closedDate ?? b.dueDate) // same date rule as the page's range filter
+    if (from && when < from) return false
+    if (to && when > to) return false
+    if (a.overdue === true && !(open(b) && new Date(b.dueDate) < now)) return false
+    return true
+  })
+  const rows = sameScope.filter(byStatus)
+  const count = (st: DealRow['status']) => rows.filter((b) => b.status === st).length
+  const wonInScope = sameScope.filter((b) => b.status === 'WON').length
+  const decided = wonInScope + sameScope.filter((b) => b.status === 'LOST').length
+  const won = rows.filter((b) => b.status === 'WON')
+  const wonValue = won.reduce((t, b) => t + (b.awardedPrice ?? 0), 0)
+  const filtered = status !== 'all' || agent || words || type || from || to || a.overdue === true
+  const byAgent = new Map<string, Record<string, number>>()
+  for (const b of rows) {
+    const x = byAgent.get(b.agentName) ?? { total: 0, ACTIVE: 0, SUBMITTED: 0, WON: 0, LOST: 0, wonValue: 0 }
+    x.total++; x[b.status]++
+    if (b.status === 'WON') x.wonValue += b.awardedPrice ?? 0
+    byAgent.set(b.agentName, x)
+  }
+  const limit = Math.min(60, Math.max(1, Number(a.limit) || 25))
+  const list = [...rows].sort((x, y) => (open(x) === open(y) ? x.dueDate.localeCompare(y.dueDate) : open(x) ? -1 : 1)).slice(0, limit)
+  return [
+    `Deal Tracker cards (every deal this person can see, exactly as on the page): Active ${s.active}, Submitted ${s.submitted}, Won ${s.won} (${dealMoney(s.wonValue)} awarded), Lost ${s.lost}; ${d.bids.length} deals in all.`,
+    filtered
+      ? `Matching the filter (${[status !== 'all' && `status ${status}`, agent && `agent "${str(a.agent)}"`, type && `type ${type}`, words && `"${str(a.search)}"`, from && `from ${from}`, to && `to ${to}`, a.overdue === true && 'overdue'].filter(Boolean).join(', ')}): ${rows.length} deals: Active ${count('ACTIVE')}, Submitted ${count('SUBMITTED')}, Won ${count('WON')} (${dealMoney(wonValue)}), Lost ${count('LOST')}.`
+      : '',
+    // The open deals with no date limit, so a from/to the model added on its own never hides overdue ones.
+    (from || to) ? (() => {
+      const allOpen = d.bids.filter((b) => open(b) && (!agent || b.agentName.toLowerCase().includes(agent)))
+      return `Note: the dates above hide some deals. All open deals${agent ? ` for "${str(a.agent)}"` : ''} at any date: ${allOpen.length} (Active ${allOpen.filter((b) => b.status === 'ACTIVE').length}, Submitted ${allOpen.filter((b) => b.status === 'SUBMITTED').length}), ${allOpen.filter((b) => new Date(b.dueDate) < now).length} of them overdue. Use these when the person did not name a period.`
+    })() : '',
+    rows.some(open) ? (() => {
+      const late = rows.filter((b) => open(b) && new Date(b.dueDate) < now).length
+      const next = rows.filter((b) => open(b) && new Date(b.dueDate) >= now).sort((x, y) => x.dueDate.localeCompare(y.dueDate))[0]
+      return `Open deals here: ${late} overdue (due date passed). Next due (still ahead): ${next ? `#${next.number} ${next.title} (${next.company}), due ${fmtDay(next.dueDate)}` : 'none, every open deal here is already overdue'}.`
+    })() : '',
+    decided ? `Win rate (won / (won + lost))${agent || type || words || from || to ? ' with these filters' : ''}: ${Math.round((wonInScope / decided) * 100)}% (${wonInScope} won of ${decided} decided).` : '',
+    byAgent.size ? `By agent: ${[...byAgent].sort((x, y) => y[1].total - x[1].total).map(([n, x]) => `${n} ${x.total} (active ${x.ACTIVE}, submitted ${x.SUBMITTED}, won ${x.WON} ${dealMoney(x.wonValue)}, lost ${x.LOST})`).join('; ')}.` : 'No deals match.',
+    rows.length ? `\nDeals (${list.length} of ${rows.length}${list.length < rows.length ? '; ask with a filter or a bigger limit for the rest' : ''}), open ones first by due date. Prices exactly as stored, in dollars:` : '',
+    ...list.map((b) => [
+      `#${b.number} ${b.title}`, b.company, b.type, b.district || null, b.agentName, STATUS_WORD[b.status],
+      `due ${fmtDay(b.dueDate)}${open(b) && new Date(b.dueDate) < now ? ' (OVERDUE)' : ''}`,
+      `quoted ${dealMoney(b.priceQuoted)}`, b.awardedPrice != null && b.status === 'WON' ? `awarded ${dealMoney(b.awardedPrice)}` : null,
+      b.submissionType ? `sent by ${b.submissionType.toLowerCase()}` : null,
+      b.bidBond ? `bid bond${b.bidBondAmount != null ? ` ${dealMoney(b.bidBondAmount)}` : ''}` : null,
+      b.closedDate ? `closed ${DateTime.fromISO(b.closedDate).setZone(PKT_ZONE).toFormat('d LLL yyyy')}` : null,
+    ].filter(Boolean).join(' | ')),
+  ].filter(Boolean).join('\n')
 }
 
 // ------------------------------------------------------------------ Lead Dialer
@@ -336,6 +437,32 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
     },
   },
   {
+    name: 'deal_tracker',
+    title: 'ITAD Deal Tracker',
+    description: 'ITAD Deal Tracker (bids and deals): exact counts per status (Active, Submitted, Won, Lost), won value, win rate, per-agent totals, and the deals themselves. Use it for ANY question about bids, deals, RFQs, RFPs or POs: how many, totals, overdue, won or lost, by agent or month. Filters are optional.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['all', 'open', 'active', 'submitted', 'won', 'lost', 'closed'], description: 'open = Active + Submitted; closed = Won + Lost. Default all.' },
+        agent: { type: 'string', description: 'Only this agent (name or part of it).' },
+        type: { type: 'string', enum: ['RFQ', 'RFP', 'BID', 'PO'] },
+        search: { type: 'string', description: 'Words in the title, company or district.' },
+        from: { type: 'string', description: 'YYYY-MM-DD, ONLY when the person names a period. Like the page: a closed deal counts on its closed date, an open one on its due date. "My open bids" has no dates.' },
+        to: { type: 'string', description: 'YYYY-MM-DD (inclusive).' },
+        overdue: { type: 'boolean', description: 'Only open deals whose due date has passed (any date; leave from/to out).' },
+        limit: { type: 'number', description: 'How many deals to list (default 25, max 60). Totals always cover every match.' },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+    async run(u, a) {
+      const r = await apiAs(u, 'GET', '/api/itad/bids')
+      if (r.status === 403) return fail('The Deal Tracker is for the ITAD team.')
+      if (r.status >= 400) return fail(apiError(r))
+      return text(dealTrackerText(r.body as DealTrackerData, a, new Date()))
+    },
+  },
+  {
     name: 'dialer_summary',
     title: 'Lead Dialer at a glance',
     description: 'ITAD Lead Dialer: which US regions are open for calling right now (and prime time), how many leads can be called in each, follow-ups due (overdue, due today, scheduled), hot leads, and the funnel. For a rep, their own leads; managers can ask for rep "all" or one rep.',
@@ -476,6 +603,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
         decision_maker: { type: 'string', description: 'Decision maker\'s name and role ("" removes it)' },
         best_time: { type: 'string', description: 'Best time to call, e.g. "Tue-Thu after 2 PM ET" ("" removes it)' },
         tags: { type: 'array', items: { type: 'string' }, description: 'The lead\'s tags (replaces them; [] removes all)' },
+        alt_phones: { type: 'array', items: { type: 'string' }, description: 'Alternative phone numbers to ADD to the lead (kept with the ones it has; a number it already has is skipped). Each gets its own copy button and shows in the Claude log.' },
         earthzone: { type: 'boolean', description: 'false: this change does not need to go into Earthzone. Default true.' },
         done_in_earthzone: { type: 'boolean', description: 'true: the marked changes are now in Earthzone (clears "needs Earthzone").' },
       },
@@ -509,9 +637,27 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
         body.tags = tags
         said.push(tags.length ? `tags ${tags.join(', ')}` : 'tags removed')
       }
+      if (a.alt_phones !== undefined) {
+        // Added to the numbers the lead has; sent through PATCH /api/dialer/leads/:id, so each lands in the Claude log.
+        if (!Array.isArray(a.alt_phones)) return fail('alt_phones must be a list of phone numbers.')
+        const have = ((lead as { altPhones?: unknown }).altPhones as string[] | undefined ?? []).filter((x) => typeof x === 'string')
+        const digits = (x: string) => x.replace(/\D/g, '')
+        const known = new Set([lead.phone, (lead as { phone2?: string | null }).phone2, ...have].filter((x): x is string => !!x).map(digits))
+        const add: string[] = []
+        for (const raw of a.alt_phones) {
+          const v = str(raw)
+          if (!v) continue
+          if (v.length > 40 || digits(v).length < 7) return fail(`"${v}" does not look like a phone number.`)
+          if (known.has(digits(v))) continue
+          known.add(digits(v)); add.push(v)
+        }
+        if (have.length + add.length > 20) return fail('A lead keeps at most 20 alternative numbers.')
+        if (add.length) { body.altPhones = [...have, ...add]; said.push(`alternative number${add.length > 1 ? 's' : ''} ${add.join(', ')} added`) }
+        else if (!said.length && a.done_in_earthzone !== true) return text(`${lead.company} already has ${a.alt_phones.length > 1 ? 'these numbers' : 'this number'}; nothing changed.`)
+      }
       if (a.earthzone === false) body.needsCrm = false
       if (a.done_in_earthzone === true) { body.crmDone = true; said.push('marked done in Earthzone') }
-      if (!said.length) return fail('Say what to change: second_phone, second_email, linkedin, decision_maker, best_time, tags or done_in_earthzone.')
+      if (!said.length) return fail('Say what to change: second_phone, second_email, linkedin, decision_maker, best_time, tags, alt_phones or done_in_earthzone.')
       const r = await apiAs(u, 'PATCH', `/api/dialer/leads/${encodeURIComponent(lead.id)}`, { body })
       if (r.status >= 400) return fail(apiError(r))
       return text(`${lead.company}: ${said.join('; ')}.`)

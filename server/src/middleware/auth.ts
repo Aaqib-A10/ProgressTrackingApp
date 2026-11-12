@@ -24,6 +24,8 @@ export interface AuthUser {
   companyId: string
   /** Help sign-in: the owner (Metriq support) signed in as this person. */
   supportBy?: string
+  /** The request came through a connector key (Claude...): what it writes is labelled so (Claude log, note source). */
+  via?: 'connector'
 }
 
 export interface AuthedRequest extends Request {
@@ -138,7 +140,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         }
       }
     }
-    req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}) }
+    req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}), ...(payload.via === 'connector' ? { via: 'connector' as const } : {}) }
     timeZone = user.company.timeZone
   } catch {
     res.status(401).json({ error: 'Invalid or expired session' })

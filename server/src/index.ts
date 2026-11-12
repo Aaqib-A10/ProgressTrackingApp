@@ -16,6 +16,7 @@ import { startPmDeadlines } from './lib/pm/deadlines'
 import { startCallSweeper, setOnCallEnded } from './lib/pm/calls'
 import { startMeetingReminders } from './lib/pm/meetings'
 import { startCleanup } from './lib/cleanup'
+import { startMetraIndexer } from './lib/metra/indexer'
 import { scheduleNotes } from './controllers/chatController'
 import { recoverNotes } from './lib/pm/notes'
 import { captureError, flushErrors } from './lib/health/errors'
@@ -67,6 +68,8 @@ app.listen(PORT, () => {
   startCallSweeper()
   startMeetingReminders()
   startCleanup()
+  // Metra: keeps its search index in step with Metriq (only for companies with the switch on).
+  startMetraIndexer()
   setAuditBaseUrl(`http://127.0.0.1:${PORT}`)
   startHealthAudit()
   // Leads imported before the import learned First/Last Name and more website columns.

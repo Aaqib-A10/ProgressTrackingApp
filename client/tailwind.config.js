@@ -76,6 +76,9 @@ export default {
         shimmer: { '100%': { transform: 'translateX(100%)' } },
         // A window on a phone comes up from the bottom, like a sheet in any phone app.
         'sheet-up': { from: { transform: 'translateY(100%)' }, to: { transform: 'translateY(0)' } },
+        // Metra's launcher: a soft ring that breathes out now and then.
+        'metra-glow': { '0%': { transform: 'scale(1)', opacity: '0.45' }, '70%, 100%': { transform: 'scale(1.35)', opacity: '0' } },
+        'metra-float': { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-4px)' } },
       },
       animation: {
         'fade-in': 'fade-in 150ms ease-out',
@@ -84,6 +87,8 @@ export default {
         'rise-in': 'rise-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1)',
         shimmer: 'shimmer 1.4s infinite',
         'sheet-up': 'sheet-up 260ms cubic-bezier(0.2, 0.9, 0.3, 1)',
+        'metra-glow': 'metra-glow 3.2s cubic-bezier(0.2, 0.7, 0.3, 1) infinite',
+        'metra-float': 'metra-float 4s ease-in-out infinite',
       },
     },
   },

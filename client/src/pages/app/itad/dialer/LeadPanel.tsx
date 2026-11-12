@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Maximize2, Minimize2, Pencil, Pin, PinOff, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Maximize2, Minimize2, Pencil, Pin, PinOff, Trash2, UserPlus, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
-import { dialerApi, type DialerLead, type DialerSettings, type LeadDetail, type LeadEdit } from '../../../../lib/dialerApi'
+import { dialerApi, type ContactEdit, type DialerContact, type DialerLead, type DialerSettings, type LeadDetail, type LeadEdit, type NoteSource } from '../../../../lib/dialerApi'
 import { REGIONS, REGION_META, TASK_KINDS, US_STATES, daysInStatus, leadRegion, leadState, outcomeLabel, regionWindow, shortDate } from '../../../../lib/dialer'
 import { LeadActions, NoteFields, RegionBadge, StatusPill, errMsg } from './ui'
 import { AddTaskModal, AddTouchModal } from './TaskParts'
@@ -21,7 +21,7 @@ import { downloadNotes } from './exports'
  * Earthzone shows it.
  */
 
-const KIND_LABEL: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups' }
+const KIND_LABEL: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups', EZ_SYNC: 'Earth Zone sync', NOTE_DELETED: 'Note deleted', CONTACT: 'Contact' }
 const fmt = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavigate, onClose, onChanged }: {
@@ -117,7 +117,9 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
 
               <Group name="contact" title="Contact" tag="from CRM">
                 <Field k="Phone" v={l.phone} copy />
+                {(l.altPhones ?? []).map((n, i) => <Field key={`${n}-${i}`} k={i === 0 ? 'Alternative numbers' : ''} v={n} copy />)}
                 <Field k="Email" v={l.email} link={l.email ? `mailto:${l.email}` : undefined} />
+                {l.jobTitle && <Field k="Job title" v={l.jobTitle} />}
                 <Field k="Website" v={l.website} link={l.website ? (/^https?:/.test(l.website) ? l.website : `https://${l.website}`) : undefined} />
                 <Field k="City" v={l.city} />
                 <div className="flex items-center gap-2 py-1">
@@ -147,7 +149,12 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
                 <Field k="Source" v={l.source} />
                 <Field k="List" v={l.listName === 'CRM' ? 'CRM (SMB leads)' : l.listName} />
                 <Field k="CRM lead ID" v={l.externalId} copy />
+                {l.ezLeadId && l.ezLeadId !== l.externalId && <Field k="Earth Zone ID" v={l.ezLeadId} copy />}
+                {(l.ezLinks ?? []).filter((x) => /^https?:\/\//i.test(x.url)).map((x, i) => <Field key={x.url} k={i === 0 ? 'Links' : ''} v={x.label || x.url} link={x.url} />)}
+                {l.description && <div className="flex gap-2 py-1"><span className="w-28 shrink-0 text-ink-muted">Description</span><p className="min-w-0 whitespace-pre-wrap break-words text-ink">{l.description}</p></div>}
               </Group>
+
+              {(d.contacts?.length ?? 0) > 0 && <ContactsGroup contacts={d.contacts!} canEdit={!!d.canEdit} onChanged={changed} />}
 
               <Group name="status" title="Status">
                 <div className="flex flex-wrap items-center gap-2 py-1"><StatusPill lead={l} /><span className="text-ink-muted">{daysInStatus(l, now)} days in this status</span></div>
@@ -172,7 +179,7 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
             </div>
             <div className="space-y-3">
               <TouchesAndTasks lead={l} d={d} leads={leads} now={now} onChanged={changed} />
-              <NotesGroup lead={l} notes={d.notes} meId={meId} settings={settings} focusKey={noteFocus} onChanged={changed} />
+              <NotesGroup lead={l} notes={d.notes} meId={meId} canEdit={!!d.canEdit} deletedEz={d.deletedEzNotes ?? 0} settings={settings} focusKey={noteFocus} onChanged={changed} />
 
               {(d.calls?.length ?? 0) > 0 && (
                 <Group name="calls" title={`Dialer calls · ${d.calls!.length}`}>
@@ -288,7 +295,29 @@ function AddedHere({ lead, settings, onSave }: { lead: DialerLead; settings: Dia
   )
 }
 
-function NotesGroup({ lead, notes, meId, settings, focusKey, onChanged }: { lead: DialerLead; notes: LeadDetail['notes']; meId: string; settings: DialerSettings; focusKey: number; onChanged: () => void }) {
+const SOURCE: Record<NoteSource, { label: string; cls: string }> = {
+  EARTHZONE: { label: 'Earth Zone', cls: 'bg-warning/15 text-warning' },
+  METRIQ: { label: 'Metriq', cls: 'bg-primary/10 text-primary' },
+  CLAUDE: { label: 'Claude', cls: 'bg-accent/15 text-accent' },
+}
+/** Where a note came from: Earth Zone (the sync), Metriq, or Claude (the connector). */
+export function SourceChip({ source }: { source?: NoteSource | string | null }) {
+  const s = SOURCE[(source as NoteSource) ?? 'METRIQ'] ?? SOURCE.METRIQ
+  return <span className={cn('rounded-full px-1.5 py-px text-[10.5px] font-semibold', s.cls)}>{s.label}</span>
+}
+
+/** "Edited here, differs from Earth Zone": Earth Zone's own text on hover, or on tap (phones). */
+function EzMarker({ ezText }: { ezText: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setOpen((o) => !o)} title={`In Earth Zone: ${ezText}`} className="rounded-full border border-dashed border-warning/60 px-1.5 text-[10.5px] font-semibold text-warning">edited here, differs from Earth Zone</button>
+      {open && <span className="basis-full whitespace-pre-wrap rounded-btn bg-warning/5 px-2 py-1 text-[12px] text-ink"><b>In Earth Zone:</b> {ezText}</span>}
+    </>
+  )
+}
+
+function NotesGroup({ lead, notes, meId, canEdit, deletedEz, settings, focusKey, onChanged }: { lead: DialerLead; notes: LeadDetail['notes']; meId: string; canEdit: boolean; deletedEz: number; settings: DialerSettings; focusKey: number; onChanged: () => void }) {
   const { addToast } = useToast()
   const [text, setText] = useState('')
   const [next, setNext] = useState('')
@@ -296,6 +325,10 @@ function NotesGroup({ lead, notes, meId, settings, focusKey, onChanged }: { lead
   const [crm, setCrm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  async function remove(id: string) {
+    try { await dialerApi.deleteNote(id); setDeleting(null); addToast({ type: 'success', message: 'Note deleted.' }); onChanged() } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not delete the note') }) }
+  }
   async function add() {
     setBusy(true)
     try {
@@ -332,13 +365,18 @@ function NotesGroup({ lead, notes, meId, settings, focusKey, onChanged }: { lead
                   <p className="whitespace-pre-wrap break-words text-ink">{n.text}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-muted">
                     {n.pinned && <span className="inline-flex items-center gap-0.5 font-semibold text-primary"><Pin size={10} />Pinned</span>}
+                    <SourceChip source={n.source} />
                     <span>{n.author} · {fmt(n.createdAt)}</span>
                     {n.editedAt && <span title={`Edited ${fmt(n.editedAt)}`}>edited</span>}
                     {n.nextActionAt && <span className="font-semibold text-ink">Next action {fmt(n.nextActionAt)}</span>}
-                    <span className="ml-auto flex gap-1">
-                      <button type="button" onClick={() => update(n.id, { pinned: !n.pinned })} className="rounded p-0.5 hover:text-ink" title={n.pinned ? 'Unpin' : 'Pin to the top'}>{n.pinned ? <PinOff size={12} /> : <Pin size={12} />}</button>
-                      {n.authorId === meId && <button type="button" onClick={() => setEditing({ id: n.id, text: n.text })} className="rounded p-0.5 hover:text-ink" title="Edit (shows as edited)"><Pencil size={12} /></button>}
+                    <span className="ml-auto flex items-center gap-1">
+                      <button type="button" onClick={() => update(n.id, { pinned: !n.pinned })} className="rounded p-1 hover:text-ink" title={n.pinned ? 'Unpin' : 'Pin to the top'} aria-label={n.pinned ? 'Unpin' : 'Pin'}>{n.pinned ? <PinOff size={12} /> : <Pin size={12} />}</button>
+                      {(n.authorId === meId || canEdit) && <button type="button" onClick={() => setEditing({ id: n.id, text: n.text })} className="rounded p-1 hover:text-ink" title="Edit (shows as edited)" aria-label="Edit note"><Pencil size={12} /></button>}
+                      {(n.authorId === meId || canEdit) && (deleting === n.id
+                        ? <span className="flex items-center gap-1.5"><span>Delete?</span><button type="button" onClick={() => remove(n.id)} className="font-semibold text-danger">Yes</button><button type="button" onClick={() => setDeleting(null)} className="font-semibold hover:text-ink">No</button></span>
+                        : <button type="button" onClick={() => setDeleting(n.id)} className="rounded p-1 hover:text-danger" title={n.source === 'EARTHZONE' ? 'Delete (stays deleted after any Earth Zone sync)' : 'Delete'} aria-label="Delete note"><Trash2 size={12} /></button>)}
                     </span>
+                    {n.ezText && <EzMarker ezText={n.ezText} />}
                   </div>
                 </>
               )}
@@ -346,6 +384,67 @@ function NotesGroup({ lead, notes, meId, settings, focusKey, onChanged }: { lead
           ))}
           {notes.length === 0 && <li className="text-ink-muted">No notes yet.</li>}
         </ul>
+        {deletedEz > 0 && <p className="text-[12px] text-ink-muted">{deletedEz} Earth Zone note{deletedEz === 1 ? '' : 's'} deleted here (a later sync does not bring {deletedEz === 1 ? 'it' : 'them'} back).</p>}
+      </div>
+    </Group>
+  )
+}
+
+/**
+ * Second contacts found in notes (a new person with an email, phone or LinkedIn): the agent accepts (and may
+ * correct) or ignores each one. Accepted ones are listed as the lead's contacts.
+ */
+function ContactsGroup({ contacts, canEdit, onChanged }: { contacts: DialerContact[]; canEdit: boolean; onChanged: () => void }) {
+  const { addToast } = useToast()
+  type Draft = { name: string; title: string; email: string; phone: string; linkedin: string }
+  const [editing, setEditing] = useState<{ id: string; v: Draft } | null>(null)
+  const suggested = contacts.filter((c) => c.state === 'SUGGESTED')
+  const accepted = contacts.filter((c) => c.state === 'ACCEPTED')
+  async function set(id: string, body: ContactEdit, ok: string) {
+    try { await dialerApi.updateContact(id, body); setEditing(null); addToast({ type: 'success', message: ok }); onChanged() } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save') }) }
+  }
+  const draft = (c: DialerContact): Draft => ({ name: c.name ?? '', title: c.title ?? '', email: c.email ?? '', phone: c.phone ?? '', linkedin: c.linkedin ?? '' })
+  const inp = 'h-8 min-w-0 flex-1 rounded-btn border border-line bg-card px-2 text-body-sm text-ink focus:border-primary focus:outline-none'
+  const LABEL: Record<keyof Draft, string> = { name: 'Name', title: 'Title', email: 'Email', phone: 'Phone', linkedin: 'LinkedIn' }
+  const lines = (c: DialerContact) => (
+    <>
+      <p className="font-semibold text-ink">{c.name ?? 'No name'}{c.title && <span className="font-normal text-ink-muted"> · {c.title}</span>}</p>
+      {c.email && <Field k="Email" v={c.email} link={`mailto:${c.email}`} />}
+      {c.phone && <Field k="Phone" v={c.phone} copy />}
+      {c.linkedin && <Field k="LinkedIn" v={c.linkedin} link={/^https?:\/\//i.test(c.linkedin) ? c.linkedin : `https://${c.linkedin}`} />}
+    </>
+  )
+  return (
+    <Group name="contacts" title={`Other contacts${accepted.length ? ` · ${accepted.length}` : ''}${suggested.length ? ` · ${suggested.length} found in notes` : ''}`}>
+      <div className="space-y-2 py-1">
+        {suggested.map((c) => (
+          <div key={c.id} className="rounded-btn border border-dashed border-primary/40 bg-primary/[0.03] px-3 py-2">
+            <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-primary"><UserPlus size={12} />Found in a note</p>
+            {editing?.id === c.id ? (
+              <div className="space-y-1.5">
+                {(Object.keys(LABEL) as (keyof Draft)[]).map((k) => (
+                  <label key={k} className="flex items-center gap-2"><span className="w-20 shrink-0 text-ink-muted">{LABEL[k]}</span><input value={editing.v[k]} onChange={(e) => setEditing({ id: c.id, v: { ...editing.v, [k]: e.target.value } })} className={inp} /></label>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" onClick={() => set(c.id, { state: 'ACCEPTED', name: editing.v.name.trim() || null, title: editing.v.title.trim() || null, email: editing.v.email.trim() || null, phone: editing.v.phone.trim() || null, linkedin: editing.v.linkedin.trim() || null }, 'Contact added.')}>Add contact</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {lines(c)}
+                {canEdit && (
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <Button size="sm" leadingIcon={<Check size={13} />} onClick={() => set(c.id, { state: 'ACCEPTED' }, 'Contact added.')}>Add</Button>
+                    <Button size="sm" variant="secondary" leadingIcon={<Pencil size={13} />} onClick={() => setEditing({ id: c.id, v: draft(c) })}>Edit and add</Button>
+                    <Button size="sm" variant="ghost" onClick={() => set(c.id, { state: 'IGNORED' }, 'Ignored.')}>Ignore</Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+        {accepted.map((c) => <div key={c.id} className="rounded-btn border border-line px-3 py-2">{lines(c)}</div>)}
       </div>
     </Group>
   )

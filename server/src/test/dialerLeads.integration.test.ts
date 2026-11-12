@@ -122,12 +122,13 @@ describe('follow-up backlog and per-rep settings', () => {
     await request(app).put('/api/dialer/prefs').set(...auth(w.itadMember)).send({ followUp: { Connected: 61 } }).expect(400)
     await request(app).put('/api/dialer/prefs').set(...auth(w.itadMember)).send({ followUp: { Connected: 10 }, views: [{ id: 'v1', name: 'Georgia hot', filters: { state: 'Georgia', tag: 'hot' } }] }).expect(200)
     let d = await data(w.itadMember)
-    expect(d.followUpByOwner[w.itadMember.id]).toMatchObject({ Connected: 10, Interested: 14, Pipeline: 7 })
+    // The rep's own Connected days over the defaults of the ITAD update of 12 Nov (Interested 15, Pipeline 30).
+    expect(d.followUpByOwner[w.itadMember.id]).toMatchObject({ Connected: 10, Interested: 15, Pipeline: 30 })
     expect(d.prefs.views[0]).toMatchObject({ name: 'Georgia hot' })
     // Changing the days keeps the views.
     await request(app).put('/api/dialer/prefs').set(...auth(w.itadMember)).send({ followUp: {} }).expect(200)
     d = await data(w.itadMember)
-    expect(d.followUpByOwner[w.itadMember.id].Connected).toBe(30)
+    expect(d.followUpByOwner[w.itadMember.id].Connected).toBe(7)
     expect(d.prefs.views).toHaveLength(1)
   })
 })

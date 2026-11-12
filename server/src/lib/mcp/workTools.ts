@@ -279,7 +279,9 @@ export const WORK_TOOLS: DeptTool[] = [
       const errors: string[] = []
       for (const title of lines) {
         const r = await apiAs(u, 'POST', '/api/worklog', { body: { title: title.slice(0, 3000), date, period: str(a.period) || 'DAY', ...(str(a.tag) ? { tag: str(a.tag).slice(0, 40) } : {}) } })
-        if (r.status >= 400) errors.push(`${title.slice(0, 60)}: ${apiError(r)}`); else ok++
+        // Counted only when Metriq returns the saved item (never "added" on a reply that saved nothing).
+        const saved = r.status === 201 && !!(r.body as { entry?: { id?: string } } | null)?.entry?.id
+        if (!saved) errors.push(`${title.slice(0, 60)}: ${r.status >= 400 ? apiError(r) : `not saved (Metriq answered ${r.status})`}`); else ok++
       }
       return errors.length ? fail(`Added ${ok}. Not added: ${errors.join('; ')}`) : text(`Added ${ok} to-do${ok === 1 ? '' : 's'} for ${date}.`)
     },

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Search, Loader2, User, FolderKanban, ListChecks, MessagesSquare, Paperclip, CalendarDays, LayoutGrid, PhoneCall, CornerDownLeft, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, Loader2, User, FolderKanban, ListChecks, MessagesSquare, Paperclip, CalendarDays, LayoutGrid, PhoneCall, CornerDownLeft, ArrowUp, ArrowDown, Sparkles } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { cn } from '../../lib/cn'
 import { filterNav } from './navConfig'
+import { flagOn, useFlags } from '../../lib/flags'
+import { metraReady, openMetra, useMetraStatus } from '../../lib/metraApi'
 
 /**
  * The command bar: one box that finds pages, people, projects, tasks, chats, files and
@@ -14,10 +16,10 @@ import { filterNav } from './navConfig'
  * Everyone only finds what they can open.
  */
 
-interface Hit { id: string; title: string; sub?: string; link: string; icon?: ReactNode }
+interface Hit { id: string; title: string; sub?: string; link: string; icon?: ReactNode; run?: () => void }
 interface Results { q: string; people: Hit[]; leads?: Hit[]; projects: Hit[]; tasks: Hit[]; chats: Hit[]; files: Hit[]; meetings: Hit[] }
 
-const GROUPS: { key: keyof Omit<Results, 'q'> | 'pages'; label: string; icon: ReactNode }[] = [
+const GROUPS: { key: keyof Omit<Results, 'q'> | 'pages' | 'metra'; label: string; icon: ReactNode }[] = [
   { key: 'pages', label: 'Pages', icon: <LayoutGrid size={14} /> },
   { key: 'people', label: 'People', icon: <User size={14} /> },
   { key: 'leads', label: 'Leads', icon: <PhoneCall size={14} /> },
@@ -26,6 +28,7 @@ const GROUPS: { key: keyof Omit<Results, 'q'> | 'pages'; label: string; icon: Re
   { key: 'chats', label: 'Chats', icon: <MessagesSquare size={14} /> },
   { key: 'files', label: 'Files', icon: <Paperclip size={14} /> },
   { key: 'meetings', label: 'Meetings', icon: <CalendarDays size={14} /> },
+  { key: 'metra', label: 'Metra', icon: <Sparkles size={14} /> },
 ]
 
 const OPEN_EVENT = 'pt:open-search'
@@ -117,16 +120,21 @@ export function CommandPalette() {
     return t ? out.slice(0, 6) : out.filter((h) => !h.sub).slice(0, 9)
   }, [user, term])
 
+  // Metra (switch `metra`): ask the typed words as a question.
+  useFlags()
+  const metra = metraReady(useMetraStatus()) && flagOn('metra')
+  const metraHits: Hit[] = useMemo(() => (metra && term ? [{ id: 'ask-metra', title: `Ask Metra: ${term}`, sub: 'Answers from your own Metriq data', link: '', icon: <Sparkles size={15} className="text-primary" />, run: () => openMetra(term) }] : []), [metra, term])
+
   const groups = useMemo(() => GROUPS
-    .map((g) => ({ ...g, label: g.key === 'pages' && !term ? 'Go to' : g.label, hits: g.key === 'pages' ? pages : (term.length >= 2 ? res?.[g.key] ?? [] : []) }))
-    .filter((g) => g.hits.length > 0), [pages, res, term])
+    .map((g) => ({ ...g, label: g.key === 'pages' && !term ? 'Go to' : g.label, hits: g.key === 'pages' ? pages : g.key === 'metra' ? metraHits : (term.length >= 2 ? res?.[g.key] ?? [] : []) }))
+    .filter((g) => g.hits.length > 0), [pages, res, term, metraHits])
   const flat = useMemo(() => groups.flatMap((g) => g.hits), [groups])
 
   useEffect(() => {
     list.current?.querySelector<HTMLElement>(`[data-i="${cursor}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [cursor])
 
-  const go = (h: Hit) => { setOpen(false); navigate(h.link) }
+  const go = (h: Hit) => { setOpen(false); if (h.run) h.run(); else navigate(h.link) }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, Math.max(flat.length - 1, 0))) }

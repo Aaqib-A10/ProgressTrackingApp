@@ -34,6 +34,7 @@ const TeamMembers = lazy(pageModule(() => import('../pages/app/TeamMembers')))
 const MemberProfile = lazy(pageModule(() => import('../pages/app/MemberProfile')))
 const Feedback = lazy(pageModule(() => import('../pages/app/Feedback')))
 const Connectors = lazy(pageModule(() => import('../pages/app/Connectors')))
+const MetraPage = lazy(pageModule(() => import('../pages/app/Metra')))
 const FeedbackThread = lazy(pageModule(() => import('../pages/app/FeedbackThread')))
 const QaEvaluate = lazy(pageModule(() => import('../pages/app/qa/QaEvaluate')))
 const QaScorecards = lazy(pageModule(() => import('../pages/app/qa/QaScorecards')))
@@ -194,6 +195,7 @@ export const router = createBrowserRouter([
 
       // Feedback (all roles — members receive, leads author & receive replies)
       { path: 'feedback', element: <Feedback /> },
+      { path: 'metra', element: <RequireFlag flag="metra"><MetraPage /></RequireFlag> },
       { path: 'connectors', element: <Connectors /> },
       { path: 'connectors/:id', element: <Connectors /> },
       { path: 'feedback/:id', element: <FeedbackThread /> },

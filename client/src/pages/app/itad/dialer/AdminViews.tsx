@@ -2,10 +2,10 @@ import { CHART } from '../../../../components/charts/chartTheme'
 import { PredictiveDialer } from './PredictiveDialer'
 import { useEffect, useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from 'recharts'
-import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
-import { dialerApi, type DialerSettings, type DuplicateGroup, type ImportRecord, type RegionCode } from '../../../../lib/dialerApi'
+import { dialerApi, type DialerSettings, type DuplicateGroup, type EzMatchKey, type ImportRecord, type RegionCode } from '../../../../lib/dialerApi'
 import { REGIONS, REGION_META, num, pct } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { InfoTip, Pager, Panel, errMsg, usePaged } from './ui'
@@ -17,6 +17,9 @@ export function HistoryView({ rep, refreshKey, onOpenLead }: { rep: string; refr
   const [rows, setRows] = useState<ImportRecord[] | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [showChart, setShowChart] = useState(true)
+  // The imports by import, or rolled up by week / month (ITAD update 12 Nov, section 11).
+  const [by, setBy] = useState<'import' | 'week' | 'month'>(() => { try { const v = localStorage.getItem('dialer.history.by'); return v === 'week' || v === 'month' ? v : 'import' } catch { return 'import' } })
+  const setGroup = (v: 'import' | 'week' | 'month') => { setBy(v); setOpen(null); try { localStorage.setItem('dialer.history.by', v) } catch { /* ignore */ } }
   useEffect(() => { dialerApi.imports(rep).then((r) => { setRows(r.imports); setOpen(r.imports[0]?.id ?? null) }).catch(() => setRows([])) }, [rep, refreshKey])
   const p = usePaged(rows ?? [], 25, 'h')
   if (!rows) return <div className="h-40 animate-pulse rounded-card bg-slate-100" />
@@ -70,7 +73,9 @@ export function HistoryView({ rep, refreshKey, onOpenLead }: { rep: string; refr
           </div>
         )}
       </Panel>
-      <Panel title={`Imports · ${rows.length}`} info="Every import is kept with its summary. Click a status change to see the leads behind it.">
+      <Panel title={`Imports · ${rows.length}`} info="Every import is kept with its summary. Click a status change to see the leads behind it. By week or month: the imports of each period added up."
+        action={<div className="inline-flex rounded-btn border border-line bg-card p-0.5">{(['import', 'week', 'month'] as const).map((k) => <button key={k} type="button" onClick={() => setGroup(k)} className={cn('h-7 rounded-md px-2.5 text-body-sm font-semibold', by === k ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>{k === 'import' ? 'Each import' : k === 'week' ? 'By week' : 'By month'}</button>)}</div>}>
+        {by !== 'import' ? <PeriodList rows={rows} by={by} open={open} setOpen={setOpen} onOpenLead={onOpenLead} /> : <>
         <ul className="divide-y divide-line">
           {p.rows.map((r) => (
             <li key={r.id} className="py-2">
@@ -86,8 +91,59 @@ export function HistoryView({ rep, refreshKey, onOpenLead }: { rep: string; refr
           ))}
         </ul>
         <Pager p={p} />
+        </>}
       </Panel>
     </div>
+  )
+}
+
+/** Imports added up by week (Monday first) or month, newest first; a period opens its imports. */
+function PeriodList({ rows, by, open, setOpen, onOpenLead }: { rows: ImportRecord[]; by: 'week' | 'month'; open: string | null; setOpen: (v: string | null) => void; onOpenLead: (id: string) => void }) {
+  const [inner, setInner] = useState<string | null>(null)
+  const keyOf = (iso: string) => {
+    const d = new Date(iso)
+    if (by === 'month') return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) }
+    const m = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))
+    return { key: m.toISOString().slice(0, 10), label: `Week of ${m.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` }
+  }
+  const groups: { key: string; label: string; items: ImportRecord[] }[] = []
+  for (const r of rows) {
+    const k = keyOf(r.createdAt)
+    const g = groups.find((x) => x.key === k.key)
+    if (g) g.items.push(r); else groups.push({ ...k, items: [r] })
+  }
+  const sum = (xs: ImportRecord[], f: (r: ImportRecord) => number) => xs.reduce((n, r) => n + f(r), 0)
+  return (
+    <ul className="divide-y divide-line">
+      {groups.map((g) => {
+        const latest = g.items[0]
+        return (
+          <li key={g.key} className="py-2">
+            <button type="button" onClick={() => setOpen(open === g.key ? null : g.key)} className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 text-left text-body-sm">
+              {open === g.key ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <b className="text-ink">{g.label}</b>
+              <span className="text-ink-muted">{g.items.length} import{g.items.length === 1 ? '' : 's'}</span>
+              <span className="text-ink">+{num(sum(g.items, (r) => r.summary.added))} new · {num(sum(g.items, (r) => r.summary.movedForward))} forward · {num(sum(g.items, (r) => r.summary.movedBack))} back{sum(g.items, (r) => r.summary.touches ?? 0) ? ` · ${num(sum(g.items, (r) => r.summary.touches ?? 0))} touches` : ''}</span>
+              <span className="ml-auto text-ink-muted">At the end: {num(latest.funnel.total)} leads · Connect {pct(latest.funnel.connectRate)} · Win {pct(latest.funnel.winRate)}</span>
+            </button>
+            {open === g.key && (
+              <ul className="mt-2 space-y-1 border-l border-line pl-4">
+                {g.items.map((r) => (
+                  <li key={r.id}>
+                    <button type="button" onClick={() => setInner(inner === r.id ? null : r.id)} className="flex w-full flex-wrap items-center gap-x-3 text-left text-body-sm">
+                      {inner === r.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                      <span className="text-ink">{new Date(r.createdAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                      <span className="text-ink-muted">{r.user.name} · {num(r.summary.leads)} leads · +{r.summary.added} new</span>
+                    </button>
+                    {inner === r.id && <div className="my-3"><ImportSummaryView s={r.summary} importId={r.id} onOpenLead={onOpenLead} /></div>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -209,9 +265,13 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
                   <span className="w-40 text-ink">{st}</span>
                   <input type="number" min={1} max={365} disabled={!canEdit} value={d} onChange={(e) => set('followUp', { ...s.followUp, [st]: Number(e.target.value) })} className={cn(inp, 'w-24')} />
                   <span className="text-ink-muted">days</span>
+                  {defaults.followUp[st] != null && defaults.followUp[st] !== d && <span className="text-[11px] text-ink-muted" title="The ITAD update of 12 Nov suggests this value; the saved one is kept until you change it">suggested {defaults.followUp[st]}</span>}
                   {canEdit && <button type="button" onClick={() => { const n = { ...s.followUp }; delete n[st]; set('followUp', n) }} className="text-[11px] text-ink-muted hover:text-danger">remove</button>}
                 </div>
               ))}
+              {canEdit && Object.entries(defaults.followUp).some(([st, d]) => s.followUp[st] !== d) && (
+                <button type="button" onClick={() => set('followUp', { ...s.followUp, ...defaults.followUp })} className="text-body-sm font-semibold text-primary">Use the suggested days ({Object.entries(defaults.followUp).map(([st, d]) => `${st} ${d}`).join(', ')})</button>
+              )}
               {canEdit && (
                 <select value="" onChange={(e) => e.target.value && set('followUp', { ...s.followUp, [e.target.value]: 14 })} className={inp}>
                   <option value="">Add a status…</option>
@@ -299,6 +359,8 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
         </div>
       </Panel>
 
+      <NotesSettings s={s} set={set} canEdit={canEdit} statuses={statuses} />
+
       {canEdit && (
         <div className="flex justify-end gap-2">
           <Button variant="secondary" leadingIcon={<RotateCcw size={14} />} onClick={() => setS(defaults)}>Back to the plan's defaults</Button>
@@ -306,5 +368,53 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
         </div>
       )}
     </div>
+  )
+}
+
+const MATCH_LABEL: Record<EzMatchKey, string> = { ezId: 'Earth Zone Lead ID', email: 'Primary email', phone: 'Primary phone', companyLastName: 'Company + last name' }
+const MATCH_ALL: EzMatchKey[] = ['ezId', 'email', 'phone', 'companyLastName']
+
+/** ITAD update 12 Nov: touches from notes, follow-ups that close themselves, and how the Earth Zone sync matches rows. */
+function NotesSettings({ s, set, canEdit, statuses }: { s: DialerSettings; set: <K extends keyof DialerSettings>(k: K, v: DialerSettings[K]) => void; canEdit: boolean; statuses: string[] }) {
+  const fromNotes = s.touchesFromNotes ?? true
+  const noteOnly = s.noteOnlyStatuses ?? ['Pipeline', 'Interested']
+  const order = s.ezMatchOrder ?? MATCH_ALL
+  const move = (i: number, d: number) => { const n = [...order]; const [x] = n.splice(i, 1); n.splice(i + d, 0, x); set('ezMatchOrder', n) }
+  return (
+    <Panel title="Notes, touches and the Earth Zone sync">
+      <div className="space-y-3 text-body-sm text-ink">
+        <label className="flex items-start gap-2"><input type="checkbox" disabled={!canEdit} checked={fromNotes} onChange={(e) => set('touchesFromNotes', e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" /><span>Last touched and tries come from the agent's own notes (Updated At only for leads with none), and a follow-up closes by itself when the agent makes contact<InfoTip>A colleague's note never counts. Two notes on one day count once.</InfoTip></span></label>
+        <label className={cn('flex items-start gap-2', !fromNotes && 'opacity-50')}><input type="checkbox" disabled={!canEdit || !fromNotes} checked={s.manualTouchesCount ?? true} onChange={(e) => set('manualTouchesCount', e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" /><span>The agent's logged calls (outcome chips, Add touch) count as contacts too</span></label>
+        <div className={cn(!fromNotes && 'opacity-50')}>
+          <p className="mb-1.5">A status change alone does not close the follow-up on these (the agent's note is needed):</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[...new Set([...Object.keys(s.followUp), ...noteOnly])].filter((st) => statuses.includes(st) || noteOnly.includes(st)).map((st) => {
+              const on = noteOnly.includes(st)
+              return <button key={st} type="button" disabled={!canEdit || !fromNotes} onClick={() => set('noteOnlyStatuses', on ? noteOnly.filter((x) => x !== st) : [...noteOnly, st])} className={cn('rounded-full border px-3 py-1 font-medium', on ? 'border-primary bg-primary text-white' : 'border-line text-ink')}>{st}</button>
+            })}
+          </div>
+        </div>
+        <div>
+          <p className="mb-1.5">Earth Zone sync: a row finds its lead by, in this order</p>
+          <ol className="max-w-sm space-y-1.5">
+            {order.map((k, i) => (
+              <li key={k} className="flex items-center gap-2 rounded-btn border border-line px-2.5 py-1.5">
+                <span className="w-5 text-[11px] font-semibold text-ink-faint">{i + 1}</span>
+                <span className="flex-1 font-semibold">{MATCH_LABEL[k]}</span>
+                {canEdit && <>
+                  <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="rounded p-1 text-ink-muted disabled:opacity-30" aria-label={`Move ${MATCH_LABEL[k]} up`}><ArrowUp size={14} /></button>
+                  <button type="button" disabled={i === order.length - 1} onClick={() => move(i, 1)} className="rounded p-1 text-ink-muted disabled:opacity-30" aria-label={`Move ${MATCH_LABEL[k]} down`}><ArrowDown size={14} /></button>
+                  <button type="button" disabled={order.length === 1} onClick={() => set('ezMatchOrder', order.filter((x) => x !== k))} className="rounded p-1 text-[11px] text-ink-muted hover:text-danger disabled:opacity-30">remove</button>
+                </>}
+              </li>
+            ))}
+          </ol>
+          {canEdit && MATCH_ALL.some((k) => !order.includes(k)) && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">{MATCH_ALL.filter((k) => !order.includes(k)).map((k) => <button key={k} type="button" onClick={() => set('ezMatchOrder', [...order, k])} className="rounded-full border border-dashed border-line px-2.5 py-1 text-ink hover:border-primary hover:text-primary">+ {MATCH_LABEL[k]}</button>)}</div>
+          )}
+          <p className="mt-1.5 text-[11px] text-ink-muted">A row that matches two leads is left out and shown in the preview.</p>
+        </div>
+      </div>
+    </Panel>
   )
 }
