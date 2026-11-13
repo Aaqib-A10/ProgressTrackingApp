@@ -43,6 +43,16 @@ describe('deal_tracker counts like the page', () => {
     expect(dealTrackerText(data, { agent: 'usama', status: 'Won', type: 'deal' }, now)).toContain('1 deals: Active 0, Submitted 0, Won 1 ($2,500.5), Lost 0.')
     // "How many open bids do I have" once came back 0 because the model added from=today: the open total at any date is always given.
     expect(dealTrackerText(data, { status: 'active', agent: 'usama', from: '2026-11-13' }, now)).toContain('All open deals for "usama" at any date: 2 (Active 1, Submitted 1), 2 of them overdue.')
+    // "How many deals have I won" with dates the model added (this month) while the wins were closed earlier: the no-date numbers are given too.
+    const dated = dealTrackerText(data, { status: 'won', from: '2099-01-01', to: '2099-01-31' }, now)
+    const plain = dealTrackerText(data, { status: 'won' }, now)
+    const wonLine = /Won (\d+) \((\$[\d,.]+[^)]*)\)/
+    expect(dated).toContain('The same filter with NO dates:')
+    expect(dated.split('The same filter with NO dates:')[1].match(wonLine)?.slice(1)).toEqual(plain.split('Matching the filter')[1].match(wonLine)?.slice(1))
+    // An agent with no deals (the asker's own name, for an admin) plus today's date once gave a summary of all zeros.
+    const nobody = dealTrackerText(data, { status: 'all', agent: 'Test Super Admin', from: '2099-01-01' }, now)
+    expect(nobody).toContain('No deal here is under an agent called "Test Super Admin", so that filter was left out')
+    expect(nobody.split('The same filter with NO dates:')[1]).toContain(`${data.bids.length} deals:`)
     // The model passed today's date with overdue once and got "none"; overdue ignores dates.
     expect(dealTrackerText(data, { overdue: true, from: '2026-11-13', to: '2026-11-13' }, now)).toContain('2 deals: Active 1, Submitted 1')
     expect(dealTrackerText(data, { status: 'won', from: '2026-11-01', to: '2026-11-30' }, now)).toContain('1 deals: Active 0, Submitted 0, Won 1 ($2,500.5), Lost 0.')

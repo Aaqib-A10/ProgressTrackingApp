@@ -15,6 +15,7 @@ import { auditReport, errorBrief, errorList } from './health/report'
 import { startAudit } from './health/audit'
 import { DEPARTMENT_TOOLS } from './mcp/departmentTools'
 import { WORK_TOOLS } from './mcp/workTools'
+import { apiAs } from './mcp/api'
 import { runAsCompany } from './tenancy'
 
 /**
@@ -84,10 +85,26 @@ type Card = { code: string; title: string; status: string; category: string; pri
 
 /** One ticket as a line: code | status | priority | due | title | given by / given to. */
 function ticketLine(t: Card, who: 'from' | 'to' | 'both'): string {
-  const due = t.dueAt ? ` | due ${fmtWhen(t.dueAt)}${t.isOverdue ? ' (OVERDUE)' : ''}` : ''
+  // Always a due field: when it was left out for tasks without one, the row had one field fewer than the heading
+  // promised and the model filled the gap with a date of its own (metra:check, 14 Nov).
+  const due = t.dueAt ? `due ${fmtWhen(t.dueAt)}${t.isOverdue ? ' (OVERDUE)' : ''}` : 'no due date'
   const to = t.assignees.map((x) => x.name).join(', ') || 'nobody'
   const tail = who === 'from' ? `from ${t.createdBy.name}` : who === 'to' ? `to ${to}` : `to ${to}, from ${t.createdBy.name}`
-  return `${t.code} | ${t.status} | ${t.priority.toLowerCase()}${due} | ${t.title} | ${tail}`
+  return `${t.code} | ${t.status} | ${t.priority.toLowerCase()} | ${due} | ${t.title} | ${tail}`
+}
+
+/**
+ * The person's own open tasks on the Marketing and E-commerce boards. The My Tasks screen shows them next to the
+ * project tickets, so "my tasks" is not complete without them. Read through the app's API (its own permission checks);
+ * when that page is closed to the person, there are none to add.
+ */
+async function otherBoardTasks(u: User): Promise<string[]> {
+  const r = await apiAs(u, 'GET', '/api/tasks/mine').catch(() => null)
+  if (!r || r.status !== 200) return []
+  type Pending = { source: string; title: string; status: string; dueDate: string | null; overdue: boolean }
+  const from: Record<string, string> = { marketing: 'Marketing', ecommerce: 'E-commerce' }
+  return ((r.body as { pending?: Pending[] }).pending ?? []).filter((t) => t.source !== 'project')
+    .map((t) => `${from[t.source] ?? t.source} | ${t.status} | ${t.dueDate ? `due ${t.dueDate}${t.overdue ? ' (OVERDUE)' : ''}` : 'no due date'} | ${t.title}`)
 }
 
 type ProjectRow = { key: string; name: string; workFolder: string | null; myRole: string | null; openCount: number; myOpenCount: number }
@@ -172,7 +189,7 @@ const TOOLS: Tool[] = [
   {
     name: 'list_my_tickets',
     title: 'List my tickets',
-    description: 'Tickets assigned to the person (or created by them for others), open ones first by due date. Optionally only one project.',
+    description: 'My tasks, as on the My Tasks screen: tickets assigned to the person (or created by them for others), open ones first by due date, and their own open Marketing and E-commerce tasks. Optionally only one project.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -192,9 +209,12 @@ const TOOLS: Tool[] = [
       const p = str(a.project)
       if (p) rows = rows.filter((t) => norm(t.project.key) === norm(p) || norm(t.project.name) === norm(p))
       if (!a.include_done) rows = rows.filter((t) => t.category !== 'DONE')
-      if (!rows.length) return text(`No ${a.include_done ? '' : 'open '}tickets ${scope === 'assigned' ? 'assigned to you' : 'you gave to others'}${p ? ` in ${p}` : ''}.`)
-      const lines = rows.map((t) => ticketLine(t, scope === 'assigned' ? 'from' : 'to'))
-      return text(`${rows.length} ticket${rows.length === 1 ? '' : 's'} (code | status | priority | due | title | ${scope === 'assigned' ? 'given by' : 'given to'}):\n${lines.join('\n')}\n\nUse get_ticket with a code for the full brief.`)
+      const others = scope === 'assigned' && !p ? await otherBoardTasks(u) : []
+      const also = others.length ? `${others.length} more open task${others.length === 1 ? '' : 's'} of yours from the Marketing and E-commerce boards, also shown on My Tasks (board | status | due | title; these have no code and get_ticket does not open them):\n${others.join('\n')}` : ''
+      if (!rows.length) return text(`No ${a.include_done ? '' : 'open '}tickets ${scope === 'assigned' ? 'assigned to you' : 'you gave to others'}${p ? ` in ${p}` : ''}.${also ? `\n\n${also}` : ''}`)
+      // Each line names its project: without it the model made one up ("2 tickets on the Marketing board").
+      const lines = rows.map((t) => `${ticketLine(t, scope === 'assigned' ? 'from' : 'to')} | project ${t.project.name}`)
+      return text(`${rows.length} ticket${rows.length === 1 ? '' : 's'} (code | status | priority | due | title | ${scope === 'assigned' ? 'given by' : 'given to'} | project):\n${lines.join('\n')}${also ? `\n\n${also}` : ''}\n\nUse get_ticket with a code for the full brief.`)
     },
   },
   {

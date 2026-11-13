@@ -69,7 +69,15 @@ async function main() {
     // ---- the questions (kept between runs)
     const file = path.resolve(__dirname, '../../.cache/metra-bench.json')
     const kept: Record<string, string> = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
-    const readable = all.filter((c) => asker.sources.has(c.sourceType) && canRead(c.labels, asker.principals) && c.text.length >= 90 && !/METRA-CHECK|Check Company \d|Lead Own Company \d/.test(`${c.title} ${c.text}`))
+    const canAsk = all.filter((c) => asker.sources.has(c.sourceType) && canRead(c.labels, asker.principals) && c.text.length >= 90 && !/METRA-CHECK|Check Company \d|Lead Own Company \d/.test(`${c.title} ${c.text}`))
+    // A record whose title is only a link and that has no description, comments or notes holds no words of its own:
+    // no question can single it out, so it is counted apart instead of being scored as a search miss. (On the test
+    // copy, Nov 2026: 14 of 67 marketing tasks were only a Google Docs link, and every marketing miss was one of them.)
+    const onlyLink = (c: { title: string; text: string }) => /^\s*https?:\/\/\S+\s*$/i.test(c.title) && !/\n(Description|Comments|Notes|Details|Outcome):/.test(c.text)
+    const readable = canAsk.filter((c) => !onlyLink(c))
+    const bare = new Map<string, number>()
+    for (const c of canAsk) if (onlyLink(c)) bare.set(c.sourceType, (bare.get(c.sourceType) ?? 0) + 1)
+    if (bare.size) console.log(`\nNOT ASKED: ${[...bare].map(([s, n]) => `${n} ${SOURCE_BY_TYPE.get(s)?.label ?? s}`).join(', ')} with only a link as the title and nothing else written (no words to search by).`)
     const sample: typeof readable = []
     // --total N: spread N questions over the sources, as evenly as the data allows.
     if (total) {
@@ -81,8 +89,15 @@ async function main() {
     }
     for (const type of [...new Set(readable.map((c) => c.sourceType))].sort()) {
       const of = readable.filter((c) => c.sourceType === type).sort((a, b) => a.id.localeCompare(b.id))
-      // Evenly through the list (not random): the same records every run.
-      for (let i = 0; i < Math.min(per, of.length); i++) sample.push(of[Math.floor((i * of.length) / Math.min(per, of.length))])
+      // The records asked about last time first, so runs compare question for question (picking by position alone moved
+      // to other records whenever a new one was added: 158 of 1,000 questions changed between two runs a day apart).
+      // The rest evenly through the list, not random.
+      const cap = Math.min(per, of.length)
+      const before = of.filter((c) => kept[c.id]).slice(0, cap)
+      const rest = of.filter((c) => !kept[c.id])
+      const more = Math.min(cap - before.length, rest.length)
+      sample.push(...before)
+      for (let i = 0; i < more; i++) sample.push(rest[Math.floor((i * rest.length) / more)])
     }
     const need = sample.filter((c) => !kept[c.id])
     let failedQ = 0

@@ -34,6 +34,8 @@ const MKT_STATUS_LABEL: Record<string, string> = {
   SCHEDULED: 'Scheduled',
   PUBLISHED: 'Published',
 }
+/** Where each kind of marketing task is worked on (the same places MarketingTaskRedirect sends old board links to). */
+const MKT_HOME: Record<string, string> = { SOCIAL: '/app/marketing/planner', CONTENT: '/app/marketing/content', SEO: '/app/marketing/seo' }
 
 export async function getMyTasks(req: AuthedRequest, res: Response): Promise<void> {
   const userId = req.user!.id
@@ -93,7 +95,8 @@ export async function getMyTasks(req: AuthedRequest, res: Response): Promise<voi
       status: MKT_STATUS_LABEL[t.status] ?? t.status,
       dueDate: t.dueDate ? dateStringFromDb(t.dueDate) : null,
       overdue: isOverdue(t.dueDate),
-      link: '/app/marketing/board',
+      // The Marketing Board screen was retired: a task opens where that kind of work lives now.
+      link: MKT_HOME[t.discipline] ?? '/app/marketing/board',
     })),
     ...pmOpen.map((t) => ({
       id: t.id,

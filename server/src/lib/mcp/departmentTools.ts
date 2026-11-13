@@ -121,7 +121,7 @@ const AREAS: { title: string; for: (m: Me) => boolean; lines: string[] }[] = [
       '/api/attendance/history?range=month : my attendance history (range: today, week, month, rolling3m, or custom with start=YYYY-MM-DD&end=YYYY-MM-DD)',
       '/api/todos : my to-do list',
       '/api/worklog : my work log',
-      '/api/tasks/mine : my tasks',
+      '/api/tasks/mine : my tasks (the My Tasks screen: every open task given to me, from projects and my own Marketing and E-commerce tasks, with how many are open, due today, overdue and finished)',
       '/api/meetings : my meetings',
       '/api/notifications : my notifications',
       '/api/search?q=WORDS : search people, tasks and files',
@@ -172,7 +172,7 @@ const AREAS: { title: string; for: (m: Me) => boolean; lines: string[] }[] = [
     title: 'Marketing',
     for: (m) => inDept(m, 'MARKETING'),
     lines: [
-      '/api/marketing/board : the marketing task board',
+      '/api/marketing/board : the marketing team\'s work by status (social posts, content pieces, SEO items; shown in the Social Planner, Content board and SEO). Everybody\'s work, not "my tasks": for those read /api/tasks/mine',
       '/api/marketing/plan : the marketing plan',
       '/api/marketing/content : content calendar',
       '/api/marketing/seo/entries : SEO work log',
@@ -235,7 +235,11 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
   // A value that is not real (type "deal", status "pending") is ignored rather than turning every count into 0.
   const st = str(a.status).toLowerCase()
   const status = ['open', 'active', 'submitted', 'won', 'lost', 'closed'].includes(st) ? st : 'all'
-  const agent = str(a.agent).toLowerCase()
+  // An agent nobody here has deals under is left out, and said so. The model passes the asker's own name unasked; for
+  // an admin with no deals of their own that turned "a summary of the Deal Tracker" into all zeros (metra:check, 14 Nov).
+  const askedAgent = str(a.agent).toLowerCase()
+  const agent = askedAgent && d.bids.some((b) => b.agentName.toLowerCase().includes(askedAgent)) ? askedAgent : ''
+  const noAgent = askedAgent && !agent ? `No deal here is under an agent called "${str(a.agent)}", so that filter was left out: the numbers below cover every deal this person can see. (If they asked about their OWN deals: they have none.)` : ''
   const words = str(a.search).toLowerCase()
   const type = ['RFQ', 'RFP', 'BID', 'PO'].includes(str(a.type).toUpperCase()) ? str(a.type).toUpperCase() : ''
   const ymd = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(str(v)) ? str(v) : '')
@@ -251,16 +255,17 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
     return true
   }
   // Everything but the status filter: the win rate is always won / (won + lost), even when only won deals are asked for.
-  const sameScope = d.bids.filter((b) => {
+  const inScope = (b: DealRow, dates: boolean) => {
     if (agent && !b.agentName.toLowerCase().includes(agent)) return false
     if (type && b.type !== type) return false
     if (words && !`${b.title} ${b.company} ${b.district}`.toLowerCase().includes(words)) return false
     const when = pkDay(b.closedDate ?? b.dueDate) // same date rule as the page's range filter
-    if (from && when < from) return false
-    if (to && when > to) return false
+    if (dates && from && when < from) return false
+    if (dates && to && when > to) return false
     if (a.overdue === true && !(open(b) && new Date(b.dueDate) < now)) return false
     return true
-  })
+  }
+  const sameScope = d.bids.filter((b) => inScope(b, true))
   const rows = sameScope.filter(byStatus)
   const count = (st: DealRow['status']) => rows.filter((b) => b.status === st).length
   const wonInScope = sameScope.filter((b) => b.status === 'WON').length
@@ -279,13 +284,19 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
   const list = [...rows].sort((x, y) => (open(x) === open(y) ? x.dueDate.localeCompare(y.dueDate) : open(x) ? -1 : 1)).slice(0, limit)
   return [
     `Deal Tracker cards (every deal this person can see, exactly as on the page): Active ${s.active}, Submitted ${s.submitted}, Won ${s.won} (${dealMoney(s.wonValue)} awarded), Lost ${s.lost}; ${d.bids.length} deals in all.`,
+    noAgent,
     filtered
       ? `Matching the filter (${[status !== 'all' && `status ${status}`, agent && `agent "${str(a.agent)}"`, type && `type ${type}`, words && `"${str(a.search)}"`, from && `from ${from}`, to && `to ${to}`, a.overdue === true && 'overdue'].filter(Boolean).join(', ')}): ${rows.length} deals: Active ${count('ACTIVE')}, Submitted ${count('SUBMITTED')}, Won ${count('WON')} (${dealMoney(wonValue)}), Lost ${count('LOST')}.`
       : '',
     // The open deals with no date limit, so a from/to the model added on its own never hides overdue ones.
     (from || to) ? (() => {
       const allOpen = d.bids.filter((b) => open(b) && (!agent || b.agentName.toLowerCase().includes(agent)))
-      return `Note: the dates above hide some deals. All open deals${agent ? ` for "${str(a.agent)}"` : ''} at any date: ${allOpen.length} (Active ${allOpen.filter((b) => b.status === 'ACTIVE').length}, Submitted ${allOpen.filter((b) => b.status === 'SUBMITTED').length}), ${allOpen.filter((b) => new Date(b.dueDate) < now).length} of them overdue. Use these when the person did not name a period.`
+      // The same filter with no dates at all. "How many deals have I won" was once answered "none" because the model
+      // added this month's dates on its own and both wins were closed last month (metra:check, 14 Nov).
+      const any = d.bids.filter((b) => inScope(b, false)).filter(byStatus)
+      const n = (st: DealRow['status']) => any.filter((b) => b.status === st).length
+      const anyWon = any.filter((b) => b.status === 'WON').reduce((t, b) => t + (b.awardedPrice ?? 0), 0)
+      return `Note: the dates above hide some deals. All open deals${agent ? ` for "${str(a.agent)}"` : ''} at any date: ${allOpen.length} (Active ${allOpen.filter((b) => b.status === 'ACTIVE').length}, Submitted ${allOpen.filter((b) => b.status === 'SUBMITTED').length}), ${allOpen.filter((b) => new Date(b.dueDate) < now).length} of them overdue. The same filter with NO dates: ${any.length} deals: Active ${n('ACTIVE')}, Submitted ${n('SUBMITTED')}, Won ${n('WON')} (${dealMoney(anyWon)}), Lost ${n('LOST')}. When the person did not name a period, answer with these no-date numbers (and say so), not with the dated ones.`
     })() : '',
     rows.some(open) ? (() => {
       const late = rows.filter((b) => open(b) && new Date(b.dueDate) < now).length
@@ -543,7 +554,8 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
       const r = await apiAs(u, 'GET', '/api/itad/bids')
       if (r.status === 403) return fail('The Deal Tracker is for the ITAD team.')
       if (r.status >= 400) return fail(apiError(r))
-      return text(dealTrackerText(r.body as DealTrackerData, a, new Date()))
+      // "me", "my", "mine" as the agent means the person asking.
+      return text(dealTrackerText(r.body as DealTrackerData, ME_WORDS.test(str(a.agent)) ? { ...a, agent: u.name } : a, new Date()))
     },
   },
   {

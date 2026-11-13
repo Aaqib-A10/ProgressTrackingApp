@@ -46,7 +46,7 @@ function readToolsFor(a: Asker): DeptTool[] {
 /** Where the exact, complete numbers for each kind of search result live (search only returns the best few). */
 const LIVE_FOR: Record<string, string> = {
   BID: 'deal_tracker', DIALER_LEAD: 'dialer_summary / dialer_leads', DIALER_NOTE: 'dialer_summary / dialer_leads', LEAD: 'leads_list',
-  TODO: 'todo_list', MEETING: 'meetings_list', WORKLOG: 'todo_list',
+  TODO: 'todo_list', MEETING: 'meetings_list', WORKLOG: 'todo_list', PM_TASK: 'list_my_tickets / list_project_tickets',
 }
 /** Words that mean Metra gave up ("I couldn't find", "try again in a minute"): counted as a problem when the data was there. */
 export const GAVE_UP = /couldn['’]?t (find|pull|get|read)|could not (find|read|pull)|unable to|not able to|try again|isn['’]?t returning|not returning|no data (is )?available|don['’]?t have (any )?(data|access|information)/i
@@ -69,7 +69,10 @@ export function liveMap(a: Asker): string[] {
   const has = (k: string) => sa || a.kinds.includes(k as never)
   const read = (p: string) => `metriq_read ${p}`
   return [
-    'My to-dos → todo_list. My meetings → meetings_list. My project tickets → list_my_tickets.',
+    // "My task(s)" is the My Tasks screen. It was missing here by that name (only "project tickets"), and the one
+    // line with the word "tasks" was the marketing team's board: live, 14 Nov, "my task" was answered with that board.
+    `MY TASKS ("my task", "my tasks", "tasks assigned to me", "what do I have to do on my tasks"; a task and a ticket are the same thing) = the My Tasks screen → ${read('/api/tasks/mine')}: every open task given to me (project tasks, and my own Marketing and E-commerce tasks) with its status and due date, and how many are open, due today, overdue and finished. For more about my project tasks (priority, who gave it, the tasks I gave to others with scope "created", finished ones) → list_my_tickets. Never answer "my tasks" from a team board: a board holds everybody's work.`,
+    'My to-dos (the My To-Do screen: my own daily list, a different screen from My Tasks) → todo_list. My meetings → meetings_list.',
     'Project tickets in general, overdue tickets, who has which ticket → FIRST list_projects (real project keys with open and overdue counts; never guess a key), then list_project_tickets for the projects that matter (for overdue pass overdue: true and no status or assignee).',
     `My attendance → ${read('/api/attendance/me')} (today) or ${read('/api/attendance/history?range=month')}.`,
     ...(lead ? [
@@ -92,7 +95,8 @@ export function liveMap(a: Asker): string[] {
     ...(has('LEAD_GEN') ? [lead
       ? `Lead Gen numbers (leads, accounts, contacts, MQL, SQL) → ${read('/api/leadgen/team?range=month')} for the team; by source ${read('/api/leadgen/breakdown?range=month')}. Your own: ${read('/api/reports/me?range=month')}.`
       : `MY Lead Gen numbers (leads, accounts, contacts, MQL, SQL) → ${read('/api/reports/me?range=month')} (my totals and each day), or ${read('/api/leadgen/entries?date=YYYY-MM-DD')} for one day. The team's numbers are for team leads: do not read /api/leadgen/team.`] : []),
-    ...(has('MARKETING') ? [`Marketing tasks by column (Backlog, In Progress, In Review...) → ${read('/api/marketing/board')} (each column says how many tasks it has).`] : []),
+    // There is no "Marketing board" screen any more: the same items are shown in the Social Planner, the Content board and SEO.
+    ...(has('MARKETING') ? [`The Marketing TEAM's work by status (Backlog, In Progress, In Review, Scheduled, Published): social posts, content pieces and SEO items of everyone I can see → ${read('/api/marketing/board')} (each column says how many it has; ?discipline=SOCIAL, CONTENT or SEO for one kind). Only for questions about the team's marketing work, never for "my tasks". In the answer call it the Social Planner, the Content board or SEO; do not say "Marketing board".`] : []),
     ...(has('ECOMMERCE') ? [lead
       ? `E-commerce listings and tasks → ${read('/api/ecommerce/team?range=month')}, ${read('/api/ecommerce/board')}.`
       : `E-commerce: the task board → ${read('/api/ecommerce/board')}; my listings entry for a day → ${read('/api/ecommerce/entries?date=YYYY-MM-DD')}.`] : []),
@@ -137,7 +141,7 @@ function systemPrompt(a: Asker, ctx: AnswerContext): string {
     ...liveMap(a).map((l) => `  • ${l}`),
     `- Periods (use exactly these dates, never work them out yourself): ${periods(now)}. Pass them as from/to dates (or range=week/month) to tools that take them, and say which dates you used. When no period is named, use none.`,
     '- For "who" questions, name the people: when a tool gives names, list every name (grouped by team, up to 60), never only counts.',
-    '- For the person\'s CURRENT lists (their to-dos, tasks, leads, follow-ups, meetings, team status) always call the live tool (todo_list, dialer_*, leads_list, meetings_list, metriq_read) — search can be a few seconds behind. In past messages, a line [Card "...": CONFIRMED and DONE] means that action really happened.',
+    '- For the person\'s CURRENT lists (their to-dos, tasks, leads, follow-ups, meetings, team status) always call the live tool (metriq_read /api/tasks/mine and list_my_tickets for tasks, todo_list for to-dos, dialer_*, leads_list, meetings_list, metriq_read) — search can be a few seconds behind. In past messages, a line [Card "...": CONFIRMED and DONE] means that action really happened.',
     '- If a request to change something is vague ("add some tasks", "update my lead"), ask ONE short question for the missing details instead of proposing a card. Never invent the content of a to-do, note or meeting.',
     '- When the person tells you something lasting about themselves, their work or how they like answers, or says "remember", call remember_fact (one short fact). When they say forget something, call forget_fact. Tell them in a few words.',
     '- If they ask what you can do: answer questions from their Metriq data with sources, show live numbers and lists, and prepare changes (to-dos, notes, call backs, lead updates, meetings) they confirm on a card.',

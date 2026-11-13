@@ -104,7 +104,7 @@ describe('create_ticket', () => {
 
   it('"me" assigns it to the person; it then shows in list_my_tickets', async () => {
     expect((await call(w.itadMember, 'create_ticket', { project: 'OPS', title: 'Update the bid tracker', assignee: 'me' })).text).toContain('Created OPS-3')
-    expect((await call(w.itadMember, 'list_my_tickets', {})).text).toContain('OPS-3 | To Do | medium | Update the bid tracker | from itad member')
+    expect((await call(w.itadMember, 'list_my_tickets', {})).text).toContain('OPS-3 | To Do | medium | no due date | Update the bid tracker | from itad member')
   })
 
   it('an ambiguous name returns the candidates and creates nothing', async () => {

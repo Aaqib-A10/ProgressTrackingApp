@@ -14,7 +14,8 @@ import type { AddressInfo } from 'node:net'
  *   npm run metra:check -w server -- --erp --unseed   take the test rows out again
  *
  * --erp uses the local erp database (pulsetrack_erp, the one `npm run dev:erp` runs on). It only ever touches a
- * database on this computer, and only rows it made itself (Lead Dialer list "METRA-CHECK", bids titled "METRA-CHECK").
+ * database on this computer, and only rows it made itself (Lead Dialer list "METRA-CHECK", bids and marketing cards
+ * titled "METRA-CHECK", the project MCHK "METRA-CHECK Website").
  * It needs the test accounts (npx tsx prisma/test-users.ts) and the model key in server/.env.
  */
 
@@ -31,10 +32,15 @@ const INTERESTED = ['Zephyr Dental Group', 'Halcyon Freight Lines', 'Orchid Rese
 const PIPELINE = ['Kestrel Community Bank', 'Juniper Family Clinic', 'Tamarind Foods Inc']
 const BULK: [string, number][] = [['Assigned', 1200], ['Contact Attempted', 600], ['Voicemail Sent', 400], ['Not Interested', 200], ['Connected', 93]]
 const WON = [{ company: 'Quartz Valley Hospital', awarded: 5400 }, { company: 'Ridgeway Technical College', awarded: 12250 }]
+// "My Tasks": two project tasks given to the marketing lead and one marketing card of their own (My Tasks shows all
+// three), and a card on the marketing team's board that is someone else's.
+const MY_TASKS = ['Rewrite the pricing page copy', 'Fix broken links on the blog']
+const NOT_MINE = 'Saffron launch carousel'
+const MINE_ON_BOARD = 'December newsletter draft'
 
 type U = { id: string; role: import('@prisma/client').Role; name: string }
-interface Truth { total: number; byStatus: Record<string, number>; interested: string[]; teamTotal: number; leadTotal: number; won: { company: string; awarded: number }[]; deals: { active: number; submitted: number; won: number; lost: number }; notSubmitted: number; myDials: number; myLeadsGenerated: number }
-interface Case { as: 'member' | 'lead' | 'admin' | 'leadgen'; ask: string; history?: { role: 'user' | 'assistant'; content: string }[]; numbers?: (t: Truth) => number[]; names?: (t: Truth) => string[]; note: string }
+interface Truth { total: number; byStatus: Record<string, number>; interested: string[]; teamTotal: number; leadTotal: number; won: { company: string; awarded: number }[]; deals: { active: number; submitted: number; won: number; lost: number }; notSubmitted: number; myDials: number; myLeadsGenerated: number; myTasks: string[]; myOpenTasks: number }
+interface Case { as: 'member' | 'lead' | 'admin' | 'leadgen' | 'marketing'; ask: string; history?: { role: 'user' | 'assistant'; content: string }[]; numbers?: (t: Truth) => number[]; names?: (t: Truth) => string[]; absent?: string[]; note: string }
 
 const CASES: Case[] = [
   { as: 'member', ask: 'how many leads do i hv in total ?', numbers: (t) => [t.total], note: 'total leads' },
@@ -58,6 +64,10 @@ const CASES: Case[] = [
   { as: 'member', ask: 'how many calls did I make this year so far', numbers: () => [], note: 'a range the app does not have (year)' },
   { as: 'member', ask: 'tell me about Quartz Valley Hospital', names: () => ['Quartz Valley Hospital'], note: 'a company that is only in the Deal Tracker' },
   { as: 'leadgen', ask: 'how many leads did I generate this month?', numbers: (t) => [t.myLeadsGenerated], note: 'own numbers of a Lead Gen member' },
+  // Live, 14 Nov: "my task" was answered from the marketing team's board (other people's cards) instead of My Tasks.
+  { as: 'marketing', ask: 'what are my task', names: (t) => t.myTasks, absent: [NOT_MINE], note: 'My Tasks, not the marketing board' },
+  { as: 'marketing', ask: 'how many tasks are assigned to me right now?', numbers: (t) => [t.myOpenTasks], absent: [NOT_MINE], note: 'the count on My Tasks' },
+  { as: 'marketing', ask: 'mere tasks dikhao', names: (t) => t.myTasks, absent: [NOT_MINE], note: 'My Tasks (Roman Urdu)' },
 ]
 
 /** Words that mean Metra gave up; never right when the data is there. */
@@ -82,12 +92,15 @@ async function main() {
     if (!u) { console.error(`The test account ${email} is missing. Run: npx tsx prisma/test-users.ts`); process.exit(1) }
     return u
   }
-  const people = { member: await find('itad.member@test.local'), lead: await find('itad.lead@test.local'), admin: await find('admin@test.local'), leadgen: await find('leadgen.member@test.local') }
+  const people = { member: await find('itad.member@test.local'), lead: await find('itad.lead@test.local'), admin: await find('admin@test.local'), leadgen: await find('leadgen.member@test.local'), marketing: await find('marketing.lead@test.local') }
 
   const unseed = () => runAsCompany(HOME_COMPANY_ID, async () => {
     const a = await prisma.dialerLead.deleteMany({ where: { listName: MARK } })
     const b = await prisma.bid.deleteMany({ where: { title: { startsWith: MARK } } })
-    return a.count + b.count
+    const c = await prisma.pmTask.deleteMany({ where: { project: { key: 'MCHK', name: { startsWith: MARK } } } })
+    await prisma.pmProject.deleteMany({ where: { key: 'MCHK', name: { startsWith: MARK } } })
+    const d = await prisma.marketingTask.deleteMany({ where: { title: { startsWith: MARK } } })
+    return a.count + b.count + c.count + d.count
   })
   if (flag('--unseed')) { console.log(`Took out ${await unseed()} test rows.`); await prisma.$disconnect(); return }
 
@@ -113,6 +126,26 @@ async function main() {
     await prisma.bid.createMany({ data: [...WON.map((w, k) => bid(`buyback ${k + 1}`, w.company, 'WON', w.awarded)), bid('lost one', 'Sable Logistics', 'LOST', 0), bid('open one', 'Tindall Motors', 'ACTIVE', null)] })
     console.log(`Seeded ${rows.length.toLocaleString('en-US')} Lead Dialer leads and 4 bids (list / title "${MARK}").`)
   })
+  // My Tasks: a project with two tasks for the marketing lead, and one marketing card that belongs to a colleague.
+  await runAsCompany(HOME_COMPANY_ID, async () => {
+    const own = { key: 'MCHK', name: { startsWith: MARK } }
+    if ((await prisma.pmTask.count({ where: { project: own } })) === MY_TASKS.length && (await prisma.marketingTask.count({ where: { title: { startsWith: MARK } } })) === 2 && !flag('--reseed')) return
+    await prisma.pmTask.deleteMany({ where: { project: own } })
+    await prisma.pmProject.deleteMany({ where: own })
+    await prisma.marketingTask.deleteMany({ where: { title: { startsWith: MARK } } })
+    const p = await prisma.pmProject.create({ data: { name: `${MARK} Website`, key: 'MCHK', ownerId: people.admin.id, taskCounter: MY_TASKS.length } })
+    await prisma.pmProjectMember.create({ data: { projectId: p.id, userId: people.marketing.id } })
+    const todo = await prisma.pmColumn.create({ data: { projectId: p.id, name: 'To Do', category: 'TODO', position: 0, isDefault: true } })
+    await prisma.pmColumn.create({ data: { projectId: p.id, name: 'Done', category: 'DONE', position: 1 } })
+    for (const [k, title] of MY_TASKS.entries()) {
+      const t = await prisma.pmTask.create({ data: { projectId: p.id, code: `MCHK-${k + 1}`, title, columnId: todo.id, createdById: people.admin.id, position: k } })
+      await prisma.pmTaskAssignee.create({ data: { taskId: t.id, userId: people.marketing.id, assignedById: people.admin.id } })
+    }
+    const colleague = await find('marketing.social@test.local')
+    await prisma.marketingTask.create({ data: { title: `${MARK} ${NOT_MINE}`, discipline: 'SOCIAL', status: 'IN_PROGRESS', assigneeId: colleague.id } })
+    await prisma.marketingTask.create({ data: { title: `${MARK} ${MINE_ON_BOARD}`, discipline: 'CONTENT', status: 'IN_REVIEW', assigneeId: people.marketing.id } })
+    console.log(`Seeded project MCHK with ${MY_TASKS.length} tasks for ${people.marketing.name} and one marketing card for ${colleague.name}.`)
+  })
   await setCompanyFlag('metra', HOME_COMPANY_ID, true, 'metra:check')
   // What Metra knows about Metriq's own screens is part of its index: make sure it is there.
   const { indexNow } = await import('../lib/metra/indexer')
@@ -135,7 +168,9 @@ async function main() {
     const missing = (await apiAs(people.admin, 'GET', '/api/notifications/not-submitted')).body as { total: number }
     // A member's own daily numbers this month, as My Reports shows them.
     const own = async (u: U, key: string) => { const b = (await apiAs(u, 'GET', '/api/reports/me', { query: { range: 'month' } })).body as { totals?: Record<string, unknown> }; return Number(b.totals?.[key] ?? 0) }
+    const tasks = (await apiAs(people.marketing, 'GET', '/api/tasks/mine')).body as { pending: { title: string }[]; stats: { openCount: number } }
     return {
+      myTasks: tasks.pending.map((t) => t.title).slice(0, 12), myOpenTasks: tasks.stats.openCount,
       total: mine.length, byStatus, interested: mine.filter((l) => l.status === 'Interested').map((l) => l.company),
       teamTotal: (await leadsOf(people.lead, 'all')).length, leadTotal: (await leadsOf(people.lead, 'me')).length,
       won: myDeals.bids.filter((b) => b.status === 'WON').map((b) => ({ company: b.company, awarded: b.awardedPrice ?? 0 })),
@@ -164,6 +199,7 @@ async function main() {
       tools = r.tools.map((x) => `${x.name}${x.ok ? '' : ' (FAILED: ' + (x.error ?? '').slice(0, 80) + ')'} ${JSON.stringify(x.args)}`).join(' ; ')
       for (const n of c.numbers?.(truth) ?? []) if (!hasNumber(text, n) && !(n === 0 && NONE.test(text))) problems.push(`the number ${n.toLocaleString('en-US')} is missing`)
       for (const n of c.names?.(truth) ?? []) if (!text.toLowerCase().includes(n.toLowerCase())) problems.push(`"${n}" is missing`)
+      for (const n of c.absent ?? []) if (text.toLowerCase().includes(n.toLowerCase())) problems.push(`"${n}" is in the answer and must not be`)
       if (GAVE_UP.test(text)) problems.push('it says it could not find or read something')
       if (r.tools.some((x) => !x.ok)) problems.push('a lookup failed')
       if (!text.trim()) problems.push('empty answer')
