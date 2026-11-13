@@ -80,6 +80,30 @@ export function compact(v: unknown, max = 40_000): string {
   return s.length > max ? `${s.slice(0, max)}\n\n[CUT at ${max.toLocaleString()} characters of ${s.length.toLocaleString()}: the lists above are incomplete, so do not count them; use the totals and "(N items)" counts, or ask for a smaller range.]` : s
 }
 
+/**
+ * The app's screens take range=today|week|month|rolling3m|custom. An assistant also asks for "year", "last month",
+ * "yesterday"... (live, 13 Nov: range=year on the ITAD numbers failed). Those are turned into the custom range they
+ * mean; the returned note says which dates were read.
+ */
+export function fixRange(query: Record<string, string>, now: DateTime = DateTime.now().setZone(PKT_ZONE)): string | null {
+  const raw = query.range
+  if (!raw) return null
+  const r = raw.toLowerCase().replace(/[\s_-]+/g, '')
+  if (['today', 'week', 'month', 'rolling3m', 'custom'].includes(r)) { query.range = r; return null }
+  const custom = (a: DateTime, b: DateTime, what: string) => { query.range = 'custom'; query.start = a.toISODate()!; query.end = b.toISODate()!; return `"${raw}" was read as ${what}: ${query.start} to ${query.end}.` }
+  const simple = (to: string) => { query.range = to; return `"${raw}" was read as range=${to}.` }
+  if (/^(day|daily|thisday)$/.test(r)) return simple('today')
+  if (/^(weekly|thisweek|wtd)$/.test(r)) return simple('week')
+  if (/^(monthly|thismonth|mtd)$/.test(r)) return simple('month')
+  if (/^(quarter|quarterly|3m|3months|last3months|rolling3|90d|90days)$/.test(r)) return simple('rolling3m')
+  if (/^(year|yearly|thisyear|ytd|annual)$/.test(r)) return custom(now.startOf('year'), now, 'this year so far')
+  if (r === 'yesterday') return custom(now.minus({ days: 1 }), now.minus({ days: 1 }), 'yesterday')
+  if (r === 'lastweek') { const s = now.startOf('week').minus({ weeks: 1 }); return custom(s, s.plus({ days: 6 }), 'last week') }
+  if (r === 'lastmonth') { const s = now.startOf('month').minus({ months: 1 }); return custom(s, s.endOf('month'), 'last month') }
+  if (r === 'lastyear') { const s = now.startOf('year').minus({ years: 1 }); return custom(s, s.endOf('year'), 'last year') }
+  return simple('month')
+}
+
 interface Me { id: string; name: string; role: Role; department: string | null; subDepartment: string | null; isDeveloper?: boolean; memberships?: { department: string }[]; leadsRole?: 'MANAGER' | 'REP' | null }
 
 async function whoAmI(u: User): Promise<Me | null> {
@@ -485,11 +509,15 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
       const [path, inline] = raw.split('?')
       const query: Record<string, string> = Object.fromEntries(new URLSearchParams(inline ?? ''))
       if (a.query && typeof a.query === 'object') for (const [k, v] of Object.entries(a.query as Record<string, unknown>)) if (v != null) query[k] = String(v)
+      const ranged = fixRange(query)
       const r = await apiAs(u, 'GET', path, { query })
       if (r.status === 404) return fail(`${path}: not found. Check the path with metriq_guide.`)
+      // A page this person may not open (team pages are for team leads): say where their own numbers are, so the
+      // assistant goes there instead of reporting that nothing could be read.
+      if (r.status === 403) return fail(`${path}: ${apiError(r)}. This screen is not open to this person (team and analytics pages are for team leads). Their own daily numbers are at /api/reports/me?range=month; metriq_guide lists everything they can open.`)
       if (r.status >= 400) return fail(`${path}: ${apiError(r)}`)
       if (!r.contentType.includes('json')) return fail(`${path} is not data (it is a file or a page). Open it in the app.`)
-      return text(compact(r.body))
+      return text(compact(r.body) + (ranged ? `\n\n[Note: ${ranged}]` : ''))
     },
   },
   {

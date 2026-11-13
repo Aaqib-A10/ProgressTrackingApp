@@ -83,12 +83,21 @@ export function liveMap(a: Asker): string[] {
       'Bids, deals, RFQs, RFPs, POs, won/lost, win rate, overdue bids → deal_tracker.',
       'Lead Dialer leads, follow-ups, who to call → dialer_summary (the funnel: how many leads in each status), dialer_leads (the leads themselves; pass status with the exact status name; for several statuses make one call per status, all in the same round).',
       `Lead Dialer statuses are exactly: ${DIALER_STATUSES.join(', ')}. There is no "Won", "Lost" or "Closed" status there: won, lost and closed clients or deals are in the Deal Tracker → deal_tracker with status won / lost. So "my interested and won leads" = dialer_leads status Interested AND deal_tracker status won, both in the same round; answer with two separate lists (Interested leads, then Won deals) and say so when one of them is empty.`,
-      `ITAD daily numbers (dials, connected, voicemail, emails, interested, closed, RFQs) → ${lead ? `${read('/api/itad/team?range=week')} for the team, ` : ''}${read('/api/itad/analytics?range=month')}, or ${read('/api/itad/entries?date=YYYY-MM-DD')} for one day.`,
+      // The team pages (team, analytics) are for team leads; a member who is sent there gets "Forbidden" (live, 13 Nov:
+      // "how many dials did I make this month" failed that way). A member's own numbers are on My Reports.
+      lead
+        ? `ITAD daily numbers (dials, connected, voicemail, emails, interested, closed, RFQs) → ${read('/api/itad/team?range=week')} for the team and each agent, ${read('/api/itad/analytics?range=month')} for the trend. Your own: ${read('/api/reports/me?range=month')}.`
+        : `MY ITAD daily numbers (dials, connected, voicemail, emails, interested, closed, RFQs) → ${read('/api/reports/me?range=month')} (my totals and each day; range: week, month, rolling3m or custom), or ${read('/api/itad/entries?date=YYYY-MM-DD')} for one day. The team's numbers are for team leads: do not read /api/itad/team or /api/itad/analytics.`,
     ] : []),
-    ...(has('LEAD_GEN') ? [`Lead Gen numbers (leads, accounts, contacts, MQL, SQL) → ${read('/api/leadgen/team?range=month')}${lead ? `; by source ${read('/api/leadgen/breakdown?range=month')}` : ''}.`] : []),
+    ...(has('LEAD_GEN') ? [lead
+      ? `Lead Gen numbers (leads, accounts, contacts, MQL, SQL) → ${read('/api/leadgen/team?range=month')} for the team; by source ${read('/api/leadgen/breakdown?range=month')}. Your own: ${read('/api/reports/me?range=month')}.`
+      : `MY Lead Gen numbers (leads, accounts, contacts, MQL, SQL) → ${read('/api/reports/me?range=month')} (my totals and each day), or ${read('/api/leadgen/entries?date=YYYY-MM-DD')} for one day. The team's numbers are for team leads: do not read /api/leadgen/team.`] : []),
     ...(has('MARKETING') ? [`Marketing tasks by column (Backlog, In Progress, In Review...) → ${read('/api/marketing/board')} (each column says how many tasks it has).`] : []),
-    ...(has('ECOMMERCE') ? [`E-commerce listings and tasks → ${read('/api/ecommerce/team?range=month')}, ${read('/api/ecommerce/board')}.`] : []),
-    'Ranges: today, week, month, rolling3m, or range=custom&start=YYYY-MM-DD&end=YYYY-MM-DD.',
+    ...(has('ECOMMERCE') ? [lead
+      ? `E-commerce listings and tasks → ${read('/api/ecommerce/team?range=month')}, ${read('/api/ecommerce/board')}.`
+      : `E-commerce: the task board → ${read('/api/ecommerce/board')}; my listings entry for a day → ${read('/api/ecommerce/entries?date=YYYY-MM-DD')}.`] : []),
+    `Daily Report (the form a person fills in each day) → ${read('/api/daily-report/forms')} for the forms, then ${read('/api/daily-report/forms/FORM_ID/entry?date=YYYY-MM-DD')} for what I sent that day${lead ? `, or ${read('/api/daily-report/forms/FORM_ID/team?date=YYYY-MM-DD')} for the team` : ''}.`,
+    'Ranges: today, week, month, rolling3m, or range=custom&start=YYYY-MM-DD&end=YYYY-MM-DD (a year, a quarter or last month is custom with its two dates).',
   ]
 }
 
@@ -158,7 +167,7 @@ function toolSpecs(a: Asker): ToolSpec[] {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'What to look for, in plain words (names, companies, topics).' },
-            sources: { type: 'array', items: { type: 'string', enum: sourceTypes }, description: 'Only these sources (optional).' },
+            sources: { type: 'array', items: { type: 'string', enum: sourceTypes }, description: 'Leave this out. Only when the person names one kind of record ("in my meeting notes") give that kind; a company, person or topic can be in any kind (a lead, a bid, a note, a task).' },
             from: { type: 'string', description: 'Only things from this day on, YYYY-MM-DD (optional).' },
             to: { type: 'string', description: 'Only things up to this day, YYYY-MM-DD (optional).' },
           },
@@ -264,8 +273,19 @@ async function answerNow(a: Asker, history: { role: 'user' | 'assistant'; conten
       const began = Date.now()
       try {
         if (c.function.name === 'search_metriq') {
-          const hits: Hit[] = await searchMetriq(a, String(args.query ?? ''), { k: 6, sources: Array.isArray(args.sources) ? (args.sources as string[]) : undefined, from: day(args.from), to: endOfDay(args.to) })
-          if (!hits.length) out = 'No matching records this person can read.'
+          const query = String(args.query ?? '')
+          const kinds = Array.isArray(args.sources) ? [...new Set(args.sources as string[])] : undefined
+          let hits: Hit[] = await searchMetriq(a, query, { k: 6, sources: kinds, from: day(args.from), to: endOfDay(args.to) })
+          // The model often narrows a search to the wrong kind of record or the wrong dates ("Novel Energy" in leads
+          // only, when it is a Deal Tracker company; "notes" in daily logs, when they are Lead Dialer notes) and then
+          // reports "nothing found". When the narrow search finds little, everything the person can read is searched.
+          let widened = false
+          if (hits.length < 3 && (kinds?.length || args.from || args.to)) {
+            const have = new Set(hits.map((h) => h.chunk.id))
+            const more = (await searchMetriq(a, query, { k: 6 })).filter((h) => !have.has(h.chunk.id))
+            if (more.length) { hits = [...hits, ...more].slice(0, 8); widened = true }
+          }
+          if (!hits.length) out = 'No matching records this person can read, in any kind of record. If this is about numbers, a list or a screen, use the live tools instead.'
           else {
             const parts: string[] = []
             for (const h of hits) {
@@ -278,7 +298,7 @@ async function answerNow(a: Asker, history: { role: 'user' | 'assistant'; conten
               parts.push(`[${n}] ${h.chunk.title} (${SOURCE_BY_TYPE.get(h.chunk.sourceType)?.label}, ${h.chunk.occurredAt.toISOString().slice(0, 10)})\n${h.chunk.text}`)
             }
             const live = [...new Set(hits.map((h) => LIVE_FOR[h.chunk.sourceType]).filter((x): x is string => !!x && readToolsFor(a).some((t) => x.split(' / ').includes(t.name))))]
-            out = `<search_results>\n${parts.join('\n\n')}\n</search_results>\nThese are only the ${hits.length} best-matching records, not a complete list: do not count or total them.${live.length ? ` For exact counts and full lists call ${live.join(', ')}.` : ''}`
+            out = `<search_results>\n${parts.join('\n\n')}\n</search_results>\n${widened ? 'Little was found in the kinds of record or dates you picked, so every kind this person can read was searched as well. ' : ''}These are only the ${hits.length} best-matching records, not a complete list: do not count or total them.${live.length ? ` For exact counts and full lists call ${live.join(', ')}.` : ''}`
             emit('sources', sources)
           }
         } else if (c.function.name === 'remember_fact' || c.function.name === 'forget_fact') {

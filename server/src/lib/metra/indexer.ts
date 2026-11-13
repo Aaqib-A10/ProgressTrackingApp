@@ -8,7 +8,7 @@ import { runTracked } from '../health/jobs'
 import { captureError } from '../health/errors'
 import { embedModelId, embedPassages, toBytes, warmUp } from './embed'
 import { SOURCES, SOURCES_BY_MODEL, SOURCE_BY_TYPE, type ChunkDraft, type Source } from './sources'
-import { applyToIndex, evictIdle, type StoredChunk } from './store'
+import { applyToIndex, evictIdle, type StoredChunk, indexOf } from './store'
 import { startMetraInsights } from './insights'
 
 /**
@@ -167,7 +167,7 @@ let fullRunning = false
 export async function reconcileAll(): Promise<void> {
   if (fullRunning) return
   fullRunning = true
-  try { await forEachCompany(async () => { const c = maybeCompanyId(); if (c && (await isOn('metra', c))) await reconcile(c) }) } finally { fullRunning = false }
+  try { await forEachCompany(async () => { const c = maybeCompanyId(); if (c && (await isOn('metra', c))) { await indexOf(c); await reconcile(c) } }) } finally { fullRunning = false }
 }
 
 export function startMetraIndexer(): void {

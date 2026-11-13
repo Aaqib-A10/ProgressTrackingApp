@@ -115,7 +115,7 @@ async function main() {
       const s = await rerank(q, ats.map((at) => { const x = ix.chunkAt(at); return `${x.title}\n${x.text}` }))
       return s ? ats.map((at, i) => [at, s[i]] as [number, number]).sort((a, b) => b[1] - a[1]).map(([at]) => at) : ats
     }
-    const SETUPS = ['meaning only', 'words only', 'both merged', 'both + re-rank 30 (live)', 'both + re-rank 60'] as const
+    const SETUPS = ['meaning only', 'words only', 'both merged', 'both + re-rank 10 (live)', 'both + re-rank 30 (before)', 'both + re-rank 60'] as const
     const ranks: Record<string, number[]> = Object.fromEntries(SETUPS.map((s) => [s, []]))
     const bySrc = new Map<string, { n: number; hit8: number }>()
     const found: number[] = []
@@ -129,12 +129,13 @@ async function main() {
       const { vector, keyword } = ix.search(vec, tokens(q), filter, 50); ms.scan.push(Date.now() - t)
       const merged = rrf(vector, keyword)
       t = Date.now()
-      const live = await reranked(q, merged.slice(0, 30)); ms.rerank.push(Date.now() - t)
+      const live = await reranked(q, merged.slice(0, 10)); ms.rerank.push(Date.now() - t)
+      const thirty = await reranked(q, merged.slice(0, 30))
       const wide = await reranked(q, merged.slice(0, 60))
-      const lists: Record<string, number[]> = { 'meaning only': vector.map(([at]) => at), 'words only': keyword.map(([at]) => at), 'both merged': merged, 'both + re-rank 30 (live)': live, 'both + re-rank 60': wide }
+      const lists: Record<string, number[]> = { 'meaning only': vector.map(([at]) => at), 'words only': keyword.map(([at]) => at), 'both merged': merged, 'both + re-rank 10 (live)': live, 'both + re-rank 30 (before)': thirty, 'both + re-rank 60': wide }
       for (const s of SETUPS) ranks[s].push(lists[s].map(keyOf).indexOf(target) + 1) // 0 = not there
       found.push(merged.map(keyOf).includes(target) ? 1 : 0)
-      const r = ranks['both + re-rank 30 (live)'].at(-1)!
+      const r = ranks['both + re-rank 10 (live)'].at(-1)!
       const b = bySrc.get(c.sourceType) ?? { n: 0, hit8: 0 }
       b.n++; if (r >= 1 && r <= 8) b.hit8++
       bySrc.set(c.sourceType, b)
@@ -144,8 +145,8 @@ async function main() {
     const hit = (rs: number[], k: number) => rs.filter((r) => r >= 1 && r <= k).length / Math.max(1, rs.length)
     const mrr = (rs: number[]) => rs.reduce((s, r) => s + (r ? 1 / r : 0), 0) / Math.max(1, rs.length)
     console.log(`\nACCURACY on ${cases.length} questions (each has one right record):`)
-    console.log(`  ${'set-up'.padEnd(28)} top 1  top 5  top 8   MRR`)
-    for (const s of SETUPS) console.log(`  ${s.padEnd(28)} ${pct(hit(ranks[s], 1))}  ${pct(hit(ranks[s], 5))}  ${pct(hit(ranks[s], 8))}  ${mrr(ranks[s]).toFixed(2)}`)
+    console.log(`  ${'set-up'.padEnd(30)} top 1  top 5  top 8   MRR`)
+    for (const s of SETUPS) console.log(`  ${s.padEnd(30)} ${pct(hit(ranks[s], 1))}  ${pct(hit(ranks[s], 5))}  ${pct(hit(ranks[s], 8))}  ${mrr(ranks[s]).toFixed(2)}`)
     console.log(`  the right record was among the candidates (before ranking): ${pct(found.reduce((a, b) => a + b, 0) / Math.max(1, found.length))}`)
     console.log('\nBY SOURCE (live set-up, right record in the 8 shown to the model):')
     console.log([...bySrc].sort((a, b) => a[1].hit8 / a[1].n - b[1].hit8 / b[1].n).map(([s, v]) => `  ${(SOURCE_BY_TYPE.get(s)?.label ?? s).padEnd(26)} ${v.hit8}/${v.n}`).join('\n'))
@@ -160,7 +161,7 @@ async function main() {
     const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length)
     const p95 = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length * 0.95)] ?? 0
     const mem = process.memoryUsage()
-    console.log(`\nSPEED per search: understand the question ${avg(ms.embed).toFixed(0)} ms, scan ${all.length.toLocaleString('en-US')} pieces ${avg(ms.scan).toFixed(0)} ms (p95 ${p95(ms.scan)} ms), re-rank 30 ${avg(ms.rerank).toFixed(0)} ms (p95 ${p95(ms.rerank)} ms).`)
+    console.log(`\nSPEED per search: understand the question ${avg(ms.embed).toFixed(0)} ms, scan ${all.length.toLocaleString('en-US')} pieces ${avg(ms.scan).toFixed(0)} ms (p95 ${p95(ms.scan)} ms), re-rank 10 ${avg(ms.rerank).toFixed(0)} ms (p95 ${p95(ms.rerank)} ms).`)
     console.log(`MEMORY: process ${Math.round(mem.rss / 1048576)} MB in all; the vectors alone ${(all.length * 384 * 4 / 1048576).toFixed(1)} MB (384 numbers per piece).`)
   })
   await prisma.$disconnect()

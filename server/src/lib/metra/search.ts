@@ -4,7 +4,7 @@ import { canRead, type Asker } from './access'
 
 /**
  * search_metriq (docs/metra/DESIGN.md §2, step 3): vector top 50 + keyword (BM25) top 50, merged by reciprocal rank,
- * re-ranked by the local cross-encoder, cut at a minimum relevance, at most two pieces per record, top 8.
+ * the best ten re-ranked by the local cross-encoder, cut at a minimum relevance, at most two pieces per record, top 8.
  * Only chunks the asker may read are ever scored (the store checks labels inside the scan); the final list is
  * checked once more here.
  */
@@ -14,6 +14,14 @@ export interface SearchOptions { sources?: string[]; from?: Date | null; to?: Da
 
 /** Below this cross-encoder score a passage is not about the question (ms-marco logits: relevant ~0 and up). */
 const MIN_RERANK = Number(process.env.METRA_MIN_RERANK ?? -6)
+/**
+ * How many of the merged candidates the re-ranker reads. Ten, not thirty: on 1,000 questions over the live index
+ * (Nov 2026) the re-ranker did not put the right record in the top 8 more often than the merged order alone (97% and
+ * 98%), while reading thirty pieces took 0.64 s of every search. Ten gives the same accuracy at a third of the time
+ * and keeps what the re-ranker is really for: dropping pieces that are not about the question. `npm run metra:bench`
+ * measures any change to this.
+ */
+const RERANK_TOP = Math.max(1, Number(process.env.METRA_RERANK_TOP ?? 10))
 
 export async function searchMetriq(asker: Asker, query: string, o: SearchOptions = {}): Promise<Hit[]> {
   const q = query.trim().slice(0, 500)
@@ -28,7 +36,7 @@ export async function searchMetriq(asker: Asker, query: string, o: SearchOptions
   const fused = new Map<number, { rrf: number; cos: number; kw: boolean }>()
   vector.forEach(([at, cos], r) => fused.set(at, { rrf: 1 / (60 + r), cos, kw: false }))
   keyword.forEach(([at], r) => { const f = fused.get(at) ?? { rrf: 0, cos: 0, kw: false }; f.rrf += 1 / (60 + r); f.kw = true; fused.set(at, f) })
-  let cands = [...fused].sort((a, b) => b[1].rrf - a[1].rrf).slice(0, 30).map(([at, f]) => ({ chunk: ix.chunkAt(at), score: f.rrf, cos: f.cos, kw: f.kw }))
+  let cands = [...fused].sort((a, b) => b[1].rrf - a[1].rrf).slice(0, RERANK_TOP).map(([at, f]) => ({ chunk: ix.chunkAt(at), score: f.rrf, cos: f.cos, kw: f.kw }))
 
   const scores = await rerank(q, cands.map((c) => `${c.chunk.title}\n${c.chunk.text}`))
   if (scores) {

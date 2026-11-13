@@ -305,7 +305,10 @@ export async function adminProblems(req: AuthedRequest, res: Response): Promise<
       tools: tools.map((t) => ({ name: String(t.name ?? ''), args: t.args ?? {}, ok: t.ok !== false, ms: t.ms ?? null, error: t.error ? String(t.error).slice(0, 300) : null })),
     }]
   })
-  res.json({ answers: rows.length, problems: problems.slice(0, 100), total: problems.length })
+  // When this version started (the last deploy or restart): problems before it are often already fixed.
+  const since = new Date(Date.now() - process.uptime() * 1000)
+  const fresh = rows.filter((m) => m.createdAt >= since).length
+  res.json({ answers: rows.length, problems: problems.slice(0, 200), total: problems.length, since: since.toISOString(), answersSince: fresh })
 }
 
 /** PATCH /api/metra/admin/feedback/:id { handled } — Super Admin: tick a piece of feedback as dealt with. */

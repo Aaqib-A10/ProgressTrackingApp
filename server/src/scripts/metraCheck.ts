@@ -33,8 +33,8 @@ const BULK: [string, number][] = [['Assigned', 1200], ['Contact Attempted', 600]
 const WON = [{ company: 'Quartz Valley Hospital', awarded: 5400 }, { company: 'Ridgeway Technical College', awarded: 12250 }]
 
 type U = { id: string; role: import('@prisma/client').Role; name: string }
-interface Truth { total: number; byStatus: Record<string, number>; interested: string[]; teamTotal: number; leadTotal: number; won: { company: string; awarded: number }[]; deals: { active: number; submitted: number; won: number; lost: number }; notSubmitted: number }
-interface Case { as: 'member' | 'lead' | 'admin'; ask: string; history?: { role: 'user' | 'assistant'; content: string }[]; numbers?: (t: Truth) => number[]; names?: (t: Truth) => string[]; note: string }
+interface Truth { total: number; byStatus: Record<string, number>; interested: string[]; teamTotal: number; leadTotal: number; won: { company: string; awarded: number }[]; deals: { active: number; submitted: number; won: number; lost: number }; notSubmitted: number; myDials: number; myLeadsGenerated: number }
+interface Case { as: 'member' | 'lead' | 'admin' | 'leadgen'; ask: string; history?: { role: 'user' | 'assistant'; content: string }[]; numbers?: (t: Truth) => number[]; names?: (t: Truth) => string[]; note: string }
 
 const CASES: Case[] = [
   { as: 'member', ask: 'how many leads do i hv in total ?', numbers: (t) => [t.total], note: 'total leads' },
@@ -52,6 +52,12 @@ const CASES: Case[] = [
   { as: 'admin', ask: 'Give me a summary of the Deal Tracker: how many Active, Submitted, Won and Lost bids', numbers: (t) => [t.deals.active, t.deals.submitted, t.deals.won, t.deals.lost], note: 'Deal Tracker cards' },
   { as: 'admin', ask: "How many people haven't submitted their daily report today?", numbers: (t) => [t.notSubmitted], note: 'missing reports' },
   { as: 'member', ask: 'where in metriq do I add a new bid?', names: () => ['Deal Tracker'], note: 'knows its own screens' },
+  // From "Problems Metra had" on live, 13 Nov: members were sent to team-lead pages and got Forbidden;
+  // a company that exists only as a bid was searched for in leads only and "not found".
+  { as: 'member', ask: 'how many dials did I make this month?', numbers: (t) => [t.myDials], note: 'own numbers of a member (not the team page)' },
+  { as: 'member', ask: 'how many calls did I make this year so far', numbers: () => [], note: 'a range the app does not have (year)' },
+  { as: 'member', ask: 'tell me about Quartz Valley Hospital', names: () => ['Quartz Valley Hospital'], note: 'a company that is only in the Deal Tracker' },
+  { as: 'leadgen', ask: 'how many leads did I generate this month?', numbers: (t) => [t.myLeadsGenerated], note: 'own numbers of a Lead Gen member' },
 ]
 
 /** Words that mean Metra gave up; never right when the data is there. */
@@ -76,7 +82,7 @@ async function main() {
     if (!u) { console.error(`The test account ${email} is missing. Run: npx tsx prisma/test-users.ts`); process.exit(1) }
     return u
   }
-  const people = { member: await find('itad.member@test.local'), lead: await find('itad.lead@test.local'), admin: await find('admin@test.local') }
+  const people = { member: await find('itad.member@test.local'), lead: await find('itad.lead@test.local'), admin: await find('admin@test.local'), leadgen: await find('leadgen.member@test.local') }
 
   const unseed = () => runAsCompany(HOME_COMPANY_ID, async () => {
     const a = await prisma.dialerLead.deleteMany({ where: { listName: MARK } })
@@ -127,11 +133,13 @@ async function main() {
     const deals = (await apiAs(people.admin, 'GET', '/api/itad/bids')).body as { summary: Truth['deals'] }
     const myDeals = (await apiAs(people.member, 'GET', '/api/itad/bids')).body as { bids: { company: string; status: string; awardedPrice: number | null }[] }
     const missing = (await apiAs(people.admin, 'GET', '/api/notifications/not-submitted')).body as { total: number }
+    // A member's own daily numbers this month, as My Reports shows them.
+    const own = async (u: U, key: string) => { const b = (await apiAs(u, 'GET', '/api/reports/me', { query: { range: 'month' } })).body as { totals?: Record<string, unknown> }; return Number(b.totals?.[key] ?? 0) }
     return {
       total: mine.length, byStatus, interested: mine.filter((l) => l.status === 'Interested').map((l) => l.company),
       teamTotal: (await leadsOf(people.lead, 'all')).length, leadTotal: (await leadsOf(people.lead, 'me')).length,
       won: myDeals.bids.filter((b) => b.status === 'WON').map((b) => ({ company: b.company, awarded: b.awardedPrice ?? 0 })),
-      deals: deals.summary, notSubmitted: missing.total,
+      deals: deals.summary, notSubmitted: missing.total, myDials: await own(people.member, 'callsDialed'), myLeadsGenerated: await own(people.leadgen, 'leadsGenerated'),
     }
   })
   console.log(`Model: ${llmModel()} at ${llmBase().replace(/^https?:\/\//, '')}. The agent has ${truth.total.toLocaleString('en-US')} leads; the team ${truth.teamTotal.toLocaleString('en-US')}.\n`)
@@ -139,6 +147,10 @@ async function main() {
   const only = opt('--only')?.split(',').map(Number)
   const digits = (s: string) => s.replace(/(\d)[,   ](?=\d{3}\b)/g, '$1')
   const hasNumber = (text: string, n: number) => new RegExp(`(^|[^\\d.])${n}(\\.0+)?(?![\\d])`).test(digits(text))
+  // The model writes special spaces and hyphens ("Quartz Valley Hospital" with narrow spaces): compare plain text.
+  const plain = (t: string) => Array.from(t).map((ch) => ('    '.includes(ch) ? ' ' : '‐‑‒–—'.includes(ch) ? '-' : ch)).join('')
+  // A true zero is often said in words ("you haven't generated any leads yet").
+  const NONE = /\b(no|none|zero|any|nothing)\b|haven|n['’]t/i
   let failed = 0, asked = 0
   for (const [i, c] of CASES.entries()) {
     if (only && !only.includes(i + 1)) continue
@@ -148,9 +160,9 @@ async function main() {
     let text = '', problems: string[] = [], tools = ''
     try {
       const r = await runAsCompany(HOME_COMPANY_ID, async () => answer(await askerOf(who.id), c.history ?? [], c.ask, () => undefined))
-      text = r.content
+      text = plain(r.content)
       tools = r.tools.map((x) => `${x.name}${x.ok ? '' : ' (FAILED: ' + (x.error ?? '').slice(0, 80) + ')'} ${JSON.stringify(x.args)}`).join(' ; ')
-      for (const n of c.numbers?.(truth) ?? []) if (!hasNumber(text, n)) problems.push(`the number ${n.toLocaleString('en-US')} is missing`)
+      for (const n of c.numbers?.(truth) ?? []) if (!hasNumber(text, n) && !(n === 0 && NONE.test(text))) problems.push(`the number ${n.toLocaleString('en-US')} is missing`)
       for (const n of c.names?.(truth) ?? []) if (!text.toLowerCase().includes(n.toLowerCase())) problems.push(`"${n}" is missing`)
       if (GAVE_UP.test(text)) problems.push('it says it could not find or read something')
       if (r.tools.some((x) => !x.ok)) problems.push('a lookup failed')

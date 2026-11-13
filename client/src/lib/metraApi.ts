@@ -28,7 +28,7 @@ export interface MetraProblem {
   error: string | null; model: string | null; latencyMs: number | null
   tools: { name: string; args: Record<string, unknown>; ok: boolean; ms: number | null; error: string | null }[]
 }
-export interface MetraProblemList { answers: number; total: number; problems: MetraProblem[] }
+export interface MetraProblemList { answers: number; total: number; problems: MetraProblem[]; since: string; answersSince: number }
 
 export interface MetraAdmin {
   embed: { mode: string; model: string; reranker: string | boolean | null }

@@ -48,7 +48,7 @@ export function MetraAdmin() {
             <Row label="Search">{a.embed.mode}</Row>
             <Row label="Embedding model"><span className="break-all">{a.embed.model || '—'}</span></Row>
             <Row label="Re-ranker">{typeof a.embed.reranker === 'boolean' ? (a.embed.reranker ? 'On' : 'Off') : a.embed.reranker || 'Off'}</Row>
-            <Row label="Index">{a.index.loaded ? `${num(a.index.chunks)} pieces` : 'Loading'}</Row>
+            <Row label="Index">{`${num(a.index.chunks)} pieces`}{a.index.loaded ? '' : ' (loads on the first question)'}</Row>
           </dl>
         </Card>
         <Card title="This month">
@@ -196,6 +196,7 @@ function ProblemsCard() {
   const { addToast } = useToast()
   const [data, setData] = useState<MetraProblemList | null>(null)
   const [failed, setFailed] = useState(false)
+  const [all, setAll] = useState(false)
   const load = () => { setFailed(false); metraApi.adminProblems().then(setData).catch(() => setFailed(true)) }
   useEffect(load, [])
   async function copy(text: string, what: string) {
@@ -204,16 +205,23 @@ function ProblemsCard() {
   const title = 'Problems Metra had'
   if (failed) return <Card title={title}><p className="text-body-md text-ink-muted">Could not load this. <button type="button" onClick={load} className="font-medium text-primary hover:underline">Try again</button></p></Card>
   if (!data) return <Card title={title}><p className="flex items-center gap-2 text-body-md text-ink-muted"><Loader2 size={15} className="animate-spin" />Loading…</p></Card>
-  const rate = data.answers ? Math.round((data.total / data.answers) * 100) : 0
+  // Problems from before this version went live are often already fixed: they are hidden until asked for.
+  const fresh = data.problems.filter((p) => p.createdAt >= data.since)
+  const shown = all ? data.problems : fresh
+  const answers = all ? data.answers : data.answersSince
+  const count = all ? data.total : fresh.length
+  const rate = answers ? Math.round((count / answers) * 100) : 0
+  const cause = (p: MetraProblem) => p.kind === 'ERROR' ? (/rate limit|busy/i.test(p.error ?? '') ? 'the AI model was busy' : /tool choice/i.test(p.error ?? '') ? 'the model called a tool on the answer step' : 'the answer failed') : p.kind === 'LOOKUP_FAILED' ? 'a lookup failed' : p.kind === 'GAVE_UP' ? 'said it could not find it' : 'marked not helpful'
+  const causes = [...shown.reduce((m, p) => m.set(cause(p), (m.get(cause(p)) ?? 0) + 1), new Map<string, number>())].sort((x, y) => y[1] - x[1])
   return (
     <Card title={title}
-      subtitle={`Last 14 days: ${data.total} of ${data.answers} answers had a problem (${rate}%). You see what Metra looked up and why it failed, never the question or the answer.`}
-      action={data.problems.length ? <Button size="sm" variant="secondary" onClick={() => void copy(JSON.stringify(data.problems, null, 1), 'All problems')}>Copy all for the developer</Button> : undefined}>
-      {data.problems.length === 0 ? (
-        <p className="text-body-md text-ink-muted">No problems in the last 14 days.</p>
+      subtitle={`${all ? 'Last 14 days' : `Since this version went live (${when(data.since)})`}: ${count} of ${answers} answers had a problem${answers ? ` (${rate}%)` : ''}.${causes.length ? ` ${causes.map(([c, n]) => `${n} × ${c}`).join(', ')}.` : ''} You see what Metra looked up and why it failed, never the question or the answer.`}
+      action={<span className="flex items-center gap-3"><button type="button" onClick={() => setAll((v) => !v)} className="text-body-sm font-medium text-primary hover:underline">{all ? 'Only since this version' : `Show the last 14 days (${data.total})`}</button>{shown.length ? <Button size="sm" variant="secondary" onClick={() => void copy(JSON.stringify(shown, null, 1), 'These problems')}>Copy for the developer</Button> : null}</span>}>
+      {shown.length === 0 ? (
+        <p className="text-body-md text-ink-muted">{all ? 'No problems in the last 14 days.' : 'No problems since this version went live.'}</p>
       ) : (
         <ul className="divide-y divide-line">
-          {data.problems.map((p) => (
+          {shown.map((p) => (
             <li key={p.id} className="py-3 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', PROBLEM[p.kind].tone)}>{PROBLEM[p.kind].label}</span>
