@@ -1,5 +1,6 @@
 import type { Role } from '@prisma/client'
 import { signConnectorToken } from '../auth'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { apiBaseUrl } from '../health/audit'
 
 /**
@@ -10,6 +11,12 @@ import { apiBaseUrl } from '../health/audit'
  */
 export interface ApiResult { status: number; body: unknown; contentType: string }
 
+// Reads made while one answer is being worked out (Metra): the same screen asked for twice is read once. The Lead
+// Dialer tools each load the person's whole lead list, and a question often needs three of them.
+const reads = new AsyncLocalStorage<Map<string, Promise<ApiResult>>>()
+/** Run `fn` with a memory of its GETs (per person and address). Writes are never remembered. */
+export function withApiCache<T>(fn: () => Promise<T>): Promise<T> { return reads.run(new Map(), fn) }
+
 export async function apiAs(
   u: { id: string; role: Role },
   method: 'GET' | 'POST' | 'PATCH' | 'PUT',
@@ -17,6 +24,21 @@ export async function apiAs(
   opts: { query?: Record<string, string>; body?: unknown } = {},
 ): Promise<ApiResult> {
   const qs = opts.query && Object.keys(opts.query).length ? `?${new URLSearchParams(opts.query).toString()}` : ''
+  const seen = method === 'GET' ? reads.getStore() : undefined
+  if (!seen) return call(u, method, path, qs, opts.body)
+  const key = `${u.id} ${path}${qs}`
+  let hit = seen.get(key)
+  if (!hit) {
+    // One more try when the first read fails on the way (time-out, dropped connection): a blip is not "could not read".
+    hit = call(u, method, path, qs, undefined).catch(() => call(u, method, path, qs, undefined))
+    seen.set(key, hit)
+    hit.catch(() => seen.delete(key))
+  }
+  return hit
+}
+
+async function call(u: { id: string; role: Role }, method: string, path: string, qs: string, sent: unknown): Promise<ApiResult> {
+  const opts = { body: sent }
   const r = await fetch(`${apiBaseUrl()}${path}${qs}`, {
     method,
     headers: {

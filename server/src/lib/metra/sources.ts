@@ -3,6 +3,7 @@ import { prisma } from '../prisma'
 import { companyTz } from '../time'
 import type { AreaKey } from '../permissions'
 import { dealMoney } from '../dealMoney'
+import { BLOCKS, BLOCK_GROUPS } from '../blocks'
 
 /**
  * Metra's sources (docs/metra/DESIGN.md §6): how each kind of record becomes text to search, and who may read it.
@@ -75,6 +76,8 @@ function chunks(header: string, body: string, base: Omit<ChunkDraft, 'part' | 't
 /** Non-empty lines joined; `x.length && ...` may give 0, which is skipped like any other falsy value. */
 const lines = (...xs: (string | number | null | undefined | false)[]) => xs.filter((x): x is string => typeof x === 'string' && !!x.trim()).join('\n')
 const day = (d: Date | null | undefined) => (d ? DateTime.fromJSDate(d).setZone(companyTz()).toFormat('d LLL yyyy') : '')
+/** A calendar day in full and in figures: "Friday 3 July 2026 (2026-07-03)". People ask with either; the search then finds both. */
+const fullDay = (d: Date) => `${DateTime.fromJSDate(d, { zone: 'utc' }).toFormat('cccc d LLLL yyyy')} (${d.toISOString().slice(0, 10)})`
 const page = async <T extends { id: string }>(rows: Promise<T[]>) => { const r = await rows; return { ids: r.map((x) => x.id), next: r.length ? r[r.length - 1].id : null } }
 const cursorArgs = (cursor: string | null, take: number) => ({ take, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}), orderBy: { id: 'asc' as const } })
 const same = async (ids: string[]) => ids
@@ -406,7 +409,7 @@ const DAILY_NOTE: Source = {
     const rows = await prisma.itadDailyEntry.findMany({ where: { id: { in: ids }, notes: { not: null } }, include: { user: { select: { name: true } } } })
     for (const e of rows) {
       const nums = `Dials ${e.callsDialed}, connected ${e.connected}, voicemails ${e.voicemail}, emails ${e.emailsSent}, interested ${e.interested}, working on ${e.workingOn}, closed ${e.closed}, RFQs ${e.rfqs}.`
-      out.set(e.id, chunks(`${e.user.name}'s ITAD daily log for ${e.date.toISOString().slice(0, 10)} (${e.status}): ${nums}`, `Notes: ${e.notes}`, {
+      out.set(e.id, chunks(`${e.user.name}'s ITAD daily log for ${fullDay(e.date)} (${e.status}): ${nums}`, `Notes: ${e.notes}`, {
         title: `${e.user.name}, ITAD log ${e.date.toISOString().slice(0, 10)}`, labels: [`u:${e.userId}`, `t:${e.userId}`, 'sa'], occurredAt: e.date, link: '/app/itad/log',
       }))
     }
@@ -425,7 +428,7 @@ const REPORT_ENTRY: Source = {
       const v = (e.values && typeof e.values === 'object' ? e.values : {}) as Record<string, unknown>
       const answers = e.form.fields.filter((f) => v[f.id] != null && v[f.id] !== '').map((f) => `${f.label}: ${Array.isArray(v[f.id]) ? (v[f.id] as unknown[]).join(', ') : String(v[f.id])}${f.unit ? ` ${f.unit}` : ''}`)
       if (!answers.length) continue
-      out.set(e.id, chunks(`${e.user.name}'s Daily Report "${e.form.name}" for ${e.date.toISOString().slice(0, 10)}:`, answers.join('\n'), {
+      out.set(e.id, chunks(`${e.user.name}'s Daily Report "${e.form.name}" for ${fullDay(e.date)}:`, answers.join('\n'), {
         title: `${e.form.name}, ${e.user.name}`, labels: [`u:${e.userId}`, `rt:${e.userId}`, 'sa', 'power:company.settings'], occurredAt: e.date, link: '/app/daily-report',
       }))
     }
@@ -549,15 +552,50 @@ const HOLIDAY: Source = {
   async build(ids) {
     const out = result(ids)
     for (const h of await prisma.holiday.findMany({ where: { id: { in: ids } } })) {
-      out.set(h.id, chunks(`Company holiday: ${h.name}`, `${h.name} on ${h.date.toISOString().slice(0, 10)} (${DateTime.fromJSDate(h.date, { zone: 'utc' }).toFormat('cccc')}).`, { title: h.name, labels: ['all'], occurredAt: h.date, link: '/app/attendance/me' }))
+      out.set(h.id, chunks(`Company holiday: ${h.name}`, `${h.name} on ${fullDay(h.date)}.`, { title: h.name, labels: ['all'], occurredAt: h.date, link: '/app/attendance/me' }))
     }
     return out
   },
 }
 
+/**
+ * Metriq itself: every screen, what it is for, who has it and where it is. With it Metra answers "where do I log my
+ * calls" or "how do I see who is on leave", and knows which screen an address someone pastes belongs to. Open to
+ * everyone: the names of screens are no secret, and opening one still needs the person's own access.
+ */
+const APP_SCREEN: Source = {
+  type: 'APP_SCREEN', label: 'Metriq screen',
+  watch: {},
+  all: async (cursor) => ({ ids: cursor ? [] : BLOCKS.map((b) => b.key), next: null }),
+  async build(ids) {
+    const out = result(ids)
+    const menu = new Map<string, string>(BLOCK_GROUPS.map((g) => [g.key, g.label]))
+    const team = (k: string) => k.toLowerCase().split('_').map((w) => (w === 'itad' || w === 'csr' ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' ')
+    for (const b of BLOCKS) {
+      if (!ids.includes(b.key)) continue
+      const where = b.app[0].replace(/\$$/, '')
+      const who = `${b.kinds.length ? `${b.kinds.map(team).join(', ')} teams` : 'every team'}${b.leadOnly ? ' (team leads only)' : ''}`
+      const text = lines(`"${b.label}" is a screen of Metriq, in the menu under ${menu.get(b.group) ?? b.group}. ${b.description}`, `Who has it: ${who}.`, `Open it at ${where}`)
+      out.set(b.key, [{ part: 0, title: `Metriq screen: ${b.label}`, text, labels: ['all'], occurredAt: new Date('2026-01-01T00:00:00Z'), link: where }])
+    }
+    return out
+  },
+}
+
+/** The screen a Metriq address belongs to ("/app/itad/dialer" = Lead Dialer), or null. */
+export function screenAt(path: string): { label: string; description: string } | null {
+  const p = path.replace(/[?#].*$/, '').replace(/\/+$/, '')
+  let best: { label: string; description: string; len: number } | null = null
+  for (const b of BLOCKS) for (const a of b.app) {
+    const exact = a.endsWith('$'), at = exact ? a.slice(0, -1) : a
+    if ((exact ? p === at : p === at || p.startsWith(`${at}/`)) && (!best || at.length > best.len)) best = { label: b.label, description: b.description, len: at.length }
+  }
+  return best && { label: best.label, description: best.description }
+}
+
 export const SOURCES: Source[] = [
   DIALER_LEAD, DIALER_NOTE, DIALER_CALL, LEAD, LEAD_COMMENT, LEAD_CALL, LEAD_TASK, CHAT_DAY, CALL_NOTES, MEETING, PM_TASK,
-  WORKLOG, TODO, DAILY_NOTE, REPORT_ENTRY, CUSTOM_RECORD, MKT_TASK, ECOM_TASK, FEEDBACK, BID, SAVED_DOC, HOLIDAY,
+  WORKLOG, TODO, DAILY_NOTE, REPORT_ENTRY, CUSTOM_RECORD, MKT_TASK, ECOM_TASK, FEEDBACK, BID, SAVED_DOC, HOLIDAY, APP_SCREEN,
 ]
 export const SOURCE_BY_TYPE = new Map(SOURCES.map((s) => [s.type, s]))
 /** model name → the sources it feeds. */

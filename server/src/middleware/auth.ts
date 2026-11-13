@@ -141,6 +141,11 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
       }
     }
     req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}), ...(payload.via === 'connector' ? { via: 'connector' as const } : {}) }
+    // Every answer says whose it is. The sign-in is one cookie for the whole browser: when someone signs in as another
+    // account in a second tab, the first tab still shows the first account while its requests are answered as the
+    // second (one person saw another's recent Metra chats that way). The page compares this with the account it shows
+    // and reloads when they differ (client/src/lib/api.ts).
+    res.setHeader('X-PT-User', user.id)
     timeZone = user.company.timeZone
   } catch {
     res.status(401).json({ error: 'Invalid or expired session' })

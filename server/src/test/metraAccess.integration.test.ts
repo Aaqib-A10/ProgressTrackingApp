@@ -138,6 +138,15 @@ describe('Metra API', () => {
     const conv = await prisma.aiConversation.create({ data: { userId: w.itadMember.id, title: 'Mine', companyId: HOME_COMPANY_ID } })
     await request(app).get(`/api/metra/conversations/${conv.id}`).set(...auth(w.itadMember)).expect(200)
     await request(app).get(`/api/metra/conversations/${conv.id}`).set(...auth(w.superAdmin)).expect(404)
+    // The list too: nobody, not even a Super Admin or the person's team lead, is handed another person's chats,
+    // and no browser or proxy may keep a copy of the answer.
+    const mine = await request(app).get('/api/metra/conversations').set(...auth(w.itadMember)).expect(200)
+    expect(mine.body.conversations.map((c: { id: string }) => c.id)).toContain(conv.id)
+    expect(mine.headers['cache-control']).toContain('no-store')
+    for (const other of [w.superAdmin, w.itadLead, w.leadgenMember]) {
+      const theirs = await request(app).get('/api/metra/conversations').set(...auth(other)).expect(200)
+      expect(theirs.body.conversations.map((c: { id: string }) => c.id)).not.toContain(conv.id)
+    }
     const key = process.env.GROQ_API_KEY
     delete process.env.GROQ_API_KEY
     delete process.env.METRA_LLM_API_KEY
@@ -168,6 +177,13 @@ describe('Metra API', () => {
     const rated = r.body.answers.find((a: { id: string }) => a.id === ans.id)
     expect(rated).toMatchObject({ feedback: 'DOWN', note: 'I won 3, not 0', question: 'How many deals did I win?', tools: ['deal_tracker'] })
     expect(JSON.stringify(r.body)).not.toContain('SECRET-ANSWER-TEXT')
+    // A thumbs up or down with no note keeps the question private: the admin sees that it was rated, not what was asked.
+    await prisma.aiMessage.create({ data: { conversationId: conv.id, role: 'USER', content: 'PRIVATE-QUESTION about my salary', companyId: HOME_COMPANY_ID } })
+    const quiet = await prisma.aiMessage.create({ data: { conversationId: conv.id, role: 'ASSISTANT', content: 'x', companyId: HOME_COMPANY_ID } })
+    await request(app).post(`/api/metra/messages/${quiet.id}/feedback`).set(...auth(w.itadMember)).send({ feedback: 'DOWN' }).expect(200)
+    const r2 = await request(app).get('/api/metra/admin/feedback').set(...auth(w.superAdmin)).expect(200)
+    expect(r2.body.answers.find((a: { id: string }) => a.id === quiet.id).question).toBe('')
+    expect(JSON.stringify(r2.body)).not.toContain('PRIVATE-QUESTION')
 
     // Ticking one as handled (Super Admin only).
     const id = r.body.general.find((g: { rating: string }) => g.rating === 'NEEDS_CHANGES').id

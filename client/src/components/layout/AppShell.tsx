@@ -156,7 +156,7 @@ export function AppShell({ user, children }: AppShellProps) {
         <BottomTabs user={user} onMore={() => setNavOpen(true)} />
         <QuickLogWidget user={user} />
         <CommandPalette />
-        <MetraLauncher firstName={user.name?.split(' ')[0]} />
+        <MetraLauncher key={user.id} firstName={user.name?.split(' ')[0]} />
         <SilentUpdater />
       </CallProvider>
     </RangeContext.Provider>

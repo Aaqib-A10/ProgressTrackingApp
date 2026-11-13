@@ -642,7 +642,7 @@ const fixSchema = z.object({
   zone: z.enum(['ET', 'CT', 'MT', 'PT']).nullable().optional(),
   sentToLeadGen: z.boolean().optional(),
   // Added here: kept by the dialer, never touched by an import.
-  phone2: opt(40), email2: opt(200), linkedin: opt(300), decisionMaker: opt(120), bestTime: opt(80),
+  phone2: opt(200), email2: opt(200), linkedin: opt(300), decisionMaker: opt(120), bestTime: opt(80),
   tags: z.array(z.string().trim().min(1).max(30)).max(20).optional(),
   /** Alternative numbers (Earth Zone sync, or added by the agent or Claude), each its own copy button. */
   altPhones: z.array(z.string().trim().min(3).max(40)).max(20).optional(),
@@ -1022,7 +1022,7 @@ const fillRow = z.object({
   company: z.string().max(300).nullable().optional(),
   contactName: z.string().max(200).nullable().optional(),
   phone: z.string().max(60).nullable().optional(),
-  phone2: z.string().max(40).nullable().optional(),
+  phone2: z.string().max(200).nullable().optional(),
   email2: z.string().max(200).nullable().optional(),
   linkedin: z.string().max(300).nullable().optional(),
   decisionMaker: z.string().max(120).nullable().optional(),

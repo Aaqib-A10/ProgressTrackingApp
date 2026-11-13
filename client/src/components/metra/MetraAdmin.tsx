@@ -4,7 +4,7 @@ import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
 import { apiErrorText } from '../../lib/api'
-import { loadMetraStatus, metraApi, type MetraFeedbackList, type MetraStatus } from '../../lib/metraApi'
+import { loadMetraStatus, metraApi, type MetraFeedbackList, type MetraProblem, type MetraProblemList, type MetraStatus } from '../../lib/metraApi'
 import { cn } from '../../lib/cn'
 
 function when(iso: string | null): string {
@@ -67,6 +67,7 @@ export function MetraAdmin() {
       </div>
       {/* What people said comes before the index: it is what an admin acts on. */}
       <FeedbackCards />
+      <ProblemsCard />
       <Card
         title="What Metra has read"
         subtitle={errors ? `${errors} source${errors === 1 ? '' : 's'} had a problem on the last run.` : 'Each source is read again by itself in the background.'}
@@ -153,7 +154,7 @@ function FeedbackCards() {
           </ul>
         )}
       </Card>
-      <Card title="Answers people rated" subtitle={`${down} not helpful, ${data.answers.length - down} helpful. You see the question and their note, not the answer.`}
+      <Card title="Answers people rated" subtitle={`${down} not helpful, ${data.answers.length - down} helpful. You see their note, and the question only if they sent one with it. Never the answer.`}
         action={<FilterLink on={onlyDown} onClick={() => setOnlyDown((v) => !v)} onLabel="Show all" offLabel="Only not helpful" />}>
         {answers.length === 0 ? (
           <p className="text-body-md text-ink-muted">{data.answers.length ? 'No answers were marked not helpful.' : 'Nobody has rated an answer yet.'}</p>
@@ -167,7 +168,7 @@ function FeedbackCards() {
                   <span className="text-body-sm font-medium text-ink">{person(a)}</span>
                   <span className="text-[12px] text-ink-faint">{day(a.createdAt)}</span>
                 </div>
-                <p className="mt-1.5 break-words text-body-md text-ink"><span className="text-ink-muted">Asked: </span>{a.question || '—'}</p>
+                <p className="mt-1.5 break-words text-body-md text-ink"><span className="text-ink-muted">Asked: </span>{a.question || <span className="text-ink-faint">not shared (their questions are private unless they send a note)</span>}</p>
                 {a.note && <p className="mt-1 whitespace-pre-wrap break-words text-body-md text-ink"><span className="text-ink-muted">Their note: </span>{a.note}</p>}
                 {a.tools.length > 0 && <p className="mt-1 text-[12px] text-ink-faint">Metra looked in: {[...new Set(a.tools)].map((t) => t.replace(/_/g, ' ')).join(', ')}</p>}
               </li>
@@ -176,6 +177,67 @@ function FeedbackCards() {
         )}
       </Card>
     </div>
+  )
+}
+
+const PROBLEM: Record<MetraProblem['kind'], { label: string; tone: string }> = {
+  ERROR: { label: 'Could not answer', tone: 'bg-danger/10 text-danger' },
+  LOOKUP_FAILED: { label: 'A lookup failed', tone: 'bg-danger/10 text-danger' },
+  GAVE_UP: { label: 'Said it could not find it', tone: 'bg-warning/15 text-ink' },
+  NOT_HELPFUL: { label: 'Marked not helpful', tone: 'bg-slate-100 text-ink' },
+}
+const shortArgs = (a: Record<string, unknown>) => { const t = JSON.stringify(a); return t === '{}' ? '' : t.length > 140 ? `${t.slice(0, 140)}…` : t }
+
+/**
+ * Answers that went wrong in the last 14 days: what Metra looked up and why it failed. So a problem is seen here,
+ * and "Copy details" gives the developer everything needed to fix it. The question and the answer are never shown.
+ */
+function ProblemsCard() {
+  const { addToast } = useToast()
+  const [data, setData] = useState<MetraProblemList | null>(null)
+  const [failed, setFailed] = useState(false)
+  const load = () => { setFailed(false); metraApi.adminProblems().then(setData).catch(() => setFailed(true)) }
+  useEffect(load, [])
+  async function copy(text: string, what: string) {
+    try { await navigator.clipboard.writeText(text); addToast({ type: 'success', message: `${what} copied.` }) } catch { addToast({ type: 'error', message: 'Could not copy.' }) }
+  }
+  const title = 'Problems Metra had'
+  if (failed) return <Card title={title}><p className="text-body-md text-ink-muted">Could not load this. <button type="button" onClick={load} className="font-medium text-primary hover:underline">Try again</button></p></Card>
+  if (!data) return <Card title={title}><p className="flex items-center gap-2 text-body-md text-ink-muted"><Loader2 size={15} className="animate-spin" />Loading…</p></Card>
+  const rate = data.answers ? Math.round((data.total / data.answers) * 100) : 0
+  return (
+    <Card title={title}
+      subtitle={`Last 14 days: ${data.total} of ${data.answers} answers had a problem (${rate}%). You see what Metra looked up and why it failed, never the question or the answer.`}
+      action={data.problems.length ? <Button size="sm" variant="secondary" onClick={() => void copy(JSON.stringify(data.problems, null, 1), 'All problems')}>Copy all for the developer</Button> : undefined}>
+      {data.problems.length === 0 ? (
+        <p className="text-body-md text-ink-muted">No problems in the last 14 days.</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {data.problems.map((p) => (
+            <li key={p.id} className="py-3 first:pt-0 last:pb-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', PROBLEM[p.kind].tone)}>{PROBLEM[p.kind].label}</span>
+                <span className="text-body-sm font-medium text-ink">{person(p)}</span>
+                <span className="text-[12px] text-ink-faint">{when(p.createdAt)}{p.latencyMs != null ? ` · ${(p.latencyMs / 1000).toFixed(1)} s` : ''}{p.model ? ` · ${p.model}` : ''}</span>
+                <button type="button" onClick={() => void copy(JSON.stringify(p, null, 1), 'Details')} className="ml-auto text-body-sm font-medium text-primary hover:underline">Copy details</button>
+              </div>
+              {p.error && <p className="mt-1.5 break-words text-body-sm text-danger">{p.error}</p>}
+              {p.tools.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5">
+                  {p.tools.map((t, i) => (
+                    <li key={i} className="break-words text-[12.5px] text-ink-muted">
+                      <span className={cn('font-medium', t.ok ? 'text-ink' : 'text-danger')}>{t.name.replace(/_/g, ' ')}</span>
+                      {shortArgs(t.args) && <span className="ml-1 font-mono text-[11.5px]">{shortArgs(t.args)}</span>}
+                      {!t.ok && <span className="ml-1 text-danger">failed{t.error ? `: ${t.error}` : ''}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   )
 }
 

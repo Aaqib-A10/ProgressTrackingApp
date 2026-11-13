@@ -250,7 +250,7 @@ function Field({ k, v, copy, link }: { k: string; v: string | null | undefined; 
 }
 
 const ADDED: { k: keyof Pick<DialerLead, 'phone2' | 'email2' | 'linkedin' | 'decisionMaker' | 'bestTime'>; label: string; placeholder: string }[] = [
-  { k: 'phone2', label: 'Second phone', placeholder: '(555) 123-4567' },
+  { k: 'phone2', label: 'Second phone', placeholder: '(555) 123-4567, (555) 987-6543 (up to 5 numbers)' },
   { k: 'email2', label: 'Second email', placeholder: 'name@company.com' },
   { k: 'linkedin', label: 'LinkedIn', placeholder: 'linkedin.com/in/…' },
   { k: 'decisionMaker', label: 'Decision maker', placeholder: 'Name and title' },
@@ -276,7 +276,7 @@ function AddedHere({ lead, settings, onSave }: { lead: DialerLead; settings: Dia
         {ADDED.map((a) => (
           <label key={a.k} className="flex items-center gap-2">
             <span className="w-28 shrink-0 text-ink-muted">{a.label}</span>
-            <input value={v[a.k]} onChange={(e) => setV({ ...v, [a.k]: e.target.value })} placeholder={a.placeholder} maxLength={a.k === 'linkedin' ? 300 : 120} className="h-8 min-w-0 flex-1 rounded-btn border border-line bg-card px-2 text-body-sm text-ink focus:border-primary focus:outline-none" />
+            <input value={v[a.k]} onChange={(e) => setV({ ...v, [a.k]: e.target.value })} placeholder={a.placeholder} maxLength={a.k === 'linkedin' ? 300 : a.k === 'phone2' ? 200 : 120} className="h-8 min-w-0 flex-1 rounded-btn border border-line bg-card px-2 text-body-sm text-ink focus:border-primary focus:outline-none" />
           </label>
         ))}
         <label className="flex items-center gap-2">

@@ -17,6 +17,8 @@
     "import:rdp": "tsx prisma/importRdp.ts",
     "metra:demo": "tsx src/scripts/metraDemo.ts",
     "metra:eval": "tsx src/scripts/metraEval.ts",
+    "metra:check": "tsx src/scripts/metraCheck.ts",
+    "metra:bench": "tsx src/scripts/metraBench.ts",
     "metra:models": "tsx -e \"require('./src/lib/metra/embed').embedQuery('warm up').then(()=>require('./src/lib/metra/embed').rerank('a',['b'])).then(()=>console.log('Metra models ready'))\""
   },
   "prisma": {

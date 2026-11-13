@@ -170,6 +170,14 @@ describe('bulk fill', () => {
     const other = await request(app).post('/api/dialer/bulk-fill').set(...auth(w.itadLead)).send({ rows: [{ matchKey: key, phone2: '9' }], apply: false }).expect(200)
     expect(other.body).toMatchObject({ matched: 0, unmatchedCount: 1 })
   })
+
+  it('the second phone holds up to five numbers (it used to stop at 40 characters, about two)', async () => {
+    const h = await lead(w.itadMember, 'Harbor Cold Storage')
+    const five = '(404) 555-0101, (404) 555-0102, (404) 555-0103, (404) 555-0104, (404) 555-0105'
+    await request(app).patch(`/api/dialer/leads/${h.id}`).set(...auth(w.itadMember)).send({ phone2: five }).expect(200)
+    expect((await lead(w.itadMember, 'Harbor Cold Storage')).phone2).toBe(five)
+    await request(app).patch(`/api/dialer/leads/${h.id}`).set(...auth(w.itadMember)).send({ phone2: '5'.repeat(201) }).expect(400)
+  })
 })
 
 describe('calling hours and the working day', () => {

@@ -20,7 +20,13 @@ import { usePhone } from '../../mobile/usePhone'
  * and the sources of the selected answer on the right on wide screens. ?c=<id> opens a conversation,
  * ?insight=<id> puts that brief on top (the bell's link).
  */
+/** One person's Metra page: a different person signing in on the same page gets a fresh one (no chat of the first is kept). */
 export default function MetraPage() {
+  const { user } = useAuth()
+  return <MetraPageFor key={user?.id ?? 'none'} />
+}
+
+function MetraPageFor() {
   const { user } = useAuth()
   const status = useMetraStatus()
   const navigate = useNavigate()

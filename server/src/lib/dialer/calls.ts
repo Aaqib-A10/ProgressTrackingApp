@@ -191,11 +191,13 @@ export async function findLead(c: ReadCall, agentId: string | null): Promise<{ l
     const rows = await prisma.$queryRaw<{ id: string }[]>`
       SELECT id FROM "DialerLead"
       WHERE (right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 7) = ${tail}
-         OR right(regexp_replace(coalesce(phone2, ''), '\\D', '', 'g'), 7) = ${tail})
+         OR regexp_replace(coalesce(phone2, ''), '\\D', '', 'g') LIKE ${'%' + tail + '%'})
         AND (${maybeCompanyId()}::text IS NULL OR "companyId" = ${maybeCompanyId()})
       LIMIT 200`
     const cands = rows.length ? await prisma.dialerLead.findMany({ where: { id: { in: rows.map((r) => r.id) } }, select: leadSel }) : []
-    const same = cands.filter((l) => digitsOf(l.phone) === d || digitsOf(l.phone2) === d)
+    // The second phone may hold several numbers ("555 123 4567, 555 987 6543", up to five): each one counts.
+    const seconds = (s: string | null | undefined) => (s ?? '').split(/[,;/|\n]+|\bor\b/i).map((x) => digitsOf(x)).filter((x) => x.length >= 7)
+    const same = cands.filter((l) => digitsOf(l.phone) === d || seconds(l.phone2).includes(d))
     const l = best(same, agentId)
     if (l) return { lead: l, matchedBy: 'phone' }
   }

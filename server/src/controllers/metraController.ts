@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { isOn } from '../lib/flags'
 import { askerOf } from '../lib/metra/access'
-import { answer, suggestionsFor, WRITE_TOOLS, type ActionCard, type Emit } from '../lib/metra/agent'
+import { answer, suggestionsFor, GAVE_UP, WRITE_TOOLS, type ActionCard, type Emit, type ToolUse } from '../lib/metra/agent'
 import { llmReady, LlmError } from '../lib/metra/llm'
 import { embedStatus } from '../lib/metra/embed'
 import { indexNow } from '../lib/metra/indexer'
@@ -276,9 +276,36 @@ export async function adminFeedback(req: AuthedRequest, res: Response): Promise<
     }),
     answers: rated.map((m) => ({
       id: m.id, name: m.conversation.user.name, department: m.conversation.user.department?.name ?? null, feedback: m.feedback, note: m.feedbackNote ?? '',
-      question: questionFor(m).slice(0, 500), tools: (Array.isArray(m.tools) ? (m.tools as { name?: string }[]) : []).map((t) => String(t.name ?? '')).filter(Boolean), createdAt: m.createdAt.toISOString(),
+      // The question is the person's own: the admin sees it only when they sent a note with it (the app says it goes along).
+      question: m.feedbackNote ? questionFor(m).slice(0, 500) : '', tools: (Array.isArray(m.tools) ? (m.tools as { name?: string }[]) : []).map((t) => String(t.name ?? '')).filter(Boolean), createdAt: m.createdAt.toISOString(),
     })),
   })
+}
+
+/**
+ * GET /api/metra/admin/problems — Super Admin: the answers of the last 14 days that went wrong, newest first, so a
+ * failure is seen here and not only when someone complains. A problem is: the answer failed, a lookup failed, Metra
+ * said it could not find or read something, or the person marked it not helpful. It shows which lookups ran, with
+ * what options, and why one failed; never the question or the answer (those stay the person's own).
+ */
+export async function adminProblems(req: AuthedRequest, res: Response): Promise<void> {
+  if (req.user!.role !== 'SUPER_ADMIN') { res.status(403).json({ error: 'Only a Super Admin can do this.' }); return }
+  if (!(await on(req, res))) return
+  const rows = await prisma.aiMessage.findMany({
+    where: { role: 'ASSISTANT', createdAt: { gte: new Date(Date.now() - 14 * 86400000) } }, orderBy: { createdAt: 'desc' }, take: 1000,
+    select: { id: true, content: true, error: true, tools: true, feedback: true, latencyMs: true, model: true, createdAt: true, conversation: { select: { user: { select: { name: true, department: { select: { name: true } } } } } } },
+  })
+  const problems = rows.flatMap((m) => {
+    const tools = (Array.isArray(m.tools) ? m.tools : []) as unknown as ToolUse[]
+    const kind = m.error ? 'ERROR' : tools.some((t) => t.ok === false) ? 'LOOKUP_FAILED' : GAVE_UP.test(m.content) ? 'GAVE_UP' : m.feedback === 'DOWN' ? 'NOT_HELPFUL' : null
+    if (!kind) return []
+    return [{
+      id: m.id, kind, name: m.conversation.user.name, department: m.conversation.user.department?.name ?? null, createdAt: m.createdAt.toISOString(),
+      error: m.error ? m.error.slice(0, 300) : null, model: m.model, latencyMs: m.latencyMs,
+      tools: tools.map((t) => ({ name: String(t.name ?? ''), args: t.args ?? {}, ok: t.ok !== false, ms: t.ms ?? null, error: t.error ? String(t.error).slice(0, 300) : null })),
+    }]
+  })
+  res.json({ answers: rows.length, problems: problems.slice(0, 100), total: problems.length })
 }
 
 /** PATCH /api/metra/admin/feedback/:id { handled } — Super Admin: tick a piece of feedback as dealt with. */

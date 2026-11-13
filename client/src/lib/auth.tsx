@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { api, setUnauthorizedHandler } from './api'
+import { api, setShownUser, setUnauthorizedHandler } from './api'
 import { disablePush } from './push'
 import { isNativeApp } from '../mobile/native'
 import type { CurrentUser, Department } from './types'
@@ -41,8 +41,10 @@ export function useAuth(): AuthContextValue {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<CurrentUser | null>(null)
+  const [user, setUserState] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
+  // The account on screen is told to the API client at once: it checks every answer against it (lib/api.ts).
+  const setUser = useCallback((u: CurrentUser | null) => { setShownUser(u?.id ?? null); setUserState(u) }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -61,7 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // drop the user so the route guard redirects to /login, and flag why.
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      setUser((prev) => {
+      setShownUser(null)
+      setUserState((prev) => {
         if (prev) {
           try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1') } catch { /* ignore */ }
         }

@@ -46,6 +46,28 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
   onUnauthorized = fn
 }
 
+// The account this page shows. The sign-in is one cookie for the whole browser, so signing in as someone else in
+// another tab changes who EVERY tab's requests are answered as, while this tab still shows the first account: that
+// person then saw the other account's data here (first noticed as "another user's recent Metra chats"). Every answer
+// says whose it is (X-PT-User); when that is not the account on screen, nothing of it is used and the page reloads
+// as the account that is really signed in.
+let shownUser: string | null = null
+let reloading = false
+export function setShownUser(id: string | null): void {
+  shownUser = id
+}
+/** True when the answer belongs to another account than the one on screen (the page is then reloading). */
+export function answeredAsSomeoneElse(res: Response, path: string): boolean {
+  if (reloading) return true
+  if (!shownUser || guestMode || path.startsWith('/auth/')) return false
+  const who = res.headers.get('X-PT-User')
+  if (!who || who === shownUser) return false
+  reloading = true
+  window.location.reload()
+  return true
+}
+const ACCOUNT_CHANGED = 'The signed-in account changed in another tab. Reloading.'
+
 async function request<T>(method: string, path: string, body?: JsonBody): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -62,6 +84,7 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
   })
+  if (answeredAsSomeoneElse(res, path)) throw new ApiError(ACCOUNT_CHANGED, 409)
 
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/auth/') && !guestMode) onUnauthorized?.()
@@ -89,6 +112,7 @@ async function sendRaw<T>(path: string, body: BodyInit, contentType: string): Pr
     credentials: 'include',
     body,
   })
+  if (answeredAsSomeoneElse(res, path)) throw new ApiError(ACCOUNT_CHANGED, 409)
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized?.()
     const message = await res.text().catch(() => res.statusText)

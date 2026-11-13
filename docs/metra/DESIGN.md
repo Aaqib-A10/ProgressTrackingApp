@@ -188,3 +188,38 @@ hit@5 11/11, MRR 1.00; 6/6 must-not-see checks held; the off-topic question retu
   copy `server/.cache/models` across and set `METRA_OFFLINE=1`).
 * Nginx: answers are streamed; the API sends `X-Accel-Buffering: no`, so no Nginx change is needed.
 * Switch Metra on for one company first; watch System Health (`metra-index`, `metra-insights`) and Admin → Metra.
+
+## 12. Reliability layer (13 Nov, after the first day live)
+
+The first day live showed what a copy with 4 Lead Dialer leads could not: "you have no Interested leads" (there were
+four), "I can't pull the total", and one failed answer. None was a model problem; all came from tools written for a
+careful caller being used by a smaller model that fills in options its own way. What was added:
+
+| Problem on live | Cause | What now prevents it |
+|---|---|---|
+| "No Interested leads" | status filter exact and case-sensitive; the model also added `view: follow_ups`, `list: CRM` | `dialer_leads` matches every filter to the values that exist (any case, misspellings); if nothing matches it takes the model's extra narrowing off one by one before saying "none", and says what it left out |
+| "Can't pull the total" | the model sent the person's own name as `rep`; the dialer answers 403 to a name | `loadDialerFor`: your own name or "me" = your leads; a manager's rep is found by name; a non-manager always gets their own, with a note |
+| Wrong "none" presented as fact | a tool returned an empty list with no context | every dialer answer starts with the total and the count per status; the Deal Tracker tool the same |
+| Options the tool does not have, `""`, `"true"`, wrong enum case | the model | `lib/metra/guard.ts` checks every read tool's arguments against its own schema first and tells the model what it dropped |
+| "Tool choice is none, but model called a tool" | the last turn offered tools with `tool_choice: none` | the last turn offers no tools at all: the lookups go in as text |
+| Three lookups = three full loads of the lead list | each tool call read `/api/dialer/data` again | reads are remembered for the length of one answer (`withApiCache`), with one retry on a dropped connection |
+| Nobody saw the failures until a user pasted a chat | no trace | each lookup is stored with the answer (name, options, ok, time, error); Company settings, Metra, "Problems Metra had" lists the last 14 days |
+
+Metra also knows Metriq itself now: every screen (name, what it is for, who has it, where) is in the index as source
+"Metriq screen", and a Metriq address in a question is named for the model.
+
+### The rule before going live
+
+    npm run metra:check -w server -- --erp
+
+It seeds 2,800 Lead Dialer leads and a few bids for the test accounts (local database only), asks the real questions
+as an agent, a team lead and a Super Admin, and compares every answer with what the screens show. **Nothing goes
+live unless it says "Ready".** When a problem shows up on live ("Problems Metra had", or a person's feedback), the
+question that caused it is added to `CASES` in `src/scripts/metraCheck.ts` first, then fixed.
+
+### Privacy of chats
+
+A person's chats are theirs alone: every read is filtered by the signed-in person (tested for members, team leads
+and Super Admins), `/api/metra` answers are never cached (`Cache-Control: no-store`), and the browser forgets
+everything of Metra when a different person signs in on the same page. An admin never sees an answer, and sees a
+question only when the person sent a note with it.

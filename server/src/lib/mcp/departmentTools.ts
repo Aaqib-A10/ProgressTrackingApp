@@ -3,9 +3,10 @@ import type { Role } from '@prisma/client'
 import { apiAs, apiError } from './api'
 import { LEADS_GUIDE, WORK_GUIDE } from './workTools'
 import { dealMoney } from '../dealMoney'
+import { STATUSES, normalizeStatus } from '../dialer/rules'
 import {
   REGION_META, clock, filterLeads, followUpTabs, funnelOf, isDialable, lastActivity, latestActedToday, leadRegion, leadState,
-  daysSince, pct, regionWindow, REGIONS, PRESET_VIEWS, fmtSpan,
+  daysSince, pct, regionWindow, REGIONS, PRESET_VIEWS, fmtSpan, joinMulti, multiOf,
   type DialerLead, type DialerSettings, type FollowUp, type LeadFilters, type RegionCode,
 } from '../dialer/view'
 
@@ -304,10 +305,65 @@ async function loadDialer(u: User, rep: string): Promise<{ data?: DialerData; er
 /** A rep by id or name for managers ("all" for everyone). */
 function repParam(given: unknown, data?: DialerData): string {
   const g = str(given)
-  if (!g || /^(me|mine|my)$/i.test(g)) return 'me'
-  if (/^(all|team|everyone)$/i.test(g)) return 'all'
+  if (!g || ME_WORDS.test(g)) return 'me'
+  if (ALL_WORDS.test(g)) return 'all'
   const hit = data?.reps?.find((r) => r.id === g || r.name.toLowerCase() === g.toLowerCase())
   return hit?.id ?? g
+}
+
+const ME_WORDS = /^(me|mine|my|myself|self|i|own)$/i
+const ALL_WORDS = /^(all|everyone|everybody|itad|company|(the |our |my )?(whole |entire |all )?(itad )?(team|reps|agents|department|dept)( all)?)$/i
+const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean)
+/** "Usama", "usama shabir" and "Usama S." all mean the person named Usama Shabir. */
+const sameName = (given: string, name: string): boolean => {
+  const g = words(given), n = words(name)
+  if (!g.length || !g.every((w) => n.some((x) => x === w || (w.length >= 3 && x.startsWith(w))))) return false
+  // One word must be the first name ("Usama"), not any word in it ("ITAD" in "Test ITAD Lead" is the team, not the person).
+  return g.length >= 2 || n[0] === g[0] || n[0].startsWith(g[0]) || n.length === 1
+}
+
+/**
+ * The Lead Dialer data for the rep asked for. An assistant often fills "rep" with the person's own name, or with a
+ * rep's name instead of their id; the dialer itself answers 403 to both ("how many leads do I have" then failed for
+ * good). Here: your own name or "me" = your leads; someone who is not a manager always gets their own leads, with a
+ * note; a manager's rep is found by id, full name or part of the name.
+ */
+async function loadDialerFor(u: User, given: unknown): Promise<{ data?: DialerData; error?: string; note?: string; who?: string }> {
+  const g = str(given)
+  if (!g || ME_WORDS.test(g) || g === u.id || sameName(g, u.name)) return loadDialer(u, 'me')
+  const mine = await loadDialer(u, 'me')
+  if (!mine.data) return mine
+  if (!mine.data.me.isManager) return { ...mine, note: `These are your own leads (you see only yours, so rep "${g}" was left out).` }
+  if (ALL_WORDS.test(g)) return { ...(await loadDialer(u, 'all')), who: 'the whole team' }
+  const reps = mine.data.reps ?? []
+  const exact = reps.filter((r) => r.id === g || r.name.trim().toLowerCase() === g.toLowerCase())
+  const hit = exact.length ? exact : reps.filter((r) => sameName(g, r.name))
+  if (hit.length === 1) return { ...(await loadDialer(u, hit[0].id)), who: hit[0].name }
+  if (hit.length > 1) return { error: `"${g}" fits ${hit.length} reps: ${hit.map((r) => r.name).join(', ')}. Say which one.` }
+  return { error: `No rep called "${g}". The reps are: ${reps.map((r) => r.name).join(', ') || 'none'}. Use "all" for the whole team.` }
+}
+
+/**
+ * What an assistant typed for a filter, matched to the values that really exist (any letter case, extra words like
+ * "leads" dropped). The dialer's own filter is exact, so "interested" used to give "no leads" while four were there.
+ */
+export function matchValues(given: unknown, real: string[], fix: (s: string) => string = (s) => s): { values: string[]; unknown: string[] } {
+  const asked = (Array.isArray(given) ? given.map(String) : [str(given)]).flatMap((s) => s.split(/\s*(?:,|;|\/|\||\u001f|\band\b|\bor\b|&)\s*/i)).map((s) => s.trim()).filter(Boolean)
+  const byLower = new Map(real.map((r) => [r.toLowerCase(), r]))
+  const values: string[] = [], unknown: string[] = []
+  for (const a of asked) {
+    const tries = [a, fix(a), a.replace(/\b(leads?|clients?|customers?|status|stage|ones?|the|my)\b/gi, ' ').replace(/\s+/g, ' ').trim()].flatMap((t) => [t, fix(t)])
+    const hit = tries.map((t) => byLower.get(t.toLowerCase())).find(Boolean)
+    if (hit) values.push(hit); else unknown.push(a)
+  }
+  return { values: [...new Set(values)], unknown: [...new Set(unknown)] }
+}
+
+/** Leads counted by status, biggest first: "Interested 4, Pipeline 2, ...". */
+function statusCounts(leads: DialerLead[]): string {
+  const n = new Map<string, number>()
+  for (const l of leads) if (!l.duplicate) n.set(l.status, (n.get(l.status) ?? 0) + 1)
+  return [...n].sort((a, b) => b[1] - a[1]).map(([s, c]) => `${s} ${c.toLocaleString('en-US')}`).join(', ') || 'none'
 }
 
 const VIEWS = ['all', 'call_now', 'prime_time', 'follow_ups', 'overdue', 'due_today', 'scheduled', 'snoozed', 'hot', 'never_attempted', 'stuck', 'no_state', 'changed', 'needs_earthzone'] as const
@@ -363,10 +419,10 @@ function pickLeads(d: DialerData, view: string, f: LeadFilters, now: Date): { ro
 /** Keep the follow-up order, but only leads that also pass the filters. */
 const keep = (ordered: DialerLead[], allowed: DialerLead[]) => { const ok = new Set(allowed.map((l) => l.id)); return ordered.filter((l) => ok.has(l.id)) }
 
-async function findLead(u: User, given: unknown, rep: string): Promise<{ lead?: DialerLead; data?: DialerData; error?: string }> {
+async function findLead(u: User, given: unknown, rep: unknown): Promise<{ lead?: DialerLead; data?: DialerData; error?: string }> {
   const g = str(given)
   if (!g) return { error: 'Say which lead: its id (from dialer_leads), company name or phone number.' }
-  const { data, error } = await loadDialer(u, rep)
+  const { data, error } = await loadDialerFor(u, rep)
   if (!data) return { error }
   const byId = data.leads.find((l) => l.id === g)
   if (byId) return { lead: byId, data }
@@ -469,7 +525,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
     inputSchema: { type: 'object', properties: { rep: { type: 'string', description: 'Managers only: "all", a rep\'s name or id. Leave out for your own leads.' } }, additionalProperties: false },
     annotations: { readOnlyHint: true },
     async run(u, a) {
-      const { data, error } = await loadDialer(u, repParam(a.rep))
+      const { data, error, note, who } = await loadDialerFor(u, a.rep)
       if (!data) return fail(error!)
       const now = new Date()
       const s = data.settings
@@ -484,15 +540,17 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
         return `- ${REGION_META[r].name} (${r}): ${w.localTime} there, ${state}; ${n} leads to dial`
       })
       return text([
-        `Lead Dialer for ${data.me.name}${repParam(a.rep) !== 'me' ? ` (showing ${str(a.rep)})` : ''}, ${pkt} Pakistan time.`,
+        `Lead Dialer for ${data.me.name}${who ? ` (showing ${who})` : ''}, ${pkt} Pakistan time.`,
+        note ?? '',
         `Leads: ${f.total}. Attempted ${f.attempted} (${pct(f.attemptRate)}), connected ${f.connected} (${pct(f.connectRate)} of attempted), positive ${f.positive} (${pct(f.winRate)} win).`,
+        `Leads by status: ${statusCounts(live)}.`,
         `Follow-ups: ${t.overdue.length} overdue, ${t.dueToday.length} due today, ${t.scheduled.length} scheduled, ${t.snoozed.length} snoozed, ${t.done.length} done today, ${t.backlog.length} in the 90+ day backlog.`,
         `Hot leads (Interested or Pipeline): ${live.filter((l) => l.status === 'Interested' || l.status === 'Pipeline').length}.`,
         'Calling right now (9 AM to 5 PM on the lead\'s own clock):',
         ...regions,
         '',
-        'Use dialer_leads with view follow_ups, call_now, prime_time or hot for the names.',
-      ].join('\n'))
+        'Use dialer_leads with view follow_ups, call_now, prime_time or hot for the names, or with a status for the leads in it. Won and lost deals are in the Deal Tracker (deal_tracker), not here.',
+      ].filter((x) => x !== '').join('\n'))
     },
   },
   {
@@ -502,13 +560,13 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        view: { type: 'string', enum: [...VIEWS], description: 'Default all.' },
+        view: { type: 'string', enum: [...VIEWS], description: 'Default all (every lead). Pick another view ONLY when the person asks for that list (their follow-ups, who to call now...); for "my Interested leads" use status alone.' },
         search: { type: 'string', description: 'Words in the company, contact, phone, email or notes.' },
         state: { type: 'string', description: 'US state name, e.g. Texas' },
         region: { type: 'string', enum: ['ET', 'CT', 'MT', 'PT'] },
         status: { type: 'string', description: 'Exact status, e.g. Interested, Voicemail Sent' },
         industry: { type: 'string' },
-        list: { type: 'string', description: 'List name, e.g. CRM or Vendors' },
+        list: { type: 'string', description: 'Only when the person names an import list.' },
         tag: { type: 'string' },
         rep: { type: 'string', description: 'Managers only: "all", a rep\'s name or id.' },
         limit: { type: 'number', description: 'Most leads to list (default 50, up to 300).' },
@@ -517,17 +575,68 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
     },
     annotations: { readOnlyHint: true },
     async run(u, a) {
-      const { data, error } = await loadDialer(u, repParam(a.rep))
+      const { data, error, note, who } = await loadDialerFor(u, a.rep)
       if (!data) return fail(error!)
       const now = new Date()
-      const view = VIEWS.includes(str(a.view) as (typeof VIEWS)[number]) ? str(a.view) : 'all'
-      const f: LeadFilters = { q: str(a.search) || undefined, state: str(a.state) || undefined, region: str(a.region) || undefined, status: str(a.status) || undefined, industry: str(a.industry) || undefined, list: str(a.list) || undefined, tag: str(a.tag) || undefined }
-      const { rows, why } = pickLeads(data, view, f, now)
+      const live = data.leads.filter((l) => !l.duplicate)
+      const notes: string[] = note ? [note] : []
+      const uniq = (xs: (string | null | undefined)[]) => [...new Set(xs.filter((x): x is string => !!x))]
+      let view = VIEWS.find((v) => v === str(a.view).toLowerCase().replace(/[\s-]+/g, '_')) ?? 'all'
+      let search = str(a.search)
+
+      // Each filter is matched to the values that exist (any letter case); what does not exist is said, not turned into "no leads".
+      const real = { status: uniq([...STATUSES, ...live.map((l) => l.status)]), state: uniq(live.map((l) => leadState(l))), industry: uniq(live.map((l) => l.industry)), list: uniq(live.map((l) => l.listName)), tag: uniq(live.flatMap((l) => l.tags)) }
+      const asked = { status: str(a.status), state: str(a.state), industry: str(a.industry), list: str(a.list), tag: str(a.tag) }
+      // A status typed into the search box ("interested") is a status, not words to look for in the notes.
+      if (search && !asked.status && matchValues(search, real.status, normalizeStatus).unknown.length === 0) { asked.status = search; search = '' }
+      const f: LeadFilters = { q: search || undefined, region: ['ET', 'CT', 'MT', 'PT'].find((r) => r === str(a.region).toUpperCase()) }
+      for (const key of ['status', 'state', 'industry', 'list', 'tag'] as const) {
+        if (!asked[key]) continue
+        let { values, unknown } = matchValues(asked[key], real[key], key === 'status' ? normalizeStatus : undefined)
+        if (key === 'status') {
+          if (unknown.some((x) => /^(hot|warm|positive)$/i.test(x))) { values = uniq([...values, 'Interested', 'Pipeline']); unknown = unknown.filter((x) => !/^(hot|warm|positive)$/i.test(x)) }
+          const deals = unknown.filter((x) => /\b(won|win|lost|lose|closed|close|deal|deals|awarded)\b/i.test(x))
+          if (deals.length) { notes.push(`"${deals.join('", "')}" is not a Lead Dialer status: won, lost and closed deals are in the Deal Tracker (use deal_tracker).`); unknown = unknown.filter((x) => !deals.includes(x)) }
+        }
+        if (unknown.length) notes.push(`No ${key} called "${unknown.join('", "')}" here, so it was left out. The ${key === 'status' ? 'statuses' : `${key} values`} are: ${real[key].slice(0, 40).join(', ') || 'none'}.`)
+        if (values.length) f[key] = joinMulti(values)
+      }
+      // "hot" with a status that is not hot would always be empty: the status wins.
+      if (view === 'hot' && f.status) view = 'all'
+
+      let { rows, why } = pickLeads(data, view, f, now)
+      // Nothing matched: before saying "none", the extra narrowing an assistant tends to add on its own (a view, a
+      // list, a tag...) is taken off one by one, keeping what the person asked for (the status, the search words).
+      if (!rows.length) {
+        const dropped: string[] = []
+        const tryAgain = () => { const r = pickLeads(data, view, f, now); rows = r.rows; why = r.why; return rows.length > 0 }
+        const steps: [string, () => boolean, () => void][] = [
+          [`view ${view.replace(/_/g, ' ')}`, () => view !== 'all' && !!(f.status || f.q), () => { view = 'all' }],
+          [`list ${f.list ? multiOf(f.list).join(' or ') : ''}`, () => !!f.list, () => { f.list = undefined }],
+          [`tag ${f.tag ? multiOf(f.tag).join(' or ') : ''}`, () => !!f.tag, () => { f.tag = undefined }],
+          [`industry ${f.industry ? multiOf(f.industry).join(' or ') : ''}`, () => !!f.industry && !!(f.status || f.q), () => { f.industry = undefined }],
+          [`region ${f.region ?? ''}`, () => !!f.region && !!(f.status || f.q), () => { f.region = undefined }],
+        ]
+        for (const [label, applies, drop] of steps) {
+          if (!applies()) continue
+          drop(); dropped.push(label)
+          if (tryAgain()) break
+        }
+        if (rows.length && dropped.length) notes.push(`Nothing matched together with ${dropped.join(' and ')}, so that was left out; these are the leads without it.`)
+      }
       const limit = Math.min(300, Math.max(1, Number(a.limit) || 50))
-      if (!rows.length) return text(`No leads for view "${view}"${Object.values(f).some(Boolean) ? ' with those filters' : ''}.`)
+      const applied = [view !== 'all' && `view ${view.replace(/_/g, ' ')}`, f.status && `status ${multiOf(f.status).join(' or ')}`, f.state && `state ${multiOf(f.state).join(' or ')}`, f.region && `region ${f.region}`, f.industry && `industry ${multiOf(f.industry).join(' or ')}`, f.list && `list ${multiOf(f.list).join(' or ')}`, f.tag && `tag ${multiOf(f.tag).join(' or ')}`, f.q && `search "${f.q}"`].filter(Boolean).join(', ')
+      // Every answer says how many leads there are in all and in each status, so a count never needs a second call,
+      // and "none" for a filter can be told from "none at all".
+      const head = [
+        `Lead Dialer for ${data.me.name}${who ? ` (showing ${who})` : ''}: ${live.length.toLocaleString('en-US')} leads in total. By status: ${statusCounts(live)}.`,
+        ...notes,
+      ]
+      if (!rows.length) return text([...head, `No leads match ${applied || 'that'}. (The totals above are every lead, with no filter.)`].join('\n'))
       const hint = PRESET_VIEWS.find((p) => (view === 'hot' && p.id === 'pipeline') || (view === 'never_attempted' && p.id === 'never') || p.id === view)?.hint
       return text([
-        `${rows.length} lead${rows.length === 1 ? '' : 's'} (${view.replace(/_/g, ' ')}${hint ? `: ${hint}` : ''})${rows.length > limit ? `, first ${limit}` : ''}. Times are now, ${DateTime.now().setZone(PKT_ZONE).toFormat('h:mm a')} Pakistan time.`,
+        ...head,
+        `${rows.length.toLocaleString('en-US')} lead${rows.length === 1 ? '' : 's'} match${applied ? ` (${applied}${hint ? `: ${hint}` : ''})` : ' (all leads)'}${rows.length > limit ? `; the first ${limit} are listed, the count is exact` : ''}. Times are now, ${DateTime.now().setZone(PKT_ZONE).toFormat('h:mm a')} Pakistan time.`,
         ...rows.slice(0, limit).map((l) => leadLine(l, now, data.settings, why.get(l.id))),
       ].join('\n'))
     },
@@ -539,7 +648,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
     inputSchema: { type: 'object', properties: { lead: { type: 'string', description: 'Lead id, company name or phone number' }, rep: { type: 'string', description: 'Managers: the rep who owns it, or "all".' } }, required: ['lead'], additionalProperties: false },
     annotations: { readOnlyHint: true },
     async run(u, a) {
-      const { lead, error } = await findLead(u, a.lead, repParam(a.rep))
+      const { lead, error } = await findLead(u, a.lead, a.rep)
       if (!lead) return fail(error!)
       const r = await apiAs(u, 'GET', `/api/dialer/leads/${encodeURIComponent(lead.id)}`)
       if (r.status >= 400) return fail(apiError(r))
@@ -616,7 +725,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
       if (!lead) return fail(error!)
       const body: Record<string, unknown> = {}
       const fields: [string, string, string, number][] = [
-        ['second_phone', 'phone2', 'second phone', 40], ['second_email', 'email2', 'second email', 200], ['linkedin', 'linkedin', 'LinkedIn', 300],
+        ['second_phone', 'phone2', 'second phone', 200], ['second_email', 'email2', 'second email', 200], ['linkedin', 'linkedin', 'LinkedIn', 300],
         ['decision_maker', 'decisionMaker', 'decision maker', 120], ['best_time', 'bestTime', 'best time to call', 80],
       ]
       const said: string[] = []

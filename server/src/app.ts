@@ -134,6 +134,7 @@ export function createApp(): Express {
     cors({
       origin: (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim()).filter(Boolean),
       credentials: true,
+      exposedHeaders: ['X-PT-User'], // whose answer it is (see middleware/auth.ts); a page on another origin may read it
     }),
   )
   // Cap JSON bodies to blunt memory-pressure DoS from oversized payloads.

@@ -60,8 +60,36 @@ function loadExtractor(): Promise<Extractor> {
 // ------------------------------------------------------------------ the hash embedding (tests, fallback)
 
 const WORD = /[\p{L}\p{N}]+/gu
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+const MON = '(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?'
+const DATES: [RegExp, (m: RegExpMatchArray) => [number | null, number, number]][] = [
+  [/\b(\d{4})[-/.‐-―](\d{1,2})[-/.‐-―](\d{1,2})\b/g, (m) => [+m[1], +m[2], +m[3]]], // 2026-07-03 (any kind of hyphen)
+  [new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${MON},?\\s+(\\d{4})\\b`, 'g'), (m) => [+m[3], MONTHS.indexOf(m[2].slice(0, 3)) + 1, +m[1]]], // 3 Jul 2026
+  [new RegExp(`\\b${MON}\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`, 'g'), (m) => [+m[3], MONTHS.indexOf(m[1].slice(0, 3)) + 1, +m[2]]], // July 3, 2026
+  [new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${MON}(?!\\s*,?\\s*\\d{4})`, 'g'), (m) => [null, MONTHS.indexOf(m[2].slice(0, 3)) + 1, +m[1]]], // 3 July
+  [new RegExp(`\\b${MON}\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?!\\s*,?\\s*\\d{4})`, 'g'), (m) => [null, MONTHS.indexOf(m[1].slice(0, 3)) + 1, +m[2]]], // July 3
+]
+/**
+ * One word per date, however it is written: "2026-07-03", "3 Jul 2026" and "July 3, 2026" all give d20260703 (and
+ * md0703, which a date with no year also gives). Records write dates one way and people ask another: the benchmark's
+ * misses were "the log for July 3, 2026" against records titled "ITAD log 2026-07-03", which shared only "2026".
+ */
+export function dateTokens(lower: string): string[] {
+  const out: string[] = []
+  const two = (n: number) => String(n).padStart(2, '0')
+  for (const [re, pick] of DATES) {
+    for (const m of lower.matchAll(re)) {
+      const [y, mo, d] = pick(m)
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) continue
+      if (y != null) { if (y < 1990 || y > 2100) continue; out.push(`d${y}${two(mo)}${two(d)}`) }
+      out.push(`md${two(mo)}${two(d)}`)
+    }
+  }
+  return out
+}
 export function tokens(text: string): string[] {
-  return (text.toLowerCase().normalize('NFKC').match(WORD) ?? []).filter((w) => w.length > 1 || /\d/.test(w))
+  const lower = text.toLowerCase().normalize('NFKC')
+  return [...(lower.match(WORD) ?? []).filter((w) => w.length > 1 || /\d/.test(w)), ...dateTokens(lower)]
 }
 function hashVec(text: string): Float32Array {
   const v = new Float32Array(DIM)

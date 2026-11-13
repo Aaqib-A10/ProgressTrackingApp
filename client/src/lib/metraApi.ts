@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { api } from './api'
+import { answeredAsSomeoneElse, api } from './api'
 import { isMobileOrTablet } from './device'
 import { apiBase, sessionHeaders } from './session'
 import { flagOn, refreshFlags, useFlags } from './flags'
+import { useAuth } from './auth'
 
 /**
  * Metra, the AI assistant (docs/metra/DESIGN.md): typed calls to /api/metra, the answer stream, and the
@@ -20,6 +21,14 @@ export interface MetraFeedbackList {
   general: { id: string; name: string; department: string | null; rating: MetraRating; text: string; handled: boolean; createdAt: string }[]
   answers: { id: string; name: string; department: string | null; feedback: 'UP' | 'DOWN'; note: string; question: string; tools: string[]; createdAt: string }[]
 }
+
+/** Super Admin: answers that went wrong in the last 14 days (which lookups ran and why one failed; never the question or answer). */
+export interface MetraProblem {
+  id: string; kind: 'ERROR' | 'LOOKUP_FAILED' | 'GAVE_UP' | 'NOT_HELPFUL'; name: string; department: string | null; createdAt: string
+  error: string | null; model: string | null; latencyMs: number | null
+  tools: { name: string; args: Record<string, unknown>; ok: boolean; ms: number | null; error: string | null }[]
+}
+export interface MetraProblemList { answers: number; total: number; problems: MetraProblem[] }
 
 export interface MetraAdmin {
   embed: { mode: string; model: string; reranker: string | boolean | null }
@@ -57,6 +66,7 @@ export const metraApi = {
   /** What the person thinks of Metra as a whole (the thumbs on an answer are `feedback` above). */
   sendFeedback: (rating: MetraRating, text?: string) => api.post<{ ok: true }>('/metra/feedback', { rating, ...(text?.trim() ? { text: text.trim() } : {}) }),
   adminFeedback: () => api.get<MetraFeedbackList>('/metra/admin/feedback'),
+  adminProblems: () => api.get<MetraProblemList>('/metra/admin/problems'),
   setFeedbackHandled: (id: string, handled: boolean) => api.patch<{ ok: true }>(`/metra/admin/feedback/${encodeURIComponent(id)}`, { handled }),
   insights: () => api.get<{ insights: MetraInsight[] }>('/metra/insights').then((r) => r.insights ?? []),
   setInsight: (id: string, state: 'DONE' | 'DISMISSED' | 'NEW') => api.patch<{ ok: true }>(`/metra/insights/${encodeURIComponent(id)}`, { state }),
@@ -127,6 +137,8 @@ export async function streamChat(body: { conversationId?: string; message: strin
     if (signal?.aborted) return
     throw new MetraHttpError('Could not reach Metriq. Check your connection and try again.', 0)
   }
+  // Another account signed in from a second tab: this answer is theirs, not the account on screen. The page reloads.
+  if (answeredAsSomeoneElse(res, '/metra/chat')) { void res.body?.cancel(); throw new MetraHttpError('The signed-in account changed in another tab. Reloading.', 409) }
   if (!res.ok || !res.body) {
     let msg = `Metra could not answer (${res.status}).`
     try { const j = (await res.json()) as { error?: string }; if (j?.error) msg = j.error } catch { /* keep the plain words */ }
@@ -176,6 +188,7 @@ export async function streamChat(body: { conversationId?: string; message: strin
 
 let status: MetraStatus | null = null
 let statusAt = 0
+let statusUser: string | null = null
 let statusLoading: Promise<MetraStatus | null> | null = null
 const statusListeners = new Set<() => void>()
 
@@ -183,11 +196,26 @@ const statusListeners = new Set<() => void>()
 export function loadMetraStatus(force = false): Promise<MetraStatus | null> {
   if (!force && status && Date.now() - statusAt < 5 * 60_000) return Promise.resolve(status)
   if (statusLoading && !force) return statusLoading
+  const forUser = statusUser
   statusLoading = metraApi.status()
-    .then((s) => { status = s; statusAt = Date.now(); return s })
+    .then((s) => { if (forUser !== statusUser) return status; status = s; statusAt = Date.now(); return s })
     .catch(() => status)
     .finally(() => { statusLoading = null; statusListeners.forEach((f) => f()) })
   return statusLoading
+}
+
+/**
+ * Whatever Metra keeps in the browser's memory belongs to one signed-in person. When someone else signs in on the
+ * same page (no reload), it all starts empty: nothing of the first person can be shown to the second.
+ */
+export function metraUser(id: string | null | undefined): void {
+  const u = id ?? null
+  if (u === statusUser) return
+  statusUser = u
+  status = null
+  statusAt = 0
+  statusLoading = null
+  statusListeners.forEach((f) => f())
 }
 
 /**
@@ -196,6 +224,8 @@ export function loadMetraStatus(force = false): Promise<MetraStatus | null> {
  */
 export function useMetraStatus(): MetraStatus | null {
   useFlags()
+  const { user } = useAuth()
+  const me = user?.id ?? null
   const on = flagOn('metra')
   const [, setN] = useState(0)
   useEffect(() => {
@@ -204,8 +234,8 @@ export function useMetraStatus(): MetraStatus | null {
     void refreshFlags()
     return () => { statusListeners.delete(f) }
   }, [])
-  useEffect(() => { if (on) void loadMetraStatus() }, [on])
-  return on ? status : null
+  useEffect(() => { metraUser(me); if (on) void loadMetraStatus() }, [on, me])
+  return on && statusUser === me ? status : null
 }
 
 /** True when Metra can be shown: the switch is on and the server agrees. */

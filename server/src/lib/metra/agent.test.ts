@@ -67,6 +67,30 @@ describe('Metra agent loop', () => {
     expect(offered).not.toContain('lead_update')
   })
 
+  it('when the lookups run out, the answer is asked for as plain text with no tools on offer', async () => {
+    // Live, 13 Nov: "Tool choice is none, but model called a tool". The model wanted a fourth lookup on the turn that
+    // had to be the answer, and the provider failed the whole turn. The last turn now has nothing to call.
+    process.env.GROQ_API_KEY = 'test-key'
+    const bodies: { tools?: unknown[]; tool_choice?: string; messages: { role: string; content: string | null }[] }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)))
+      if (bodies.length <= 3) return sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: `c${bodies.length}`, function: { name: 'search_metriq', arguments: `{"query":"interested leads ${bodies.length}"}` } }] }, finish_reason: 'tool_calls' }] }])
+      return sse([{ choices: [{ delta: { content: 'You have one interested lead: Acme Printing [1].' }, finish_reason: 'stop' }] }])
+    }))
+    const r = await answer(asker, [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'Hello.' }], 'my interested and won leads', () => undefined)
+    expect(r.content).toBe('You have one interested lead: Acme Printing [1].')
+    expect(bodies).toHaveLength(4)
+    expect(bodies.slice(0, 3).every((b) => b.tool_choice === 'auto')).toBe(true)
+    const last = bodies[3]
+    expect(last.tools).toBeUndefined()
+    expect(last.tool_choice).toBeUndefined()
+    // System prompt, the earlier turns, then one message: the question with everything that was looked up.
+    expect(last.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user'])
+    expect(last.messages[3].content).toContain('my interested and won leads')
+    expect(last.messages[3].content).toContain('[1] Note on Acme Printing')
+    expect(last.messages[3].content).toContain('Do not call any tool or function')
+  })
+
   it('a question too large for one model (413) goes to the next one instead of failing', async () => {
     process.env.GROQ_API_KEY = 'test-key'
     const models: string[] = []
