@@ -49,6 +49,8 @@ export function MetraAdmin() {
             <Row label="Embedding model"><span className="break-all">{a.embed.model || '—'}</span></Row>
             <Row label="Re-ranker">{typeof a.embed.reranker === 'boolean' ? (a.embed.reranker ? 'On' : 'Off') : a.embed.reranker || 'Off'}</Row>
             <Row label="Index">{`${num(a.index.chunks)} pieces`}{a.index.loaded ? '' : ' (loads on the first question)'}</Row>
+            {a.memory && <Row label="In memory"><span title={`All companies on this server: ${num(a.memory.pieces)} of at most ${num(a.memory.cap)} pieces. The whole server process uses ${num(a.memory.processMb)} MB.`}>{`${num(a.memory.pieces)} pieces, ${a.memory.companies} ${a.memory.companies === 1 ? 'company' : 'companies'}`}</span></Row>}
+            {a.usage.strongModel && <Row label="Second model"><span className="break-all" title="Used only to rewrite an answer whose numbers had no source in the data.">{a.usage.strongModel}</span></Row>}
           </dl>
         </Card>
         <Card title="This month">
@@ -56,6 +58,10 @@ export function MetraAdmin() {
             <Row label="Answers"><span className="tabular-nums">{num(a.usage.answers)}</span></Row>
             <Row label="Tokens in"><span className="tabular-nums">{num(a.usage.tokensIn)}</span></Row>
             <Row label="Tokens out"><span className="tabular-nums">{num(a.usage.tokensOut)}</span></Row>
+            {a.usage.medianSeconds != null && <Row label="Time to answer"><span className="tabular-nums" title="Half of the answers took less than the first number; nine in ten took less than the second.">{`${a.usage.medianSeconds} s usual, ${a.usage.slowSeconds ?? a.usage.medianSeconds} s slow`}</span></Row>}
+            {a.usage.tokensPerAnswer != null && <Row label="Per answer"><span className="tabular-nums">{`${num(a.usage.tokensPerAnswer)} tokens${a.usage.lookupsPerAnswer != null ? `, ${a.usage.lookupsPerAnswer} lookups` : ''}`}</span></Row>}
+            <Row label="Cost"><span className="tabular-nums" title="Shown when the model's prices are set on the server (METRA_PRICE_IN and METRA_PRICE_OUT, dollars per million tokens).">{a.usage.cost != null ? `$${a.usage.cost.toFixed(2)}${a.usage.costPerAnswer != null ? ` ($${a.usage.costPerAnswer.toFixed(4)} an answer)` : ''}` : 'Prices not set'}</span></Row>
+            {(a.usage.rewritten ?? 0) > 0 && <Row label="Numbers checked"><span className="tabular-nums" title="Answers that held a number not found in the data and were written again. 'Still without a source' are in the problems list below.">{`${num(a.usage.rewritten)} rewritten${a.usage.stillUnbacked ? `, ${num(a.usage.stillUnbacked)} still without a source` : ''}`}</span></Row>}
           </dl>
         </Card>
         <Card title="Feedback" subtitle="All time">
@@ -155,7 +161,11 @@ function FeedbackCards() {
         )}
       </Card>
       <Card title="Answers people rated" subtitle={`${down} not helpful, ${data.answers.length - down} helpful. You see their note, and the question only if they sent one with it. Never the answer.`}
-        action={<FilterLink on={onlyDown} onClick={() => setOnlyDown((v) => !v)} onLabel="Show all" offLabel="Only not helpful" />}>
+        action={<span className="flex items-center gap-3">
+          {/* The questions people shared with a note, as a list the developer adds to Metra's go-live check (npm run metra:check -- --extra file.json). */}
+          {data.answers.some((x) => x.feedback === 'DOWN' && x.question) && <button type="button" className="text-body-sm font-medium text-primary hover:underline" onClick={() => { void navigator.clipboard?.writeText(JSON.stringify(data.answers.filter((x) => x.feedback === 'DOWN' && x.question).map((x) => ({ ask: x.question, team: x.department, note: x.note })), null, 1)) }}>Copy as test questions</button>}
+          <FilterLink on={onlyDown} onClick={() => setOnlyDown((v) => !v)} onLabel="Show all" offLabel="Only not helpful" />
+        </span>}>
         {answers.length === 0 ? (
           <p className="text-body-md text-ink-muted">{data.answers.length ? 'No answers were marked not helpful.' : 'Nobody has rated an answer yet.'}</p>
         ) : (
@@ -183,6 +193,7 @@ function FeedbackCards() {
 const PROBLEM: Record<MetraProblem['kind'], { label: string; tone: string }> = {
   ERROR: { label: 'Could not answer', tone: 'bg-danger/10 text-danger' },
   LOOKUP_FAILED: { label: 'A lookup failed', tone: 'bg-danger/10 text-danger' },
+  NUMBERS: { label: 'A number had no source', tone: 'bg-danger/10 text-danger' },
   GAVE_UP: { label: 'Said it could not find it', tone: 'bg-warning/15 text-ink' },
   NOT_HELPFUL: { label: 'Marked not helpful', tone: 'bg-slate-100 text-ink' },
 }

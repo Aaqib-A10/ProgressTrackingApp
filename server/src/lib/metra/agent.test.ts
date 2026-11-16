@@ -149,3 +149,60 @@ describe('the answer as people read it', () => {
     expect(tidyAnswer(md).split('\n')).toEqual(['You have two:', '| Task | Status |', '| ------ | -------- |', '| Make Metra live | open |', 'See [2].'])
   })
 })
+
+describe('a number with no source is not sent as it is', () => {
+  const look = { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_a', function: { name: 'search_metriq', arguments: '{"query":"Acme laptops"}' } }] } }] }
+  const say = (text: string) => sse([{ choices: [{ delta: { content: text }, finish_reason: 'stop' }] }, { choices: [], usage: { prompt_tokens: 500, completion_tokens: 20 } }])
+
+  it('the answer is written once more, and the person gets the rewrite', async () => {
+    process.env.GROQ_API_KEY = 'test-key'
+    const bodies: { tools?: unknown[]; messages: { role: string; content: string | null }[] }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)))
+      if (bodies.length === 1) return sse([look, { choices: [], usage: { prompt_tokens: 900, completion_tokens: 20 } }])
+      if (bodies.length === 2) return say('Acme has 400 laptops and 9,750 monitors to retire [1].') // 9,750 is in no lookup
+      return say('Acme has 400 laptops to retire in Q1 [1].')
+    }))
+    const events: string[] = []
+    const r = await answer(asker, [], 'What does Acme want to retire?', (e, d) => { if (e === 'status') events.push(String(d)) })
+    expect(r.content).toBe('Acme has 400 laptops to retire in Q1 [1].')
+    expect(bodies).toHaveLength(3)
+    // The rewrite is asked for with the data, the draft and the numbers that had no source, and with no tools on offer.
+    const ask = bodies[2].messages.at(-1)!.content!
+    expect(bodies[2].tools).toBeUndefined()
+    expect(ask).toContain('These numbers in the draft are not in the data above: 9,750.')
+    expect(ask).toContain('400 laptops to retire in Q1') // the looked-up data
+    expect(events).toContain('Checking the numbers')
+    expect(r.tools.at(-1)).toMatchObject({ name: 'answer_check', ok: true, args: { numbers: ['9,750'], rewritten: true } })
+  })
+
+  it('an answer whose numbers are all in the data is left alone (no extra model turn)', async () => {
+    process.env.GROQ_API_KEY = 'test-key'
+    let calls = 0
+    vi.stubGlobal('fetch', vi.fn(async () => { calls++; return calls === 1 ? sse([look, { choices: [], usage: { prompt_tokens: 900, completion_tokens: 20 } }]) : say('Linda Park said 400 laptops will be retired in Q1 [1].') }))
+    const r = await answer(asker, [], 'What does Acme want to retire?', () => undefined)
+    expect(calls).toBe(2)
+    expect(r.tools.some((t) => t.name === 'answer_check')).toBe(false)
+  })
+
+  it('when the rewrite still has a number with no source it is recorded with the answer', async () => {
+    process.env.GROQ_API_KEY = 'test-key'
+    let calls = 0
+    vi.stubGlobal('fetch', vi.fn(async () => { calls++; return calls === 1 ? sse([look, { choices: [], usage: { prompt_tokens: 900, completion_tokens: 20 } }]) : say('They will retire 9,750 monitors [1].') }))
+    const r = await answer(asker, [], 'What does Acme want to retire?', () => undefined)
+    expect(calls).toBe(3)
+    expect(r.tools.at(-1)).toMatchObject({ name: 'answer_check', ok: false })
+    expect(r.tools.at(-1)!.error).toContain('9,750')
+  })
+
+  it('a follow-up and the screen the person is on are said to the model with the question', async () => {
+    process.env.GROQ_API_KEY = 'test-key'
+    const bodies: { messages: { role: string; content: string | null }[] }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => { bodies.push(JSON.parse(String(init.body))); return say('Nothing new.') }))
+    await answer(asker, [{ role: 'user', content: 'what did the CFO at Acme say?' }, { role: 'assistant', content: 'They have laptops to retire.' }], 'and last month?', () => undefined, undefined, { memories: [], summary: null, page: '/app/itad/dialer' })
+    const q = bodies[0].messages.at(-1)!.content!
+    expect(q).toContain('and last month?')
+    expect(q).toContain('This continues the person\'s earlier question: "what did the CFO at Acme say?"')
+    expect(q).toContain('the "Lead Dialer" screen')
+  })
+})

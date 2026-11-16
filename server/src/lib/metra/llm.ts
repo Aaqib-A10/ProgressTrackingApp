@@ -62,8 +62,8 @@ let usedId = ''
 export function resetModelBusy(): void { busyUntil.clear() }
 
 /** One streamed model turn. On a rate limit or an outage it moves to the next endpoint; when all are busy it waits (up to 30 s). */
-export async function* streamChat(o: { messages: LlmMessage[]; tools?: ToolSpec[]; toolChoice?: 'auto' | 'none'; maxTokens?: number; signal?: AbortSignal; onWait?: (seconds: number) => void }): AsyncGenerator<LlmEvent> {
-  const list = endpoints()
+export async function* streamChat(o: { messages: LlmMessage[]; tools?: ToolSpec[]; toolChoice?: 'auto' | 'none'; maxTokens?: number; signal?: AbortSignal; onWait?: (seconds: number) => void; /** Ask this model first (same provider), then the usual ones. */ model?: string }): AsyncGenerator<LlmEvent> {
+  const list = o.model && o.model !== llmModel() ? [{ id: `${llmBase()}#${o.model}`, base: llmBase(), key: llmKey(), model: o.model }, ...endpoints()] : endpoints()
   const bodyFor = (model: string) => JSON.stringify({
     model, messages: o.messages, stream: true, temperature: 0.2, max_completion_tokens: o.maxTokens ?? 1800, max_tokens: o.maxTokens ?? 1800,
     ...(o.tools?.length ? { tools: o.tools, tool_choice: o.toolChoice ?? 'auto', parallel_tool_calls: true } : {}),

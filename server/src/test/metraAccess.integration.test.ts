@@ -18,6 +18,7 @@ import { SOURCE_BY_TYPE } from '../lib/metra/sources'
 type U = { id: string; role: Role }
 let w: SeededWorld
 let member2: U, bravoUser: U
+let ecLead: U, ecMember: U, ecPeer: U, ecOther: U
 let projectId = '', convId = ''
 const B = 'metra-bravo-co'
 
@@ -35,8 +36,24 @@ beforeAll(async () => {
   const passwordHash = await hashPassword('Pass-for-tests-9')
   const m2 = await prisma.user.create({ data: { name: 'Second Agent', email: 'second.agent@metra.local.test', role: 'MEMBER', status: 'ACTIVE', isActive: true, passwordHash, departmentId: itad.id } })
   member2 = { id: m2.id, role: m2.role }
+  // Two e-commerce departments (the second one must never read the first one's records), and the inventory department.
+  const [ec, ec2] = [await prisma.department.create({ data: { type: 'ECOMMERCE', name: 'E-commerce' } }), await prisma.department.create({ data: { type: 'ECOMMERCE', name: 'E-commerce Two' } })]
+  const inventory = await prisma.department.findFirstOrThrow({ where: { type: 'INVENTORY', companyId: HOME_COMPANY_ID } })
+  const person = async (name: string, role: Role, departmentId: string): Promise<U> => { const u = await prisma.user.create({ data: { name, email: `${name.replace(/\s+/g, '.').toLowerCase()}@metra.local.test`, role, status: 'ACTIVE', isActive: true, passwordHash, departmentId } }); return { id: u.id, role: u.role } }
+  ecLead = await person('Ec Lead', 'TEAM_LEAD', ec.id)
+  ecMember = await person('Ec Member', 'MEMBER', ec.id)
+  ecPeer = await person('Ec Peer', 'MEMBER', ec.id)
+  ecOther = await person('Ec Other', 'MEMBER', ec2.id)
 
   await runAsCompany(HOME_COMPANY_ID, async () => {
+    // E-commerce: a meeting note and a stock request of the department, and one member's own daily log.
+    const day0 = new Date(new Date().toISOString().slice(0, 10))
+    await prisma.meetingNote.create({ data: { authorId: ecLead.id, departmentId: ec.id, title: 'Weekly sync', body: 'We pause the walrus repricer until Friday.', meetingDate: day0 } })
+    await prisma.stockRequest.create({ data: { departmentId: ec.id, itemName: 'Turquoise monitor arm', requestedByName: 'Warehouse', action: 'STOCK_OUT', note: 'Pull the turquoise listing from every marketplace.' } })
+    await prisma.ecommerceDailyEntry.create({ data: { userId: ecMember.id, date: day0, status: 'SUBMITTED', notes: 'Relisted the opal bundles after the photo fix.' } })
+    // Inventory: an item and a request on it.
+    const item = await prisma.inventoryItem.create({ data: { departmentId: inventory.id, name: 'Zephyr 4TB NAS drive', category: 'Drives', quantity: 7, lowStockAt: 3, notes: 'Kept in the mezzanine cage.' } })
+    await prisma.inventoryMovement.create({ data: { itemId: item.id, type: 'STOCK_OUT', quantity: 2, requestedByName: 'Repairs', note: 'For the heron refurb batch.' } })
     // Lead Dialer: each agent's own leads and notes.
     const l1 = await prisma.dialerLead.create({ data: { ownerId: w.itadMember.id, matchKey: 'id:m1', company: 'Acme Printing', status: 'Interested', stage: 4, maxStage: 4 } })
     await prisma.dialerNote.create({ data: { leadId: l1.id, userId: w.itadMember.id, text: 'Acme wants 200 old servers recycled before March, ask for the CFO.' } })
@@ -116,6 +133,25 @@ describe('Metra retrieves only what the app shows each person', () => {
     expect(await find(w.leadgenMember, 'Falcon datacenter migration')).not.toContain('Falcon datacenter')
     await prisma.pmProjectMember.deleteMany({ where: { projectId, userId: w.itadMember.id } })
     expect(await find(w.itadMember, 'Falcon datacenter migration')).not.toContain('Falcon datacenter')
+  })
+
+  it('e-commerce meeting notes and stock requests: that department\'s people and Super Admins, never another team or another e-commerce department', async () => {
+    for (const [q, word] of [['walrus repricer friday', 'walrus'], ['turquoise listing marketplace', 'turquoise']] as const) {
+      for (const who of [ecMember, ecPeer, ecLead, w.superAdmin]) expect(await find(who, q), q).toContain(word)
+      for (const who of [ecOther, w.itadMember, w.itadLead, w.inventoryMember, w.leadgenLead]) expect(await find(who, q), q).not.toContain(word)
+    }
+  })
+
+  it('an e-commerce daily log: its owner, their team lead and Super Admins, not a colleague on the same team', async () => {
+    for (const who of [ecMember, ecLead, w.superAdmin]) expect(await find(who, 'opal bundles photo fix')).toContain('opal bundles')
+    for (const who of [ecPeer, ecOther, w.itadMember, w.inventoryLead]) expect(await find(who, 'opal bundles photo fix')).not.toContain('opal bundles')
+  })
+
+  it('inventory items and requests: the inventory department and Super Admins only', async () => {
+    for (const [q, word] of [['mezzanine cage NAS drive', 'mezzanine'], ['heron refurb batch', 'heron']] as const) {
+      for (const who of [w.inventoryMember, w.inventoryLead, w.superAdmin]) expect(await find(who, q), q).toContain(word)
+      for (const who of [ecMember, ecLead, w.itadMember, w.itadLead, w.leadgenMember]) expect(await find(who, q), q).not.toContain(word)
+    }
   })
 
   it('nothing crosses companies', async () => {

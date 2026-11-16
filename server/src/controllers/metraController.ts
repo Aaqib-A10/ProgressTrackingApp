@@ -9,9 +9,12 @@ import { answer, suggestionsFor, GAVE_UP, WRITE_TOOLS, type ActionCard, type Emi
 import { llmReady, LlmError } from '../lib/metra/llm'
 import { embedStatus } from '../lib/metra/embed'
 import { indexNow } from '../lib/metra/indexer'
-import { indexStats } from '../lib/metra/store'
+import { indexStats, memoryStats } from '../lib/metra/store'
 import { SOURCES } from '../lib/metra/sources'
 import { conversationContext, forget, memoriesOf } from '../lib/metra/memory'
+import { dayBrief } from '../lib/metra/catalog/brief'
+import { withApiCache } from '../lib/mcp/api'
+import { companyToday } from '../lib/time'
 
 /**
  * Metra API (docs/metra/DESIGN.md). Everything is the asking person's own: conversations are private to them, and
@@ -35,7 +38,7 @@ function tooMany(userId: string): boolean {
   return false
 }
 
-const chatSchema = z.object({ conversationId: z.string().min(1).max(60).optional(), message: z.string().trim().min(1, 'Ask a question.').max(4000) })
+const chatSchema = z.object({ conversationId: z.string().min(1).max(60).optional(), message: z.string().trim().min(1, 'Ask a question.').max(4000), page: z.string().max(300).optional() })
 
 /**
  * POST /api/metra/chat { conversationId?, message } — the answer streamed as server-sent events:
@@ -70,7 +73,7 @@ export async function chat(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const asker = await askerOf(userId)
     const emit: Emit = (event, data) => send(event, data)
-    const r = await answer(asker, history, p.data.message, emit, ctl.signal, { memories, summary })
+    const r = await answer(asker, history, p.data.message, emit, ctl.signal, { memories, summary, page: p.data.page ?? null })
     // A card with no words still needs a line; no words and no card means the model gave nothing back.
     if (!r.content && !r.actions.length && !r.sources.length && !r.tools.length) throw new LlmError('The AI model did not answer. Please try again.', 502)
     const content = r.content || (r.actions.length ? 'Here is a card for it: press Confirm to do it.' : 'I couldn\'t find that in your Metriq data.')
@@ -168,6 +171,32 @@ export async function decideAction(req: AuthedRequest, res: Response): Promise<v
   res.json({ action: card })
 }
 
+/**
+ * What answers cost and how fast they are (docs/metra/ROADMAP.md phase 5), from what is stored with each answer: time,
+ * tokens and its lookups. Money is shown only when the prices are set (METRA_PRICE_IN / METRA_PRICE_OUT, US dollars
+ * per million tokens of the model in use): Metriq does not know what a provider charges.
+ */
+export function usageOf(rows: { latencyMs: number | null; tokensIn: number | null; tokensOut: number | null; tools: unknown }[], monthIn: number, monthOut: number) {
+  const ms = rows.map((r) => r.latencyMs).filter((x): x is number => typeof x === 'number' && x > 0).sort((a, b) => a - b)
+  const at = (p: number) => (ms.length ? ms[Math.min(ms.length - 1, Math.floor(ms.length * p))] : null)
+  const sized = rows.filter((r) => (r.tokensIn ?? 0) > 0)
+  const checks = rows.flatMap((r) => (Array.isArray(r.tools) ? (r.tools as ToolUse[]) : []).filter((t) => t?.name === 'answer_check'))
+  const lookups = rows.map((r) => (Array.isArray(r.tools) ? (r.tools as ToolUse[]).filter((t) => t?.name !== 'answer_check').length : 0))
+  const price = (v: string | undefined) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null }
+  const pin = price(process.env.METRA_PRICE_IN), pout = price(process.env.METRA_PRICE_OUT)
+  const cost = pin != null && pout != null ? Math.round(((monthIn * pin + monthOut * pout) / 1_000_000) * 100) / 100 : null
+  return {
+    medianSeconds: at(0.5) != null ? Math.round(at(0.5)! / 100) / 10 : null,
+    slowSeconds: at(0.9) != null ? Math.round(at(0.9)! / 100) / 10 : null, // nine answers in ten are faster than this
+    tokensPerAnswer: sized.length ? Math.round(sized.reduce((s, r) => s + (r.tokensIn ?? 0) + (r.tokensOut ?? 0), 0) / sized.length) : null,
+    lookupsPerAnswer: lookups.length ? Math.round((lookups.reduce((s, n) => s + n, 0) / lookups.length) * 10) / 10 : null,
+    rewritten: checks.length, // answers the number check sent back to be written again
+    stillUnbacked: checks.filter((t) => t.ok === false).length, // of those, the ones whose numbers still had no source
+    cost, costPerAnswer: cost != null && rows.length ? Math.round((cost / Math.max(1, rows.length)) * 10000) / 10000 : null,
+    strongModel: process.env.METRA_STRONG_MODEL || null,
+  }
+}
+
 /** GET /api/metra/status — is Metra ready for me, what to ask; for Super Admins also the index per source. */
 export async function status(req: AuthedRequest, res: Response): Promise<void> {
   const enabled = await isOn('metra', req.user!.companyId)
@@ -175,15 +204,20 @@ export async function status(req: AuthedRequest, res: Response): Promise<void> {
   const asker = await askerOf(req.user!.id)
   const out: Record<string, unknown> = { enabled, llm: llmReady(), suggestions: suggestionsFor(asker), sources: SOURCES.filter((s) => asker.sources.has(s.type)).map((s) => ({ type: s.type, label: s.label })) }
   if (req.user!.role === 'SUPER_ADMIN') {
-    const [states, month, stats] = await Promise.all([
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    const [states, month, stats, answers, memory] = await Promise.all([
       prisma.aiIndexState.findMany({ orderBy: { sourceType: 'asc' } }),
-      prisma.aiMessage.aggregate({ where: { role: 'ASSISTANT', createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } }, _count: true, _sum: { tokensIn: true, tokensOut: true } }),
+      prisma.aiMessage.aggregate({ where: { role: 'ASSISTANT', createdAt: { gte: monthStart } }, _count: true, _sum: { tokensIn: true, tokensOut: true } }),
       indexStats(req.user!.companyId),
+      // Speed, size and what the number check did, over this month's answers (the newest 2,000). Never their words.
+      prisma.aiMessage.findMany({ where: { role: 'ASSISTANT', createdAt: { gte: monthStart }, error: null }, orderBy: { createdAt: 'desc' }, take: 2000, select: { latencyMs: true, tokensIn: true, tokensOut: true, tools: true } }),
+      memoryStats(),
     ])
     out.admin = {
       embed: embedStatus(), index: stats,
       sources: states.map((s) => ({ type: s.sourceType, label: SOURCES.find((x) => x.type === s.sourceType)?.label ?? s.sourceType, chunks: s.chunks, lastRunAt: s.lastRunAt?.toISOString() ?? null, lastError: s.lastError })),
-      usage: { answers: month._count, tokensIn: month._sum.tokensIn ?? 0, tokensOut: month._sum.tokensOut ?? 0 },
+      usage: { answers: month._count, tokensIn: month._sum.tokensIn ?? 0, tokensOut: month._sum.tokensOut ?? 0, ...usageOf(answers, month._sum.tokensIn ?? 0, month._sum.tokensOut ?? 0) },
+      memory: { ...memory, processMb: Math.round(process.memoryUsage().rss / 1048576) },
       feedback: await prisma.aiMessage.groupBy({ by: ['feedback'], where: { role: 'ASSISTANT', feedback: { not: null } }, _count: true }).then((g) => Object.fromEntries(g.map((x) => [x.feedback, x._count]))),
     }
   }
@@ -202,9 +236,32 @@ export async function reindex(req: AuthedRequest, res: Response): Promise<void> 
   res.status(202).json({ ok: true })
 }
 
+/** Who was already looked at today (a person with nothing to say gets no row, and is not worked out again on every opening). */
+const briefTried = new Map<string, string>()
+
+/**
+ * "Your day": made once a day, the first time the person opens Metra, from their own data sets (lib/metra/catalog/brief.ts;
+ * no model). ITAD agents already get their shift brief from the hourly job, so a person who has a brief for today gets no second one.
+ */
+async function ensureDayBrief(userId: string): Promise<void> {
+  const day = companyToday()
+  if (briefTried.get(userId) === day) return
+  briefTried.set(userId, day)
+  if (briefTried.size > 5000) for (const [k, v] of briefTried) if (v !== day) briefTried.delete(k)
+  const has = await prisma.aiInsight.findFirst({ where: { userId, kind: 'BRIEF', OR: [{ day }, { createdAt: { gte: new Date(Date.now() - 18 * 3600_000) } }] }, select: { id: true } })
+  if (has) return
+  // A Lead Dialer agent's brief is the shift brief (lib/metra/insights.ts), made before their shift: this one must not take its place.
+  if (await prisma.dialerLead.findFirst({ where: { ownerId: userId }, select: { id: true } })) return
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { id: true, role: true, name: true } })
+  const brief = await withApiCache(async () => dayBrief(await askerOf(userId), me))
+  if (!brief) return
+  await prisma.aiInsight.create({ data: { userId, kind: 'BRIEF', day, title: 'Your day', payload: { text: brief.text, facts: { lines: brief.lines } } as unknown as Prisma.InputJsonValue } }).catch(() => undefined) // two tabs at once: one wins
+}
+
 /** GET /api/metra/insights — my insights of the last 7 days still open: the shift brief and next steps that passed. */
 export async function listInsights(req: AuthedRequest, res: Response): Promise<void> {
   if (!(await on(req, res))) return
+  await ensureDayBrief(req.user!.id).catch(() => undefined) // a brief that cannot be made is simply not there
   // Only the insight kinds: memories (MEMORY) and feedback (FEEDBACK) live in the same table and are not insights.
   const rows = await prisma.aiInsight.findMany({ where: { userId: req.user!.id, kind: { in: ['BRIEF', 'NEXT_STEP'] }, state: 'NEW', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: [{ kind: 'asc' }, { createdAt: 'desc' }], take: 50 })
   res.json({ insights: rows.map((r) => ({ id: r.id, kind: r.kind, day: r.day, title: r.title, payload: r.payload, createdAt: r.createdAt.toISOString() })) })
@@ -297,7 +354,9 @@ export async function adminProblems(req: AuthedRequest, res: Response): Promise<
   })
   const problems = rows.flatMap((m) => {
     const tools = (Array.isArray(m.tools) ? m.tools : []) as unknown as ToolUse[]
-    const kind = m.error ? 'ERROR' : tools.some((t) => t.ok === false) ? 'LOOKUP_FAILED' : GAVE_UP.test(m.content) ? 'GAVE_UP' : m.feedback === 'DOWN' ? 'NOT_HELPFUL' : null
+    // A number with no source that a rewrite did not clear is its own kind (it is not a lookup that failed).
+    const real = tools.filter((t) => t.name !== 'answer_check')
+    const kind = m.error ? 'ERROR' : real.some((t) => t.ok === false) ? 'LOOKUP_FAILED' : tools.some((t) => t.name === 'answer_check' && t.ok === false) ? 'NUMBERS' : GAVE_UP.test(m.content) ? 'GAVE_UP' : m.feedback === 'DOWN' ? 'NOT_HELPFUL' : null
     if (!kind) return []
     return [{
       id: m.id, kind, name: m.conversation.user.name, department: m.conversation.user.department?.name ?? null, createdAt: m.createdAt.toISOString(),

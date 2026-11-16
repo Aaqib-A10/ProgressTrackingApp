@@ -320,9 +320,10 @@ export const WORK_TOOLS: DeptTool[] = [
       const to = /^\d{4}-\d{2}-\d{2}$/.test(str(a.to)) ? DateTime.fromISO(str(a.to), { zone }).endOf('day') : from.plus({ days: 7 }).endOf('day')
       const r = await apiAs(u, 'GET', '/api/meetings', { query: { from: from.toUTC().toISO()!, to: to.toUTC().toISO()! } })
       if (r.status >= 400) return fail(apiError(r))
-      const list = (r.body as { meetings: { id: string; title: string; startsAt: string; endsAt: string; cancelledAt?: string | null; attendees?: { name: string }[]; organizer?: { name: string } }[] }).meetings
+      const list = (r.body as { meetings: { id: string; title: string; agenda?: string; startsAt: string; endsAt: string; cancelledAt?: string | null; attendees?: { name: string }[]; organizer?: { name: string } }[] }).meetings
       if (!list.length) return text('No meetings in that time.')
-      return text(list.map((m) => `- ${DateTime.fromISO(m.startsAt).setZone(zone).toFormat('ccc d LLL HH:mm')}-${DateTime.fromISO(m.endsAt).setZone(zone).toFormat('HH:mm')} ${m.title}${m.cancelledAt ? ' (CANCELLED)' : ''}${m.attendees?.length ? ` with ${m.attendees.map((x) => x.name).join(', ')}` : ''} [id ${m.id}]`).join('\n') + `\nTimes are ${zone}.`)
+      // The agenda is the notes a person writes on the calendar event: without it "what notes did I put on my calendar" had no answer.
+      return text(list.map((m) => `- ${DateTime.fromISO(m.startsAt).setZone(zone).toFormat('ccc d LLL HH:mm')}-${DateTime.fromISO(m.endsAt).setZone(zone).toFormat('HH:mm')} ${m.title}${m.cancelledAt ? ' (CANCELLED)' : ''}${m.attendees?.length ? ` with ${m.attendees.map((x) => x.name).join(', ')}` : ''}${m.agenda?.trim() ? ` | notes on it: ${m.agenda.replace(/\s+/g, ' ').trim().slice(0, 600)}` : ' | no notes on it'} [id ${m.id}]`).join('\n') + `\nTimes are ${zone}.`)
     },
   },
   {

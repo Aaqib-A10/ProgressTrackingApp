@@ -637,6 +637,8 @@ const TOOLS: Tool[] = [
 ]
 
 /** The read-only project ticket tools, for Metra (it answers "which tickets are overdue" from these, not from search). */
+/** Ticket changes Metra may propose on a card (the person confirms; the same checks, log and alerts as in the app). */
+export const TICKET_WRITE_TOOLS = TOOLS.filter((t) => ['create_ticket', 'add_comment', 'move_ticket', 'update_checklist_item'].includes(t.name))
 export const TICKET_READ_TOOLS = TOOLS.filter((t) => t.annotations?.readOnlyHint && ['list_my_tickets', 'list_projects', 'list_project_tickets', 'get_ticket'].includes(t.name))
 
 // ------------------------------------------------------------------ JSON-RPC over HTTP

@@ -176,9 +176,45 @@ export function indexOf(companyId: string): Promise<CompanyIndex> {
       return ix
     })()
     indexes.set(companyId, p)
-    p.catch(() => indexes.delete(companyId))
+    p.then(() => trim(companyId)).catch(() => indexes.delete(companyId))
   }
   return p
+}
+
+/**
+ * How many pieces all companies' indexes may hold in memory together (docs/metra/ROADMAP.md phase 5). One company of
+ * 21,600 pieces takes about 100 MB with its words; the default allows about thirty such companies. Past it, the
+ * companies nobody asked for the longest are dropped (they load again from the database on their next question).
+ */
+const MAX_PIECES = Math.max(10_000, Number(process.env.METRA_MAX_PIECES ?? 600_000))
+
+/** Which loaded indexes to drop to get under the cap: least recently used first, never the one just asked for. */
+export function overCap(loaded: { id: string; count: number; lastUsed: number }[], cap: number, keep: string): string[] {
+  let total = loaded.reduce((s, x) => s + x.count, 0)
+  const out: string[] = []
+  for (const x of loaded.filter((y) => y.id !== keep).sort((a, b) => a.lastUsed - b.lastUsed)) {
+    if (total <= cap) break
+    out.push(x.id)
+    total -= x.count
+  }
+  return out
+}
+
+async function loadedNow(): Promise<{ id: string; count: number; lastUsed: number }[]> {
+  const out: { id: string; count: number; lastUsed: number }[] = []
+  for (const [id, p] of indexes) { const ix = await p.catch(() => null); if (ix) out.push({ id, count: ix.count, lastUsed: ix.lastUsed }) }
+  return out
+}
+
+async function trim(keep: string): Promise<void> {
+  for (const id of overCap(await loadedNow(), MAX_PIECES, keep)) indexes.delete(id)
+}
+
+/** What the indexes hold in memory right now, for the admin page: companies loaded, pieces, and the size of their vectors. */
+export async function memoryStats(): Promise<{ companies: number; pieces: number; vectorsMb: number; cap: number }> {
+  const all = await loadedNow()
+  const pieces = all.reduce((s, x) => s + x.count, 0)
+  return { companies: all.length, pieces, vectorsMb: Math.round((pieces * DIM * 4) / 1048576 * 10) / 10, cap: MAX_PIECES }
 }
 
 /** The indexer saved or removed chunks: keep a loaded index in step (an unloaded one reads them on first use). */

@@ -223,3 +223,140 @@ A person's chats are theirs alone: every read is filtered by the signed-in perso
 and Super Admins), `/api/metra` answers are never cached (`Cache-Control: no-store`), and the browser forgets
 everything of Metra when a different person signs in on the same page. An admin never sees an answer, and sees a
 question only when the person sent a note with it.
+
+## 13. The catalog (15 Nov): one entry per screen
+
+Until now each screen was taught to Metra by hand in several places, and a screen nobody wrote a line for failed
+("open the Stock tracking screen", "couldn't find any meeting notes"). `docs/metra/ROADMAP.md` has the plan; phase 1
+is built:
+
+- **`server/src/lib/metra/catalog/`**: one entry per screen or data set (`types.ts`). An entry says what the screen
+  is called, how people ask for it (English and Roman Urdu), who may open it, how its data is read, and which
+  screens, read routes and tables it stands for.
+- **`metriq_data`** (`catalog/index.ts`, `catalog/table.ts`): one reader for every entry with a table. It reads the
+  screen's own API as the person, then filters and counts in code: totals of every row first, the count of each
+  status and each named condition ("low stock", "not resolved", "overdue"), sums, then the rows. A filter value that
+  matches nothing real is left out and said so; dates that leave nothing are dropped with a note; every row has
+  every column of its heading.
+- **The guide is made per person and per question** (`guideFor`): the hand-written lines of the areas that have
+  their own tools (kept word for word in `catalog/core.ts`), the full line of each data set that is the person's own
+  team's or fits the question (`pick`), and the rest by name only.
+- **Search** gained the free text of these areas (`sources.ts`): e-commerce meeting notes, stock requests, daily
+  logs, inventory items and inventory requests. A department's shared screens are labelled with the kind of screen
+  AND the department (`dkd:<KIND>:<departmentId>`), so another e-commerce department never reads them.
+- **Finished areas:** E-commerce (listings, daily log, task board and a task's comments, stock tracking and its
+  history, meeting notes, remote desktops and their history), Inventory (stock list, requests, team, one item's
+  history) and the calendar (meetings with the notes written on them, holidays, leave, tasks due, to-dos, meeting
+  note deadlines).
+
+### The gate
+
+    npm run metra:coverage -w server -- --erp
+
+fails when a screen, a read route or a table of a finished area belongs to no entry, when free text of a finished
+area is not in the search index, when an entry cannot be read by any test account, or when a person who may not
+open a screen can read its entry. It also prints what is not in the catalog yet (phase 2). `metra:coverage` and
+`metra:check` both run before a deploy.
+
+### Adding a screen
+
+1. Write its entry (copy one from `catalog/inventory.ts`): `key`, `label`, `about`, `says`, `who`, `load`, `table`,
+   and the `blocks`, `apis` and `models` it stands for.
+2. If people write free text there, add a source in `sources.ts` with the screen's own access rule.
+3. Add its area to `DONE` in `scripts/metraCoverage.ts` and at least ten questions to `CASES` in
+   `scripts/metraCheck.ts`, with the truth read from the app's API.
+4. Run both scripts until they pass twice.
+
+## 14. Conversation, actions, scale (15 Nov; roadmap phases 3 to 5)
+
+### Conversation (`lib/metra/talk.ts`)
+
+- **Follow-ups.** A short question that leans on the one before ("and last month?", "what about Ali?", "aur pichle
+  hafte?") is given to the model with a line naming the earlier question, and the data sets of the earlier question
+  are picked again. Rule: `isFollowUp`.
+- **The screen behind the panel.** The app sends the address of the screen the person is on with each question
+  (`page` on `POST /api/metra/chat`; never from Metra's own page). Only an address inside `/app/` with plain
+  characters is read. The model is told the screen and the record open on it (a task code, a project board, a
+  meeting, a lead, a day), and that screen's data sets are given in full in the guide.
+- **Roman Urdu.** `plainWords` adds the English meaning of common Roman Urdu words so the catalog (written in
+  English) is matched; the model always reads the original words.
+- **Two data sets fit.** When two data sets of different areas fit a question about equally ("any stock requests
+  open?" for someone with both E-commerce and Inventory), the guide says so and tells the model to read both.
+- **Every number has a source.** After the answer is written, `checkNumbers` looks for each number (10 and above,
+  any decimal, any percentage) in what the lookups returned and in the person's own words. Dates, times, codes,
+  citations and list markers are not numbers. If one has no source, the answer is written once more with that said;
+  the person gets the rewrite. What happened is kept with the answer as a lookup called `answer_check`; a number
+  still without a source shows in "Problems Metra had" as "A number had no source".
+  Switch off with `METRA_CHECK_NUMBERS=off`.
+
+### Actions (`lib/metra/actions.ts`)
+
+A change is only ever a card. Nothing is written until the person presses Confirm; then the action runs as that
+person through the app's own route, so the app's checks are made again.
+
+| Card | Who | What it does |
+|---|---|---|
+| Ask for stock in or out | Inventory | a request on the Inventory Requests screen (stock changes when the team completes it) |
+| Log a stock problem | E-commerce | a line in Stock tracking |
+| Save meeting notes | E-commerce | a note on the Meeting notes screen |
+| Add a task to the board | E-commerce team lead | a task, optionally given to a person with a due date |
+| Ask to work from home | everyone | their own request, for their team lead to answer |
+| Enter leave | team leads | a leave, day-off or work-from-home day for a person of their team |
+| Ticket: create, comment, move, tick a checklist item | project members | the same as on the project board |
+
+The everyday cards from before (to-do, meeting, lead note and call back) are always on offer. The ones above are
+offered only when the message asks for a change (`wantsAction`), so a plain question carries fewer tools.
+Not built: drafting a daily log (numbers entered in someone's name are not something to prepare for them).
+
+**"Your day"** (`lib/metra/catalog/brief.ts`): the first time a person opens Metra on a day, a brief is made from
+their own data sets with no model: today's meetings, what is due, their to-dos, a holiday, what is overdue, and one
+line from each data set of their own team that has something to say. ITAD agents keep their shift brief.
+
+### Scale and cost
+
+- **Memory.** All companies' indexes together hold at most `METRA_MAX_PIECES` pieces (default 600,000); past it the
+  company nobody asked for the longest is dropped and loads again on its next question (`overCap` in `store.ts`).
+- **Cost and speed.** Company settings > Metra shows, for this month: answers, tokens, the usual and the slow time to
+  answer, tokens and lookups per answer, how many answers the number check sent back, and the cost when
+  `METRA_PRICE_IN` and `METRA_PRICE_OUT` are set (US dollars per million tokens of the model in use).
+- **A second model for rejected answers.** `METRA_STRONG_MODEL` (a model name on the same provider) is used only to
+  rewrite an answer the number check rejected. Unset: the usual model rewrites.
+- **Real questions as tests.** Company settings > Metra > "Answers people rated" > **Copy as test questions** copies
+  the questions people marked not helpful and shared with a note. Saved to a file, they are asked by
+  `npm run metra:check -w server -- --erp --extra file.json`.
+
+### Settings added (server `.env`, all optional)
+
+    METRA_CHECK_NUMBERS=off        switch the number check off
+    METRA_STRONG_MODEL=<model>     model for rewriting rejected answers
+    METRA_PRICE_IN=0.00            dollars per million input tokens (for the cost on the admin page)
+    METRA_PRICE_OUT=0.00           dollars per million output tokens
+    METRA_MAX_PIECES=600000        pieces all companies' indexes may hold in memory together
+
+## 15. The whole app in the catalog (15 Nov; roadmap section 8)
+
+A full audit by machine (every screen address, every read route, every table) showed the catalog had been checked
+only for the areas called finished. What changed:
+
+- **`catalog/more.ts`**: 29 more entries (Lead Management, the Projects dashboard and ticket history, a person's
+  profile, the attendance register, the trend screens, one day's own log, the Lead Dialer's imports and history, one
+  evaluation and one scorecard in full, one marketing item, the Daily Report forms, notification history, tags).
+- **`catalog/load.ts`** gained readers for screens whose shape is not fixed in code: `auto` (the screen's own figures
+  first, its list as the rows; a screen of figures only becomes rows of figures; a page of a longer list is said to
+  be a page), `figures` (rates kept as shares are said as percentages) and `dayLog` (one day's own entry; a day with
+  nothing logged is said in words). The main screens still name their columns themselves.
+- **`catalog/screens.ts`**: the 34 screens outside the Department Studio menu. They are in the search index
+  (`APP_SCREEN`) and in `screenAt`, so Metra can say where a screen is and knows the page a person asks from.
+- **Access**: two more principals in `access.ts`. `leads` is anyone with a place in Lead Management (a rep, a
+  manager, a head, the Super Admin); `sub:<slug>` is a person's part of a department (the social numbers are for the
+  social team and the leads, as the app has it). A screen that gives everyone "their own" (Lead Management) is read
+  as the person, so a rep's answers hold a rep's leads; the gate checks a person with none gets nothing.
+- **The gate** (`scripts/metraCoverage.ts`) is for the whole app now. Every read route is in one of four lists:
+  read by an entry (the entry's own `apis`), read by a tool of its own (`OWN_TOOL`), not data (`NOT_DATA`, each with
+  its reason), or left out on purpose (`LEFT_OUT`). Every table is shown, indexed, never read (`NEVER`) or named with
+  a reason (`TABLE_NOTES`). While it reads, `traceCalls` writes down the addresses each entry calls: an entry must
+  read every route it lists and none it does not.
+
+**Adding a screen now:** (1) the screen in `lib/blocks.ts` (menu) or `catalog/screens.ts`; (2) an entry in the
+catalog that reads its route, or the route in one of the gate's lists with the reason; (3) run the gate. It names
+whatever is still unplaced.

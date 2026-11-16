@@ -55,8 +55,14 @@ export async function askerOf(userId: string): Promise<Asker> {
   // Department kinds: their own, and kinds borrowed into their menu (Department Studio).
   const blocks = await personBlocks({ role: u.role, companyId: u.companyId, department: u.department ? { type: u.department.type, layout: u.department.layout } : null }).catch(() => null)
   const kinds = [...new Set([...(u.department ? [u.department.type] : []), ...(blocks ? kindsOfBlocks(blocks) : [])])] as DepartmentType[]
-  for (const k of kinds) p.add(`dk:${k}`)
+  for (const k of kinds) {
+    p.add(`dk:${k}`)
+    // A department's shared screens (E-commerce stock and meeting notes, Inventory): that kind of screen AND that department.
+    if (u.departmentId) p.add(`dkd:${k}:${u.departmentId}`)
+  }
   if (u.departmentId) p.add(`dept:${u.departmentId}`)
+  // Their part of a department (Marketing: social, content, seo, ads), for screens only that part and the leads open.
+  if (u.subDepartment?.slug) p.add(`sub:${u.subDepartment.slug.toLowerCase()}`)
 
   // A Team Lead reads their department's people (User.departmentId, as the app's team screens).
   if (u.role === 'TEAM_LEAD' && u.departmentId) {
@@ -79,6 +85,8 @@ export async function askerOf(userId: string): Promise<Asker> {
   // Lead Management: managers and the head of a business (active businesses), as leadScope.
   for (const m of await prisma.leadBusinessMember.findMany({ where: { userId: u.id, role: 'MANAGER', business: { isActive: true } }, select: { businessId: true } })) p.add(`lbm:${m.businessId}`)
   for (const b of await prisma.leadBusiness.findMany({ where: { headId: u.id, isActive: true }, select: { id: true } })) p.add(`lbm:${b.id}`)
+  // Anyone with a place in Lead Management (a rep, a manager, a head, or a Super Admin): its screens are theirs to open.
+  if (sa || [...p].some((x) => x.startsWith('lbm:')) || (await prisma.leadBusinessMember.count({ where: { userId: u.id, business: { isActive: true } } })) > 0) p.add('leads')
 
   // Lead Dialer managers (Super Admin, or a Team Lead acting as ITAD) see the leads of the dialer's people, as itadUserIds.
   if (sa || (u.role === 'TEAM_LEAD' && kinds.includes('ITAD'))) {

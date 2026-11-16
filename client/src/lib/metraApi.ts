@@ -24,7 +24,7 @@ export interface MetraFeedbackList {
 
 /** Super Admin: answers that went wrong in the last 14 days (which lookups ran and why one failed; never the question or answer). */
 export interface MetraProblem {
-  id: string; kind: 'ERROR' | 'LOOKUP_FAILED' | 'GAVE_UP' | 'NOT_HELPFUL'; name: string; department: string | null; createdAt: string
+  id: string; kind: 'ERROR' | 'LOOKUP_FAILED' | 'NUMBERS' | 'GAVE_UP' | 'NOT_HELPFUL'; name: string; department: string | null; createdAt: string
   error: string | null; model: string | null; latencyMs: number | null
   tools: { name: string; args: Record<string, unknown>; ok: boolean; ms: number | null; error: string | null }[]
 }
@@ -34,7 +34,14 @@ export interface MetraAdmin {
   embed: { mode: string; model: string; reranker: string | boolean | null }
   index: { loaded: boolean; chunks: number }
   sources: { type: string; label: string; chunks: number; lastRunAt: string | null; lastError: string | null }[]
-  usage: { answers: number; tokensIn: number; tokensOut: number }
+  /** This month. Seconds, tokens per answer and what the number check did come from the answers themselves; money only when the prices are set on the server. */
+  usage: {
+    answers: number; tokensIn: number; tokensOut: number
+    medianSeconds?: number | null; slowSeconds?: number | null; tokensPerAnswer?: number | null; lookupsPerAnswer?: number | null
+    rewritten?: number; stillUnbacked?: number; cost?: number | null; costPerAnswer?: number | null; strongModel?: string | null
+  }
+  /** What the search indexes of all companies hold in memory on this server right now. */
+  memory?: { companies: number; pieces: number; vectorsMb: number; cap: number; processMb: number }
   feedback: { UP?: number; DOWN?: number }
 }
 export type MetraStatus =
@@ -117,7 +124,8 @@ export function parseSseBlock(block: string): { event: string; data: unknown } |
  * POST /api/metra/chat and read the server-sent events as they come (a POST, so fetch + a stream reader, not
  * EventSource). Resolves when the stream ends; an abort (Stop) resolves quietly. Non-200 answers throw MetraHttpError.
  */
-export async function streamChat(body: { conversationId?: string; message: string }, on: StreamHandlers, signal?: AbortSignal): Promise<void> {
+/** `page` is the address of the screen the person is on while asking (never Metra's own page), so "this task" or "here" means something. */
+export async function streamChat(body: { conversationId?: string; message: string; page?: string }, on: StreamHandlers, signal?: AbortSignal): Promise<void> {
   let res: Response
   try {
     res = await fetch(`${apiBase()}/metra/chat`, {

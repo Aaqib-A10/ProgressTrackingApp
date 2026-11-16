@@ -108,7 +108,10 @@ export function useMetraChat(opts: { onConversation?: (id: string, title: string
     setStreaming(true)
     const key = answer.key
     let gotText = false
-    streamChat({ conversationId: convRef.current ?? undefined, message: text }, {
+    // The screen behind the Metra panel, sent with the question. From Metra's own page there is none.
+    const here = `${window.location.pathname}${window.location.search}`
+    const page = window.location.pathname.startsWith('/app/metra') || here.length > 300 ? undefined : here
+    streamChat({ conversationId: convRef.current ?? undefined, message: text, page }, {
       meta: (m) => {
         if (ctl.signal.aborted) return
         patch(key, (x) => ({ ...x, id: m.messageId }))

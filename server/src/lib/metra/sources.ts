@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { MORE_SCREENS } from './catalog/screens'
 import { prisma } from '../prisma'
 import { companyTz } from '../time'
 import type { AreaKey } from '../permissions'
@@ -492,6 +493,120 @@ const ECOM_TASK: Source = {
   },
 }
 
+/**
+ * E-commerce and Inventory screens are shared by a department: every member who has that kind of screen reads all of
+ * the department's records (the controllers filter by departmentId and check actsAs). The label is that pair: the
+ * kind of screen and the department (principal dkd:<KIND>:<departmentId>, lib/metra/access.ts).
+ */
+const deptLabels = (kind: 'ECOMMERCE' | 'INVENTORY', departmentId: string | null | undefined) => [...(departmentId ? [`dkd:${kind}:${departmentId}`] : []), 'sa']
+const STOCK_WORD: Record<string, string> = { STOCK_IN: 'Stock in', STOCK_OUT: 'Stock out' }
+
+/** E-commerce meeting notes (Meeting notes screen): read by the whole e-commerce department. */
+const ECOM_NOTE: Source = {
+  type: 'ECOM_NOTE', label: 'E-commerce meeting note', area: 'ecommerce',
+  watch: { MeetingNote: same },
+  all: (c, t) => page(prisma.meetingNote.findMany({ ...cursorArgs(c, t), select: { id: true } })),
+  async build(ids) {
+    const out = result(ids)
+    const rows = await prisma.meetingNote.findMany({ where: { id: { in: ids } }, include: { author: { select: { name: true } } } })
+    for (const n of rows) {
+      const body = lines(`Written by ${n.author.name}.`, n.deadline && `Deadline: ${fullDay(n.deadline)}`, n.body)
+      out.set(n.id, chunks(`E-commerce meeting notes "${n.title}", meeting of ${fullDay(n.meetingDate)}:`, body, { title: n.title, labels: deptLabels('ECOMMERCE', n.departmentId), occurredAt: n.meetingDate, link: '/app/ecommerce/notes' }))
+    }
+    return out
+  },
+}
+
+/** Stock tracking (e-commerce): stock problems and stock-in / stock-out requests, with the note written on each. */
+const STOCK_REQUEST: Source = {
+  type: 'STOCK_REQUEST', label: 'Stock request', area: 'ecommerce',
+  watch: { StockRequest: same },
+  all: (c, t) => page(prisma.stockRequest.findMany({ ...cursorArgs(c, t), select: { id: true } })),
+  async build(ids) {
+    const out = result(ids)
+    const rows = await prisma.stockRequest.findMany({ where: { id: { in: ids } }, include: { assignedTo: { select: { name: true } }, createdBy: { select: { name: true } } } })
+    const said: Record<string, string> = { REQUESTED: 'requested, nobody on it yet', ASSIGNED: 'assigned', RESOLVED: 'resolved' }
+    for (const s of rows) {
+      const body = lines(
+        `${s.action ? STOCK_WORD[s.action] ?? s.action : 'Stock request'}${s.quantity != null ? `, quantity ${s.quantity}` : ''}. Status: ${said[s.status] ?? s.status}.`,
+        `Requested by ${s.requestedByName} on ${day(s.requestedAt)}.${s.createdBy ? ` Logged by ${s.createdBy.name}.` : ''}${s.assignedTo ? ` Assigned to ${s.assignedTo.name}.` : ''}${s.resolvedAt ? ` Resolved ${day(s.resolvedAt)}.` : ''}`,
+        s.note && `Note: ${s.note}`,
+      )
+      out.set(s.id, chunks(`E-commerce stock request: ${s.itemName}`, body, { title: s.itemName, labels: deptLabels('ECOMMERCE', s.departmentId), occurredAt: s.resolvedAt ?? s.requestedAt, link: '/app/ecommerce/stock' }))
+    }
+    return out
+  },
+}
+
+/** A person's e-commerce daily log: what they listed where, and the notes and pricing notes they wrote. Theirs, their team lead's, and Super Admins'. */
+const ECOM_ENTRY: Source = {
+  type: 'ECOM_ENTRY', label: 'E-commerce daily log', area: 'ecommerce',
+  watch: { EcommerceDailyEntry: same },
+  all: (c, t) => page(prisma.ecommerceDailyEntry.findMany({ ...cursorArgs(c, t), select: { id: true } })),
+  async build(ids) {
+    const out = result(ids)
+    const rows = await prisma.ecommerceDailyEntry.findMany({ where: { id: { in: ids } }, include: { user: { select: { name: true } }, lines: { include: { taskType: { select: { name: true, group: true } }, marketplace: { select: { name: true } } } } } })
+    for (const e of rows) {
+      const made = e.lines.filter((l) => l.listings > 0)
+      if (!made.length && !e.notes?.trim() && !e.pricingNotes?.trim()) continue // a bare "on leave" day holds nothing to find
+      const total = made.reduce((s, l) => s + l.listings, 0)
+      const body = lines(
+        made.length && `Listings: ${made.map((l) => `${l.marketplace.name} ${l.taskType.group ?? 'Other'} / ${l.taskType.name}: ${l.listings}`).join('; ')}.`,
+        e.notes?.trim() && `Notes: ${e.notes.trim()}`, e.pricingNotes?.trim() && `Pricing notes: ${e.pricingNotes.trim()}`,
+      )
+      out.set(e.id, chunks(`${e.user.name}'s e-commerce daily log for ${fullDay(e.date)} (${e.status}): ${total} listings.`, body, {
+        title: `${e.user.name}, e-commerce log ${e.date.toISOString().slice(0, 10)}`, labels: [`u:${e.userId}`, `t:${e.userId}`, 'sa'], occurredAt: e.date, link: '/app/ecommerce/log',
+      }))
+    }
+    return out
+  },
+}
+
+// ------------------------------------------------------------------ Inventory
+
+const INV_STATUS = (quantity: number, lowStockAt: number) => (quantity <= 0 ? 'out of stock' : lowStockAt > 0 && quantity <= lowStockAt ? 'low stock' : 'in stock')
+
+/** The stock list: one piece per item (what it is, how many, where, the notes on it). */
+const INV_ITEM: Source = {
+  type: 'INV_ITEM', label: 'Inventory item', area: 'inventory',
+  watch: { InventoryItem: same },
+  all: (c, t) => page(prisma.inventoryItem.findMany({ ...cursorArgs(c, t), select: { id: true } })),
+  async build(ids) {
+    const out = result(ids)
+    for (const i of await prisma.inventoryItem.findMany({ where: { id: { in: ids } } })) {
+      const body = lines(
+        `Category: ${i.category}. In stock: ${i.quantity}${i.unit ? ` ${i.unit}` : ''} (${INV_STATUS(i.quantity, i.lowStockAt)}${i.lowStockAt > 0 ? `; counts as low at ${i.lowStockAt}` : ''}).${i.active ? '' : ' Not active.'}`,
+        [i.price != null && `Price each: ${Number(i.price)}`, i.sku && `SKU: ${i.sku}`, i.location && `Kept at: ${i.location}`].filter(Boolean).join('. '),
+        i.notes && `Notes: ${i.notes}`,
+      )
+      out.set(i.id, chunks(`Inventory item: ${i.name}`, body, { title: i.name, labels: deptLabels('INVENTORY', i.departmentId), occurredAt: i.updatedAt, link: '/app/inventory' }))
+    }
+    return out
+  },
+}
+
+/** Stock-in and stock-out requests on the Inventory Requests screen. */
+const INV_MOVE: Source = {
+  type: 'INV_MOVE', label: 'Inventory request', area: 'inventory',
+  watch: { InventoryMovement: same },
+  all: (c, t) => page(prisma.inventoryMovement.findMany({ ...cursorArgs(c, t), select: { id: true } })),
+  async build(ids) {
+    const out = result(ids)
+    const rows = await prisma.inventoryMovement.findMany({ where: { id: { in: ids } }, include: { item: { select: { name: true, category: true, departmentId: true } }, requestedBy: { select: { name: true } }, assignedTo: { select: { name: true } } } })
+    const said: Record<string, string> = { REQUESTED: 'requested, nobody on it yet', ASSIGNED: 'assigned', COMPLETED: 'completed', CANCELLED: 'cancelled' }
+    for (const m of rows) {
+      const who = m.requestedBy?.name ?? m.requestedByName ?? ''
+      const body = lines(
+        `Category: ${m.item.category}. Status: ${said[m.status] ?? m.status}.`,
+        `${who ? `Requested by ${who} on` : 'Requested on'} ${day(m.requestedAt)}.${m.assignedTo ? ` Assigned to ${m.assignedTo.name}.` : ''}${m.resolvedAt ? ` Finished ${day(m.resolvedAt)}.` : ''}`,
+        m.note && `Note: ${m.note}`,
+      )
+      out.set(m.id, chunks(`Inventory request: ${STOCK_WORD[m.type] ?? m.type}, ${m.quantity} x ${m.item.name}`, body, { title: `${STOCK_WORD[m.type] ?? m.type}: ${m.item.name}`, labels: deptLabels('INVENTORY', m.item.departmentId), occurredAt: m.resolvedAt ?? m.requestedAt, link: '/app/inventory/requests' }))
+    }
+    return out
+  },
+}
+
 // ------------------------------------------------------------------ People
 
 const FEEDBACK: Source = {
@@ -566,7 +681,8 @@ const HOLIDAY: Source = {
 const APP_SCREEN: Source = {
   type: 'APP_SCREEN', label: 'Metriq screen',
   watch: {},
-  all: async (cursor) => ({ ids: cursor ? [] : BLOCKS.map((b) => b.key), next: null }),
+  // Screens of the Department Studio menu, and the rest of the app's screens (catalog/screens.ts).
+  all: async (cursor) => ({ ids: cursor ? [] : [...BLOCKS.map((b) => b.key), ...MORE_SCREENS.map((x) => `screen:${x.key}`)], next: null }),
   async build(ids) {
     const out = result(ids)
     const menu = new Map<string, string>(BLOCK_GROUPS.map((g) => [g.key, g.label]))
@@ -577,6 +693,11 @@ const APP_SCREEN: Source = {
       const who = `${b.kinds.length ? `${b.kinds.map(team).join(', ')} teams` : 'every team'}${b.leadOnly ? ' (team leads only)' : ''}`
       const text = lines(`"${b.label}" is a screen of Metriq, in the menu under ${menu.get(b.group) ?? b.group}. ${b.description}`, `Who has it: ${who}.`, `Open it at ${where}`)
       out.set(b.key, [{ part: 0, title: `Metriq screen: ${b.label}`, text, labels: ['all'], occurredAt: new Date('2026-01-01T00:00:00Z'), link: where }])
+    }
+    for (const x of MORE_SCREENS) {
+      if (!ids.includes(`screen:${x.key}`)) continue
+      const text = lines(`"${x.label}" is a screen of Metriq, in the menu under ${x.menu}. ${x.description}`, `Who has it: ${x.who}.`, `Open it at ${x.app[0]}`)
+      out.set(`screen:${x.key}`, [{ part: 0, title: `Metriq screen: ${x.label}`, text, labels: ['all'], occurredAt: new Date('2026-01-01T00:00:00Z'), link: x.app[0] }])
     }
     return out
   },
@@ -590,12 +711,14 @@ export function screenAt(path: string): { label: string; description: string } |
     const exact = a.endsWith('$'), at = exact ? a.slice(0, -1) : a
     if ((exact ? p === at : p === at || p.startsWith(`${at}/`)) && (!best || at.length > best.len)) best = { label: b.label, description: b.description, len: at.length }
   }
+  for (const x of MORE_SCREENS) for (const at of x.app) if ((p === at || p.startsWith(`${at}/`)) && (!best || at.length > best.len)) best = { label: x.label, description: x.description, len: at.length }
   return best && { label: best.label, description: best.description }
 }
 
 export const SOURCES: Source[] = [
   DIALER_LEAD, DIALER_NOTE, DIALER_CALL, LEAD, LEAD_COMMENT, LEAD_CALL, LEAD_TASK, CHAT_DAY, CALL_NOTES, MEETING, PM_TASK,
-  WORKLOG, TODO, DAILY_NOTE, REPORT_ENTRY, CUSTOM_RECORD, MKT_TASK, ECOM_TASK, FEEDBACK, BID, SAVED_DOC, HOLIDAY, APP_SCREEN,
+  WORKLOG, TODO, DAILY_NOTE, REPORT_ENTRY, CUSTOM_RECORD, MKT_TASK, ECOM_TASK, ECOM_NOTE, STOCK_REQUEST, ECOM_ENTRY, INV_ITEM, INV_MOVE,
+  FEEDBACK, BID, SAVED_DOC, HOLIDAY, APP_SCREEN,
 ]
 export const SOURCE_BY_TYPE = new Map(SOURCES.map((s) => [s.type, s]))
 /** model name → the sources it feeds. */
