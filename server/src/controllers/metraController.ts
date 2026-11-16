@@ -15,6 +15,8 @@ import { conversationContext, forget, memoriesOf } from '../lib/metra/memory'
 import { dayBrief } from '../lib/metra/catalog/brief'
 import { withApiCache } from '../lib/mcp/api'
 import { companyToday } from '../lib/time'
+import { inAudit } from '../lib/health/auditContext'
+import { captureError } from '../lib/health/errors'
 
 /**
  * Metra API (docs/metra/DESIGN.md). Everything is the asking person's own: conversations are private to them, and
@@ -229,10 +231,15 @@ let reindexing = false
 export async function reindex(req: AuthedRequest, res: Response): Promise<void> {
   if (req.user!.role !== 'SUPER_ADMIN') { res.status(403).json({ error: 'Only a Super Admin can do this.' }); return }
   if (!(await on(req, res))) return
+  // The hourly self check calls every route in test mode, where nothing may be saved: the route answers, but no
+  // rebuild starts (it could not save, and it would hold off a real "Re-index now" while it ran).
+  if (inAudit()) { res.status(202).json({ ok: true }); return }
   if (reindexing) { res.status(409).json({ error: 'Already re-indexing.' }); return }
   reindexing = true
   const companyId = req.user!.companyId
-  void indexNow(companyId).finally(() => { reindexing = false })
+  void indexNow(companyId)
+    .catch((e: Error) => captureError({ source: 'JOB', message: `Metra re-index: ${e.message}`, stack: e.stack, route: 'job:metra-index' }))
+    .finally(() => { reindexing = false })
   res.status(202).json({ ok: true })
 }
 
@@ -261,7 +268,9 @@ async function ensureDayBrief(userId: string): Promise<void> {
 /** GET /api/metra/insights — my insights of the last 7 days still open: the shift brief and next steps that passed. */
 export async function listInsights(req: AuthedRequest, res: Response): Promise<void> {
   if (!(await on(req, res))) return
-  await ensureDayBrief(req.user!.id).catch(() => undefined) // a brief that cannot be made is simply not there
+  // Not in the self check's test mode: it signs in as a Super Admin, and a brief it could not save would count as
+  // that person's brief for the day.
+  if (!inAudit()) await ensureDayBrief(req.user!.id).catch(() => undefined) // a brief that cannot be made is simply not there
   // Only the insight kinds: memories (MEMORY) and feedback (FEEDBACK) live in the same table and are not insights.
   const rows = await prisma.aiInsight.findMany({ where: { userId: req.user!.id, kind: { in: ['BRIEF', 'NEXT_STEP'] }, state: 'NEW', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: [{ kind: 'asc' }, { createdAt: 'desc' }], take: 50 })
   res.json({ insights: rows.map((r) => ({ id: r.id, kind: r.kind, day: r.day, title: r.title, payload: r.payload, createdAt: r.createdAt.toISOString() })) })

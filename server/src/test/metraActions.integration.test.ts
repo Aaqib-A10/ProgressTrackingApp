@@ -5,6 +5,7 @@ import request from 'supertest'
 import type { Prisma, Role } from '@prisma/client'
 import { app, auth, prisma, seedWorld, type SeededWorld } from './helpers'
 import { setAuditBaseUrl } from '../lib/health/audit'
+import { AUDIT_HEADER, AUDIT_SECRET, PROBE_HEADER } from '../lib/health/auditContext'
 import { setCompanyFlag, resetFlagCache } from '../lib/flags'
 import { HOME_COMPANY_ID } from '../lib/company'
 import { askerOf, forgetAsker } from '../lib/metra/access'
@@ -121,7 +122,10 @@ describe('a change is a card: nothing is written before Confirm', () => {
     const l = await card(w.itadLead, 'leave_add', { person: 'itad member', date: '2026-12-03', kind: 'work from home', note: 'Plumber' })
     expect((await decide(w.itadLead, l, 'confirm').expect(200)).body.action.state).toBe('DONE')
     expect(await prisma.leaveDay.findFirstOrThrow({ where: { userId: w.itadMember.id } })).toMatchObject({ type: 'WFH', note: 'Plumber' })
-    const far = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10)
+    // A working day at least 5 days ahead (a request for a weekly day off is refused by the app).
+    const ahead = new Date(Date.now() + 5 * 86400000)
+    while ([0, 6].includes(ahead.getUTCDay())) ahead.setUTCDate(ahead.getUTCDate() + 1)
+    const far = ahead.toISOString().slice(0, 10)
     const q = await card(w.itadMember, 'wfh_request', { start_date: far, reason: 'Internet engineer is coming' })
     const r = await decide(w.itadMember, q, 'confirm').expect(200)
     expect(r.body.action.state).toBe('DONE')
@@ -141,6 +145,24 @@ describe('"Your day" brief', () => {
     expect(b.payload.text).toContain('- Stock requests: 1 open, 1 with nobody on it.')
     expect(await briefs(w.inventoryMember)).toHaveLength(1)
     expect(await prisma.aiInsight.count({ where: { userId: w.inventoryMember.id, kind: 'BRIEF' } })).toBe(1)
+  })
+
+  it("the hourly self check (test mode) neither uses up a person's brief nor starts a re-index", async () => {
+    // The self check signs in as a Super Admin; the rule is the same for anyone. The inventory lead has a brief to give
+    // (an open request and a low item on their own screens).
+    const probe = (u: U, path: string, method: 'get' | 'post') => request(app)[method](path).set(...auth(u)).set(AUDIT_HEADER, AUDIT_SECRET).set(PROBE_HEADER, `t-${Math.random()}`)
+    await prisma.aiInsight.deleteMany({ where: { userId: w.inventoryLead.id } })
+    await probe(w.inventoryLead, '/api/metra/insights', 'get').expect(200)
+    expect(await prisma.aiInsight.count({ where: { userId: w.inventoryLead.id, kind: 'BRIEF' } })).toBe(0)
+    const states = await prisma.aiIndexState.count()
+    await probe(w.superAdmin, '/api/metra/admin/reindex', 'post').expect(202)
+    await new Promise((r) => setTimeout(r, 300))
+    expect(await prisma.aiIndexState.count()).toBe(states)
+    // A real "Re-index now" right after is not refused as "already re-indexing".
+    await request(app).post('/api/metra/admin/reindex').set(...auth(w.superAdmin)).expect(202)
+    // Opened by the person themselves afterwards, the brief is made: the self check did not use up their day.
+    const [b] = await briefs(w.inventoryLead)
+    expect(b?.title).toBe('Your day')
   })
 
   it('says nothing about another team, and a person with nothing today gets no brief', async () => {
