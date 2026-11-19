@@ -1,7 +1,7 @@
 /**
  * Financial report builder: per-team cost (salaries) vs revenue (closed deals)
  * and ROI. Cost over a date range = Σ(monthlyCost × active months). Revenue for
- * ITAD = Σ awardedPrice of WON deals decided within the range. Lead Gen &
+ * ITAD = Σ awardedPrice of WON deals + Σ contract value (totalAmount) of CONTRACT deals, decided within the range. Lead Gen &
  * Marketing have no deal source yet, so their revenue/ROI are null (cost-only).
  *
  * `activeMonths` is pure (no DB) so it is unit-testable; `buildFinancialReport`
@@ -96,12 +96,13 @@ export async function buildFinancialReport({ from, to }: { from: string; to: str
       orderBy: { name: 'asc' },
     }),
     prisma.bid.findMany({
-      where: { status: 'WON', closedDate: { gte: rangeStart, lte: rangeEnd } },
-      select: { awardedPrice: true },
+      where: { status: { in: ['WON', 'CONTRACT'] }, closedDate: { gte: rangeStart, lte: rangeEnd } },
+      select: { status: true, awardedPrice: true, totalAmount: true },
     }),
   ])
 
-  const itadRevenue = wonDeals.reduce((s, b) => s + (b.awardedPrice?.toNumber() ?? 0), 0)
+  // A contract has no awarded price: its contract value counts instead.
+  const itadRevenue = wonDeals.reduce((s, b) => s + ((b.status === 'CONTRACT' ? b.totalAmount : b.awardedPrice)?.toNumber() ?? 0), 0)
   const nameFor = (t: DepartmentType) => FINANCIAL_TEAMS.find((x) => x.key === t)?.name ?? t
   // "Active" = linked to a live Metriq profile. No profile / disabled = former.
   const isActive = (s: { user: { isActive: boolean; status: string } | null }) =>

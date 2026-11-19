@@ -1,7 +1,8 @@
 import { api } from './api'
 
 export type BidType = 'RFQ' | 'RFP' | 'BID' | 'PO'
-export type BidStatus = 'ACTIVE' | 'SUBMITTED' | 'WON' | 'LOST'
+/** CONTRACT = won and signed as a contract: no awarded price; its contract value is the Total amount. */
+export type BidStatus = 'ACTIVE' | 'SUBMITTED' | 'WON' | 'LOST' | 'CONTRACT'
 export type BidSubmissionType = 'PHYSICAL' | 'EMAIL' | 'PORTAL'
 
 export const BID_STATUS_LABEL: Record<BidStatus, string> = {
@@ -9,6 +10,7 @@ export const BID_STATUS_LABEL: Record<BidStatus, string> = {
   SUBMITTED: 'Submitted',
   WON: 'Won',
   LOST: 'Lost',
+  CONTRACT: 'Contract',
 }
 
 export const BID_TYPE_LABEL: Record<BidType, string> = { RFQ: 'RFQ', RFP: 'RFP', BID: 'Bid', PO: 'PO' }
@@ -38,6 +40,8 @@ export interface Bid {
   bidBondAmount: number | null
   /** The deal's full dollar figure (prices are often per-lb rates). Optional, any status. */
   totalAmount: number | null
+  contractStart: string | null // YYYY-MM-DD, Contract deals only
+  contractEnd: string | null
   closedDate: string | null // ISO date the deal was decided (Won/Lost)
   createdAt: string
 }
@@ -51,6 +55,10 @@ export interface BidSummary {
   /** Sum of every deal's Total amount, and of the won ones. */
   totalValue: number
   wonTotal: number
+  contract: number
+  contractValue: number
+  /** Each status card's money: the Total amount of its deals. */
+  amounts: Record<BidStatus, number>
 }
 
 export interface BidListResponse {
@@ -73,6 +81,8 @@ export interface BidInput {
   bidBond?: boolean
   bidBondAmount?: number | null
   totalAmount?: number | null
+  contractStart?: string | null
+  contractEnd?: string | null
   closedDate?: string | null
 }
 

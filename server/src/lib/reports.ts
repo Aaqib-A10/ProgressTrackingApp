@@ -297,17 +297,20 @@ async function bidTotals(deptId: string, month: string) {
   const { start, end } = monthBounds(month)
   const bids = await prisma.bid.findMany({
     where: { departmentId: deptId, dueDate: { gte: start.toJSDate(), lte: end.toJSDate() } },
-    select: { status: true, awardedPrice: true, priceQuoted: true, agent: { select: { id: true, name: true } } },
+    select: { status: true, awardedPrice: true, priceQuoted: true, totalAmount: true, agent: { select: { id: true, name: true } } },
   })
   const count = (s: string) => bids.filter((b) => b.status === s).length
-  const won = count('WON')
+  // A Contract deal is won and signed: it counts as won, worth its contract value (it has no awarded price).
+  const isWon = (b: (typeof bids)[number]) => b.status === 'WON' || b.status === 'CONTRACT'
+  const value = (b: (typeof bids)[number]) => ((b.status === 'CONTRACT' ? b.totalAmount : b.awardedPrice)?.toNumber() ?? 0)
+  const won = bids.filter(isWon).length
   const lost = count('LOST')
   const byAgent = new Map<string, { name: string; won: number; wonValue: number }>()
   for (const b of bids) {
-    if (b.status !== 'WON') continue
+    if (!isWon(b)) continue
     const cur = byAgent.get(b.agent.id) ?? { name: b.agent.name, won: 0, wonValue: 0 }
     cur.won++
-    cur.wonValue += b.awardedPrice?.toNumber() ?? 0
+    cur.wonValue += value(b)
     byAgent.set(b.agent.id, cur)
   }
   const totals: BidTotals = {
@@ -316,7 +319,7 @@ async function bidTotals(deptId: string, month: string) {
     submitted: count('SUBMITTED'),
     won,
     lost,
-    wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice?.toNumber() ?? 0), 0),
+    wonValue: bids.filter(isWon).reduce((s, b) => s + value(b), 0),
     quotedValue: bids.reduce((s, b) => s + (b.priceQuoted?.toNumber() ?? 0), 0),
     winRate: rate(won, won + lost),
   }

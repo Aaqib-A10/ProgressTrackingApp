@@ -10,8 +10,18 @@ import { actsAs } from '../lib/acting'
  *  - Member: only their own bids.
  *  - Team Lead (ITAD): every bid in the ITAD department (team-wide aggregation).
  *  - Super Admin: all bids.
- * awardedPrice is required whenever status = WON.
+ * awardedPrice is required whenever status = WON. A CONTRACT deal (won and signed as a contract) has no awarded
+ * price: its contract value is the deal's totalAmount, which is required, with optional contract start and end dates.
  */
+
+const DECIDED = ['WON', 'LOST', 'CONTRACT'] as const
+const isDecided = (s: string) => (DECIDED as readonly string[]).includes(s)
+/** A YYYY-MM-DD (or full ISO) date for a date-only column, or null when empty or not a date. */
+function dayOnly(v: string | null | undefined): Date | null {
+  if (!v) return null
+  const d = new Date(`${v.slice(0, 10)}T00:00:00Z`)
+  return isNaN(d.getTime()) ? null : d
+}
 
 function loadUser(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id }, include: { department: true } })
@@ -48,6 +58,8 @@ function serialize(b: BidRow) {
     bidBond: b.bidBond,
     bidBondAmount: b.bidBondAmount?.toNumber() ?? null,
     totalAmount: b.totalAmount?.toNumber() ?? null,
+    contractStart: b.contractStart ? b.contractStart.toISOString().slice(0, 10) : null,
+    contractEnd: b.contractEnd ? b.contractEnd.toISOString().slice(0, 10) : null,
     closedDate: b.closedDate ? b.closedDate.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
   }
@@ -82,10 +94,14 @@ export async function listBids(req: AuthedRequest, res: Response): Promise<void>
     submitted: bids.filter((b) => b.status === 'SUBMITTED').length,
     won: bids.filter((b) => b.status === 'WON').length,
     lost: bids.filter((b) => b.status === 'LOST').length,
+    contract: bids.filter((b) => b.status === 'CONTRACT').length,
     wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice?.toNumber() ?? 0), 0),
     // The deals' full dollar figures (Total amount): every deal, and the won ones.
     totalValue: bids.reduce((s, b) => s + (b.totalAmount?.toNumber() ?? 0), 0),
     wonTotal: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.totalAmount?.toNumber() ?? 0), 0),
+    contractValue: bids.filter((b) => b.status === 'CONTRACT').reduce((s, b) => s + (b.totalAmount?.toNumber() ?? 0), 0),
+    // Each status card's money: the Total amount of its deals (a contract's value).
+    amounts: Object.fromEntries((['ACTIVE', 'SUBMITTED', 'WON', 'LOST', 'CONTRACT'] as const).map((st) => [st, bids.filter((b) => b.status === st).reduce((s, b) => s + (b.totalAmount?.toNumber() ?? 0), 0)])),
   }
   res.json({ bids: bids.map(serialize), summary, canManageTeam: isLead(me) })
 }
@@ -97,7 +113,7 @@ const createSchema = z.object({
   company: z.string().trim().min(1, 'Company is required').max(200),
   type: z.enum(['RFQ', 'RFP', 'BID', 'PO']),
   district: z.string().trim().max(200).nullable().optional(),
-  status: z.enum(['ACTIVE', 'SUBMITTED', 'WON', 'LOST']).optional(),
+  status: z.enum(['ACTIVE', 'SUBMITTED', 'WON', 'LOST', 'CONTRACT']).optional(),
   dueDate: z.string().datetime({ offset: true }).or(z.string().min(1)),
   reminderSet: z.boolean().optional(),
   submissionType: z.enum(['PHYSICAL', 'EMAIL', 'PORTAL']).nullable().optional(),
@@ -106,6 +122,8 @@ const createSchema = z.object({
   bidBond: z.boolean().optional(),
   bidBondAmount: priceField,
   totalAmount: z.number().nonnegative().max(999_999_999_999).nullable().optional(),
+  contractStart: z.string().nullable().optional(),
+  contractEnd: z.string().nullable().optional(),
   closedDate: z.string().nullable().optional(),
 })
 
@@ -120,9 +138,20 @@ function parseDue(input: string): Date | null {
  * the bid is still Active/Submitted. Drives financial revenue + the date filter.
  */
 function resolveClosedDate(status: string, supplied: string | null | undefined, existing: Date | null): Date | null {
-  if (status !== 'WON' && status !== 'LOST') return null
+  if (!isDecided(status)) return null
   if (supplied) return parseDue(supplied) ?? existing ?? new Date()
   return existing ?? new Date()
+}
+
+/**
+ * A Contract deal needs its contract value (the Total amount) and keeps its optional start and end dates (the end not
+ * before the start). Any other status keeps no contract dates.
+ */
+function contractFields(status: string, total: number | null, start: Date | null, end: Date | null): { start: Date | null; end: Date | null } | { error: string } {
+  if (status !== 'CONTRACT') return { start: null, end: null }
+  if (total == null || total <= 0) return { error: 'Contract value is required to mark a deal as Contract' }
+  if (start && end && end < start) return { error: 'The contract cannot end before it starts' }
+  return { start, end }
 }
 
 /** POST /api/itad/bids — create a bid; agent is always the caller. */
@@ -147,6 +176,11 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
     res.status(400).json({ error: 'Awarded price is required to mark a bid as Won' })
     return
   }
+  const contract = contractFields(v.status ?? 'ACTIVE', v.totalAmount ?? null, dayOnly(v.contractStart), dayOnly(v.contractEnd))
+  if ('error' in contract) {
+    res.status(400).json({ error: contract.error })
+    return
+  }
   const deptId = me.department?.id ?? (await prisma.department.findFirst({ where: { type: 'ITAD' } }))?.id ?? null
   const bid = await prisma.bid.create({
     data: {
@@ -163,6 +197,8 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
       priceQuoted: v.priceQuoted ?? null,
       // Awarded price applies to a decided bid — Won (our price) or Lost (winning price).
       awardedPrice: v.status === 'WON' || v.status === 'LOST' ? v.awardedPrice ?? null : null,
+      contractStart: contract.start,
+      contractEnd: contract.end,
       closedDate: resolveClosedDate(v.status ?? 'ACTIVE', v.closedDate, null),
       bidBond: v.bidBond ?? false,
       // Bond amount only kept when a bid bond applies.
@@ -179,7 +215,7 @@ const updateSchema = z.object({
   company: z.string().trim().min(1).max(200).optional(),
   type: z.enum(['RFQ', 'RFP', 'BID', 'PO']).optional(),
   district: z.string().trim().max(200).nullable().optional(),
-  status: z.enum(['ACTIVE', 'SUBMITTED', 'WON', 'LOST']).optional(),
+  status: z.enum(['ACTIVE', 'SUBMITTED', 'WON', 'LOST', 'CONTRACT']).optional(),
   dueDate: z.string().min(1).optional(),
   reminderSet: z.boolean().optional(),
   submissionType: z.enum(['PHYSICAL', 'EMAIL', 'PORTAL']).nullable().optional(),
@@ -188,6 +224,8 @@ const updateSchema = z.object({
   bidBond: z.boolean().optional(),
   bidBondAmount: priceField,
   totalAmount: z.number().nonnegative().max(999_999_999_999).nullable().optional(),
+  contractStart: z.string().nullable().optional(),
+  contractEnd: z.string().nullable().optional(),
   closedDate: z.string().nullable().optional(),
 })
 
@@ -221,7 +259,21 @@ export async function updateBid(req: AuthedRequest, res: Response): Promise<void
     return
   }
 
+  const nextTotal = v.totalAmount !== undefined ? v.totalAmount : (existing.totalAmount?.toNumber() ?? null)
+  const contract = contractFields(
+    nextStatus,
+    nextTotal,
+    v.contractStart !== undefined ? dayOnly(v.contractStart) : existing.contractStart,
+    v.contractEnd !== undefined ? dayOnly(v.contractEnd) : existing.contractEnd,
+  )
+  if ('error' in contract) {
+    res.status(400).json({ error: contract.error })
+    return
+  }
+
   const data: Prisma.BidUpdateInput = {}
+  data.contractStart = contract.start
+  data.contractEnd = contract.end
   if (v.title !== undefined) data.title = v.title
   if (v.company !== undefined) data.company = v.company
   if (v.type !== undefined) data.type = v.type

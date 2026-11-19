@@ -35,6 +35,18 @@ describe('deal_tracker counts like the page', () => {
     expect(t).toContain('Open deals here: 2 overdue (due date passed). Next due (still ahead): #2 Deal 2 (Company 2), due Fri 20 Nov 2026, 3:00 PM.')
     expect(dealTrackerText(data, { agent: 'usama', status: 'open' }, now)).toContain('Next due (still ahead): none, every open deal here is already overdue.')
   })
+  it('a Contract deal (won and signed) is its own status, counts as won in the win rate, and shows its contract value', () => {
+    const withContract: DealTrackerData = {
+      bids: [...data.bids, bid(7, 'CONTRACT', 'Usama Shabir', '2026-11-02T10:00:00Z', { awardedPrice: null, totalAmount: 50000, contractStart: '2026-12-01', contractEnd: '2027-11-30' })],
+      summary: { ...data.summary, contract: 1, contractValue: 50000 },
+    }
+    const t = dealTrackerText(withContract, {}, now)
+    expect(t.split('\n')[0]).toContain('Lost 1, Contract 1 ($50,000 contract value); 7 deals in all.')
+    expect(t).toContain('Win rate (won / (won + lost), contract deals count as won): 75% (3 won of 4 decided).')
+    expect(t).toContain('Contract (won and signed) | due')
+    expect(t).toContain('contract value $50,000 | contract from 2026-12-01 until 2027-11-30')
+    expect(dealTrackerText(withContract, { status: 'contract' }, now)).toContain('1 deals: Active 0, Submitted 0, Won 0 ($0), Lost 0, Contract 1 ($50,000 contract value).')
+  })
   it('gives the total amount card, per agent and per deal, and for a filter', () => {
     const t = dealTrackerText(data, {}, now)
     expect(t.split('\n')[1]).toBe("Total amount card (the deals' full dollar figures added up, every deal this person can see): $15,300.75, of which won deals $14,400.75; 2 of the 6 deals have a total amount entered.")

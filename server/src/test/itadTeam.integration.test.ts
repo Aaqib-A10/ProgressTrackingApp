@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import { app, auth, prisma, seedWorld, type SeededWorld } from './helpers'
 import { hashPassword } from '../lib/auth'
+import { buildFinancialReport } from '../lib/financials'
 
 // ITAD: everyone sees which deals the team is working on; Docs & Links stay private.
 
@@ -60,6 +61,33 @@ describe('team active deals', () => {
 
     await request(app).patch(`/api/itad/bids/${a.body.bid.id}`).set(...auth(w.itadMember)).send({ totalAmount: null }).expect(200)
     expect((await request(app).get('/api/itad/bids').set(...auth(w.itadMember)).expect(200)).body.summary.totalValue).toBe(0)
+  })
+
+  it('Contract: won and signed, needs a contract value instead of an awarded price, and counts as won money', async () => {
+    const month = new Date().toISOString().slice(0, 7)
+    const itadRevenue = async () => (await buildFinancialReport({ from: month, to: month })).teams.find((t) => t.team === 'ITAD')!.revenue!
+    const before = await itadRevenue()
+
+    const c = (await request(app).post('/api/itad/bids').set(...auth(w.itadMember)).send(deal('Contract deal', 'Contract Co')).expect(201)).body.bid
+    // No contract value: refused. An end before the start: refused.
+    expect((await request(app).patch(`/api/itad/bids/${c.id}`).set(...auth(w.itadMember)).send({ status: 'CONTRACT' }).expect(400)).body.error).toMatch(/Contract value is required/)
+    await request(app).patch(`/api/itad/bids/${c.id}`).set(...auth(w.itadMember)).send({ status: 'CONTRACT', totalAmount: 50000, contractStart: '2026-12-01', contractEnd: '2026-06-01' }).expect(400)
+    // No awarded price needed; the closed date is set like any decided deal.
+    const done = (await request(app).patch(`/api/itad/bids/${c.id}`).set(...auth(w.itadMember)).send({ status: 'CONTRACT', totalAmount: 50000, contractStart: '2026-12-01', contractEnd: '2027-11-30', awardedPrice: 9 }).expect(200)).body.bid
+    expect(done).toMatchObject({ status: 'CONTRACT', totalAmount: 50000, awardedPrice: null, contractStart: '2026-12-01', contractEnd: '2027-11-30' })
+    expect(done.closedDate).toBeTruthy()
+
+    const mine = (await request(app).get('/api/itad/bids').set(...auth(w.itadMember)).expect(200)).body.summary
+    expect(mine).toMatchObject({ contract: 1, contractValue: 50000 })
+    expect(mine.amounts.CONTRACT).toBe(50000)
+    expect((await request(app).get('/api/itad/bids').set(...auth(w.itadLead)).expect(200)).body.summary.contract).toBe(1)
+    // The financial report counts the contract value as won ITAD revenue.
+    expect(await itadRevenue()).toBeCloseTo(before + 50000, 2)
+
+    // Re-opened: the contract dates go away and it is no longer revenue.
+    const back = (await request(app).patch(`/api/itad/bids/${c.id}`).set(...auth(w.itadMember)).send({ status: 'ACTIVE' }).expect(200)).body.bid
+    expect(back).toMatchObject({ status: 'ACTIVE', contractStart: null, contractEnd: null, closedDate: null })
+    expect(await itadRevenue()).toBeCloseTo(before, 2)
   })
 })
 

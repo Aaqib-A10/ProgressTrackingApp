@@ -13,11 +13,14 @@ import {
   type Bid, type BidStatus, type BidType, type BidSubmissionType, type BidInput, type BidSummary, type TeamDeal,
 } from '../../../lib/bidApi'
 
-const STATUSES: BidStatus[] = ['ACTIVE', 'SUBMITTED', 'WON', 'LOST']
+const STATUSES: BidStatus[] = ['ACTIVE', 'SUBMITTED', 'WON', 'CONTRACT', 'LOST']
+/** Decided deals: they get a closed date. Contract = won and signed as a contract. */
+const isDecided = (s: BidStatus) => s === 'WON' || s === 'LOST' || s === 'CONTRACT'
+type Decision = 'WON' | 'LOST' | 'CONTRACT'
 const TYPES: BidType[] = ['RFQ', 'RFP', 'BID', 'PO']
 const SUBMISSION_TYPES: BidSubmissionType[] = ['PHYSICAL', 'EMAIL', 'PORTAL']
 
-const STATUS_TONE: Record<BidStatus, BadgeTone> = { ACTIVE: 'primary', SUBMITTED: 'warning', WON: 'success', LOST: 'danger' }
+const STATUS_TONE: Record<BidStatus, BadgeTone> = { ACTIVE: 'primary', SUBMITTED: 'warning', WON: 'success', LOST: 'danger', CONTRACT: 'accent' }
 
 // Colour the inline status select by state — Won green, Lost red, etc.
 const STATUS_SELECT_CLS: Record<BidStatus, string> = {
@@ -25,6 +28,7 @@ const STATUS_SELECT_CLS: Record<BidStatus, string> = {
   SUBMITTED: 'border-warning/40 bg-warning/10 text-warning-ink',
   WON: 'border-success/50 bg-success/10 text-success-ink',
   LOST: 'border-danger/50 bg-danger/10 text-danger-ink',
+  CONTRACT: 'border-accent/50 bg-highlight-muted text-highlight-ink',
 }
 
 const inputCls =
@@ -105,7 +109,7 @@ export default function BidTracker() {
   const [addOpen, setAddOpen] = useState(false)
   const [editFor, setEditFor] = useState<Bid | null>(null)
   // A bid mid-way through a decision that needs extra input (Won/Lost).
-  const [decideFor, setDecideFor] = useState<{ bid: Bid; status: 'WON' | 'LOST' } | null>(null)
+  const [decideFor, setDecideFor] = useState<{ bid: Bid; status: Decision } | null>(null)
   // "My deals" or the whole team's open deals (who is working on what).
   const [view, setView] = useState<'mine' | 'team'>('mine')
   const [teamDeals, setTeamDeals] = useState<TeamDeal[] | null>(null)
@@ -156,7 +160,7 @@ export default function BidTracker() {
   /** Inline status change from the table. Won/Lost open a prompt for extra input first. */
   async function changeStatus(bid: Bid, status: BidStatus) {
     if (status === bid.status) return
-    if (status === 'WON' || status === 'LOST') { setDecideFor({ bid, status }); return }
+    if (isDecided(status)) { setDecideFor({ bid, status: status as Decision }); return }
     try {
       await updateBid(bid.id, { status })
       addToast({ type: 'success', message: `Marked ${BID_STATUS_LABEL[status]}.` })
@@ -214,6 +218,12 @@ export default function BidTracker() {
     } },
     { key: 'priceQuoted', header: 'Price Quoted', align: 'right', render: (b) => <span className="tabular-nums">{money(b.priceQuoted)}</span> },
     { key: 'awardedPrice', header: 'Awarded Price', align: 'right', render: (b) => {
+      if (b.status === 'CONTRACT') return (
+        <span className="inline-flex flex-col items-end leading-tight">
+          <span className="font-semibold tabular-nums text-highlight-ink">{usd(b.totalAmount)}</span>
+          <span className="text-body-sm text-ink-muted">contract{b.contractEnd ? ` · until ${fmtDate(`${b.contractEnd}T12:00:00`)}` : ''}</span>
+        </span>
+      )
       const tone = b.awardedPrice == null ? 'text-ink-muted' : b.status === 'LOST' ? 'font-semibold text-danger-ink' : 'font-semibold text-success-ink'
       return <span className={'tabular-nums ' + tone}>{money(b.awardedPrice)}</span>
     } },
@@ -267,12 +277,13 @@ export default function BidTracker() {
       {view === 'team' ? <TeamDeals deals={teamDeals} /> : <>
 
       {/* Interactive status filter cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <MetricCard label="Active Opportunities" count={summary?.active ?? 0} tone="primary" active={filter === 'ACTIVE'} onClick={() => setFilter(filter === 'ACTIVE' ? null : 'ACTIVE')} />
-        <MetricCard label="Submitted" count={summary?.submitted ?? 0} tone="warning" active={filter === 'SUBMITTED'} onClick={() => setFilter(filter === 'SUBMITTED' ? null : 'SUBMITTED')} />
-        <MetricCard label="Won" count={summary?.won ?? 0} sub={money(summary?.wonValue ?? 0)} tone="success" active={filter === 'WON'} onClick={() => setFilter(filter === 'WON' ? null : 'WON')} />
-        <MetricCard label="Lost" count={summary?.lost ?? 0} tone="danger" active={filter === 'LOST'} onClick={() => setFilter(filter === 'LOST' ? null : 'LOST')} />
-        <div className="col-span-2 rounded-card border border-line bg-card p-4 shadow-card lg:col-span-1" aria-live="polite">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <MetricCard label="Active Opportunities" count={summary?.active ?? 0} money={[['Total', usd(summary?.amounts?.ACTIVE ?? 0)]]} tone="primary" active={filter === 'ACTIVE'} onClick={() => setFilter(filter === 'ACTIVE' ? null : 'ACTIVE')} />
+        <MetricCard label="Submitted" count={summary?.submitted ?? 0} money={[['Total', usd(summary?.amounts?.SUBMITTED ?? 0)]]} tone="warning" active={filter === 'SUBMITTED'} onClick={() => setFilter(filter === 'SUBMITTED' ? null : 'SUBMITTED')} />
+        <MetricCard label="Won" count={summary?.won ?? 0} money={[['Awarded', money(summary?.wonValue ?? 0)], ['Total', usd(summary?.amounts?.WON ?? 0)]]} tone="success" active={filter === 'WON'} onClick={() => setFilter(filter === 'WON' ? null : 'WON')} />
+        <MetricCard label="Contract" count={summary?.contract ?? 0} money={[['Contract value', usd(summary?.contractValue ?? 0)]]} tone="accent" active={filter === 'CONTRACT'} onClick={() => setFilter(filter === 'CONTRACT' ? null : 'CONTRACT')} />
+        <MetricCard label="Lost" count={summary?.lost ?? 0} money={[['Total', usd(summary?.amounts?.LOST ?? 0)]]} tone="danger" active={filter === 'LOST'} onClick={() => setFilter(filter === 'LOST' ? null : 'LOST')} />
+        <div className="rounded-card border border-line bg-card p-4 shadow-card" aria-live="polite">
           <div className="text-body-sm font-medium text-ink-muted">
             {filter || extraFilters || query.trim() ? 'Total amount · shown deals' : user?.role === 'MEMBER' ? 'Total amount · my deals' : 'Total amount · all deals'}
           </div>
@@ -342,7 +353,8 @@ export default function BidTracker() {
   )
 }
 
-function MetricCard({ label, count, sub, tone, active, onClick }: { label: string; count: number; sub?: string; tone: BadgeTone; active: boolean; onClick: () => void }) {
+/** A status card: its count, and under it the money of its deals as [label, amount] lines. */
+function MetricCard({ label, count, money: lines, tone, active, onClick }: { label: string; count: number; money?: [string, string][]; tone: BadgeTone; active: boolean; onClick: () => void }) {
   const accent = { primary: 'text-primary-ink', warning: 'text-warning-ink', success: 'text-success-ink', danger: 'text-danger-ink', neutral: 'text-ink', accent: 'text-highlight-ink' }[tone]
   const ring = { primary: 'ring-primary', warning: 'ring-warning', success: 'ring-success', danger: 'ring-danger', neutral: 'ring-ink', accent: 'ring-accent' }[tone]
   return (
@@ -354,7 +366,9 @@ function MetricCard({ label, count, sub, tone, active, onClick }: { label: strin
     >
       <div className="text-body-sm font-medium text-ink-muted">{label}</div>
       <div className={'mt-1 text-display-lg tabular-nums ' + accent}>{count}</div>
-      {sub && <div className="text-body-sm font-semibold text-ink">{sub}</div>}
+      {lines?.map(([k, v]) => (
+        <div key={k} className="text-body-sm text-ink-muted">{k} <span className="font-semibold tabular-nums text-ink">{v}</span></div>
+      ))}
     </button>
   )
 }
@@ -382,6 +396,8 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
   const [priceQuoted, setPriceQuoted] = useState(() => toUnit(bid?.priceQuoted, readUnit()))
   const [awardedPrice, setAwardedPrice] = useState(() => toUnit(bid?.awardedPrice, readUnit()))
   const [totalAmount, setTotalAmount] = useState(bid?.totalAmount != null ? String(bid.totalAmount) : '')
+  const [contractStart, setContractStart] = useState(bid?.contractStart ?? '')
+  const [contractEnd, setContractEnd] = useState(bid?.contractEnd ?? '')
   const [bidBond, setBidBond] = useState(bid?.bidBond ?? false)
   const [bidBondAmount, setBidBondAmount] = useState(bid?.bidBondAmount != null ? String(bid.bidBondAmount) : '')
   const [closedDate, setClosedDate] = useState(bid?.closedDate ? bid.closedDate.slice(0, 10) : '')
@@ -394,6 +410,14 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
     e.preventDefault()
     if (!title.trim() || !company.trim() || !dueDate) {
       addToast({ type: 'error', message: 'Title, company and due date are required.' })
+      return
+    }
+    if (status === 'CONTRACT' && !(toTotal(totalAmount) ?? 0)) {
+      addToast({ type: 'error', message: 'Enter the contract value to mark a deal as Contract.' })
+      return
+    }
+    if (status === 'CONTRACT' && contractStart && contractEnd && contractEnd < contractStart) {
+      addToast({ type: 'error', message: 'The contract cannot end before it starts.' })
       return
     }
     if ((status === 'WON' || status === 'LOST') && !awardedPrice) {
@@ -415,8 +439,10 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
       bidBond,
       bidBondAmount: bidBond && bidBondAmount ? Number(bidBondAmount) : null,
       totalAmount: toTotal(totalAmount),
+      contractStart: status === 'CONTRACT' ? contractStart || null : null,
+      contractEnd: status === 'CONTRACT' ? contractEnd || null : null,
       // Only send a closed date for decided deals; empty lets the server default it to now.
-      closedDate: (status === 'WON' || status === 'LOST') && closedDate ? new Date(closedDate).toISOString() : undefined,
+      closedDate: isDecided(status) && closedDate ? new Date(closedDate).toISOString() : undefined,
     }
     try {
       if (editing) await updateBid(bid!.id, input)
@@ -492,12 +518,24 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
               <PriceInput value={awardedPrice} onChange={setAwardedPrice} unit={unit} onUnit={setUnit} className={inputCls} />
             </Field>
           )}
-          <Field label="Total deal amount ($)">
-            <input type="number" min="0" step="0.01" inputMode="decimal" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="e.g. 14400" className={inputCls} aria-label="Total deal amount in dollars" />
-            <span className="mt-1 block text-body-sm text-ink-muted">The full dollar figure of the deal, not the per-lb rate. Optional.</span>
+          <Field label={status === 'CONTRACT' ? 'Contract value ($)' : 'Total deal amount ($)'} required={status === 'CONTRACT'}>
+            <input type="number" min="0" step="0.01" inputMode="decimal" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="e.g. 14400" className={inputCls} aria-label={status === 'CONTRACT' ? 'Contract value in dollars' : 'Total deal amount in dollars'} />
+            <span className="mt-1 block text-body-sm text-ink-muted">
+              {status === 'CONTRACT' ? 'The value of the signed contract. It counts as won money in the reports.' : 'The full dollar figure of the deal, not the per-lb rate. Optional.'}
+            </span>
           </Field>
-          {(status === 'WON' || status === 'LOST') && (
-            <Field label="Closed date">
+          {status === 'CONTRACT' && (
+            <>
+              <Field label="Contract starts">
+                <input type="date" value={contractStart} max={contractEnd || undefined} onChange={(e) => setContractStart(e.target.value)} className={inputCls} />
+              </Field>
+              <Field label="Contract ends">
+                <input type="date" value={contractEnd} min={contractStart || undefined} onChange={(e) => setContractEnd(e.target.value)} className={inputCls} />
+              </Field>
+            </>
+          )}
+          {isDecided(status) && (
+            <Field label={status === 'CONTRACT' ? 'Signed date' : 'Closed date'}>
               <input type="date" value={closedDate} onChange={(e) => setClosedDate(e.target.value)} className={inputCls} />
               <span className="mt-1 block text-body-sm text-ink-muted">Defaults to today. Drives the financial report period.</span>
             </Field>
@@ -550,7 +588,64 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
  *  - Won: capture the final awarded price.
  *  - Lost: capture the winning price and the company it went to.
  */
-function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'WON' | 'LOST'; onClose: () => void; onSaved: () => void }) {
+function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: Decision; onClose: () => void; onSaved: () => void }) {
+  if (status === 'CONTRACT') return <ContractModal bid={bid} onClose={onClose} onSaved={onSaved} />
+  return <WonLostModal bid={bid} status={status} onClose={onClose} onSaved={onSaved} />
+}
+
+/** Mark a deal as Contract: won and signed. No awarded price; the contract value (required) and when it runs. */
+function ContractModal({ bid, onClose, onSaved }: { bid: Bid; onClose: () => void; onSaved: () => void }) {
+  const { addToast } = useToast()
+  const [value, setValue] = useState(bid.totalAmount != null ? String(bid.totalAmount) : '')
+  const [start, setStart] = useState(bid.contractStart ?? '')
+  const [end, setEnd] = useState(bid.contractEnd ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    const v = toTotal(value)
+    if (!v) { addToast({ type: 'error', message: 'Enter the contract value.' }); return }
+    if (start && end && end < start) { addToast({ type: 'error', message: 'The contract cannot end before it starts.' }); return }
+    setSaving(true)
+    try {
+      await updateBid(bid.id, { status: 'CONTRACT', totalAmount: v, contractStart: start || null, contractEnd: end || null })
+      addToast({ type: 'success', message: 'Deal marked Contract.' })
+      onSaved()
+    } catch (e) {
+      addToast({ type: 'error', message: errMsg(e, 'Could not save.') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Mark as Contract"
+      size="sm"
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={save} disabled={saving}>Save as Contract</Button></>}
+    >
+      <p className="mb-3 text-body-sm text-ink-muted">
+        <b className="text-ink">{bid.title}</b> is won and signed as a contract. Enter the contract value: it counts as won money in the reports.
+      </p>
+      <div className="space-y-4">
+        <Field label="Contract value ($)" required>
+          <input type="number" min="0" step="0.01" inputMode="decimal" autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. 14400" className={inputCls} aria-label="Contract value in dollars" />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Starts">
+            <input type="date" value={start} max={end || undefined} onChange={(e) => setStart(e.target.value)} className={inputCls} />
+          </Field>
+          <Field label="Ends">
+            <input type="date" value={end} min={start || undefined} onChange={(e) => setEnd(e.target.value)} className={inputCls} />
+          </Field>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function WonLostModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'WON' | 'LOST'; onClose: () => void; onSaved: () => void }) {
   const { addToast } = useToast()
   const isLost = status === 'LOST'
   const [unit, setUnit] = useState<PriceUnit>(readUnit)

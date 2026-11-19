@@ -631,12 +631,13 @@ const BID: Source = {
   async build(ids) {
     const out = result(ids)
     for (const b of await prisma.bid.findMany({ where: { id: { in: ids } }, include: { agent: { select: { name: true } } } })) {
-      const status = { ACTIVE: 'Active opportunity', SUBMITTED: 'Submitted', WON: 'Won', LOST: 'Lost' }[b.status]
+      const status = { ACTIVE: 'Active opportunity', SUBMITTED: 'Submitted', WON: 'Won', LOST: 'Lost', CONTRACT: 'Contract (won and signed)' }[b.status]
       const body = lines(
         `Deal Tracker bid #${b.number}: "${b.title}" for ${b.company} (${b.type}${b.district ? `, ${b.district}` : ''}). Status: ${status}. Agent: ${b.agent.name}. Due: ${day(b.dueDate)}.`,
         b.priceQuoted != null && `Price quoted: ${dealMoney(b.priceQuoted.toNumber())}`,
         b.awardedPrice != null && b.status === 'WON' && `Awarded price: ${dealMoney(b.awardedPrice.toNumber())}`,
-        b.totalAmount != null && `Total amount: ${dealMoney(b.totalAmount.toNumber())}`,
+        b.totalAmount != null && `${b.status === 'CONTRACT' ? 'Contract value' : 'Total amount'}: ${dealMoney(b.totalAmount.toNumber())}`,
+        (b.contractStart || b.contractEnd) && `Contract: ${b.contractStart ? `from ${day(b.contractStart)}` : ''}${b.contractEnd ? ` until ${day(b.contractEnd)}` : ''}`.trim(),
         b.submissionType && `Submitted by: ${b.submissionType.toLowerCase()}`,
         b.bidBond && `Bid bond: yes${b.bidBondAmount != null ? `, ${dealMoney(b.bidBondAmount.toNumber())}` : ''}`,
         b.reminderSet && 'Reminder set',
