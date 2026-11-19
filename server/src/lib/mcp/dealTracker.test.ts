@@ -13,10 +13,10 @@ const data: DealTrackerData = {
     bid(2, 'ACTIVE', 'Mobeen Zahra', '2026-11-20T10:00:00Z'),
     bid(3, 'SUBMITTED', 'Usama Shabir', '2026-11-05T10:00:00Z'),
     bid(4, 'WON', 'Usama Shabir', '2026-10-10T10:00:00Z', { priceQuoted: 0.125 }),
-    bid(5, 'WON', 'Mobeen Zahra', '2026-11-03T10:00:00Z'),
-    bid(6, 'LOST', 'Mobeen Zahra', '2026-09-15T10:00:00Z', { bidBond: true, bidBondAmount: 500 }),
+    bid(5, 'WON', 'Mobeen Zahra', '2026-11-03T10:00:00Z', { totalAmount: 14400.75 }),
+    bid(6, 'LOST', 'Mobeen Zahra', '2026-09-15T10:00:00Z', { bidBond: true, bidBondAmount: 500, totalAmount: 900 }),
   ],
-  summary: { active: 2, submitted: 1, won: 2, lost: 1, wonValue: 5001 },
+  summary: { active: 2, submitted: 1, won: 2, lost: 1, wonValue: 5001, totalValue: 15300.75, wonTotal: 14400.75 },
 }
 const now = new Date('2026-11-13T07:00:00Z')
 
@@ -34,6 +34,13 @@ describe('deal_tracker counts like the page', () => {
     // "Which is due next" must not pick one that is already overdue.
     expect(t).toContain('Open deals here: 2 overdue (due date passed). Next due (still ahead): #2 Deal 2 (Company 2), due Fri 20 Nov 2026, 3:00 PM.')
     expect(dealTrackerText(data, { agent: 'usama', status: 'open' }, now)).toContain('Next due (still ahead): none, every open deal here is already overdue.')
+  })
+  it('gives the total amount card, per agent and per deal, and for a filter', () => {
+    const t = dealTrackerText(data, {}, now)
+    expect(t.split('\n')[1]).toBe("Total amount card (the deals' full dollar figures added up, every deal this person can see): $15,300.75, of which won deals $14,400.75; 2 of the 6 deals have a total amount entered.")
+    expect(t).toContain('Mobeen Zahra 3 (active 1, submitted 0, won 1 $2,500.5, lost 1, total amount $15,300.75)')
+    expect(t).toContain('total amount $14,400.75')
+    expect(dealTrackerText(data, { status: 'won' }, now)).toContain('Total amount of these matching deals: $14,400.75.')
   })
   it('filters by status, agent, overdue and the page date rule (closed date for decided deals)', () => {
     expect(dealTrackerText(data, { status: 'open' }, now)).toContain('3 deals: Active 2, Submitted 1, Won 0 ($0), Lost 0.')

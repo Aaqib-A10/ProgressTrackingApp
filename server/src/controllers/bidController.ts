@@ -47,6 +47,7 @@ function serialize(b: BidRow) {
     awardedPrice: b.awardedPrice?.toNumber() ?? null,
     bidBond: b.bidBond,
     bidBondAmount: b.bidBondAmount?.toNumber() ?? null,
+    totalAmount: b.totalAmount?.toNumber() ?? null,
     closedDate: b.closedDate ? b.closedDate.toISOString() : null,
     createdAt: b.createdAt.toISOString(),
   }
@@ -82,6 +83,9 @@ export async function listBids(req: AuthedRequest, res: Response): Promise<void>
     won: bids.filter((b) => b.status === 'WON').length,
     lost: bids.filter((b) => b.status === 'LOST').length,
     wonValue: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.awardedPrice?.toNumber() ?? 0), 0),
+    // The deals' full dollar figures (Total amount): every deal, and the won ones.
+    totalValue: bids.reduce((s, b) => s + (b.totalAmount?.toNumber() ?? 0), 0),
+    wonTotal: bids.filter((b) => b.status === 'WON').reduce((s, b) => s + (b.totalAmount?.toNumber() ?? 0), 0),
   }
   res.json({ bids: bids.map(serialize), summary, canManageTeam: isLead(me) })
 }
@@ -101,6 +105,7 @@ const createSchema = z.object({
   awardedPrice: priceField,
   bidBond: z.boolean().optional(),
   bidBondAmount: priceField,
+  totalAmount: z.number().nonnegative().max(999_999_999_999).nullable().optional(),
   closedDate: z.string().nullable().optional(),
 })
 
@@ -162,6 +167,7 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
       bidBond: v.bidBond ?? false,
       // Bond amount only kept when a bid bond applies.
       bidBondAmount: v.bidBond ? v.bidBondAmount ?? null : null,
+      totalAmount: v.totalAmount ?? null,
     },
     include: { agent: { select: { id: true, name: true } } },
   })
@@ -181,6 +187,7 @@ const updateSchema = z.object({
   awardedPrice: priceField,
   bidBond: z.boolean().optional(),
   bidBondAmount: priceField,
+  totalAmount: z.number().nonnegative().max(999_999_999_999).nullable().optional(),
   closedDate: z.string().nullable().optional(),
 })
 
@@ -223,6 +230,7 @@ export async function updateBid(req: AuthedRequest, res: Response): Promise<void
   if (v.reminderSet !== undefined) data.reminderSet = v.reminderSet
   if (v.submissionType !== undefined) data.submissionType = v.submissionType
   if (v.priceQuoted !== undefined) data.priceQuoted = v.priceQuoted
+  if (v.totalAmount !== undefined) data.totalAmount = v.totalAmount
   if (v.dueDate !== undefined) {
     const due = parseDue(v.dueDate)
     if (!due) {

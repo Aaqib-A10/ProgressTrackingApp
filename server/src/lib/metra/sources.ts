@@ -636,6 +636,7 @@ const BID: Source = {
         `Deal Tracker bid #${b.number}: "${b.title}" for ${b.company} (${b.type}${b.district ? `, ${b.district}` : ''}). Status: ${status}. Agent: ${b.agent.name}. Due: ${day(b.dueDate)}.`,
         b.priceQuoted != null && `Price quoted: ${dealMoney(b.priceQuoted.toNumber())}`,
         b.awardedPrice != null && b.status === 'WON' && `Awarded price: ${dealMoney(b.awardedPrice.toNumber())}`,
+        b.totalAmount != null && `Total amount: ${dealMoney(b.totalAmount.toNumber())}`,
         b.submissionType && `Submitted by: ${b.submissionType.toLowerCase()}`,
         b.bidBond && `Bid bond: yes${b.bidBondAmount != null ? `, ${dealMoney(b.bidBondAmount.toNumber())}` : ''}`,
         b.reminderSet && 'Reminder set',

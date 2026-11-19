@@ -221,8 +221,10 @@ function inDept(m: Me, dept: string): boolean {
 interface DealRow {
   number: number; title: string; company: string; type: string; district: string; agentName: string; status: 'ACTIVE' | 'SUBMITTED' | 'WON' | 'LOST'
   dueDate: string; submissionType: string | null; priceQuoted: number | null; awardedPrice: number | null; bidBond: boolean; bidBondAmount: number | null; closedDate: string | null; reminderSet: boolean
+  /** The deal's full dollar figure (Total amount on the page), when entered. */
+  totalAmount?: number | null
 }
-export interface DealTrackerData { bids: DealRow[]; summary: { active: number; submitted: number; won: number; lost: number; wonValue: number } }
+export interface DealTrackerData { bids: DealRow[]; summary: { active: number; submitted: number; won: number; lost: number; wonValue: number; totalValue?: number; wonTotal?: number } }
 
 const STATUS_WORD: Record<DealRow['status'], string> = { ACTIVE: 'Active', SUBMITTED: 'Submitted', WON: 'Won', LOST: 'Lost' }
 
@@ -272,11 +274,15 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
   const decided = wonInScope + sameScope.filter((b) => b.status === 'LOST').length
   const won = rows.filter((b) => b.status === 'WON')
   const wonValue = won.reduce((t, b) => t + (b.awardedPrice ?? 0), 0)
+  const sumTotal = (list: DealRow[]) => list.reduce((t, b) => t + (b.totalAmount ?? 0), 0)
+  const allTotal = s.totalValue ?? sumTotal(d.bids)
+  const allWonTotal = s.wonTotal ?? sumTotal(d.bids.filter((b) => b.status === 'WON'))
   const filtered = status !== 'all' || agent || words || type || from || to || a.overdue === true
   const byAgent = new Map<string, Record<string, number>>()
   for (const b of rows) {
-    const x = byAgent.get(b.agentName) ?? { total: 0, ACTIVE: 0, SUBMITTED: 0, WON: 0, LOST: 0, wonValue: 0 }
+    const x = byAgent.get(b.agentName) ?? { total: 0, ACTIVE: 0, SUBMITTED: 0, WON: 0, LOST: 0, wonValue: 0, amount: 0 }
     x.total++; x[b.status]++
+    x.amount += b.totalAmount ?? 0
     if (b.status === 'WON') x.wonValue += b.awardedPrice ?? 0
     byAgent.set(b.agentName, x)
   }
@@ -284,9 +290,10 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
   const list = [...rows].sort((x, y) => (open(x) === open(y) ? x.dueDate.localeCompare(y.dueDate) : open(x) ? -1 : 1)).slice(0, limit)
   return [
     `Deal Tracker cards (every deal this person can see, exactly as on the page): Active ${s.active}, Submitted ${s.submitted}, Won ${s.won} (${dealMoney(s.wonValue)} awarded), Lost ${s.lost}; ${d.bids.length} deals in all.`,
+    `Total amount card (the deals' full dollar figures added up, every deal this person can see): ${dealMoney(allTotal)}, of which won deals ${dealMoney(allWonTotal)}; ${d.bids.filter((b) => b.totalAmount != null).length} of the ${d.bids.length} deals have a total amount entered.`,
     noAgent,
     filtered
-      ? `Matching the filter (${[status !== 'all' && `status ${status}`, agent && `agent "${str(a.agent)}"`, type && `type ${type}`, words && `"${str(a.search)}"`, from && `from ${from}`, to && `to ${to}`, a.overdue === true && 'overdue'].filter(Boolean).join(', ')}): ${rows.length} deals: Active ${count('ACTIVE')}, Submitted ${count('SUBMITTED')}, Won ${count('WON')} (${dealMoney(wonValue)}), Lost ${count('LOST')}.`
+      ? `Matching the filter (${[status !== 'all' && `status ${status}`, agent && `agent "${str(a.agent)}"`, type && `type ${type}`, words && `"${str(a.search)}"`, from && `from ${from}`, to && `to ${to}`, a.overdue === true && 'overdue'].filter(Boolean).join(', ')}): ${rows.length} deals: Active ${count('ACTIVE')}, Submitted ${count('SUBMITTED')}, Won ${count('WON')} (${dealMoney(wonValue)}), Lost ${count('LOST')}.\nTotal amount of these matching deals: ${dealMoney(sumTotal(rows))}.`
       : '',
     // The open deals with no date limit, so a from/to the model added on its own never hides overdue ones.
     (from || to) ? (() => {
@@ -304,12 +311,13 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
       return `Open deals here: ${late} overdue (due date passed). Next due (still ahead): ${next ? `#${next.number} ${next.title} (${next.company}), due ${fmtDay(next.dueDate)}` : 'none, every open deal here is already overdue'}.`
     })() : '',
     decided ? `Win rate (won / (won + lost))${agent || type || words || from || to ? ' with these filters' : ''}: ${Math.round((wonInScope / decided) * 100)}% (${wonInScope} won of ${decided} decided).` : '',
-    byAgent.size ? `By agent: ${[...byAgent].sort((x, y) => y[1].total - x[1].total).map(([n, x]) => `${n} ${x.total} (active ${x.ACTIVE}, submitted ${x.SUBMITTED}, won ${x.WON} ${dealMoney(x.wonValue)}, lost ${x.LOST})`).join('; ')}.` : 'No deals match.',
+    byAgent.size ? `By agent: ${[...byAgent].sort((x, y) => y[1].total - x[1].total).map(([n, x]) => `${n} ${x.total} (active ${x.ACTIVE}, submitted ${x.SUBMITTED}, won ${x.WON} ${dealMoney(x.wonValue)}, lost ${x.LOST}${x.amount ? `, total amount ${dealMoney(x.amount)}` : ''})`).join('; ')}.` : 'No deals match.',
     rows.length ? `\nDeals (${list.length} of ${rows.length}${list.length < rows.length ? '; ask with a filter or a bigger limit for the rest' : ''}), open ones first by due date. Prices exactly as stored, in dollars:` : '',
     ...list.map((b) => [
       `#${b.number} ${b.title}`, b.company, b.type, b.district || null, b.agentName, STATUS_WORD[b.status],
       `due ${fmtDay(b.dueDate)}${open(b) && new Date(b.dueDate) < now ? ' (OVERDUE)' : ''}`,
       `quoted ${dealMoney(b.priceQuoted)}`, b.awardedPrice != null && b.status === 'WON' ? `awarded ${dealMoney(b.awardedPrice)}` : null,
+      b.totalAmount != null ? `total amount ${dealMoney(b.totalAmount)}` : null,
       b.submissionType ? `sent by ${b.submissionType.toLowerCase()}` : null,
       b.bidBond ? `bid bond${b.bidBondAmount != null ? ` ${dealMoney(b.bidBondAmount)}` : ''}` : null,
       b.closedDate ? `closed ${DateTime.fromISO(b.closedDate).setZone(PKT_ZONE).toFormat('d LLL yyyy')}` : null,

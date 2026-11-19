@@ -44,6 +44,12 @@ const money = (v: number | null | undefined): string => {
   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: Number.isInteger(v) ? 0 : 2 })
 }
 
+/** A deal's total: always whole dollars and cents ($14,400 or $14,400.50), never shown as ¢. */
+const usd = (v: number | null | undefined): string =>
+  v == null ? '—' : v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: Number.isInteger(v) ? 0 : 2 })
+/** What a typed total turns into: a non-negative number, or null when empty. */
+const toTotal = (s: string): number | null => { const n = Number(s); return s.trim() && Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null }
+
 type PriceUnit = 'usd' | 'cents'
 const UNIT_KEY = 'itad-price-unit'
 const readUnit = (): PriceUnit => { try { return localStorage.getItem(UNIT_KEY) === 'cents' ? 'cents' : 'usd' } catch { return 'usd' } }
@@ -137,6 +143,16 @@ export default function BidTracker() {
 
   const extraFilters = Boolean(typeFilter || agentFilter || from || to)
 
+  // Total amount of the deals on screen (the filters apply, so a lead can pick one agent or a period).
+  const totals = useMemo(() => {
+    const sum = (list: Bid[]) => list.reduce((t, b) => t + (b.totalAmount ?? 0), 0)
+    return {
+      all: sum(filtered),
+      won: sum(filtered.filter((b) => b.status === 'WON')),
+      withAmount: filtered.filter((b) => b.totalAmount != null).length,
+    }
+  }, [filtered])
+
   /** Inline status change from the table. Won/Lost open a prompt for extra input first. */
   async function changeStatus(bid: Bid, status: BidStatus) {
     if (status === bid.status) return
@@ -201,6 +217,9 @@ export default function BidTracker() {
       const tone = b.awardedPrice == null ? 'text-ink-muted' : b.status === 'LOST' ? 'font-semibold text-danger-ink' : 'font-semibold text-success-ink'
       return <span className={'tabular-nums ' + tone}>{money(b.awardedPrice)}</span>
     } },
+    { key: 'totalAmount', header: 'Total Amount', align: 'right', render: (b) => (
+      <span className={'tabular-nums ' + (b.totalAmount == null ? 'text-ink-muted' : 'font-semibold text-ink')}>{usd(b.totalAmount)}</span>
+    ) },
     { key: 'closedDate', header: 'Closed', render: (b) => (
       <span className="whitespace-nowrap text-body-sm text-ink-muted">{b.closedDate ? fmtDate(b.closedDate) : '—'}</span>
     ) },
@@ -248,11 +267,20 @@ export default function BidTracker() {
       {view === 'team' ? <TeamDeals deals={teamDeals} /> : <>
 
       {/* Interactive status filter cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <MetricCard label="Active Opportunities" count={summary?.active ?? 0} tone="primary" active={filter === 'ACTIVE'} onClick={() => setFilter(filter === 'ACTIVE' ? null : 'ACTIVE')} />
         <MetricCard label="Submitted" count={summary?.submitted ?? 0} tone="warning" active={filter === 'SUBMITTED'} onClick={() => setFilter(filter === 'SUBMITTED' ? null : 'SUBMITTED')} />
         <MetricCard label="Won" count={summary?.won ?? 0} sub={money(summary?.wonValue ?? 0)} tone="success" active={filter === 'WON'} onClick={() => setFilter(filter === 'WON' ? null : 'WON')} />
         <MetricCard label="Lost" count={summary?.lost ?? 0} tone="danger" active={filter === 'LOST'} onClick={() => setFilter(filter === 'LOST' ? null : 'LOST')} />
+        <div className="col-span-2 rounded-card border border-line bg-card p-4 shadow-card lg:col-span-1" aria-live="polite">
+          <div className="text-body-sm font-medium text-ink-muted">
+            {filter || extraFilters || query.trim() ? 'Total amount · shown deals' : user?.role === 'MEMBER' ? 'Total amount · my deals' : 'Total amount · all deals'}
+          </div>
+          <div className="mt-1 text-display-lg tabular-nums text-ink">{usd(totals.all)}</div>
+          <div className="text-body-sm text-ink-muted">
+            Won <span className="font-semibold text-success-ink">{usd(totals.won)}</span> · {totals.withAmount} of {filtered.length} with an amount
+          </div>
+        </div>
       </div>
 
       <Card flush>
@@ -353,6 +381,7 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
   const [unit, setUnit] = useState<PriceUnit>(readUnit)
   const [priceQuoted, setPriceQuoted] = useState(() => toUnit(bid?.priceQuoted, readUnit()))
   const [awardedPrice, setAwardedPrice] = useState(() => toUnit(bid?.awardedPrice, readUnit()))
+  const [totalAmount, setTotalAmount] = useState(bid?.totalAmount != null ? String(bid.totalAmount) : '')
   const [bidBond, setBidBond] = useState(bid?.bidBond ?? false)
   const [bidBondAmount, setBidBondAmount] = useState(bid?.bidBondAmount != null ? String(bid.bidBondAmount) : '')
   const [closedDate, setClosedDate] = useState(bid?.closedDate ? bid.closedDate.slice(0, 10) : '')
@@ -385,6 +414,7 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
       awardedPrice: (status === 'WON' || status === 'LOST') ? fromUnit(awardedPrice, unit) : null,
       bidBond,
       bidBondAmount: bidBond && bidBondAmount ? Number(bidBondAmount) : null,
+      totalAmount: toTotal(totalAmount),
       // Only send a closed date for decided deals; empty lets the server default it to now.
       closedDate: (status === 'WON' || status === 'LOST') && closedDate ? new Date(closedDate).toISOString() : undefined,
     }
@@ -462,6 +492,10 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
               <PriceInput value={awardedPrice} onChange={setAwardedPrice} unit={unit} onUnit={setUnit} className={inputCls} />
             </Field>
           )}
+          <Field label="Total deal amount ($)">
+            <input type="number" min="0" step="0.01" inputMode="decimal" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="e.g. 14400" className={inputCls} aria-label="Total deal amount in dollars" />
+            <span className="mt-1 block text-body-sm text-ink-muted">The full dollar figure of the deal, not the per-lb rate. Optional.</span>
+          </Field>
           {(status === 'WON' || status === 'LOST') && (
             <Field label="Closed date">
               <input type="date" value={closedDate} onChange={(e) => setClosedDate(e.target.value)} className={inputCls} />
@@ -522,6 +556,7 @@ function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'W
   const [unit, setUnit] = useState<PriceUnit>(readUnit)
   const [price, setPrice] = useState(() => toUnit(bid.awardedPrice ?? bid.priceQuoted, readUnit()))
   const [company, setCompany] = useState(bid.company)
+  const [total, setTotal] = useState(bid.totalAmount != null ? String(bid.totalAmount) : '')
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -535,7 +570,7 @@ function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'W
     }
     setSaving(true)
     try {
-      await updateBid(bid.id, { status, awardedPrice: fromUnit(price, unit) ?? 0, ...(isLost ? { company: company.trim() } : {}) })
+      await updateBid(bid.id, { status, awardedPrice: fromUnit(price, unit) ?? 0, ...(isLost ? { company: company.trim() } : { totalAmount: toTotal(total) }) })
       addToast({ type: 'success', message: isLost ? 'Bid marked Lost.' : 'Bid marked Won.' })
       onSaved()
     } catch (e) {
@@ -562,6 +597,12 @@ function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'W
         <Field label={(isLost ? 'Awarded price (winning bid)' : 'Awarded price') + (unit === 'cents' ? ' · in cents' : '')} required>
           <PriceInput value={price} onChange={setPrice} unit={unit} onUnit={setUnit} autoFocus className={inputCls} />
         </Field>
+        {!isLost && (
+          <Field label="Total deal amount ($)">
+            <input type="number" min="0" step="0.01" inputMode="decimal" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="e.g. 14400" className={inputCls} aria-label="Total deal amount in dollars" />
+            <span className="mt-1 block text-body-sm text-ink-muted">The full dollar figure of the deal. Optional.</span>
+          </Field>
+        )}
         {isLost && (
           <Field label="Awarded to (company)" required>
             <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Winning company" className={inputCls} />

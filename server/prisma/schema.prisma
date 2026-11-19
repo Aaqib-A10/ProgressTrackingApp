@@ -2214,6 +2214,7 @@ model Bid {
   awardedPrice   Decimal?           @db.Decimal(12, 4) // required when status = WON
   bidBond        Boolean            @default(false) // whether a bid bond applies
   bidBondAmount  Decimal?           @db.Decimal(12, 2) // optional bid bond value (only meaningful when bidBond)
+  totalAmount    Decimal?           @db.Decimal(14, 2) // the deal's full dollar figure (prices above are often per-lb rates); any status, optional
   closedDate     DateTime? // date the deal was decided (WON/LOST) — drives financial revenue period + Deal Tracker date filter
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt

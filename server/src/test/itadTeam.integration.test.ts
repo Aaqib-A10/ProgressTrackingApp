@@ -38,6 +38,29 @@ describe('team active deals', () => {
   it('other departments cannot see ITAD deals', async () => {
     await request(app).get('/api/itad/bids/team-active').set(...auth(w.leadgenMember)).expect(403)
   })
+
+  it('total deal amount: the agent enters it, agent and lead each see the total of the deals they can see', async () => {
+    const a = await request(app).post('/api/itad/bids').set(...auth(w.itadMember)).send({ ...deal('Totals A', 'Totals Co'), totalAmount: 14400 }).expect(201)
+    expect(a.body.bid.totalAmount).toBe(14400)
+    const b = await request(app).post('/api/itad/bids').set(...auth(second)).send({ ...deal('Totals B', 'Totals Co'), totalAmount: 1000.5 }).expect(201)
+    // Winning keeps the total; it can be changed and cleared like any field.
+    const won = await request(app).patch(`/api/itad/bids/${b.body.bid.id}`).set(...auth(second)).send({ status: 'WON', awardedPrice: 0.12, totalAmount: 2000.25 }).expect(200)
+    expect(won.body.bid).toMatchObject({ status: 'WON', awardedPrice: 0.12, totalAmount: 2000.25 })
+    await request(app).post('/api/itad/bids').set(...auth(w.itadMember)).send({ ...deal('Bad total', 'Totals Co'), totalAmount: -5 }).expect(400)
+
+    // The agent: only their own deals add up (14,400; their other deal from above has none).
+    const mine = (await request(app).get('/api/itad/bids').set(...auth(w.itadMember)).expect(200)).body.summary
+    expect(mine).toMatchObject({ totalValue: 14400, wonTotal: 0 })
+    // The team lead: every ITAD deal.
+    const team = (await request(app).get('/api/itad/bids').set(...auth(w.itadLead)).expect(200)).body.summary
+    expect(team).toMatchObject({ totalValue: 16400.25, wonTotal: 2000.25 })
+    // The team's open-deals list still shows no money.
+    const open = (await request(app).get('/api/itad/bids/team-active').set(...auth(w.itadMember)).expect(200)).body.deals
+    expect(open.every((d: Record<string, unknown>) => d.totalAmount === undefined)).toBe(true)
+
+    await request(app).patch(`/api/itad/bids/${a.body.bid.id}`).set(...auth(w.itadMember)).send({ totalAmount: null }).expect(200)
+    expect((await request(app).get('/api/itad/bids').set(...auth(w.itadMember)).expect(200)).body.summary.totalValue).toBe(0)
+  })
 })
 
 describe('Docs & Links', () => {

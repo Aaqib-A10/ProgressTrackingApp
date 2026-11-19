@@ -36,6 +36,8 @@ export interface Bid {
   awardedPrice: number | null
   bidBond: boolean
   bidBondAmount: number | null
+  /** The deal's full dollar figure (prices are often per-lb rates). Optional, any status. */
+  totalAmount: number | null
   closedDate: string | null // ISO date the deal was decided (Won/Lost)
   createdAt: string
 }
@@ -46,6 +48,9 @@ export interface BidSummary {
   won: number
   lost: number
   wonValue: number
+  /** Sum of every deal's Total amount, and of the won ones. */
+  totalValue: number
+  wonTotal: number
 }
 
 export interface BidListResponse {
@@ -67,6 +72,7 @@ export interface BidInput {
   awardedPrice?: number | null
   bidBond?: boolean
   bidBondAmount?: number | null
+  totalAmount?: number | null
   closedDate?: string | null
 }
 
