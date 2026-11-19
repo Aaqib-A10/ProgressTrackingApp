@@ -76,6 +76,8 @@ const NOT_DATA: Record<string, string> = {
   '/api/qa/agents/:id/activity': "an agent's call numbers of the week and month, shown beside the evaluation form; reports and people.profile give the same numbers",
   '/api/feedback/unread-count': 'a badge count',
   '/api/worklog/people': 'the people picker of the to-do screen',
+  '/api/notes/people': 'the people picker of Notes (share a note, @mention)',
+  '/api/notes/:id': 'one note opened on its own (the same notes are read by the notes.mine entry)',
   '/api/worklog/note-sources': 'a helper of the to-do notes form',
   '/api/chat/unread': 'a badge count',
   '/api/custom/:id/summary': 'the cards above a custom block; custom.records counts its records itself',

@@ -33,8 +33,8 @@ export default function LeadCalls() {
     <div className="mx-auto w-full max-w-[1500px] space-y-4">
       <PageHeader title="Calls" hint={canManage ? 'Every call of the team, with recordings. Leave a comment on a call from the lead.' : 'Your calls and recordings.'} actions={<BusinessPicker allowAll />}>
         <div className="flex gap-1 rounded-btn border border-line bg-card p-0.5 text-body-sm">
-          <button type="button" onClick={() => setP('view', null)} className={cn('flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 font-medium', view === 'calls' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><PhoneCall size={14} />On leads</button>
-          <button type="button" onClick={() => setP('view', 'unmatched')} className={cn('flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 font-medium', view === 'unmatched' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}><PhoneMissed size={14} />No lead yet{waiting ? <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', view === 'unmatched' ? 'bg-white/20' : 'bg-warning/15 text-amber-700')}>{waiting}</span> : null}</button>
+          <button type="button" onClick={() => setP('view', null)} className={cn('flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 font-medium', view === 'calls' ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}><PhoneCall size={14} />On leads</button>
+          <button type="button" onClick={() => setP('view', 'unmatched')} className={cn('flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 font-medium', view === 'unmatched' ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}><PhoneMissed size={14} />No lead yet{waiting ? <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', view === 'unmatched' ? 'bg-primary-on/20' : 'bg-warning/15 text-warning-ink')}>{waiting}</span> : null}</button>
         </div>
       </PageHeader>
       {view === 'unmatched' ? <UnmatchedCalls business={all ? null : business} businesses={businesses} /> : <>
@@ -43,10 +43,10 @@ export default function LeadCalls() {
         <Select value={params.get('disposition') ?? ''} onChange={(e) => setP('disposition', e.target.value || null)} aria-label="Disposition"><option value="">Any result</option>{DISPOSITIONS.map((x) => <option key={x} value={x}>{DISPOSITION_LABEL[x]}</option>)}</Select>
         <Select value={params.get('minSecs') ?? ''} onChange={(e) => setP('minSecs', e.target.value || null)} aria-label="Length"><option value="">Any length</option><option value="30">30 s or longer</option><option value="120">2 min or longer</option><option value="300">5 min or longer</option></Select>
         <label className="flex flex-wrap items-center gap-1.5 text-body-sm text-ink"><TextField type="date" value={params.get('from') ?? ''} onChange={(e) => setP('from', e.target.value || null)} className="w-36" /><span>to</span><TextField type="date" value={params.get('to') ?? ''} onChange={(e) => setP('to', e.target.value || null)} className="w-36" /></label>
-        <button type="button" onClick={() => setP('recorded', params.get('recorded') ? null : '1')} className={cn('h-9 rounded-btn border px-3 text-body-sm font-medium', params.get('recorded') ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted')}>With recording</button>
+        <button type="button" onClick={() => setP('recorded', params.get('recorded') ? null : '1')} className={cn('h-9 rounded-btn border px-3 text-body-sm font-medium', params.get('recorded') ? 'border-primary bg-primary/[0.06] text-primary-ink' : 'border-line text-ink-muted')}>With recording</button>
         {d && <span className="ml-auto text-body-sm text-ink-faint">{d.total} call{d.total === 1 ? '' : 's'}</span>}
       </div>
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
       {/* Phones: one card per call, with the recording under it. */}
       <div className="space-y-2 md:hidden">
         {d?.calls.map((c) => (

@@ -48,7 +48,7 @@ export default function Start() {
       <AuthLayout headline="Daily reports, attendance and projects for your whole team, in one place.">
         <h1 className="text-headline-lg text-ink">Not open yet</h1>
         <p className="mt-1 text-body-md text-ink-muted">Metriq is not open for new companies yet. Already have an account?</p>
-        <Link to="/login" className="mt-5 inline-block font-semibold text-primary hover:underline">Sign in</Link>
+        <Link to="/login" className="mt-5 inline-block font-semibold text-primary-ink hover:underline">Sign in</Link>
       </AuthLayout>
     )
   }
@@ -62,8 +62,8 @@ export default function Start() {
         {([['team', 'For my team', 'A company, with people and departments', Users], ['solo', 'Just me', 'Plan and track your own work', User]] as const).map(([v, l, d, Icon]) => (
           <button key={v} type="button" role="radio" aria-checked={mode === v} onClick={() => setMode(v)}
             className={cn('relative rounded-card border p-3 text-left transition-colors', mode === v ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'border-line hover:border-primary/40')}>
-            {mode === v && <Check size={14} className="absolute right-2.5 top-2.5 text-primary" />}
-            <Icon size={18} className={mode === v ? 'text-primary' : 'text-ink-muted'} />
+            {mode === v && <Check size={14} className="absolute right-2.5 top-2.5 text-primary-ink" />}
+            <Icon size={18} className={mode === v ? 'text-primary-ink' : 'text-ink-muted'} />
             <span className="mt-1.5 block text-body-md font-semibold text-ink">{l}</span>
             <span className="block text-body-sm text-ink-muted">{d}</span>
           </button>
@@ -75,7 +75,7 @@ export default function Start() {
         {mode === 'team' && <TextField label="Company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} autoComplete="organization" />}
         <TextField label={mode === 'team' ? 'Work email' : 'Email'} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@company.com" />
         <PasswordField label="Password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="8 or more, letters and numbers" />
-        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{error}</p>}
+        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{error}</p>}
         <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Setting it up…' : free ? 'Start free' : 'Start free trial'}</Button>
         <p className="text-center text-body-sm text-ink-muted">By starting, you agree to the <Link to="/terms" className="font-medium text-ink underline-offset-2 hover:underline">Terms of Service</Link> and <Link to="/privacy" className="font-medium text-ink underline-offset-2 hover:underline">Privacy Policy</Link>.</p>
       </form>
@@ -83,7 +83,7 @@ export default function Start() {
       <OAuthButtons intent="signup" mode={mode} company={mode === 'team' ? companyName : undefined} label="OR START WITH" />
 
       <p className="mt-6 text-center text-body-sm text-ink-muted">
-        Already on Metriq? <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link>
+        Already on Metriq? <Link to="/login" className="font-semibold text-primary-ink hover:underline">Sign in</Link>
       </p>
     </AuthLayout>
   )

@@ -45,7 +45,7 @@ export function HelpButton() {
     <>
       <button className={iconCls} aria-label="Help" onClick={() => setOpen(true)}><HelpCircle size={18} /></button>
       <Modal open={open} onClose={() => setOpen(false)} title="Help: tell Metriq support"
-        footer={<><Link to="/app/help" onClick={() => setOpen(false)} className="mr-auto text-body-sm font-semibold text-primary">My requests</Link>
+        footer={<><Link to="/app/help" onClick={() => setOpen(false)} className="mr-auto text-body-sm font-semibold text-primary-ink">My requests</Link>
           <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={send} disabled={busy}>{busy ? 'Sending…' : 'Send'}</Button></>}>
         <div className="space-y-4">
           <TextField label="What is it about?" placeholder="e.g. The daily log will not save" value={subject} onChange={(e) => setSubject(e.target.value)} autoFocus />

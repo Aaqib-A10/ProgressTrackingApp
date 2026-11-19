@@ -21,6 +21,7 @@ import { getClientIp } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { powersOf } from '../lib/permissions'
 import { companyAreasOff } from '../lib/plans'
+import { isThemeId } from '../lib/themes'
 
 /** Record a sign-in for the Activity Log. Best-effort — never blocks auth. */
 async function logSignIn(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP'): Promise<void> {
@@ -60,7 +61,7 @@ async function publicUser(userId: string) {
         include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
         orderBy: { createdAt: 'asc' },
       },
-      company: { select: { id: true, name: true, slug: true, kind: true, plan: true, status: true, timeZone: true, modulesOff: true, modulesOn: true, trialEndsAt: true, setupDoneAt: true } },
+      company: { select: { id: true, name: true, slug: true, kind: true, plan: true, status: true, timeZone: true, modulesOff: true, modulesOn: true, trialEndsAt: true, setupDoneAt: true, theme: true, brandColor: true } },
       customRole: { select: { id: true, name: true, areasOff: true, powers: true } },
     },
   })
@@ -84,6 +85,8 @@ async function publicUser(userId: string) {
     // the parts of Metriq switched off for the role.
     company: {
       id: user.company.id, name: user.company.name, slug: user.company.slug, kind: user.company.kind, plan: user.company.plan, status: user.company.status, timeZone: user.company.timeZone,
+      // The company's colour theme and brand colour (null: Metriq's own); the person's own pick is uiTheme below.
+      theme: user.company.theme, brandColor: user.company.brandColor,
       trialEndsAt: user.company.status === 'TRIAL' ? user.company.trialEndsAt : null, setupDone: !!user.company.setupDoneAt,
       // Online payment open (a payment provider is set up), or "coming soon".
       paymentsOpen: !!activeProvider(),
@@ -100,6 +103,8 @@ async function publicUser(userId: string) {
     // Part C: the blocks the company made itself (name and icon, for menus and links).
     customBlocks: (await prisma.customBlock.findMany({ where: { companyId: user.companyId }, select: { id: true, name: true, icon: true, color: true }, orderBy: { createdAt: 'asc' } })),
     emailCheckPending: user.emailCheckPending,
+    // The colour theme this person picked (null: the company's).
+    uiTheme: user.uiTheme,
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,
     permissions: powersOf(user),
     // Switched off for the company's plan (or by the owner) and for the person's company role.
@@ -351,6 +356,17 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     data: { passwordHash: await hashPassword(parsed.data.password), sessionsValidFrom: new Date() },
   })
   res.json({ ok: true })
+}
+
+/** PUT /api/auth/me/theme { theme: id | null } — the colour theme this person picked (null: the company's). */
+export async function saveTheme(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = z.object({ theme: z.string().refine(isThemeId, 'Pick a theme from the list').nullable() }).safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' })
+    return
+  }
+  await prisma.user.update({ where: { id: req.user!.id }, data: { uiTheme: parsed.data.theme } })
+  res.json({ uiTheme: parsed.data.theme })
 }
 
 /** PUT /api/auth/me/dashboard { order, hidden } | { reset: true } — how this person arranged their own dashboard. */

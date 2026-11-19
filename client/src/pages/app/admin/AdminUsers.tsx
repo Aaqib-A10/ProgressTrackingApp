@@ -168,13 +168,13 @@ export default function AdminUsers() {
       className: 'sticky right-0 z-10 bg-card shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]',
       render: (u) => (
         <div className="flex items-center justify-end gap-0.5">
-          <button onClick={() => setDeptUser(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label={`Manage departments for ${u.name}`} title="Manage departments">
+          <button onClick={() => setDeptUser(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink" aria-label={`Manage departments for ${u.name}`} title="Manage departments">
             <Building2 size={16} />
           </button>
-          <button onClick={() => resetPw(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label={`Reset password for ${u.name}`} title="Reset password">
+          <button onClick={() => resetPw(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink" aria-label={`Reset password for ${u.name}`} title="Reset password">
             <RotateCcw size={15} />
           </button>
-          <button onClick={() => remove(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Delete ${u.name}`} title="Delete user">
+          <button onClick={() => remove(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label={`Delete ${u.name}`} title="Delete user">
             <Trash2 size={16} />
           </button>
         </div>
@@ -203,7 +203,7 @@ export default function AdminUsers() {
                 <Button size="sm" variant="secondary" leadingIcon={<Check size={16} />} onClick={() => patch(u.id, { status: 'ACTIVE' })}>
                   Approve
                 </Button>
-                <Button size="sm" variant="ghost" leadingIcon={<X size={16} />} className="!text-danger hover:!bg-danger/10" onClick={() => patch(u.id, { status: 'REJECTED' })}>
+                <Button size="sm" variant="ghost" leadingIcon={<X size={16} />} className="!text-danger-ink hover:!bg-danger/10" onClick={() => patch(u.id, { status: 'REJECTED' })}>
                   Reject
                 </Button>
               </li>
@@ -328,7 +328,7 @@ function DepartmentsModal({ user, onClose, onSaved, depts }: { user: AdminUser |
                   </select>
                 </div>
               )}
-              <button onClick={() => removeRow(i)} className="flex h-9 w-9 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove">
+              <button onClick={() => removeRow(i)} className="flex h-9 w-9 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Remove">
                 <Trash2 size={16} />
               </button>
             </div>

@@ -152,7 +152,7 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click() } }}
-            className="flex cursor-pointer items-center justify-center gap-2 rounded-btn border border-dashed border-line px-3 py-3 text-body-sm text-ink-muted hover:border-primary hover:text-primary"
+            className="flex cursor-pointer items-center justify-center gap-2 rounded-btn border border-dashed border-line px-3 py-3 text-body-sm text-ink-muted hover:border-primary hover:text-primary-ink"
           >
             <Upload size={15} /> Drop files here or click to choose
           </div>
@@ -187,7 +187,7 @@ export function CreateTaskModal({ projectKey, columns, members, labels, defaultC
             <Button type="button" variant="secondary" onClick={() => { if (newItem.trim()) { setChecklist((l) => [...l, newItem.trim()]); setNewItem('') } }} aria-label="Add checklist item"><Plus size={16} /></Button>
           </div>
         </div>
-        {error && <p className="text-body-sm text-danger">{error}</p>}
+        {error && <p className="text-body-sm text-danger-ink">{error}</p>}
       </form>
     </Modal>
   )

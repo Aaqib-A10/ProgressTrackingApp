@@ -81,7 +81,7 @@ export function ConsolidateArt() {
           <div key={tool.label} className={cn('mk-reveal absolute right-[68.2%] flex w-[290px] -translate-y-1/2 items-center gap-3 rounded-[16px] border border-line bg-card/90 p-2 pr-4 shadow-[0_6px_20px_-12px_rgb(var(--shadow)/0.35)] backdrop-blur', seen && 'mk-in')} style={{ top: `${(OLD_Y[i] / H) * 100}%`, ...d(i * 80) }}>
             <span className="relative">
               <AppTile tool={tool} />
-              <span className="absolute -right-1.5 -top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-card text-danger shadow ring-1 ring-line transition-transform duration-500" style={{ transform: seen ? 'scale(1)' : 'scale(0)', transitionDelay: `${900 + i * 140}ms` }}><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></span>
+              <span className="absolute -right-1.5 -top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-card text-danger-ink shadow ring-1 ring-line transition-transform duration-500" style={{ transform: seen ? 'scale(1)' : 'scale(0)', transitionDelay: `${900 + i * 140}ms` }}><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg></span>
             </span>
             <span className="min-w-0">
               <span className="relative block truncate text-[14px] font-semibold text-ink-muted">{tool.label}<span className="absolute left-0 top-1/2 h-[1.5px] w-full origin-left bg-ink-faint/80 transition-transform duration-700" style={{ transform: seen ? 'scaleX(1)' : 'scaleX(0)', transitionDelay: `${900 + i * 140}ms` }} /></span>
@@ -153,7 +153,7 @@ export function TeamsArt() {
         {[0, 1].map((r) => (
           <div key={r} className={cn('mk-marquee gap-2', r === 1 && 'mk-marquee-rev')}>
             {[...KINDS, ...KINDS].map((k, i) => (
-              <span key={i} className={cn('whitespace-nowrap rounded-full border px-3 py-1 text-[12.5px]', (i % 7) === (r ? 3 : 1) ? 'border-primary/40 bg-primary/10 font-semibold text-primary' : 'border-line bg-card text-ink-muted')}>{k}</span>
+              <span key={i} className={cn('whitespace-nowrap rounded-full border px-3 py-1 text-[12.5px]', (i % 7) === (r ? 3 : 1) ? 'border-primary/40 bg-primary/10 font-semibold text-primary-ink' : 'border-line bg-card text-ink-muted')}>{k}</span>
             ))}
           </div>
         ))}
@@ -214,8 +214,8 @@ export function NotesArt() {
         {bars.map((b, i) => <span key={i} className="mk-wave-bar w-[3px] flex-1 rounded-full bg-primary/70" style={d(i * 60, { height: `${b * 100}%` })} />)}
       </div>
       <div className="mt-3 space-y-1.5 text-[12.5px]">
-        <p className="mk-appear flex items-start gap-1.5 text-ink" style={d(0, { '--mk-dur': '7s' } as CSSProperties)}><IconSpark size={13} className="mt-0.5 shrink-0 text-primary" />Omar sends the forklift quote by Friday</p>
-        <p className="mk-appear flex items-start gap-1.5 text-ink" style={d(500, { '--mk-dur': '7s' } as CSSProperties)}><IconSpark size={13} className="mt-0.5 shrink-0 text-primary" />Hina books the warehouse visit</p>
+        <p className="mk-appear flex items-start gap-1.5 text-ink" style={d(0, { '--mk-dur': '7s' } as CSSProperties)}><IconSpark size={13} className="mt-0.5 shrink-0 text-primary-ink" />Omar sends the forklift quote by Friday</p>
+        <p className="mk-appear flex items-start gap-1.5 text-ink" style={d(500, { '--mk-dur': '7s' } as CSSProperties)}><IconSpark size={13} className="mt-0.5 shrink-0 text-primary-ink" />Hina books the warehouse visit</p>
       </div>
     </div>
   )
@@ -298,7 +298,7 @@ export function PhoneArt() {
         <div className="mx-auto -mt-2 mb-3 h-1.5 w-12 rounded-full bg-ink/15" />
         <p className="text-[11px] font-semibold text-ink-muted">Wednesday · Office Wi-Fi</p>
         <p className="mt-1 text-[22px] font-semibold tabular-nums tracking-tight text-ink">{hh}:{String(mm).padStart(2, '0')}:{String(ss).padStart(2, '0')}</p>
-        <p className="flex items-center gap-1.5 text-[11.5px] text-success"><span className="h-1.5 w-1.5 rounded-full bg-success" />Working</p>
+        <p className="flex items-center gap-1.5 text-[11.5px] text-success-ink"><span className="h-1.5 w-1.5 rounded-full bg-success" />Working</p>
         <div className="relative mt-4">
           <span className="mk-ping absolute inset-0 rounded-[10px] bg-primary/40" />
           <span className="relative flex h-9 items-center justify-center rounded-[10px] bg-primary text-[13px] font-semibold text-white">Take a break</span>
@@ -334,7 +334,7 @@ export function StepArt({ step }: { step: number }) {
       <div aria-hidden className="space-y-1.5 rounded-[12px] border border-line bg-card p-3 text-[12.5px] shadow-xs">
         {teams.map(([n, k], i) => (
           <div key={n} className="mk-appear flex items-center justify-between rounded-[8px] border border-line bg-bg px-2.5 py-1.5" style={{ '--mk-delay': `${i * 0.35}s`, '--mk-dur': '6s' } as CSSProperties}>
-            <span className="font-medium text-ink">{n}</span><span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{k}</span>
+            <span className="font-medium text-ink">{n}</span><span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary-ink">{k}</span>
           </div>
         ))}
       </div>
@@ -348,7 +348,7 @@ export function StepArt({ step }: { step: number }) {
           <span key={i} className={cn('mk-appear flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold text-white ring-2 ring-card', c)} style={{ '--mk-delay': `${j * 0.25}s`, '--mk-dur': '6s' } as CSSProperties}>{i}</span>
         ))}
       </div>
-      <p className="mk-appear mt-2.5 flex items-center gap-1.5 font-medium text-success" style={{ '--mk-delay': '1.4s', '--mk-dur': '6s' } as CSSProperties}><IconCheck size={14} />5 invites sent</p>
+      <p className="mk-appear mt-2.5 flex items-center gap-1.5 font-medium text-success-ink" style={{ '--mk-delay': '1.4s', '--mk-dur': '6s' } as CSSProperties}><IconCheck size={14} />5 invites sent</p>
     </div>
   )
 }

@@ -16,6 +16,7 @@ import { projectsApi } from '../../lib/projectsApi'
 import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
 import { GlobalSearch } from './GlobalSearch'
 import { getPins, onPinsChange, type Pin } from '../../lib/pins'
+import { dataTint } from '../../theme/css'
 
 const NAV_STORE = 'pt-nav-expanded'
 const matches = (to: string, path: string) => path === to || path.startsWith(to + '/')
@@ -159,29 +160,29 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
               onClick={() => { setQuery(''); onNavigate?.() }}
               className={({ isActive }) =>
                 cn(
-                  'group relative flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors duration-100',
+                  'group relative flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                   isActive
-                    ? 'bg-slate-200/70 font-medium text-ink shadow-[inset_0_0_0_1px_rgb(var(--line-strong)/0.35)]'
+                    ? 'bg-primary-50 font-medium text-primary-ink shadow-[inset_0_0_0_1px_rgb(var(--c-accent)/0.14)]'
                     : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon size={16} strokeWidth={isActive ? 2 : 1.75} className={cn('shrink-0', isActive ? 'text-ink' : 'text-ink-faint group-hover:text-ink-muted')} />
+                  <Icon size={16} strokeWidth={isActive ? 2 : 1.75} className={cn('shrink-0', isActive ? 'text-primary-ink' : 'text-ink-faint group-hover:text-ink-muted')} />
                   <span className="flex-1 truncate">{item.label}</span>
                   {item.to === '/app/feedback' && unreadFeedback > 0 && (
-                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-white">
+                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-on">
                       {unreadFeedback > 9 ? '9+' : unreadFeedback}
                     </span>
                   )}
                   {item.to === '/app/chat' && chatUnread > 0 && (
-                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-white" aria-label={`${chatUnread} unread`}>
+                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-on" aria-label={`${chatUnread} unread`}>
                       {chatUnread > 99 ? '99+' : chatUnread}
                     </span>
                   )}
                   {item.to === '/app/qa/my' && unreadQa > 0 && (
-                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-white">
+                    <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-on">
                       {unreadQa > 9 ? '9+' : unreadQa}
                     </span>
                   )}
@@ -232,7 +233,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                   <NavLink
                     to={`/app/projects/${p.key}`}
                     onClick={() => onNavigate?.()}
-                    className={({ isActive }) => cn('flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors', isActive && location.search.indexOf('task=') < 0 ? 'bg-slate-200/70 font-medium text-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
+                    className={({ isActive }) => cn('flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', isActive && location.search.indexOf('task=') < 0 ? 'bg-primary-50 font-medium text-primary-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
                   >
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center"><span className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundColor: p.color ?? 'rgb(var(--ink-faint))' }} /></span>
                     <span className="truncate">{p.name}</span>
@@ -265,7 +266,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                   {GroupIcon && (
                     <span
                       className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px]"
-                      style={group.color ? { color: group.color, backgroundColor: `${group.color}1F` } : undefined}
+                      style={group.color ? dataTint(group.color) : undefined}
                     >
                       <GroupIcon size={12} strokeWidth={2.2} />
                     </span>
@@ -314,7 +315,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
         <NavLink
           to="/app/settings"
           onClick={onNavigate}
-          className={({ isActive }) => cn('flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors', isActive ? 'bg-slate-200/70 font-medium text-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
+          className={({ isActive }) => cn('flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', isActive ? 'bg-primary-50 font-medium text-primary-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
         >
           <Settings size={16} strokeWidth={1.75} className="text-ink-faint" /> Settings
         </NavLink>
@@ -344,7 +345,7 @@ export function Avatar({ user, size = 36 }: { user: CurrentUser; size?: number }
   }
   return (
     <div
-      className="flex items-center justify-center rounded-full bg-primary/15 font-semibold text-primary"
+      className="flex items-center justify-center rounded-full bg-primary/15 font-semibold text-primary-ink"
       style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.38)) }}
     >
       {initials(user.name)}

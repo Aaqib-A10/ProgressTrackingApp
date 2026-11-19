@@ -29,10 +29,10 @@ const PAGE = 50
 // Short names in the address bar.
 const URL_KEY: Record<keyof FuFilters, string> = { q: 'fq', stage: 'fst', task: 'ftk', state: 'fs', region: 'fr', industry: 'fi', attempts: 'fa', reattempt: 'fre', tries: 'ftr', callNow: 'fcn', quietOp: 'fqo', quietA: 'fqa', quietB: 'fqb', actFrom: 'faf', actTo: 'fat', dueIn: 'fdi', touchedAgo: 'fta', all: 'fall' }
 const STRIP: { key: TaskBucket; label: string; tone: string }[] = [
-  { key: 'overdue', label: 'Overdue', tone: 'text-rose-600 dark:text-rose-300' },
-  { key: 'today', label: 'Due today', tone: 'text-amber-600 dark:text-amber-300' },
+  { key: 'overdue', label: 'Overdue', tone: 'text-red-ink' },
+  { key: 'today', label: 'Due today', tone: 'text-yellow-ink' },
   { key: 'upcoming', label: 'Upcoming', tone: 'text-ink' },
-  { key: 'done', label: 'Done today', tone: 'text-success' },
+  { key: 'done', label: 'Done today', tone: 'text-success-ink' },
 ]
 
 /**
@@ -139,7 +139,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
   }
   const activeView = views.find((v) => JSON.stringify(v.filters) === JSON.stringify(viewFilters()))?.id
   const opts = (fn: (l: DialerLead) => string | null, empty: string) => [...new Set(all.map((r) => fn(r.lead) ?? empty))].sort((a, b) => a.localeCompare(b))
-  const sel = (on: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', on ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')
+  const sel = (on: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', on ? 'border-primary bg-primary/5 font-semibold text-primary-ink' : 'border-line bg-card text-ink')
 
   return (
     <div ref={anchor} className="space-y-4">
@@ -147,16 +147,16 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" className="inline-flex rounded-btn border border-line bg-card p-1">
           {([['list', 'Lead list'], ['history', 'Task history']] as const).map(([k, l]) => (
-            <button key={k} role="tab" aria-selected={mode === k} type="button" onClick={() => update({ fmode: k === 'list' ? null : k }, false)} className={cn('rounded-md px-3 py-1.5 text-body-sm font-semibold', mode === k ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>{l}</button>
+            <button key={k} role="tab" aria-selected={mode === k} type="button" onClick={() => update({ fmode: k === 'list' ? null : k }, false)} className={cn('rounded-md px-3 py-1.5 text-body-sm font-semibold', mode === k ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>{l}</button>
           ))}
         </div>
         {mode === 'list' && views.map((v) => (
-          <span key={v.id} className={cn('inline-flex items-center rounded-full border text-body-sm font-semibold', activeView === v.id ? 'border-primary bg-primary text-white' : 'border-dashed border-line bg-card text-ink')}>
+          <span key={v.id} className={cn('inline-flex items-center rounded-full border text-body-sm font-semibold', activeView === v.id ? 'border-primary bg-primary text-primary-on' : 'border-dashed border-line bg-card text-ink')}>
             <button type="button" onClick={() => applyView(v)} className="py-1 pl-3 pr-1.5">{v.name}</button>
             <button type="button" onClick={() => saveViews(views.filter((x) => x.id !== v.id), `"${v.name}" removed.`)} className="rounded-full p-1 pr-2 opacity-60 hover:opacity-100" aria-label={`Remove ${v.name}`}><X size={12} /></button>
           </span>
         ))}
-        {mode === 'list' && Object.keys(viewFilters()).length > 0 && !activeView && <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Save size={14} /> Save view</button>}
+        {mode === 'list' && Object.keys(viewFilters()).length > 0 && !activeView && <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink"><Save size={14} /> Save view</button>}
         <div className="ml-auto flex items-center gap-2">
           <InfoTip side="bottom">
             A touch is one try at reaching a lead: a status change or a re-attempt seen between two imports, or one you log (an outcome, or Add touch). Call now only copies the number.
@@ -195,7 +195,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
                 </button>
               )
             })}
-            <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-card border border-dashed border-line px-3.5 text-body-sm font-semibold text-primary hover:border-primary"><ListPlus size={15} />Add task</button>
+            <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-card border border-dashed border-line px-3.5 text-body-sm font-semibold text-primary-ink hover:border-primary"><ListPlus size={15} />Add task</button>
             <InfoTip>Overdue is one number: leads quiet longer than their rule, call backs and tasks past their time. Each row says why.</InfoTip>
           </div>
 
@@ -214,7 +214,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
               { key: 'callNow', label: 'Can call now', group: 'Activity', active: !!f.callNow, clear: () => setF('callNow', undefined), control: <button type="button" onClick={() => setF('callNow', f.callNow ? undefined : '1')} className={sel(!!f.callNow)}>Can call now</button> },
               { key: 'quiet', label: 'Quiet for', group: 'Activity', active: !!f.quietA, summary: quietLabel, clear: () => setQuiet({ quietOp: undefined, quietA: undefined, quietB: undefined }), control: <QuietFilter f={f} set={setQuiet} /> },
               { key: 'activity', label: 'Last activity', group: 'Activity', active: !!(f.actFrom || f.actTo), summary: [f.actFrom, f.actTo].filter(Boolean).join(' – '), clear: () => update({ [URL_KEY.actFrom]: null, [URL_KEY.actTo]: null }), control: (
-                <label className={cn('inline-flex h-8 items-center gap-1 rounded-full border px-2 text-body-sm', f.actFrom || f.actTo ? 'border-primary bg-primary/5 text-primary' : 'border-line bg-card text-ink')}>
+                <label className={cn('inline-flex h-8 items-center gap-1 rounded-full border px-2 text-body-sm', f.actFrom || f.actTo ? 'border-primary bg-primary/5 text-primary-ink' : 'border-line bg-card text-ink')}>
                   <span className="pl-1 text-ink-muted">Last activity</span>
                   <input type="date" value={f.actFrom ?? ''} onChange={(e) => setF('actFrom', e.target.value)} className="bg-transparent text-body-sm outline-none" aria-label="Last activity from" />
                   <span className="text-ink-faint">–</span>
@@ -246,7 +246,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
             </div>
             {rows.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
-                <ListChecks size={28} className="text-success" />
+                <ListChecks size={28} className="text-success-ink" />
                 <p className="text-body-lg font-semibold text-ink">Nothing to follow up here</p>
                 <p className="text-body-sm text-ink-muted">{extra || f.stage || f.task ? 'No lead matches these filters.' : 'Every lead is inside its follow-up rule and has no task due.'}</p>
               </div>
@@ -333,11 +333,11 @@ function QuietFilter({ f, set }: { f: FuFilters; set: (p: Partial<Record<keyof F
   const num = 'h-8 w-16 rounded-btn border border-line bg-card px-2 text-body-sm text-ink focus:border-primary focus:outline-none'
   return (
     <div ref={box} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className={cn('h-8 rounded-full border px-3 text-body-sm', f.quietA ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')}>{label}</button>
+      <button type="button" onClick={() => setOpen((o) => !o)} className={cn('h-8 rounded-full border px-3 text-body-sm', f.quietA ? 'border-primary bg-primary/5 font-semibold text-primary-ink' : 'border-line bg-card text-ink')}>{label}</button>
       {open && (
         <div className="absolute left-0 top-9 z-30 w-72 rounded-card border border-line bg-card p-3 shadow-overlay">
           <div className="inline-flex rounded-btn border border-line p-0.5">
-            {([['gt', 'More than'], ['lt', 'Less than'], ['between', 'Between']] as const).map(([k, l]) => <button key={k} type="button" onClick={() => set({ quietOp: k === 'gt' ? undefined : k })} className={cn('rounded-md px-2 py-1 text-[12px] font-semibold', op === k ? 'bg-primary text-white' : 'text-ink-muted')}>{l}</button>)}
+            {([['gt', 'More than'], ['lt', 'Less than'], ['between', 'Between']] as const).map(([k, l]) => <button key={k} type="button" onClick={() => set({ quietOp: k === 'gt' ? undefined : k })} className={cn('rounded-md px-2 py-1 text-[12px] font-semibold', op === k ? 'bg-primary text-primary-on' : 'text-ink-muted')}>{l}</button>)}
           </div>
           <div className="mt-2.5 flex items-center gap-2 text-body-sm text-ink">
             <input type="number" min={0} value={f.quietA ?? ''} onChange={(e) => set({ quietA: e.target.value || undefined })} className={num} aria-label="Days" />
@@ -345,7 +345,7 @@ function QuietFilter({ f, set }: { f: FuFilters; set: (p: Partial<Record<keyof F
             <span className="text-ink-muted">days</span>
           </div>
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {[7, 14, 30, 60, 90].map((n) => <button key={n} type="button" onClick={() => set({ quietA: String(n) })} className={cn('rounded-full border px-2.5 py-0.5 text-[12px] font-semibold', f.quietA === String(n) ? 'border-primary text-primary' : 'border-line text-ink-muted hover:text-ink')}>{n}</button>)}
+            {[7, 14, 30, 60, 90].map((n) => <button key={n} type="button" onClick={() => set({ quietA: String(n) })} className={cn('rounded-full border px-2.5 py-0.5 text-[12px] font-semibold', f.quietA === String(n) ? 'border-primary text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{n}</button>)}
           </div>
           {f.quietA && <button type="button" onClick={() => set({ quietOp: undefined, quietA: undefined, quietB: undefined })} className="mt-2 text-[12px] font-semibold text-ink-muted hover:text-ink">Clear</button>}
         </div>
@@ -369,7 +369,7 @@ function SortModal({ sort, onClose, onSave }: { sort: FuSort[]; onClose: () => v
             <button type="button" onClick={() => setS((y) => y.map((z, j) => (j === i ? { ...z, dir: z.dir === 'asc' ? 'desc' : 'asc' } : z)))} className="rounded-full border border-line px-2 py-0.5 text-[11.5px] font-semibold text-ink-muted hover:text-ink">{x.dir === 'asc' ? 'A→Z / low first' : 'Z→A / high first'}</button>
             <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="rounded p-0.5 text-ink-muted disabled:opacity-30" aria-label="Up"><ArrowUp size={14} /></button>
             <button type="button" disabled={i === s.length - 1} onClick={() => move(i, 1)} className="rounded p-0.5 text-ink-muted disabled:opacity-30" aria-label="Down"><ArrowDown size={14} /></button>
-            <button type="button" onClick={() => setS((y) => y.filter((_, j) => j !== i))} className="rounded p-0.5 text-ink-muted hover:text-danger" aria-label="Remove"><Trash2 size={14} /></button>
+            <button type="button" onClick={() => setS((y) => y.filter((_, j) => j !== i))} className="rounded p-0.5 text-ink-muted hover:text-danger-ink" aria-label="Remove"><Trash2 size={14} /></button>
           </li>
         ))}
       </ol>

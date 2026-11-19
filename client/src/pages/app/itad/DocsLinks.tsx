@@ -92,10 +92,10 @@ export default function DocsLinks() {
           <ul className="divide-y divide-line">
             {shown.map((d) => (
               <li key={d.id} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50/60">
-                <button onClick={() => void togglePin(d)} className={cn('mt-0.5 rounded p-1', d.pinned ? 'text-warning' : 'text-ink-muted hover:text-warning')} aria-label={d.pinned ? 'Unpin' : 'Pin to top'} title={d.pinned ? 'Pinned' : 'Pin to top'}>
+                <button onClick={() => void togglePin(d)} className={cn('mt-0.5 rounded p-1', d.pinned ? 'text-warning-ink' : 'text-ink-muted hover:text-warning-ink')} aria-label={d.pinned ? 'Unpin' : 'Pin to top'} title={d.pinned ? 'Pinned' : 'Pin to top'}>
                   <Star size={16} fill={d.pinned ? 'currentColor' : 'none'} />
                 </button>
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary">{d.file ? <FileText size={16} /> : <Link2 size={16} />}</span>
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink">{d.file ? <FileText size={16} /> : <Link2 size={16} />}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-ink [overflow-wrap:anywhere]">{d.title}</span>
@@ -103,15 +103,15 @@ export default function DocsLinks() {
                     <Badge tone="neutral">{DOC_CATEGORY_LABEL[d.category]}</Badge>
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm">
-                    {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline" title={d.url}><ExternalLink size={13} /> {host(d.url)}</a>}
-                    {d.file && <a href={d.file.downloadUrl} className="inline-flex items-center gap-1 text-primary hover:underline"><Download size={13} /> {d.file.name} <span className="text-ink-muted">({sizeLabel(d.file.size)})</span></a>}
+                    {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-ink hover:underline" title={d.url}><ExternalLink size={13} /> {host(d.url)}</a>}
+                    {d.file && <a href={d.file.downloadUrl} className="inline-flex items-center gap-1 text-primary-ink hover:underline"><Download size={13} /> {d.file.name} <span className="text-ink-muted">({sizeLabel(d.file.size)})</span></a>}
                   </div>
                   {d.notes && <p className="mt-1 whitespace-pre-line text-body-sm text-ink-muted [overflow-wrap:anywhere]">{d.notes}</p>}
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
-                  {d.url && <button onClick={() => copy(d.url!)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label="Copy link" title="Copy link"><Copy size={15} /></button>}
-                  <button onClick={() => setEditing(d)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label="Edit" title="Edit"><Pencil size={15} /></button>
-                  <button onClick={() => void remove(d)} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Delete" title="Delete"><Trash2 size={15} /></button>
+                  {d.url && <button onClick={() => copy(d.url!)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-primary-ink" aria-label="Copy link" title="Copy link"><Copy size={15} /></button>}
+                  <button onClick={() => setEditing(d)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-primary-ink" aria-label="Edit" title="Edit"><Pencil size={15} /></button>
+                  <button onClick={() => void remove(d)} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label="Delete" title="Delete"><Trash2 size={15} /></button>
                 </div>
               </li>
             ))}

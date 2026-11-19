@@ -99,9 +99,9 @@ function ReportFiller({ formId }: { formId: string }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <CalendarDays size={16} className="mr-1 text-ink-muted" />
         {lastDays(data.today, 7).map((d) => (
-          <button key={d} type="button" onClick={() => load(d)} className={cn('inline-flex items-center gap-1.5 rounded-btn border px-2.5 py-1.5 text-body-sm', d === date ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
+          <button key={d} type="button" onClick={() => load(d)} className={cn('inline-flex items-center gap-1.5 rounded-btn border px-2.5 py-1.5 text-body-sm', d === date ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>
             {d === data.today ? 'Today' : fmtDay(d)}
-            {sentDays.has(d) && <CheckCircle2 size={13} className="text-success" />}
+            {sentDays.has(d) && <CheckCircle2 size={13} className="text-success-ink" />}
           </button>
         ))}
       </div>
@@ -120,7 +120,7 @@ function ReportFiller({ formId }: { formId: string }) {
 export function FieldInputRow({ field, value, onChange, disabled }: { field: ReportField; value: Answer | undefined; onChange: (v: Answer | undefined) => void; disabled?: boolean }) {
   const label = (
     <span className="mb-1.5 block">
-      <span className="text-body-md font-semibold text-ink">{field.label}{field.required && <span className="text-danger"> *</span>}</span>
+      <span className="text-body-md font-semibold text-ink">{field.label}{field.required && <span className="text-danger-ink"> *</span>}</span>
       {field.type === 'NUMBER' && field.target != null && <span className="ml-2 text-body-sm text-ink-muted">Target {field.targetDir === 'MAX' ? 'at most' : ''} {field.target}{field.unit ? ` ${field.unit}` : ''} a day</span>}
       {field.help && <span className="block text-body-sm text-ink-muted">{field.help}</span>}
     </span>
@@ -137,27 +137,27 @@ export function FieldInputRow({ field, value, onChange, disabled }: { field: Rep
     case 'CHOICE':
       return (
         <fieldset>{label}<div className="flex flex-wrap gap-1.5">
-          {field.options.map((o) => <button key={o} type="button" disabled={disabled} onClick={() => onChange(value === o ? undefined : o)} className={cn('rounded-full border px-3 py-1.5 text-body-sm', value === o ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>{o}</button>)}
+          {field.options.map((o) => <button key={o} type="button" disabled={disabled} onClick={() => onChange(value === o ? undefined : o)} className={cn('rounded-full border px-3 py-1.5 text-body-sm', value === o ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{o}</button>)}
         </div></fieldset>
       )
     case 'MULTI_CHOICE': {
       const list = Array.isArray(value) ? value : []
       return (
         <fieldset>{label}<div className="flex flex-wrap gap-1.5">
-          {field.options.map((o) => { const on = list.includes(o); return <button key={o} type="button" disabled={disabled} onClick={() => onChange(on ? list.filter((x) => x !== o) : [...list, o])} className={cn('rounded-full border px-3 py-1.5 text-body-sm', on ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>{o}</button> })}
+          {field.options.map((o) => { const on = list.includes(o); return <button key={o} type="button" disabled={disabled} onClick={() => onChange(on ? list.filter((x) => x !== o) : [...list, o])} className={cn('rounded-full border px-3 py-1.5 text-body-sm', on ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{o}</button> })}
         </div></fieldset>
       )
     }
     case 'YES_NO':
       return (
         <fieldset>{label}<div className="flex gap-1.5">
-          {[[true, 'Yes'], [false, 'No']].map(([v, l]) => <button key={String(v)} type="button" disabled={disabled} onClick={() => onChange(value === v ? undefined : (v as boolean))} className={cn('rounded-btn border px-4 py-1.5 text-body-sm font-medium', value === v ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>{l as string}</button>)}
+          {[[true, 'Yes'], [false, 'No']].map(([v, l]) => <button key={String(v)} type="button" disabled={disabled} onClick={() => onChange(value === v ? undefined : (v as boolean))} className={cn('rounded-btn border px-4 py-1.5 text-body-sm font-medium', value === v ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{l as string}</button>)}
         </div></fieldset>
       )
     case 'RATING':
       return (
         <fieldset>{label}<div className="flex gap-1">
-          {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" disabled={disabled} aria-label={`${n} of 5`} onClick={() => onChange(value === n ? undefined : n)} className="p-0.5"><Star size={24} className={typeof value === 'number' && n <= value ? 'fill-warning text-warning' : 'text-ink-faint'} /></button>)}
+          {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" disabled={disabled} aria-label={`${n} of 5`} onClick={() => onChange(value === n ? undefined : n)} className="p-0.5"><Star size={24} className={typeof value === 'number' && n <= value ? 'fill-warning text-warning-ink' : 'text-ink-faint'} /></button>)}
         </div></fieldset>
       )
   }

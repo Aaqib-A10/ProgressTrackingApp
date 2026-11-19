@@ -33,7 +33,7 @@ export default function JesseQueue() {
   return (
     <div className="mx-auto w-full max-w-[1300px] space-y-4">
       <PageHeader title="Jesse Queue" hint={`${biz?.name ?? ''} · flagged leads waiting for a decision. Jesse checks flags within 1 business day.`} actions={cmrBiz.length > 1 ? <BusinessPicker /> : undefined} />
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
       {d && !d.queue.length && <div className="rounded-card border border-line bg-card p-8"><EmptyState icon={<Flag />} title="Nothing waiting on Jesse" hint={d.canDecide ? 'When an SDR presses Qualify on a lead, it appears here with the five facts, the last call and the recording.' : 'Press Qualify on a lead once the facts are in; it appears here for Jesse within the minute.'} /></div>}
       <div className="space-y-3">
         {d?.queue.map((l) => (
@@ -44,17 +44,17 @@ export default function JesseQueue() {
                   <Link to={`/app/leads/${l.id}`} className="text-[16px] font-semibold text-ink hover:underline">{leadTitle(l)}</Link>
                   <StatusPill status={l.status} pipeline={biz?.pipeline} label={l.statusLabel} />
                   {l.belowMin && <Badge tone="accent">Below minimum</Badge>}
-                  <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold', (l.waitingDays ?? 0) > 1 ? 'bg-danger/10 text-danger' : (l.waitingDays ?? 0) === 1 ? 'bg-warning/15 text-amber-700' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>waiting {l.waitingDays ?? 0} business day{l.waitingDays === 1 ? '' : 's'}</span>
+                  <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold', (l.waitingDays ?? 0) > 1 ? 'bg-danger/10 text-danger-ink' : (l.waitingDays ?? 0) === 1 ? 'bg-warning/15 text-warning-ink' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>waiting {l.waitingDays ?? 0} business day{l.waitingDays === 1 ? '' : 's'}</span>
                 </div>
                 <p className="mt-0.5 text-body-sm text-ink-muted">{[l.industry, l.state, l.assignee ? `SDR ${l.assignee.name}` : 'Unassigned', `flagged ${ago(l.flaggedAt)}${l.flaggedBy && l.flaggedBy.id !== l.assigneeId ? ` by ${l.flaggedBy.name}` : ''}`].filter(Boolean).join(' · ')}</p>
-                <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-2.5 py-0.5 text-[12px] font-semibold text-primary">From {l.flaggedBy?.name ?? l.assignee?.name ?? 'the team'}</p>
+                <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-2.5 py-0.5 text-[12px] font-semibold text-primary-ink">From {l.flaggedBy?.name ?? l.assignee?.name ?? 'the team'}</p>
               </div>
               <div className="flex items-center gap-2">
                 <FactsMeter facts={l.facts} />
                 {d.canDecide ? <Button size="sm" onClick={() => nav(`/app/leads/${l.id}`)}>Decide</Button> : <Button size="sm" variant="secondary" onClick={() => nav(`/app/leads/${l.id}`)}>Open</Button>}
               </div>
             </div>
-            <p className="mt-3 rounded-card border border-orange-200 bg-orange-50/60 px-3 py-2 text-body-md text-ink dark:border-orange-500/30 dark:bg-orange-500/10"><span className="text-body-sm font-semibold text-ink-muted">Decide: </span>{l.jesseAsk}</p>
+            <p className="mt-3 rounded-card border border-orange-ring bg-orange-subtle/60 px-3 py-2 text-body-md text-ink"><span className="text-body-sm font-semibold text-ink-muted">Decide: </span>{l.jesseAsk}</p>
             <div className="mt-3 grid gap-3 text-body-sm sm:grid-cols-5">
               <Fact label="Material" value={l.material?.length ? l.material.map((m) => m.replace(/_/g, ' ').toLowerCase()).join(', ') : '—'} />
               <Fact label="Volume" value={l.lbsPerShipment || l.lbsPerMonth ? `${l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb/load` : ''}${l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}${l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()} lb/mo` : ''}` : '—'} />
@@ -74,17 +74,17 @@ export default function JesseQueue() {
       </div>
       {sdr && (
         <section className="grid gap-3 lg:grid-cols-3">
-          <div className="rounded-card border border-line bg-gradient-to-br from-orange-50 to-amber-50 p-5 shadow-xs dark:from-orange-500/10 dark:to-amber-500/5">
+          <div className="rounded-card border border-line bg-gradient-to-br from-orange-subtle to-yellow-subtle p-5 shadow-xs">
             <h2 className="text-[15px] font-semibold text-ink">How a lead reaches Jesse</h2>
             <ol className="mt-3 space-y-2 text-body-sm text-ink">
-              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span>Log the call and fill the <b>five facts</b> (material, volume, current outlet, decision maker, timing).</span></li>
-              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span><b>Send info</b> from the lead, follow up in two business days.</span></li>
-              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span>Open the lead and press <b>Qualify</b>: one line on what Jesse must decide (price, freight, pickup, a meeting). That puts it in this queue.</span></li>
-              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-500" /><span>Jesse answers within a business day: a meeting slot, a direction, or close. You see it on the lead and in your tasks.</span></li>
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-vivid" /><span>Log the call and fill the <b>five facts</b> (material, volume, current outlet, decision maker, timing).</span></li>
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-vivid" /><span><b>Send info</b> from the lead, follow up in two business days.</span></li>
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-vivid" /><span>Open the lead and press <b>Qualify</b>: one line on what Jesse must decide (price, freight, pickup, a meeting). That puts it in this queue.</span></li>
+              <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-orange-vivid" /><span>Jesse answers within a business day: a meeting slot, a direction, or close. You see it on the lead and in your tasks.</span></li>
             </ol>
           </div>
           <div className="rounded-card border border-line bg-card p-5 shadow-xs lg:col-span-2">
-            <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold text-ink">Your leads closest to ready</h2><Link to={`/app/leads?business=${biz?.id}&assignee=me`} className="text-body-sm font-semibold text-primary hover:underline">All mine →</Link></div>
+            <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold text-ink">Your leads closest to ready</h2><Link to={`/app/leads?business=${biz?.id}&assignee=me`} className="text-body-sm font-semibold text-primary-ink hover:underline">All mine →</Link></div>
             {ready === null ? <p className="mt-3 text-body-sm text-ink-faint">Loading…</p> : !ready.length ? <p className="mt-3 text-body-sm text-ink-muted">No open leads assigned to you yet.</p> : (
               <ul className="mt-3 divide-y divide-line">
                 {ready.map((l) => (

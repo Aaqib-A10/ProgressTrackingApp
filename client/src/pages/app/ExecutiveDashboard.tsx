@@ -17,7 +17,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 function Delta({ value }: { value: number }) {
   const pos = value >= 0
   return (
-    <span className={'inline-flex items-center gap-0.5 text-body-sm font-semibold tabular-nums ' + (pos ? 'text-success' : 'text-danger')}>
+    <span className={'inline-flex items-center gap-0.5 text-body-sm font-semibold tabular-nums ' + (pos ? 'text-success-ink' : 'text-danger-ink')}>
       {pos ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
       {formatSignedPercent(value)}
     </span>
@@ -38,15 +38,15 @@ function MiniStat({ label, value, tone = 'text-ink' }: { label: string; value: s
 
 function ActionCenter({ summary }: { summary: ExecSummary }) {
   const items = [
-    { n: summary.pendingApprovals, label: 'Team Lead approvals pending', to: '/app/admin/users', icon: <UserCheck size={16} />, tone: 'text-warning bg-warning/10' },
-    { n: summary.notSubmitted, label: "Haven't submitted today", to: '/app/team/not-submitted', icon: <ClipboardCheck size={16} />, tone: 'text-primary bg-primary/10' },
-    { n: summary.stockRequested, label: 'Stock requests to assign', to: '/app/ecommerce/stock', icon: <Boxes size={16} />, tone: 'text-success bg-success/10' },
-    { n: summary.coachingNeeded, label: 'QA coaching needed', to: '/app/qa/analytics', icon: <GraduationCap size={16} />, tone: 'text-danger bg-danger/10' },
+    { n: summary.pendingApprovals, label: 'Team Lead approvals pending', to: '/app/admin/users', icon: <UserCheck size={16} />, tone: 'text-warning-ink bg-warning/10' },
+    { n: summary.notSubmitted, label: "Haven't submitted today", to: '/app/team/not-submitted', icon: <ClipboardCheck size={16} />, tone: 'text-primary-ink bg-primary/10' },
+    { n: summary.stockRequested, label: 'Stock requests to assign', to: '/app/ecommerce/stock', icon: <Boxes size={16} />, tone: 'text-success-ink bg-success/10' },
+    { n: summary.coachingNeeded, label: 'QA coaching needed', to: '/app/qa/analytics', icon: <GraduationCap size={16} />, tone: 'text-danger-ink bg-danger/10' },
   ].filter((i) => i.n > 0)
   return (
     <Card title="Action Center" subtitle={items.length ? `${summary.alerts} items need attention` : 'You are all caught up'}>
       {items.length === 0 ? (
-        <div className="flex items-center gap-2.5 rounded-lg bg-success/[0.07] px-3 py-2.5 text-body-md text-success"><CheckCircle2 size={17} /> All clear. Nothing needs attention.</div>
+        <div className="flex items-center gap-2.5 rounded-lg bg-success/[0.07] px-3 py-2.5 text-body-md text-success-ink"><CheckCircle2 size={17} /> All clear. Nothing needs attention.</div>
       ) : (
         <ul className="divide-y divide-line">
           {items.map((i) => (
@@ -118,12 +118,12 @@ export default function ExecutiveDashboard() {
       {kinds && <GettingStarted />}
 
       {data && has('ITAD', 'CSR') && (
-        <Card title="QA health" subtitle="Call quality across ITAD + CSR this period" action={<Link to="/app/qa/analytics" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary">Open QA <ArrowRight size={14} /></Link>}>
+        <Card title="QA health" subtitle="Call quality across ITAD + CSR this period" action={<Link to="/app/qa/analytics" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink">Open QA <ArrowRight size={14} /></Link>}>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <MiniStat label="Avg QA score" value={formatPercent(data.qa.avgScore / 100)} />
             <MiniStat label="Pass rate" value={formatPercent(data.qa.passRate / 100)} />
             <MiniStat label="Evaluations" value={formatNumber(data.qa.evaluations)} />
-            <MiniStat label="Coaching needed" value={formatNumber(data.qa.coachingNeeded)} tone={data.qa.coachingNeeded > 0 ? 'text-warning' : 'text-ink'} />
+            <MiniStat label="Coaching needed" value={formatNumber(data.qa.coachingNeeded)} tone={data.qa.coachingNeeded > 0 ? 'text-warning-ink' : 'text-ink'} />
           </div>
         </Card>
       )}
@@ -156,7 +156,7 @@ export default function ExecutiveDashboard() {
                     <p className="text-body-sm text-ink-muted">{d.improvement}</p>
                   )}
                   {to && (
-                    <span className="mt-4 inline-flex items-center gap-1 text-body-sm font-semibold text-primary">
+                    <span className="mt-4 inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink">
                       View {d.name} <ArrowRight size={14} />
                     </span>
                   )}
@@ -194,7 +194,7 @@ export default function ExecutiveDashboard() {
                 <ul className="space-y-3">
                   {data.topPerformers.map((t) => (
                     <li key={t.department} className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/15 text-warning"><Trophy size={16} /></span>
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/15 text-warning-ink"><Trophy size={16} /></span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-body-md font-medium text-ink">{t.name}</p>
                         <p className="text-body-sm text-ink-muted">{t.department}</p>
@@ -228,11 +228,11 @@ export default function ExecutiveDashboard() {
           {/* Executive insights */}
           <Card className="border-primary/20 bg-primary/5">
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink">
                 <Sparkles size={18} />
               </span>
               <div>
-                <p className="text-body-sm font-semibold uppercase tracking-wide text-primary">Executive Insights</p>
+                <p className="text-body-sm font-semibold uppercase tracking-wide text-primary-ink">Executive Insights</p>
                 <ul className="mt-1 space-y-0.5 text-body-md text-ink">
                   {data.insights.map((line, i) => (
                     <li key={i}>{line}</li>

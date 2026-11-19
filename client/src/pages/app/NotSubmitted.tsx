@@ -30,7 +30,7 @@ export default function NotSubmitted() {
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-danger/10 text-danger">
+        <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-danger/10 text-danger-ink">
           <AlertTriangle size={20} />
         </span>
         <div>
@@ -46,7 +46,7 @@ export default function NotSubmitted() {
       ) : total === 0 ? (
         <Card>
           <div className="flex flex-col items-center gap-2 py-12 text-center">
-            <CheckCircle2 size={28} className="text-success" />
+            <CheckCircle2 size={28} className="text-success-ink" />
             <p className="text-body-md text-ink-muted">All team members have submitted today.</p>
           </div>
         </Card>
@@ -64,7 +64,7 @@ export default function NotSubmitted() {
                     to={`/app/members/${m.id}`}
                     className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary-ink">
                       {initials(m.name)}
                     </span>
                     <div className="min-w-0 flex-1">

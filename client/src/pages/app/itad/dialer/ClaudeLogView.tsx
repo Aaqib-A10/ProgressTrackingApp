@@ -93,13 +93,13 @@ export function ClaudeLogView({ rep, leads, showOwner, refreshKey, onOpenLead, o
                       {i.canEdit && (deleting === i.id ? (
                         <span className="flex shrink-0 items-center gap-2 text-[12px]">
                           <span className="text-ink-muted">{i.kind === 'NOTE' ? 'Delete this note?' : 'Remove from the lead?'}</span>
-                          <button type="button" disabled={busy} onClick={() => remove(i)} className="font-semibold text-danger">Yes</button>
+                          <button type="button" disabled={busy} onClick={() => remove(i)} className="font-semibold text-danger-ink">Yes</button>
                           <button type="button" onClick={() => setDeleting(null)} className="font-semibold text-ink-muted">No</button>
                         </span>
                       ) : (
                         <span className="flex shrink-0 gap-1">
                           <button type="button" onClick={() => setEditing({ id: i.id, text: i.text })} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Edit" title="Edit"><Pencil size={14} /></button>
-                          <button type="button" onClick={() => setDeleting(i.id)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-danger" aria-label="Delete" title="Delete"><Trash2 size={14} /></button>
+                          <button type="button" onClick={() => setDeleting(i.id)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-danger-ink" aria-label="Delete" title="Delete"><Trash2 size={14} /></button>
                         </span>
                       ))}
                     </div>

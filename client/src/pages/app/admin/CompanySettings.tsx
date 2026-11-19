@@ -16,6 +16,8 @@ import {
 } from '../../../lib/companyApi'
 import { kindFromName } from '../../../lib/sections'
 import { MetraAdmin } from '../../../components/metra/MetraAdmin'
+import { ThemePicker } from '../../../components/ui/ThemePicker'
+import { themeById } from '../../../theme/themes'
 import { useFlags } from '../../../lib/flags'
 
 /**
@@ -57,7 +59,7 @@ export default function CompanySettings() {
       <div role="tablist" className="pt-tabs flex flex-wrap gap-1 border-b border-line">
         {tabs.map((t) => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} type="button" onClick={() => setTab(t.key)}
-            className={cn('-mb-px inline-flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-body-md font-medium transition-colors', tab === t.key ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink')}>
+            className={cn('-mb-px inline-flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-body-md font-medium transition-colors', tab === t.key ? 'border-primary text-primary-ink' : 'border-transparent text-ink-muted hover:text-ink')}>
             <t.icon size={16} />{t.label}
           </button>
         ))}
@@ -125,6 +127,7 @@ function GeneralTab() {
         {data.canEdit && <div className="sm:col-span-2"><Button type="submit" disabled={saving || !changed || name.trim().length < 2}>{saving ? 'Saving…' : 'Save'}</Button></div>}
       </form>
     </Card>
+    <CompanyLook company={c} canEdit={data.canEdit} onSaved={(company) => { setData({ ...data, company }); void refresh?.() }} />
     {u && (
       <Card title="Your plan" subtitle={c.home ? 'Internal: no limits.' : 'Change it in Billing.'}>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -158,6 +161,68 @@ function Use({ label, used, limit, pct }: { label: string; used: string; limit: 
       <p className="mt-0.5 text-body-lg font-semibold tabular-nums text-ink">{used}<span className="text-body-sm font-normal text-ink-muted">{limit === null ? '' : ` of ${limit}`}</span></p>
       {limit !== null && <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={cn('h-full rounded-full', pct >= 1 ? 'bg-danger' : pct >= 0.8 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.min(100, pct * 100)}%` }} /></div>}
     </div>
+  )
+}
+
+/** The accent colour showing now, as #rrggbb (what a colour input needs as its starting value). */
+function accentHex(): string {
+  const ch = getComputedStyle(document.documentElement).getPropertyValue('--c-accent').trim().split(/\s+/).map(Number)
+  const rgb = ch.length === 3 && ch.every((n) => Number.isFinite(n)) ? ch : [0, 0, 0]
+  return `#${rgb.map((n) => n.toString(16).padStart(2, '0')).join('')}`
+}
+
+/**
+ * The company's look: the colour theme everyone sees unless they pick their own (Settings), and a brand colour for
+ * buttons, links and selection in place of the theme's own. Applied to this page straight away so it can be judged.
+ */
+function CompanyLook({ company, canEdit, onSaved }: { company: CompanyInfo; canEdit: boolean; onSaved: (c: CompanyInfo) => void }) {
+  const { addToast } = useToast()
+  const [saving, setSaving] = useState(false)
+  const [brand, setBrand] = useState(company.brandColor ?? '')
+  useEffect(() => { setBrand(company.brandColor ?? '') }, [company.brandColor])
+  const valid = brand === '' || /^#[0-9a-fA-F]{6}$/.test(brand)
+  async function save(input: { theme?: string | null; brandColor?: string | null }, message: string) {
+    setSaving(true)
+    try {
+      const r = await companyApi.update(input)
+      onSaved(r.company)
+      addToast({ type: 'success', message })
+    } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not save.') }) } finally { setSaving(false) }
+  }
+  const brandChanged = (brand || null) !== (company.brandColor ?? null)
+  return (
+    <Card title="Look" subtitle={canEdit ? "The colour theme your people see, unless they pick their own in Settings, and your brand colour for buttons and links." : "Set by your company's admins. You can pick your own theme in Settings."}>
+      <div className="space-y-6">
+        <ThemePicker
+          value={company.theme ?? themeById(null).id}
+          allowCompany={false}
+          busy={saving || !canEdit}
+          onPick={(id) => { if (id && id !== (company.theme ?? themeById(null).id)) void save({ theme: id === themeById(null).id ? null : id }, `Theme set to ${themeById(id).label} for everyone who has not picked their own.`) }}
+        />
+        <div className="border-t border-line pt-5">
+          <span className="mb-1 block text-body-sm font-semibold text-ink">Brand colour</span>
+          <p className="mb-3 text-body-sm text-ink-muted">Buttons, links, the selected menu item and focus rings. Metriq adjusts it a little where needed so text on it always reads.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative inline-flex h-10 w-12 cursor-pointer items-center justify-center overflow-hidden rounded-btn border border-line bg-card" title="Pick a colour">
+              <span className="h-6 w-8 rounded-[4px] border border-line" style={{ background: valid && brand ? brand : 'rgb(var(--c-accent))' }} />
+              <input type="color" aria-label="Brand colour" className="absolute inset-0 cursor-pointer opacity-0" value={valid && brand ? brand : accentHex()} disabled={!canEdit || saving} onChange={(e) => setBrand(e.target.value)} />
+            </label>
+            <input
+              className={cn(inputCls.replace('w-full', 'w-32'), 'font-mono uppercase', !valid && 'border-danger focus:border-danger focus:ring-danger/10')}
+              value={brand}
+              placeholder="#RRGGBB"
+              maxLength={7}
+              aria-invalid={!valid}
+              disabled={!canEdit || saving}
+              onChange={(e) => { const v = e.target.value.trim(); setBrand(v && !v.startsWith('#') ? `#${v}` : v) }}
+            />
+            {canEdit && <Button type="button" disabled={saving || !valid || !brandChanged} onClick={() => void save({ brandColor: brand || null }, brand ? 'Brand colour saved.' : 'Brand colour removed.')}>Save colour</Button>}
+            {canEdit && company.brandColor && <Button type="button" variant="ghost" disabled={saving} onClick={() => { setBrand(''); void save({ brandColor: null }, "Back to the theme's own colour.") }}>Use the theme's colour</Button>}
+          </div>
+          {!valid && <p className="mt-1.5 text-body-sm text-danger-ink">Six hex digits after #, like the colour code from your logo.</p>}
+        </div>
+      </div>
+    </Card>
   )
 }
 
@@ -265,7 +330,7 @@ function DepartmentsTab() {
                 return (
                   <button key={k.type} type="button" role="radio" aria-checked={type === k.type} disabled={used} onClick={() => pickType(k.type)}
                     className={cn('relative rounded-card border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50', type === k.type ? 'border-primary bg-primary/5 ring-2 ring-primary/15' : 'border-line bg-card hover:border-primary/40')}>
-                    {type === k.type && <Check size={14} className="absolute right-2.5 top-2.5 text-primary" />}
+                    {type === k.type && <Check size={14} className="absolute right-2.5 top-2.5 text-primary-ink" />}
                     <span className="block pr-5 text-body-md font-semibold text-ink">{k.label}</span>
                     <span className="mt-0.5 block text-body-sm text-ink-muted">{used ? 'You have one already. Make a General department, or rename the one you have.' : k.description}</span>
                   </button>
@@ -281,7 +346,7 @@ function DepartmentsTab() {
                   const isOn = !startOff.includes(x.key)
                   return (
                     <button key={x.key} type="button" aria-pressed={isOn} title={x.description} onClick={() => setStartOff(isOn ? [...startOff, x.key] : startOff.filter((y) => y !== x.key))}
-                      className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm', isOn ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
+                      className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm', isOn ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>
                       {isOn && <Check size={13} />}{x.label}
                     </button>
                   )
@@ -381,7 +446,7 @@ function RoleModal({ data, role, myPowers, isSuperAdmin, onClose, onSaved }: { d
   return (
     <Modal open onClose={onClose} title={role ? `Edit ${role.name}` : 'New role'}
       footer={<>
-        {role && <Button variant="ghost" className="mr-auto text-danger" onClick={remove} disabled={busy}>Remove role</Button>}
+        {role && <Button variant="ghost" className="mr-auto text-danger-ink" onClick={remove} disabled={busy}>Remove role</Button>}
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button onClick={save} disabled={busy || name.trim().length < 2}>{busy ? 'Saving…' : 'Save'}</Button>
       </>}>
@@ -467,7 +532,7 @@ function PeopleTab() {
                   return (
                     <button key={w.key} type="button" disabled={!can} onClick={() => set(p, { permissions: on ? p.permissions.filter((x) => x !== w.key) : [...p.permissions, w.key] })}
                       title={can ? w.description : 'You do not have this power'}
-                      className={cn('rounded-full border px-2.5 py-1 text-body-sm transition-colors disabled:opacity-50', on ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
+                      className={cn('rounded-full border px-2.5 py-1 text-body-sm transition-colors disabled:opacity-50', on ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>
                       {w.label}
                     </button>
                   )

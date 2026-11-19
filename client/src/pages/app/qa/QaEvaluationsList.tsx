@@ -40,7 +40,7 @@ export default function QaEvaluationsList() {
       {evals === null ? (
         <div className="text-body-md text-ink-muted">Loading…</div>
       ) : evals.length === 0 ? (
-        <Card><div className="flex flex-col items-center gap-2 py-12 text-center"><ClipboardCheck size={26} className="text-primary" /><p className="text-body-md text-ink-muted">No evaluations yet.</p></div></Card>
+        <Card><div className="flex flex-col items-center gap-2 py-12 text-center"><ClipboardCheck size={26} className="text-primary-ink" /><p className="text-body-md text-ink-muted">No evaluations yet.</p></div></Card>
       ) : (
         <Card flush>
           <div className="border-b border-line px-4 py-2.5">
@@ -51,7 +51,7 @@ export default function QaEvaluationsList() {
             {filtered.map((e) => (
               <li key={e.id}>
                 <Link to={`/app/qa/evaluations/${e.id}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary">{initials(e.agentName)}</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary-ink">{initials(e.agentName)}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-body-md font-medium text-ink">{e.agentName}</p>
                     <p className="truncate text-body-sm text-ink-muted">{e.scorecardName} · by {e.evaluatorName} · {fromNow(e.createdAt)}</p>

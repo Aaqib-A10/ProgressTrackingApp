@@ -56,7 +56,7 @@ export function ListToolbar({
           onChange={(e) => f.onChange(e.target.value)}
           className={cn(
             'h-9 rounded-btn border bg-card px-2 text-body-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20',
-            f.value ? 'border-primary/50 font-semibold text-primary' : 'border-line text-ink',
+            f.value ? 'border-primary/50 font-semibold text-primary-ink' : 'border-line text-ink',
           )}
         >
           <option value="">{f.allLabel}</option>

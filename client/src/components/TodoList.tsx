@@ -94,7 +94,7 @@ export function TodoList({ limit, onCountChange }: { limit?: number; onCountChan
         <button
           type="submit"
           disabled={adding || !title.trim()}
-          className="inline-flex h-9 items-center gap-1 rounded-btn bg-primary px-3 text-body-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1 rounded-btn bg-primary px-3 text-body-sm font-semibold text-primary-on hover:bg-primary-700 disabled:opacity-50"
         >
           <Plus size={16} /> Add
         </button>
@@ -111,7 +111,7 @@ export function TodoList({ limit, onCountChange }: { limit?: number; onCountChan
                 onClick={() => toggle(t)}
                 className={cn(
                   'flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors',
-                  t.done ? 'border-success bg-success text-white' : 'border-line hover:border-primary',
+                  t.done ? 'border-success bg-success text-success-on' : 'border-line hover:border-primary',
                 )}
                 aria-label={t.done ? 'Mark not done' : 'Mark done'}
               >
@@ -124,7 +124,7 @@ export function TodoList({ limit, onCountChange }: { limit?: number; onCountChan
                 <span
                   className={cn(
                     'flex shrink-0 items-center gap-1 text-body-sm',
-                    !t.done && t.dueDate < todayISO() ? 'font-semibold text-danger' : 'text-ink-muted',
+                    !t.done && t.dueDate < todayISO() ? 'font-semibold text-danger-ink' : 'text-ink-muted',
                   )}
                 >
                   <CalendarDays size={12} /> {t.dueDate}
@@ -133,7 +133,7 @@ export function TodoList({ limit, onCountChange }: { limit?: number; onCountChan
               <button
                 type="button"
                 onClick={() => remove(t)}
-                className="shrink-0 rounded p-1 text-ink-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                className="shrink-0 rounded p-1 text-ink-muted opacity-0 transition-opacity hover:text-danger-ink group-hover:opacity-100"
                 aria-label="Delete"
               >
                 <Trash2 size={15} />

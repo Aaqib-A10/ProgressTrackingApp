@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "theme:build": "tsx scripts/theme-build.ts",
+    "theme:check": "tsx scripts/theme-check.ts",
+    "ui:check": "tsx scripts/ui-check.ts",
+    "colors:check": "tsx scripts/theme-check.ts && tsx scripts/ui-check.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"

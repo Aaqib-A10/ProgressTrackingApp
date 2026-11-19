@@ -151,11 +151,11 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
         {onClose && <button type="button" onClick={onClose} className="rounded-btn p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Close" title="Close"><X size={15} /></button>}
       </header>
 
-      {loadError && <p className="m-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{loadError} <button type="button" className="font-semibold underline" onClick={() => void load()}>Try again</button></p>}
+      {loadError && <p className="m-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{loadError} <button type="button" className="font-semibold underline" onClick={() => void load()}>Try again</button></p>}
       {!data && !loadError && <div className="flex flex-1 items-center justify-center p-8 text-ink-muted"><Loader2 size={20} className="animate-spin" /></div>}
 
       {data && onLeave && (
-        <div className="m-2.5 rounded-btn border border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-ink">Today is marked <b>{data.entry!.status === 'ON_LEAVE' ? 'On Leave' : data.entry!.status === 'HOLIDAY' ? 'Holiday' : 'Off'}</b>. Open the <a href="/app/itad/log" target={standalone ? '_blank' : undefined} className="font-semibold text-primary underline">Daily Log</a> to change that; the counters are off until then.</div>
+        <div className="m-2.5 rounded-btn border border-warning/40 bg-warning/10 px-3 py-2 text-body-sm text-ink">Today is marked <b>{data.entry!.status === 'ON_LEAVE' ? 'On Leave' : data.entry!.status === 'HOLIDAY' ? 'Holiday' : 'Off'}</b>. Open the <a href="/app/itad/log" target={standalone ? '_blank' : undefined} className="font-semibold text-primary-ink underline">Daily Log</a> to change that; the counters are off until then.</div>
       )}
 
       {data && (
@@ -174,11 +174,11 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
               return (
                 <li key={m.key} className="flex items-center gap-2 py-[3px]">
                   <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{m.label}</span>
-                  {p !== 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-semibold tabular-nums', p > 0 ? 'bg-primary/10 text-primary' : 'bg-warning/15 text-amber-700')}>{p > 0 ? `+${p}` : p}</span>}
+                  {p !== 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-semibold tabular-nums', p > 0 ? 'bg-primary/10 text-primary-ink' : 'bg-warning/15 text-warning-ink')}>{p > 0 ? `+${p}` : p}</span>}
                   <div className="inline-flex items-center rounded-btn border border-line">
                     <button type="button" onClick={() => bump(m.key, -1)} disabled={shown <= 0} className="flex h-8 w-8 items-center justify-center rounded-l-btn text-ink-muted hover:bg-slate-100 hover:text-ink disabled:opacity-30 active:bg-slate-200" aria-label={`${m.label}: one less`}><Minus size={14} /></button>
                     <input type="number" inputMode="numeric" min={0} max={100000} value={shown} onChange={(e) => setTyped(m.key, e.target.value)} onFocus={(e) => e.currentTarget.select()} className="h-8 w-11 border-x border-line bg-transparent text-center text-[14px] font-semibold tabular-nums text-ink focus:bg-primary/[0.06] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`${m.label}: type the number`} />
-                    <button type="button" onClick={() => bump(m.key, 1)} className="flex h-8 w-8 items-center justify-center rounded-r-btn text-primary hover:bg-primary/10 active:bg-primary/20" aria-label={`${m.label}: one more`}><Plus size={15} /></button>
+                    <button type="button" onClick={() => bump(m.key, 1)} className="flex h-8 w-8 items-center justify-center rounded-r-btn text-primary-ink hover:bg-primary/10 active:bg-primary/20" aria-label={`${m.label}: one more`}><Plus size={15} /></button>
                   </div>
                 </li>
               )
@@ -194,7 +194,7 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
       {data && (
         <footer className="flex shrink-0 items-center gap-2 border-t border-line px-2.5 py-1.5">
           <a href="/app/itad/log" target={standalone ? '_blank' : undefined} onClick={!standalone ? onClose : undefined} className="text-[11.5px] font-medium text-ink-muted hover:text-ink">Full Daily Log</a>
-          <button type="button" onClick={() => { window.clearTimeout(timer.current); void flushRef.current() }} disabled={!hasPending || save.kind === 'saving' || onLeave} className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-btn bg-primary px-2.5 text-[12.5px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
+          <button type="button" onClick={() => { window.clearTimeout(timer.current); void flushRef.current() }} disabled={!hasPending || save.kind === 'saving' || onLeave} className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-btn bg-primary px-2.5 text-[12.5px] font-semibold text-primary-on hover:bg-primary/90 disabled:opacity-50">
             {save.kind === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}{hasPending ? 'Save now' : 'Saved'}
           </button>
         </footer>
@@ -205,8 +205,8 @@ export function QuickLogPanel({ standalone, onClose, onDetach, onMinimize }: { s
 
 function SaveLine({ save, hasPending }: { save: SaveState; hasPending: boolean }) {
   if (save.kind === 'saving') return <span className="inline-flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Saving…</span>
-  if (save.kind === 'failed') return <span className="inline-flex items-center gap-1 text-danger"><CloudOff size={11} /> Not saved: {save.error}. Your taps are kept; it retries on Save now.</span>
+  if (save.kind === 'failed') return <span className="inline-flex items-center gap-1 text-danger-ink"><CloudOff size={11} /> Not saved: {save.error}. Your taps are kept; it retries on Save now.</span>
   if (hasPending) return <span>Unsaved changes — saving in a moment</span>
-  if (save.kind === 'saved') return <span className="inline-flex items-center gap-1 text-success"><Check size={11} /> Saved {save.at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
+  if (save.kind === 'saved') return <span className="inline-flex items-center gap-1 text-success-ink"><Check size={11} /> Saved {save.at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
   return <span>Counts go straight into today’s Daily Log</span>
 }

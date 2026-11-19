@@ -28,7 +28,7 @@ export default function Security() {
               const Icon = ICONS[i] ?? IconWalls
               return (
                 <Reveal as="li" key={s.title} delay={(i % 3) * 80} className="rounded-[18px] border border-line bg-card p-6 transition-shadow hover:shadow-[0_20px_50px_-24px_rgb(var(--primary)/0.45)]">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><Icon size={22} /></span>
+                  <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary-ink ring-1 ring-primary/20"><Icon size={22} /></span>
                   <h2 className="mt-5 text-[17px] font-semibold text-ink">{s.title}</h2>
                   <p className="mt-2 text-[14.5px] leading-relaxed text-ink-muted">{s.text}</p>
                 </Reveal>

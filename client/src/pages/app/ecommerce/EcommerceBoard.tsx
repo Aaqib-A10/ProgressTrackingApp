@@ -137,7 +137,7 @@ function TaskCard({ task, movable, canSetStatus, isHod, onDelete, onOpen, onStat
       <div className="flex items-start justify-between gap-2">
         <p className="text-body-md font-medium text-ink">{task.title}</p>
         {isHod && (
-          <button {...stop} onClick={(e) => { e.stopPropagation(); onDelete(task.id) }} className="shrink-0 text-ink-muted hover:text-danger" aria-label="Delete task"><Trash2 size={14} /></button>
+          <button {...stop} onClick={(e) => { e.stopPropagation(); onDelete(task.id) }} className="shrink-0 text-ink-muted hover:text-danger-ink" aria-label="Delete task"><Trash2 size={14} /></button>
         )}
       </div>
       {task.description && <p className="mt-1 line-clamp-2 text-body-sm text-ink-muted">{task.description}</p>}
@@ -145,7 +145,7 @@ function TaskCard({ task, movable, canSetStatus, isHod, onDelete, onOpen, onStat
         {task.source && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-ink-muted">From: {task.source}</span>}
         {task.dueDate && <Badge tone="warning" className="gap-1"><CalendarClock size={12} />{task.dueDate}</Badge>}
         {task.commentCount > 0 && <span className="flex items-center gap-1 text-[11px] text-ink-muted"><MessageSquare size={12} />{task.commentCount}</span>}
-        {task.assignee && <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary" title={task.assignee.name}>{initials(task.assignee.name)}</span>}
+        {task.assignee && <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary-ink" title={task.assignee.name}>{initials(task.assignee.name)}</span>}
       </div>
       <div className="mt-2.5 border-t border-line pt-2" {...stop}>
         <select value={task.status} onChange={(e) => onStatus(task.id, e.target.value as EcomTaskStatus)} disabled={!canSetStatus}
@@ -284,7 +284,7 @@ function DetailModal({ task, members, isHod, meId, onClose, onSaved, onDelete, o
             <ul className="max-h-64 space-y-3 overflow-y-auto pr-1">
               {comments.map((c) => (
                 <li key={c.id} className="flex gap-2.5">
-                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">{initials(c.author.name)}</span>
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary-ink">{initials(c.author.name)}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
                       <span className="text-body-sm font-semibold text-ink">{c.author.name}</span>

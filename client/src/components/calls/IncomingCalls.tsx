@@ -46,7 +46,7 @@ export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: Act
             <span className="relative">
               <span className="absolute inset-0 animate-ping rounded-full bg-success/30" />
               {c.isDirect ? <PersonAvatar person={c.startedBy} size={40} /> : (
-                <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white"><Users size={18} /></span>
+                <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-on"><Users size={18} /></span>
               )}
             </span>
             <div className="min-w-0 flex-1">
@@ -57,7 +57,7 @@ export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: Act
             </div>
           </div>
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => onDecline(c)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-btn bg-danger px-3 py-2 text-body-sm font-semibold text-white hover:bg-danger/90">
+            <button type="button" onClick={() => onDecline(c)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-btn bg-danger px-3 py-2 text-body-sm font-semibold text-danger-on hover:bg-danger/90">
               <PhoneOff size={15} /> {c.isDirect || c.invitedBy ? 'Decline' : 'Dismiss'}
             </button>
             {c.video && (
@@ -65,13 +65,13 @@ export function IncomingCalls({ calls, inCall, onJoin, onDecline }: { calls: Act
                 <Phone size={15} /> Audio
               </button>
             )}
-            <button type="button" onClick={() => onJoin(c, c.video)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-btn bg-success px-3 py-2 text-body-sm font-semibold text-white hover:bg-success/90">
+            <button type="button" onClick={() => onJoin(c, c.video)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-btn bg-success px-3 py-2 text-body-sm font-semibold text-success-on hover:bg-success/90">
               {c.video ? <Video size={15} /> : <Phone size={15} />} {c.isDirect || c.invitedBy ? 'Answer' : 'Join'}
             </button>
           </div>
           {inCall && <p className="mt-2 text-[11px] text-ink-muted">Joining will leave your current call first.</p>}
           {alertsAsk && (
-            <button type="button" onClick={() => { void desktop.enable().then(() => setAlertsAsk(false)) }} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline">
+            <button type="button" onClick={() => { void desktop.enable().then(() => setAlertsAsk(false)) }} className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-primary-ink hover:underline">
               <BellRing size={12} /> Turn on desktop alerts so you never miss a call
             </button>
           )}

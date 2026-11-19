@@ -96,10 +96,10 @@ function ArrangeCard({ card, user, off, onToggle }: { card: DashCard; user: Curr
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: card.key })
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn('relative min-w-0 rounded-card border-2 border-dashed border-primary/40', SPAN[card.size], isDragging && 'z-20 opacity-80 shadow-overlay')}>
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 rounded-t-card bg-primary/90 px-2 py-1 text-body-sm font-semibold text-white">
-        <button type="button" {...attributes} {...listeners} className="cursor-grab rounded p-0.5 hover:bg-white/20 active:cursor-grabbing" aria-label={`Move ${cardByKey(card.key)?.label ?? 'card'}`}><GripVertical size={15} /></button>
+      <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 rounded-t-card bg-primary/90 px-2 py-1 text-body-sm font-semibold text-primary-on">
+        <button type="button" {...attributes} {...listeners} className="cursor-grab rounded p-0.5 hover:bg-primary-on/20 active:cursor-grabbing" aria-label={`Move ${cardByKey(card.key)?.label ?? 'card'}`}><GripVertical size={15} /></button>
         <span className="min-w-0 flex-1 truncate">{cardByKey(card.key)?.label ?? 'Your block'}</span>
-        <button type="button" onClick={onToggle} className="rounded p-0.5 hover:bg-white/20" aria-label={off ? 'Show' : 'Hide'} title={off ? 'Show it' : 'Hide it'}>{off ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+        <button type="button" onClick={onToggle} className="rounded p-0.5 hover:bg-primary-on/20" aria-label={off ? 'Show' : 'Hide'} title={off ? 'Show it' : 'Hide it'}>{off ? <EyeOff size={15} /> : <Eye size={15} />}</button>
       </div>
       <div className={cn('pointer-events-none select-none pt-8', off && 'opacity-30 grayscale')} aria-hidden><DashboardCard card={card} user={user} /></div>
     </div>

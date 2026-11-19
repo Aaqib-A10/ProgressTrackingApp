@@ -198,7 +198,7 @@ export default function LeadGenDailyForm() {
                       type="button"
                       onClick={() => removeIndustry(id)}
                       disabled={onLeave}
-                      className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full text-ink-muted hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+                      className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full text-ink-muted hover:bg-danger/10 hover:text-danger-ink disabled:opacity-40"
                       aria-label={`Remove ${v.name}`}
                     >
                       <X size={14} />

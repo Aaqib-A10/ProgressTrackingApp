@@ -31,7 +31,7 @@ export function AssignedTasksCard({ limit = 5 }: { limit?: number }) {
       title="My tasks"
       subtitle="Assigned to you"
       action={
-        <Link to="/app/tasks" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline">
+        <Link to="/app/tasks" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink hover:underline">
           View all <ArrowRight size={14} />
         </Link>
       }
@@ -60,7 +60,7 @@ export function AssignedTasksCard({ limit = 5 }: { limit?: number }) {
                   <p className="text-body-sm text-ink-muted">{SOURCE_LABEL[t.source] ?? t.source} · {t.status}</p>
                 </div>
                 {t.dueDate && (
-                  <span className={cn('shrink-0 text-body-sm', t.overdue ? 'font-semibold text-danger' : 'text-ink-muted')}>
+                  <span className={cn('shrink-0 text-body-sm', t.overdue ? 'font-semibold text-danger-ink' : 'text-ink-muted')}>
                     {t.overdue ? 'Overdue' : t.dueDate}
                   </span>
                 )}
@@ -75,9 +75,9 @@ export function AssignedTasksCard({ limit = 5 }: { limit?: number }) {
 
 function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: 'primary' | 'warning' | 'danger' }) {
   const toneCls = {
-    primary: 'text-primary',
-    warning: 'text-warning',
-    danger: value > 0 ? 'text-danger' : 'text-ink-muted',
+    primary: 'text-primary-ink',
+    warning: 'text-warning-ink',
+    danger: value > 0 ? 'text-danger-ink' : 'text-ink-muted',
   }[tone]
   return (
     <div className="rounded-btn border border-line bg-bg p-3">

@@ -26,6 +26,7 @@ import { customApi, iconOf, type CustomSummary } from '../../lib/customApi'
 import { CUSTOM_CARD, cardByKey, type DashCard } from '../../lib/cards'
 import { QuickAction, RecentFeedback, greeting, logPath } from '../../pages/app/DashboardHome'
 import { fmtAgo } from '../projects/pmUi'
+import { dataTint } from '../../theme/css'
 
 /**
  * The cards a department's dashboard is made of (Department Studio, part B; the list is in
@@ -98,7 +99,7 @@ function Shortcuts({ user }: { user: CurrentUser }) {
           const Icon = i.icon
           return (
             <Link key={i.to} to={i.to} className="flex items-center gap-2 rounded-btn border border-line px-2.5 py-2 text-body-sm font-medium text-ink hover:border-primary/40 hover:bg-primary/5">
-              <Icon size={15} className="shrink-0 text-primary" /><span className="truncate">{i.label}</span>
+              <Icon size={15} className="shrink-0 text-primary-ink" /><span className="truncate">{i.label}</span>
             </Link>
           )
         })}
@@ -133,9 +134,9 @@ function TodoToday() {
 
 const STATE_LABEL: Record<string, { text: string; tone: string }> = {
   NOT_IN: { text: 'Not checked in', tone: 'bg-slate-100 text-ink-muted' },
-  IN: { text: 'Checked in', tone: 'bg-success/10 text-success' },
-  ON_BREAK: { text: 'On a break', tone: 'bg-warning/10 text-warning' },
-  OUT: { text: 'Checked out', tone: 'bg-primary/10 text-primary' },
+  IN: { text: 'Checked in', tone: 'bg-success/10 text-success-ink' },
+  ON_BREAK: { text: 'On a break', tone: 'bg-warning/10 text-warning-ink' },
+  OUT: { text: 'Checked out', tone: 'bg-primary/10 text-primary-ink' },
 }
 const hm = (min: number | null | undefined) => (min == null ? '—' : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`)
 
@@ -153,7 +154,7 @@ function AttendanceCard() {
             <div><dt className="text-ink-muted">In at</dt><dd className="font-semibold text-ink">{me.today.checkInLabel ?? '—'}</dd></div>
             <div><dt className="text-ink-muted">Worked</dt><dd className="font-semibold tabular-nums text-ink">{hm(me.today.workedMin)}</dd></div>
           </dl>
-          {me.today.late && <p className="text-body-sm font-medium text-warning">Late today</p>}
+          {me.today.late && <p className="text-body-sm font-medium text-warning-ink">Late today</p>}
         </div>
       )}
     </Card>
@@ -171,12 +172,12 @@ function ChatUnread() {
           {list.slice(0, 6).map((c) => (
             <li key={c.id}>
               <button type="button" onClick={() => navigate(`/app/chat?c=${encodeURIComponent(c.id)}`)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-slate-50">
-                <MessagesSquare size={14} className="shrink-0 text-primary" />
+                <MessagesSquare size={14} className="shrink-0 text-primary-ink" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-body-sm font-semibold text-ink">{c.title}</span>
                   {c.lastMessage && <span className="block truncate text-[12px] text-ink-muted">{c.lastMessage.body}</span>}
                 </span>
-                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10.5px] font-semibold text-white">{c.unread}</span>
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10.5px] font-semibold text-primary-on">{c.unread}</span>
               </button>
             </li>
           ))}
@@ -220,9 +221,9 @@ function TeamTodo() {
             <li key={m.id} className={cn('flex flex-wrap items-center gap-2 px-5 py-2 text-body-sm', m.blocked > 0 && 'bg-danger/5')}>
               <span className="min-w-[120px] flex-1 truncate font-medium text-ink">{m.name}</span>
               {m.entries.length === 0 ? <span className="text-ink-muted">Nothing logged yet</span> : <>
-                <span className="rounded-full bg-success/10 px-2 font-semibold text-success">{m.done} done</span>
+                <span className="rounded-full bg-success/10 px-2 font-semibold text-success-ink">{m.done} done</span>
                 <span className="rounded-full bg-slate-100 px-2 font-semibold text-ink-muted">{m.planned} open</span>
-                {m.blocked > 0 && <span className="rounded-full bg-danger/10 px-2 font-semibold text-danger">needs help</span>}
+                {m.blocked > 0 && <span className="rounded-full bg-danger/10 px-2 font-semibold text-danger-ink">needs help</span>}
               </>}
             </li>
           ))}
@@ -271,8 +272,8 @@ function TeamCard({ part }: { part: string }) {
     return (
       <Card className="border-primary/20 bg-primary/5">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary"><Sparkles size={18} /></span>
-          <div><p className="text-body-sm font-semibold uppercase tracking-wide text-primary">Improvement Summary</p><p className="mt-0.5 text-body-md text-ink">{d.improvement}</p></div>
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink"><Sparkles size={18} /></span>
+          <div><p className="text-body-sm font-semibold uppercase tracking-wide text-primary-ink">Improvement Summary</p><p className="mt-0.5 text-body-md text-ink">{d.improvement}</p></div>
         </div>
       </Card>
     )
@@ -300,7 +301,7 @@ function CustomBlockCard({ id }: { id: string }) {
   const max = Math.max(1, ...(s.by?.counts.map((c) => c.count) ?? [1]))
   return (
     <Card
-      title={<span className="inline-flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-md" style={{ background: `${s.block.color}1f`, color: s.block.color }}><Icon size={14} /></span>{s.block.name}</span>}
+      title={<span className="inline-flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-md" style={dataTint(s.block.color)}><Icon size={14} /></span>{s.block.name}</span>}
       subtitle={`${s.total} in all · ${s.thisWeek} this week`}
       action={<More to={`/app/custom/${s.block.id}`} />}
     >

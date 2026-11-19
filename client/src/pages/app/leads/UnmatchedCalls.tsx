@@ -46,7 +46,7 @@ export function UnmatchedCalls({ business, businesses }: { business: MetaBusines
         <label className="ml-auto flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} className="h-4 w-4 rounded border-line" />Only numbers that answered</label>
         {d && <span className="text-body-sm text-ink-faint">{rows.length} number{rows.length === 1 ? '' : 's'} · {d.total} call{d.total === 1 ? '' : 's'}</span>}
       </div>
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
       <div className="overflow-x-auto rounded-card border border-line bg-card shadow-xs">
         <table className="w-full min-w-[640px] text-left text-body-sm">
           <thead className="bg-slate-50 text-[11.5px] uppercase tracking-wide text-ink-muted dark:bg-white/[0.03]"><tr>{['Number', 'Calls', 'Answered', 'Last call', 'Who', ''].map((h, i) => <th key={i} className="px-3 py-2.5 font-semibold">{h}</th>)}</tr></thead>

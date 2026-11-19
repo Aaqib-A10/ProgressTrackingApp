@@ -207,7 +207,7 @@ export function ClockWidget() {
         <span className={'h-2 w-2 rounded-full ' + meta.dot + (today.state === 'IN' ? ' animate-pulse' : '')} />
         <span className="hidden text-body-sm font-semibold text-ink sm:inline">{pillText}</span>
         {workMode && (
-          <span className="hidden items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[11px] font-semibold text-accent sm:inline-flex" title={workMode === 'REMOTE' ? 'You work from home: check in from anywhere' : 'Work from home today: check in from anywhere'}>
+          <span className="hidden items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[11px] font-semibold text-highlight-ink sm:inline-flex" title={workMode === 'REMOTE' ? 'You work from home: check in from anywhere' : 'Work from home today: check in from anywhere'}>
             <House size={11} /> WFH
           </span>
         )}
@@ -230,10 +230,10 @@ export function ClockWidget() {
             </div>
             {today.state !== 'NOT_IN' && (
               <div className="mt-1.5 flex justify-center gap-3 text-[11px]">
-                <span className={today.brbMin > today.brbAllowanceMin ? 'font-semibold text-danger' : 'text-ink-muted'}>
+                <span className={today.brbMin > today.brbAllowanceMin ? 'font-semibold text-danger-ink' : 'text-ink-muted'}>
                   BRB {today.brbMin}/{today.brbAllowanceMin}m
                 </span>
-                <span className={today.regularBreakMin > today.breakAllowanceMin ? 'font-semibold text-danger' : 'text-ink-muted'}>
+                <span className={today.regularBreakMin > today.breakAllowanceMin ? 'font-semibold text-danger-ink' : 'text-ink-muted'}>
                   Break {today.regularBreakMin}/{today.breakAllowanceMin}m
                 </span>
               </div>
@@ -248,19 +248,19 @@ export function ClockWidget() {
                 </div>
                 <p className="text-[11px] text-ink-muted">
                   {today.completed ? (
-                    <span className="font-medium text-success">Full shift complete ✓</span>
+                    <span className="font-medium text-success-ink">Full shift complete ✓</span>
                   ) : (
                     <>{formatMinutes(worked)} of {formatMinutes(today.requiredMin)} shift</>
                   )}
-                  {today.late && <span className="ml-1 text-warning">· late</span>}
+                  {today.late && <span className="ml-1 text-warning-ink">· late</span>}
                 </p>
                 {today.overtime && (
-                  <p className="text-[11px] font-medium text-primary">
+                  <p className="text-[11px] font-medium text-primary-ink">
                     Overtime {formatMinutes(liveOvertimeMin(me))}{today.state !== 'OUT' && today.autoCheckoutLabel ? ` · check out yourself (automatic at ${today.autoCheckoutLabel})` : ''}
                   </p>
                 )}
                 {!today.overtime && today.autoCheckoutLabel && (today.state === 'IN' || today.state === 'ON_BREAK') && (
-                  <p className={'text-[11px] ' + (left != null && left <= 10 ? 'font-semibold text-warning' : 'text-ink-muted')}>
+                  <p className={'text-[11px] ' + (left != null && left <= 10 ? 'font-semibold text-warning-ink' : 'text-ink-muted')}>
                     Automatic check-out at {today.autoCheckoutLabel} (end of your {formatMinutes(today.shiftHoursMin)} shift)
                   </p>
                 )}
@@ -271,20 +271,20 @@ export function ClockWidget() {
           <div className="space-y-1 p-2">
             {deviceBlocked && today.state !== 'OUT' ? (
               <div className="flex items-start gap-2 rounded-btn bg-warning/5 px-3 py-2.5 text-body-sm text-ink">
-                <Laptop size={16} className="mt-0.5 shrink-0 text-warning" />
+                <Laptop size={16} className="mt-0.5 shrink-0 text-warning-ink" />
                 <span>Attendance can only be recorded on a laptop or desktop — not a phone or tablet.</span>
               </div>
             ) : confirmOut ? (
               <div className="rounded-btn bg-danger/5 p-2">
                 <div className="flex items-start gap-2 px-1 py-1 text-body-sm text-ink">
-                  <TriangleAlert size={16} className="mt-0.5 shrink-0 text-danger" />
+                  <TriangleAlert size={16} className="mt-0.5 shrink-0 text-danger-ink" />
                   <span>Check out for the day? This stops your clock — you can’t undo it yourself.</span>
                 </div>
                 <div className="mt-1 flex gap-2">
                   <button
                     onClick={() => { setConfirmOut(false); run(clockCheckOut, 'Checked out.') }}
                     disabled={busy}
-                    className="flex-1 rounded-btn bg-danger px-3 py-2 text-body-sm font-semibold text-white transition-colors hover:bg-danger/90 disabled:opacity-50"
+                    className="flex-1 rounded-btn bg-danger px-3 py-2 text-body-sm font-semibold text-danger-on transition-colors hover:bg-danger/90 disabled:opacity-50"
                   >
                     Yes, check out
                   </button>
@@ -326,7 +326,7 @@ export function ClockWidget() {
                     <Action icon={<AlarmClockPlus size={16} />} label="Start overtime" hint="Keep working: the time from now counts as overtime" onClick={() => run(clockStartOvertime, 'Overtime started. Check out yourself when you finish.')} disabled={busy} tone="primary" />
                   </>
                 ) : (
-                  <div className="flex items-center gap-2 px-3 py-2 text-body-sm text-success">
+                  <div className="flex items-center gap-2 px-3 py-2 text-body-sm text-success-ink">
                     <CheckCircle2 size={16} /> Checked out for the day.
                   </div>
                 ))}
@@ -337,7 +337,7 @@ export function ClockWidget() {
           <Link
             to="/app/attendance/me"
             onClick={() => setOpen(false)}
-            className="flex items-center justify-between border-t border-line px-4 py-2.5 text-body-sm font-medium text-primary hover:bg-slate-50"
+            className="flex items-center justify-between border-t border-line px-4 py-2.5 text-body-sm font-medium text-primary-ink hover:bg-slate-50"
           >
             View my attendance <ChevronRight size={16} />
           </Link>
@@ -358,7 +358,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function Action({ icon, label, hint, onClick, disabled, tone = 'default' }: { icon: React.ReactNode; label: string; hint?: string; onClick: () => void; disabled?: boolean; tone?: 'default' | 'primary' | 'danger' }) {
   const toneClass =
-    tone === 'primary' ? 'text-primary hover:bg-primary/10' : tone === 'danger' ? 'text-danger hover:bg-danger/10' : 'text-ink hover:bg-slate-100'
+    tone === 'primary' ? 'text-primary-ink hover:bg-primary/10' : tone === 'danger' ? 'text-danger-ink hover:bg-danger/10' : 'text-ink hover:bg-slate-100'
   return (
     <button
       role="menuitem"

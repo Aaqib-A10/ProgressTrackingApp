@@ -89,7 +89,7 @@ export function PullIndicator({ pull, busy }: { pull: number; busy: boolean }) {
   const ready = pull >= TRIGGER || busy
   return (
     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center md:hidden" style={{ transform: `translateY(${Math.max(0, pull - 40)}px)`, transition: busy || !pull ? 'transform 200ms ease-out' : undefined }}>
-      <span className={cn('mt-2 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-card shadow-raised', ready ? 'text-primary' : 'text-ink-muted')}>
+      <span className={cn('mt-2 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-card shadow-raised', ready ? 'text-primary-ink' : 'text-ink-muted')}>
         <RefreshCw size={18} className={cn(busy && 'animate-spin')} style={busy ? undefined : { transform: `rotate(${Math.round((pull / TRIGGER) * 270)}deg)`, opacity: Math.min(1, pull / 40) }} />
       </span>
     </div>

@@ -41,12 +41,12 @@ export default function JesseInbox() {
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-4">
-      <PageHeader title="Inbox" hint={`${biz?.name ?? ''} · what the SDRs sent you. Open one, read the form, answer in the chat; they take it from there.`} actions={<>{cmrBiz.length > 1 && <BusinessPicker />}<Link to="/app/leads/summary" className="text-body-sm font-semibold text-primary hover:underline">Summary →</Link></>} />
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      <PageHeader title="Inbox" hint={`${biz?.name ?? ''} · what the SDRs sent you. Open one, read the form, answer in the chat; they take it from there.`} actions={<>{cmrBiz.length > 1 && <BusinessPicker />}<Link to="/app/leads/summary" className="text-body-sm font-semibold text-primary-ink hover:underline">Summary →</Link></>} />
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
       <div className="pt-tabs flex flex-wrap gap-1.5">
         {tabs.map((t) => (
           <button key={t.key} type="button" onClick={() => setParams(t.key === 'waiting' ? {} : { tab: t.key })} className={cn('inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-body-sm font-semibold', tab === t.key ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted hover:text-ink')}>
-            {t.label}{t.n != null && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', tab === t.key ? 'bg-card/20' : t.tone === 'danger' ? 'bg-danger/10 text-danger' : 'bg-slate-100 dark:bg-white/10')}>{t.n}</span>}
+            {t.label}{t.n != null && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', tab === t.key ? 'bg-card/20' : t.tone === 'danger' ? 'bg-danger/10 text-danger-ink' : 'bg-slate-100 dark:bg-white/10')}>{t.n}</span>}
           </button>
         ))}
       </div>
@@ -72,7 +72,7 @@ export default function JesseInbox() {
                     <span className="text-[15px] font-semibold text-ink">{leadTitle(l)}</span>
                     <StatusPill status={l.status} pipeline={biz?.pipeline} label={l.statusLabel} size="sm" />
                     {l.belowMin && <Badge tone="accent">Below minimum</Badge>}
-                    {tab === 'waiting' && <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', days > 1 ? 'bg-danger/10 text-danger' : days === 1 ? 'bg-warning/15 text-amber-700' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>waiting {days} business day{days === 1 ? '' : 's'}</span>}
+                    {tab === 'waiting' && <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', days > 1 ? 'bg-danger/10 text-danger-ink' : days === 1 ? 'bg-warning/15 text-warning-ink' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>waiting {days} business day{days === 1 ? '' : 's'}</span>}
                   </div>
                   <p className="mt-0.5 text-body-sm text-ink-muted">
                     {tab === 'waiting' && <>From <b className="text-ink">{from}</b> · submitted {ago(l.flaggedAt)}</>}
@@ -80,7 +80,7 @@ export default function JesseInbox() {
                     {tab === 'closed' && <>{l.statusLabel}{l.lostReason ? ` · ${l.lostReason.toLowerCase().replace(/_/g, ' ')}` : ''} · {l.assignee?.name ?? 'Unassigned'} · {ago(l.lastActivityAt)}</>}
                     {[l.industry, l.state].filter(Boolean).length ? ` · ${[l.industry, l.state].filter(Boolean).join(', ')}` : ''}
                   </p>
-                  {tab === 'waiting' && l.jesseAsk && <p className="mt-2 rounded-card border border-orange-200 bg-orange-50/60 px-3 py-1.5 text-body-sm text-ink dark:border-orange-500/30 dark:bg-orange-500/10"><span className="font-semibold text-ink-muted">They ask: </span>{l.jesseAsk}</p>}
+                  {tab === 'waiting' && l.jesseAsk && <p className="mt-2 rounded-card border border-orange-ring bg-orange-subtle/60 px-3 py-1.5 text-body-sm text-ink"><span className="font-semibold text-ink-muted">They ask: </span>{l.jesseAsk}</p>}
                   {tab !== 'waiting' && l.jesseComment && <p className="mt-1.5 line-clamp-2 text-body-sm text-ink-muted"><MessageSquare size={12} className="mr-1 inline" />You: {l.jesseComment}</p>}
                   {tab === 'waiting' && last && <p className="mt-1.5 line-clamp-1 text-body-sm text-ink-muted"><MessageSquare size={12} className="mr-1 inline" />{last.user.name}: {last.body}</p>}
                 </div>

@@ -46,7 +46,7 @@ export function ImportSummaryView({ s, importId, onOpenLead }: { s: ImportSummar
           return (
             <Tag key={t.k} type={clickable ? 'button' : undefined} onClick={clickable ? () => open(t.drill!) : undefined} className={cn('rounded-btn border px-3 py-2 text-left', active(t.drill) ? 'border-primary bg-primary/[0.06]' : 'border-line bg-card', clickable && 'hover:border-primary/60')}>
               <p className="text-[11px] font-semibold uppercase text-ink-muted">{t.k}</p>
-              <p className={cn('text-headline-md tabular-nums', clickable ? 'text-primary' : 'text-ink')}>{num(t.v)}</p>
+              <p className={cn('text-headline-md tabular-nums', clickable ? 'text-primary-ink' : 'text-ink')}>{num(t.v)}</p>
               {t.hint && <p className="truncate text-[11px] text-ink-muted">{t.hint}</p>}
             </Tag>
           )
@@ -83,7 +83,7 @@ export function ImportSummaryView({ s, importId, onOpenLead }: { s: ImportSummar
                 return (
                   <li key={c.from + c.to}>
                     {can
-                      ? <button type="button" onClick={() => open(d)} className={cn('flex w-full justify-between gap-2 rounded px-1 text-left hover:bg-slate-50', active(d) && 'bg-primary/[0.06]')}><span className="text-primary hover:underline">{c.from} → {c.to}</span><b className="tabular-nums text-ink">{c.count}</b></button>
+                      ? <button type="button" onClick={() => open(d)} className={cn('flex w-full justify-between gap-2 rounded px-1 text-left hover:bg-slate-50', active(d) && 'bg-primary/[0.06]')}><span className="text-primary-ink hover:underline">{c.from} → {c.to}</span><b className="tabular-nums text-ink">{c.count}</b></button>
                       : <span className="flex justify-between gap-2"><span className="text-ink">{c.from} → {c.to}</span><b className="tabular-nums text-ink">{c.count}</b></span>}
                   </li>
                 )
@@ -91,7 +91,7 @@ export function ImportSummaryView({ s, importId, onOpenLead }: { s: ImportSummar
               {reassigned > 0 && (
                 <li className="mt-1 border-t border-line pt-1.5">
                   {can
-                    ? <button type="button" onClick={() => open({ title: 'Reassigned from Lead Gen', kind: 'reassigned' })} className={cn('flex w-full justify-between gap-2 rounded px-1 text-left hover:bg-slate-50', active({ title: '', kind: 'reassigned' }) && 'bg-primary/[0.06]')}><span className="text-primary hover:underline">Reassigned from Lead Gen (back to you, not a regression)</span><b className="tabular-nums text-ink">{reassigned}</b></button>
+                    ? <button type="button" onClick={() => open({ title: 'Reassigned from Lead Gen', kind: 'reassigned' })} className={cn('flex w-full justify-between gap-2 rounded px-1 text-left hover:bg-slate-50', active({ title: '', kind: 'reassigned' }) && 'bg-primary/[0.06]')}><span className="text-primary-ink hover:underline">Reassigned from Lead Gen (back to you, not a regression)</span><b className="tabular-nums text-ink">{reassigned}</b></button>
                     : <span className="flex justify-between gap-2"><span className="text-ink">Reassigned from Lead Gen</span><b className="tabular-nums text-ink">{reassigned}</b></span>}
                 </li>
               )}
@@ -101,23 +101,23 @@ export function ImportSummaryView({ s, importId, onOpenLead }: { s: ImportSummar
         <div className="space-y-2 rounded-btn border border-line p-3 text-body-sm">
           <p className="font-semibold text-ink">Worth knowing</p>
           {s.newIndustries.length > 0 && <p className="text-ink">New industries: {s.newIndustries.map((i) => `${i.name} (${i.count})`).join(', ')}. Each gets its own row in the industry view.</p>}
-          {s.unknownStatuses.length > 0 && <p className="text-warning">Statuses the stage list does not know yet: {s.unknownStatuses.map((u) => `${u.status} (${u.count})`).join(', ')}. They count as stage 1 until an admin places them in Settings.</p>}
-          {s.duplicates > 0 && <p className="text-danger">{s.duplicates} lead{s.duplicates === 1 ? '' : 's'} already held by another rep{s.duplicateExamples.length ? ` (e.g. ${s.duplicateExamples.slice(0, 3).map((d) => `${d.company}, ${d.heldBy}`).join('; ')})` : ''}. A manager decides who keeps them; until then they are left out of your counts.</p>}
+          {s.unknownStatuses.length > 0 && <p className="text-warning-ink">Statuses the stage list does not know yet: {s.unknownStatuses.map((u) => `${u.status} (${u.count})`).join(', ')}. They count as stage 1 until an admin places them in Settings.</p>}
+          {s.duplicates > 0 && <p className="text-danger-ink">{s.duplicates} lead{s.duplicates === 1 ? '' : 's'} already held by another rep{s.duplicateExamples.length ? ` (e.g. ${s.duplicateExamples.slice(0, 3).map((d) => `${d.company}, ${d.heldBy}`).join('; ')})` : ''}. A manager decides who keeps them; until then they are left out of your counts.</p>}
           {s.touches != null && (
             <p className="text-ink">
-              {can && s.touches > 0 ? <button type="button" onClick={() => open({ title: 'Touches found', kind: 'touches' })} className="font-semibold text-primary hover:underline">{s.touches} touch{s.touches === 1 ? '' : 'es'} found</button> : <b>{s.touches} touch{s.touches === 1 ? '' : 'es'} found</b>}
+              {can && s.touches > 0 ? <button type="button" onClick={() => open({ title: 'Touches found', kind: 'touches' })} className="font-semibold text-primary-ink hover:underline">{s.touches} touch{s.touches === 1 ? '' : 'es'} found</button> : <b>{s.touches} touch{s.touches === 1 ? '' : 'es'} found</b>}
               {' '}against your last import (status changes and re-attempts){s.bulkUpdateDays?.length ? `; ${s.bulkUpdateDays.length} bulk-update date${s.bulkUpdateDays.length === 1 ? '' : 's'} not counted as calls` : ''}.
             </p>
           )}
           {s.changedFields && s.changedFields.length > 0 && s.changed > 0 && s.changed >= Math.max(50, total * 0.8) && (
-            <p className="text-warning">Nearly every lead counts as changed. What differed: {s.changedFields.slice(0, 4).map((f) => `${FIELD_LABEL[f.field] ?? f.field} (${num(f.count)})`).join(', ')}. If one field explains it, the export changed its format for that column.</p>
+            <p className="text-warning-ink">Nearly every lead counts as changed. What differed: {s.changedFields.slice(0, 4).map((f) => `${FIELD_LABEL[f.field] ?? f.field} (${num(f.count)})`).join(', ')}. If one field explains it, the export changed its format for that column.</p>
           )}
           {!!s.keptChangedHere && <p className="text-ink">{s.keptChangedHere} lead{s.keptChangedHere === 1 ? '' : 's'} kept the status set in Metriq, because Earthzone still shows the old one. Update {s.keptChangedHere === 1 ? 'it' : 'them'} in Earthzone (Leads, Needs Earthzone update).</p>}
           {s.notInFile > 0 && <p className="text-ink">{s.notInFile} lead{s.notInFile === 1 ? '' : 's'} from the last import {s.notInFile === 1 ? 'is' : 'are'} not in this file, so {s.notInFile === 1 ? 'it is' : 'they are'} hidden (history kept).</p>}
           {s.skipped > 0 && (
             <div className="text-ink-muted">
               {s.skippedRows?.length
-                ? <button type="button" onClick={() => setSkippedOpen((v) => !v)} className="inline-flex items-center gap-1 text-primary hover:underline">{skippedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}{s.skipped} row{s.skipped === 1 ? '' : 's'} skipped</button>
+                ? <button type="button" onClick={() => setSkippedOpen((v) => !v)} className="inline-flex items-center gap-1 text-primary-ink hover:underline">{skippedOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}{s.skipped} row{s.skipped === 1 ? '' : 's'} skipped</button>
                 : <>{s.skipped} row{s.skipped === 1 ? '' : 's'} skipped: no name, or nothing to recognise the lead by.</>}
               {skippedOpen && s.skippedRows && (
                 <ul className="mt-1 max-h-40 space-y-0.5 overflow-auto rounded border border-line bg-slate-50 p-2 text-[12px] dark:bg-white/[0.03]">
@@ -158,13 +158,13 @@ function ActivityBlock({ a, before, previousAt, can, open, active }: { a: Import
           return (
             <Tag key={it.label} type={clickable ? 'button' : undefined} onClick={clickable ? () => open(d!) : undefined} className={cn('rounded-btn px-2 py-1.5 text-left', active(d) ? 'bg-primary/10' : clickable ? 'hover:bg-primary/[0.06]' : '')}>
               <p className="text-[11px] text-ink-muted">{it.label}</p>
-              <p className="flex items-baseline gap-1 text-body-lg font-bold tabular-nums"><span className={clickable ? 'text-primary' : 'text-ink'}>{num(it.v)}</span>{diff != null && diff !== 0 && <span className={cn('text-[11px] font-semibold', diff > 0 ? 'text-success' : 'text-danger')}>{diff > 0 ? '+' : ''}{num(diff)}</span>}</p>
+              <p className="flex items-baseline gap-1 text-body-lg font-bold tabular-nums"><span className={clickable ? 'text-primary-ink' : 'text-ink'}>{num(it.v)}</span>{diff != null && diff !== 0 && <span className={cn('text-[11px] font-semibold', diff > 0 ? 'text-success-ink' : 'text-danger-ink')}>{diff > 0 ? '+' : ''}{num(diff)}</span>}</p>
             </Tag>
           )
         })}
         <div className="rounded-btn px-2 py-1.5">
           <p className="text-[11px] text-ink-muted">Connect rate, touched leads</p>
-          <p className="flex items-baseline gap-1 text-body-lg font-bold tabular-nums text-ink">{pct(rate, 0)}{dRate != null && Math.abs(dRate) >= 0.005 && <span className={cn('text-[11px] font-semibold', dRate > 0 ? 'text-success' : 'text-danger')}>{dRate > 0 ? '+' : ''}{(dRate * 100).toFixed(0)} pts</span>}</p>
+          <p className="flex items-baseline gap-1 text-body-lg font-bold tabular-nums text-ink">{pct(rate, 0)}{dRate != null && Math.abs(dRate) >= 0.005 && <span className={cn('text-[11px] font-semibold', dRate > 0 ? 'text-success-ink' : 'text-danger-ink')}>{dRate > 0 ? '+' : ''}{(dRate * 100).toFixed(0)} pts</span>}</p>
         </div>
       </div>
       <p className="mt-1.5 text-[11px] text-ink-muted">Connects ÷ touches: the rate that moves with a day's work. The lifetime funnel below is the long view.</p>
@@ -190,7 +190,7 @@ function DrillTable({ importId, drill, onClose, onOpenLead }: { importId: string
         <p className="text-body-sm font-semibold text-ink">{drill.title}{rows ? <span className="ml-1.5 font-normal text-ink-muted">· {num(rows.length)} lead{rows.length === 1 ? '' : 's'}</span> : null}</p>
         <button type="button" onClick={onClose} className="rounded p-1 text-ink-muted hover:text-ink" aria-label="Close the list"><X size={15} /></button>
       </div>
-      {err ? <p className="px-3 py-3 text-body-sm text-danger">{err}</p> : !rows ? <div className="m-3 h-16 animate-pulse rounded bg-slate-100" /> : rows.length === 0 ? <p className="px-3 py-3 text-body-sm text-ink-muted">No leads here.</p> : (
+      {err ? <p className="px-3 py-3 text-body-sm text-danger-ink">{err}</p> : !rows ? <div className="m-3 h-16 animate-pulse rounded bg-slate-100" /> : rows.length === 0 ? <p className="px-3 py-3 text-body-sm text-ink-muted">No leads here.</p> : (
         <div className="max-h-80 overflow-auto">
           <table className="w-full min-w-[640px] text-left text-body-sm">
             <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase text-ink-muted dark:bg-white/[0.03]"><tr><th className="px-3 py-1.5">Company</th><th className="px-2">Contact</th><th className="px-2">Phone</th><th className="px-2">Status</th><th className="px-2">Date</th><th className="px-2">What</th></tr></thead>
@@ -207,7 +207,7 @@ function DrillTable({ importId, drill, onClose, onOpenLead }: { importId: string
               ))}
             </tbody>
           </table>
-          {rows.length > shown && <div className="border-t border-line py-2 text-center"><button type="button" onClick={() => setShown((n) => n + 100)} className="text-body-sm font-semibold text-primary">Show more ({num(rows.length - shown)} left)</button></div>}
+          {rows.length > shown && <div className="border-t border-line py-2 text-center"><button type="button" onClick={() => setShown((n) => n + 100)} className="text-body-sm font-semibold text-primary-ink">Show more ({num(rows.length - shown)} left)</button></div>}
         </div>
       )}
     </section>
@@ -232,7 +232,7 @@ function FunnelChange({ before, now }: { before: FunnelNumbers | null; now: Funn
               <span className="text-ink-muted">{label}</span>
               <span className="flex items-center gap-1 tabular-nums">
                 <b className="text-ink">{isRate ? pct(n) : num(n ?? 0)}</b>
-                {d != null && d !== 0 && <span className={cn('inline-flex items-center text-[11px]', d > 0 ? 'text-success' : 'text-danger')}>{d > 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}{isRate ? `${Math.abs(d * 100).toFixed(1)} pts` : num(Math.abs(d))}</span>}
+                {d != null && d !== 0 && <span className={cn('inline-flex items-center text-[11px]', d > 0 ? 'text-success-ink' : 'text-danger-ink')}>{d > 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}{isRate ? `${Math.abs(d * 100).toFixed(1)} pts` : num(Math.abs(d))}</span>}
                 {d === 0 && before && <Minus size={11} className="text-ink-muted" />}
               </span>
             </div>

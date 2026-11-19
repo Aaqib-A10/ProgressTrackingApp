@@ -75,7 +75,7 @@ export function ListView({ projectKey, tasks, columns, members, canManage, onOpe
     <div className="space-y-2">
       {canManage && sel.size > 0 && (
         <div className="sticky top-2 z-10 flex animate-rise-in flex-wrap items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 text-body-sm shadow-raised">
-          <span className="mr-1 inline-flex h-6 items-center rounded-md bg-primary/10 px-2 font-medium text-primary">{sel.size} selected</span>
+          <span className="mr-1 inline-flex h-6 items-center rounded-md bg-primary/10 px-2 font-medium text-primary-ink">{sel.size} selected</span>
           <select defaultValue="" onChange={(e) => { if (e.target.value) bulk({ columnId: e.target.value }); e.target.value = '' }} className="h-7 rounded-md border border-line bg-card px-2 text-body-sm shadow-xs" aria-label="Move selected to">
             <option value="">Move to…</option>
             {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

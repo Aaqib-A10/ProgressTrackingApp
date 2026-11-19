@@ -152,7 +152,7 @@ export function QuickAction({ to, icon, title, desc }: { to: string; icon: React
       to={to}
       className="group flex items-start gap-3.5 rounded-card border border-line bg-card p-4 shadow-xs transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</div>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary-ink">{icon}</div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-[14px] font-semibold text-ink">{title}</h3>

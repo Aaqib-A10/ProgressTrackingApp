@@ -72,7 +72,7 @@ export default function MemberProfile() {
       {/* Profile header */}
       <Card>
         <div className="flex flex-wrap items-center gap-4">
-          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-headline-md font-semibold text-primary">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-headline-md font-semibold text-primary-ink">
             {initials(user.name)}
           </span>
           <div className="min-w-0 flex-1">

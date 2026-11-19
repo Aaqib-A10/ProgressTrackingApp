@@ -23,10 +23,10 @@ export function useToast(): ToastContextValue {
 }
 
 const ICONS: Record<ToastType, ReactNode> = {
-  success: <CheckCircle2 size={18} className="text-success" />,
-  error: <XCircle size={18} className="text-danger" />,
-  warning: <AlertTriangle size={18} className="text-warning" />,
-  info: <Info size={18} className="text-primary" />,
+  success: <CheckCircle2 size={18} className="text-success-ink" />,
+  error: <XCircle size={18} className="text-danger-ink" />,
+  warning: <AlertTriangle size={18} className="text-warning-ink" />,
+  info: <Info size={18} className="text-primary-ink" />,
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {

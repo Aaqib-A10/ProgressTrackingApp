@@ -24,9 +24,9 @@ export default function Legal() {
           <h1 className="mt-8 text-[36px] font-semibold leading-[1.05] tracking-[-0.035em] text-ink sm:text-[52px]">{doc.title}</h1>
           <p className="mt-3 text-[14.5px] text-ink-muted">Last updated {LEGAL.updated} · {LEGAL.operator}</p>
           <div className="mt-8 max-w-3xl rounded-[16px] border border-primary/20 bg-primary/5 p-5 sm:p-6">
-            <p className="text-[13px] font-semibold text-primary">In short</p>
+            <p className="text-[13px] font-semibold text-primary-ink">In short</p>
             <ul className="mt-3 space-y-2">
-              {doc.summary.map((s) => <li key={s} className="flex gap-2.5 text-[15px] leading-relaxed text-ink"><IconCheck size={16} className="mt-1 shrink-0 text-primary" />{s}</li>)}
+              {doc.summary.map((s) => <li key={s} className="flex gap-2.5 text-[15px] leading-relaxed text-ink"><IconCheck size={16} className="mt-1 shrink-0 text-primary-ink" />{s}</li>)}
             </ul>
             <p className="mt-4 text-[13px] text-ink-muted">This summary helps you read the page; the full text below is what applies.</p>
           </div>
@@ -52,7 +52,7 @@ export default function Legal() {
               </div>
             </section>
           ))}
-          <p className="mt-6 rounded-[12px] border border-line bg-card p-4 text-[13.5px] text-ink-muted">Related: {LEGAL_DOCS.filter((d) => d.slug !== doc.slug).map((d, i) => <span key={d.slug}>{i > 0 && ' · '}<Link to={`/${d.slug}`} className="font-medium text-primary hover:underline">{d.title}</Link></span>)}</p>
+          <p className="mt-6 rounded-[12px] border border-line bg-card p-4 text-[13.5px] text-ink-muted">Related: {LEGAL_DOCS.filter((d) => d.slug !== doc.slug).map((d, i) => <span key={d.slug}>{i > 0 && ' · '}<Link to={`/${d.slug}`} className="font-medium text-primary-ink hover:underline">{d.title}</Link></span>)}</p>
         </article>
       </Container>
     </MarketingLayout>

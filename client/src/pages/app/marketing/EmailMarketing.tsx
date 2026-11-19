@@ -57,7 +57,7 @@ export default function EmailMarketing() {
 
       <Card>
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-card bg-primary/10 text-primary">
+          <span className="flex h-12 w-12 items-center justify-center rounded-card bg-primary/10 text-primary-ink">
             <Mail size={22} />
           </span>
           <p className="text-body-lg font-semibold text-ink">{TABS.find((t) => t.value === tab)?.label} — nothing here yet</p>

@@ -112,7 +112,7 @@ export default function LeadDialer() {
     { key: 'duplicates', label: 'Duplicates', count: dupCount, tone: 'red', manager: true },
     { key: 'settings', label: 'Settings' },
   ]
-  const sel = (active: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', active ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')
+  const sel = (active: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', active ? 'border-primary bg-primary/5 font-semibold text-primary-ink' : 'border-line bg-card text-ink')
 
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-4">
@@ -139,7 +139,7 @@ export default function LeadDialer() {
 
       {data?.lastImport && (
         <div className={cn('flex items-center gap-2 truncate rounded-btn border px-3 py-1.5 text-body-sm', stale ? 'border-warning/40 bg-warning/5' : 'border-line bg-card')}>
-          {stale && <AlertTriangle size={14} className="shrink-0 text-warning" />}
+          {stale && <AlertTriangle size={14} className="shrink-0 text-warning-ink" />}
           <span className="truncate text-ink">Last import <b>{lastAt!.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</b>{showOwner ? ` by ${data.lastImport.by}` : ''}{stale ? ' · import again for fresh numbers' : ''}</span>
         </div>
       )}
@@ -149,7 +149,7 @@ export default function LeadDialer() {
         {tabs.filter((t) => !t.manager || isManager).map((t) => (
           <button key={t.key} type="button" onClick={() => go(t.key)} className={cn('-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-body-md font-medium', view === t.key ? 'border-primary text-ink' : 'border-transparent text-ink-muted hover:text-ink')}>
             {t.label}
-            {!!t.count && <span className={cn('rounded-full px-1.5 text-[11px] font-bold', t.tone === 'red' ? 'bg-danger/10 text-danger' : 'bg-warning/15 text-warning')}>{t.count}</span>}
+            {!!t.count && <span className={cn('rounded-full px-1.5 text-[11px] font-bold', t.tone === 'red' ? 'bg-danger/10 text-danger-ink' : 'bg-warning/15 text-warning-ink')}>{t.count}</span>}
           </button>
         ))}
       </div>
@@ -158,7 +158,7 @@ export default function LeadDialer() {
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-card bg-slate-100" />)}</div>
       ) : !data ? null : leads.length === 0 && view !== 'settings' && view !== 'history' && view !== 'duplicates' && view !== 'claude' ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-card px-6 py-16 text-center">
-          <FileUp size={32} className="text-primary" />
+          <FileUp size={32} className="text-primary-ink" />
           <p className="text-body-lg font-semibold text-ink">{rep === 'me' ? 'Import your leads to start' : 'No leads imported yet for this view'}</p>
           <p className="max-w-lg text-body-md text-ink-muted">Export your own leads from Earthzone (CSV or Excel) and import the file.</p>
           {rep === 'me' && <Button leadingIcon={<FileUp size={15} />} onClick={() => setImporting(true)}>Import my leads</Button>}

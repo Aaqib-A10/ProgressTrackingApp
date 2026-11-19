@@ -67,7 +67,7 @@ export function NotificationPrefsModal({ onClose }: { onClose: () => void }) {
             </li>
             {perm === 'denied' && (
               <li className="py-3 text-body-sm text-ink">
-                <p className="font-medium text-danger">Notifications are blocked for this site.</p>
+                <p className="font-medium text-danger-ink">Notifications are blocked for this site.</p>
                 <p className="mt-1 text-ink-muted">Click the icon to the left of the address bar, set <b>Notifications</b> to <b>Allow</b>, reload the page, then turn this on again. On Windows also check Settings, System, Notifications, and make sure Chrome or Edge is allowed.</p>
               </li>
             )}

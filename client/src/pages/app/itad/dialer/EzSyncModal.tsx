@@ -90,7 +90,7 @@ export function EzSyncModal({ onClose, onDone }: { onClose: () => void; onDone: 
     <Modal open onClose={onClose} title="Earth Zone sync" size="xl" footer={footer}>
       {done ? (
         <div className="space-y-3 text-body-md">
-          <p className="flex items-center gap-2 font-semibold text-ink"><CheckCircle2 size={18} className="text-success" />Done. {plural(done.updated, 'lead')} updated.</p>
+          <p className="flex items-center gap-2 font-semibold text-ink"><CheckCircle2 size={18} className="text-success-ink" />Done. {plural(done.updated, 'lead')} updated.</p>
           <ul className="space-y-1 text-body-sm text-ink">
             {done.fields.altPhones > 0 && <li>{plural(done.fields.altPhones, 'alternative number')} added</li>}
             {done.fields.email2 > 0 && <li>{plural(done.fields.email2, 'secondary email')} filled</li>}
@@ -109,7 +109,7 @@ export function EzSyncModal({ onClose, onDone }: { onClose: () => void; onDone: 
             <li>Upload it here and check the preview. Nothing is saved until you confirm.</li>
           </ol>
           <div onClick={() => fileRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); pick(e.dataTransfer.files[0]) }} className="flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed border-line px-6 py-10 text-center hover:border-primary/50">
-            <FileSpreadsheet size={28} className="text-primary" />
+            <FileSpreadsheet size={28} className="text-primary-ink" />
             <p className="font-semibold text-ink">Drop the Earth Zone file here or click to choose</p>
             <p className="text-body-sm text-ink-muted">Fills alternative numbers, secondary email, job title, description and links, and the notes timeline. Nothing else on the lead changes.</p>
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }} />
@@ -130,7 +130,7 @@ export function EzSyncModal({ onClose, onDone }: { onClose: () => void; onDone: 
               </label>
             ))}
           </div>
-          {!canMatch && <p className="rounded-btn bg-danger/5 px-3 py-2 text-danger">Pick the Lead ID, Primary Email, Primary Phone or Company Name column, so each row can find its lead.</p>}
+          {!canMatch && <p className="rounded-btn bg-danger/5 px-3 py-2 text-danger-ink">Pick the Lead ID, Primary Email, Primary Phone or Company Name column, so each row can find its lead.</p>}
         </div>
       ) : (
         <PreviewView p={preview} replace={replace} setReplace={setReplace} />
@@ -147,7 +147,7 @@ function PreviewView({ p, replace, setReplace }: { p: EzSyncPreview; replace: bo
   return (
     <div className="space-y-4 text-body-sm">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {([['Matched', p.matched, ''], ['Leads to update', p.leadsToUpdate, ''], ['Not matched', p.unmatchedCount, p.unmatchedCount ? 'text-warning' : ''], ['Unclear', p.ambiguousCount, p.ambiguousCount ? 'text-warning' : '']] as const).map(([k, v, tone]) => (
+        {([['Matched', p.matched, ''], ['Leads to update', p.leadsToUpdate, ''], ['Not matched', p.unmatchedCount, p.unmatchedCount ? 'text-warning-ink' : ''], ['Unclear', p.ambiguousCount, p.ambiguousCount ? 'text-warning-ink' : '']] as const).map(([k, v, tone]) => (
           <div key={k} className="rounded-btn border border-line px-3 py-2"><p className="text-[11px] font-semibold uppercase text-ink-muted">{k}</p><p className={cn('text-headline-md tabular-nums text-ink', tone)}>{v.toLocaleString()}</p></div>
         ))}
       </div>
@@ -164,7 +164,7 @@ function PreviewView({ p, replace, setReplace }: { p: EzSyncPreview; replace: bo
           <div className="flex flex-wrap gap-1.5">
             {p.authors.map((a) => (
               <span key={a.name} className={cn('rounded-full px-2.5 py-0.5', a.matched ? 'bg-primary/10 text-ink' : 'bg-slate-100 text-ink-muted')} title={a.matched ? 'Matched to a Metriq person' : 'No Metriq person with this name: the name is kept as written'}>
-                {a.name}{a.isMe && <b className="ml-1 text-primary">(you)</b>} · {a.notes}
+                {a.name}{a.isMe && <b className="ml-1 text-primary-ink">(you)</b>} · {a.notes}
               </span>
             ))}
           </div>

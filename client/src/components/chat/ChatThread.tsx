@@ -21,6 +21,8 @@ import { VoiceBubble } from './VoiceBubble'
 import { apiBase } from '../../lib/session'
 
 const API = apiBase()
+/** The message box grows with what is typed (wrapped lines too) up to about 8 lines, then scrolls. */
+const COMPOSER_MAX = 172
 /** A phone or tablet: no hover, so a tap on a message shows its buttons under it (like WhatsApp). */
 const TOUCH = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(hover: none)').matches
 const TASK_RE = /\b([A-Z][A-Z0-9]{1,5}-\d{1,7})\b/g
@@ -78,6 +80,13 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const [picOpen, setPicOpen] = useState(false)
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // Grow the message box to fit what is typed, so a long message can be read before it is sent.
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX)}px`
+  }, [text, compact])
   const fileRef = useRef<HTMLInputElement>(null)
   const lastSeq = useRef(0)
   const lastSync = useRef<string | null>(null)
@@ -346,6 +355,9 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
   const lastMine = [...msgs].reverse().find((m) => m.user.id === meId && !m.deleted && !m.call)
   const isDirect = conv?.type === 'DIRECT'
   const other = isDirect ? members[0] : null
+  // "Message yourself": a direct chat with only me in it (no calls, no one to be seen by).
+  const selfChat = !!conv?.self
+  const me = conv?.members.find((x) => x.id === meId)
   // Latest handlers for the memoised message list (it only redraws when messages change).
   const h = useRef({ react, remove, nameOrYou })
   h.current = { react, remove, nameOrYou }
@@ -412,7 +424,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                       <>
                         {!m.file && <button type="button" onClick={() => { setEditing(m); setReplyTo(null); setText(m.body); inputRef.current?.focus() }} className="flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Edit" title="Edit"><Pencil size={14} /></button>}
                         {menuFor === m.id
-                          ? <button type="button" onClick={() => { setMenuFor(null); h.current.remove(m) }} className="inline-flex h-7 items-center gap-1 rounded-md bg-danger/10 px-2 text-body-sm font-medium text-danger hover:bg-danger/15" autoFocus onBlur={() => setMenuFor(null)}><Trash2 size={13} /> Delete</button>
+                          ? <button type="button" onClick={() => { setMenuFor(null); h.current.remove(m) }} className="inline-flex h-7 items-center gap-1 rounded-md bg-danger/10 px-2 text-body-sm font-medium text-danger-ink hover:bg-danger/15" autoFocus onBlur={() => setMenuFor(null)}><Trash2 size={13} /> Delete</button>
                           : <button type="button" onClick={() => setMenuFor(m.id)} className="flex h-7 w-7 items-center justify-center rounded-md text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="More" title="More"><MoreHorizontal size={15} /></button>}
                       </>
                     )}
@@ -424,15 +436,15 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
                     {m.reactions.map((r) => {
                       const mineR = r.userIds.includes(meId)
                       return (
-                        <button key={r.emoji} type="button" onClick={() => h.current.react(m, r.emoji)} title={`${r.userIds.map(h.current.nameOrYou).join(', ')}${mineR ? ' (click to take yours back)' : ''}`} className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none shadow-sm transition-transform hover:scale-105', mineR ? 'border-primary/40 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:bg-slate-50')} style={{ animation: 'pt-pop-in 200ms both cubic-bezier(.2,1.4,.4,1)' }}>
+                        <button key={r.emoji} type="button" onClick={() => h.current.react(m, r.emoji)} title={`${r.userIds.map(h.current.nameOrYou).join(', ')}${mineR ? ' (click to take yours back)' : ''}`} className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] leading-none shadow-sm transition-transform hover:scale-105', mineR ? 'border-primary/40 bg-primary/10 text-primary-ink' : 'border-line bg-card text-ink-muted hover:bg-slate-50')} style={{ animation: 'pt-pop-in 200ms both cubic-bezier(.2,1.4,.4,1)' }}>
                           <span className="text-[15px]">{r.emoji}</span>{r.userIds.length > 1 ? r.userIds.length : null}
                         </button>
                       )
                     })}
                   </div>
                 )}
-                {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary"><CheckCheck size={12} /> Seen</p>}
-                {!isDirect && mine && lastMine?.id === m.id && seenBy && <p className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate px-1 text-[11px] text-primary" title={`Seen by ${seenBy}`}><CheckCheck size={12} className="shrink-0" /> Seen by {seenBy}</p>}
+                {isDirect && mine && lastMine?.id === m.id && otherReadSeq >= m.seq && <p className="mt-0.5 inline-flex items-center gap-1 px-1 text-[11px] text-primary-ink"><CheckCheck size={12} /> Seen</p>}
+                {!isDirect && mine && lastMine?.id === m.id && seenBy && <p className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate px-1 text-[11px] text-primary-ink" title={`Seen by ${seenBy}`}><CheckCheck size={12} className="shrink-0" /> Seen by {seenBy}</p>}
               </div>
             </div>
           </Fragment>
@@ -449,7 +461,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false) }}
       onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) } }}
     >
-      {dragOver && <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-primary/[0.06] text-body-md font-medium text-primary backdrop-blur-[1px]">Drop files to add them</div>}
+      {dragOver && <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-primary/[0.06] text-body-md font-medium text-primary-ink backdrop-blur-[1px]">Drop files to add them</div>}
       {notesFor && <NotesModal callId={notesFor} onClose={() => setNotesFor(null)} />}
       {picOpen && conv && conv.type !== 'DIRECT' && (
         <Modal open onClose={() => setPicOpen(false)} title={conv.type === 'PROJECT' ? 'Channel picture' : 'Group picture'} size="sm">
@@ -468,7 +480,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
       <div className={cn('flex shrink-0 items-center gap-2 border-b border-line bg-card', compact ? 'px-3 py-2' : 'h-14 px-5')}>
         {conv ? (
           <button type="button" onClick={onHeaderClick} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-            {isDirect && other ? <PersonAvatar person={other} size={compact ? 28 : 34} presence={other.presence} /> : conv.canChangePicture ? (
+            {selfChat && me ? <PersonAvatar person={me} size={compact ? 28 : 34} /> : isDirect && other ? <PersonAvatar person={other} size={compact ? 28 : 34} presence={other.presence} /> : conv.canChangePicture ? (
               // Leads and admins: click the picture to change it.
               <span
                 role="button"
@@ -488,13 +500,13 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             <span className="min-w-0">
               <span className="block truncate text-[14px] font-semibold text-ink">{conv.title}</span>
               <span className="block truncate text-[12px] text-ink-muted">
-                {isDirect && other ? (other.presence === 'busy' ? 'In a call' : other.presence === 'online' ? 'Online' : other.presence === 'away' ? 'Away' : 'Offline') : `${conv.members.length} members`}
+                {selfChat ? 'Message yourself: notes, links and files only you can see' : isDirect && other ? (other.presence === 'busy' ? 'In a call' : other.presence === 'online' ? 'Online' : other.presence === 'away' ? 'Away' : 'Offline') : `${conv.members.length} members`}
                 {conv.muted && <> · <BellOff size={11} className="inline" /> muted</>}
               </span>
             </span>
           </button>
         ) : <span className="skeleton h-8 w-40 rounded-md" />}
-        {conv && calls && !hideCallButtons && <CallButtons conversationId={conversationId} compact={compact} />}
+        {conv && calls && !hideCallButtons && !selfChat && <CallButtons conversationId={conversationId} compact={compact} />}
         {conv?.project && !compact && <Link to={`/app/projects/${conv.project.key}`} className="hidden h-8 shrink-0 sm:inline-flex items-center rounded-btn border border-line bg-card px-2.5 text-body-sm font-medium text-ink shadow-xs hover:bg-slate-50">Open board</Link>}
         {actions}
       </div>
@@ -542,7 +554,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
               <li key={p.id}>
                 {p.id === ALL_ID ? (
                   <button type="button" onClick={() => pickMention(p)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-body-sm hover:bg-slate-100">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white"><Users size={11} /></span>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-on"><Users size={11} /></span>
                     <span className="font-semibold text-ink">@all</span>
                     <span className="text-ink-muted">Notify everyone here ({members.length})</span>
                   </button>
@@ -581,14 +593,14 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
             maxLength={5000}
             placeholder={pending.length ? 'Add a message (optional), then press Enter to send' : conv ? `Message ${conv.title}` : 'Message'}
             aria-label="Message"
-            className="max-h-40 min-h-[32px] flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-[14px] text-ink shadow-none placeholder:text-ink-faint focus:outline-none focus:ring-0"
-            style={{ height: Math.min(160, 34 + (text.split('\n').length - 1) * 20) }}
+            className="min-h-[32px] flex-1 resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-[14px] leading-5 text-ink shadow-none placeholder:text-ink-faint focus:outline-none focus:ring-0"
+            style={{ maxHeight: COMPOSER_MAX }}
           />
           <button ref={emojiBtn} type="button" onClick={() => setShowEmoji((s) => !s)} className={cn('flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-slate-100 hover:text-ink', showEmoji && 'bg-slate-100 text-ink')} aria-label="Emoji" title="Emoji"><Smile size={17} /></button>
           {/* Empty box: the mic (hold to talk, or click). Something typed or picked: Send. */}
           {!editing && !text.trim() && !pending.length
             ? <VoiceRecorder onSend={(f) => sendVoice(f)} onError={(m) => addToast({ type: 'error', message: m })} />
-            : <button type="button" onClick={send} disabled={(!text.trim() && !pending.length) || sending} className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-xs transition-[transform,background-color] hover:bg-primary-700 active:scale-95 disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}</button>}
+            : <button type="button" onClick={send} disabled={(!text.trim() && !pending.length) || sending} className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-on shadow-xs transition-[transform,background-color] hover:bg-primary-700 active:scale-95 disabled:opacity-40" aria-label={editing ? 'Save edit' : 'Send'}>{sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}</button>}
         </div>
         {!compact && <p className="mt-1.5 hidden px-1 text-[11px] text-ink-faint sm:block">Enter to send, Shift+Enter for a new line, @ to mention, paste a task code like RTI-12 to share it.</p>}
       </div>
@@ -601,11 +613,11 @@ const ALL_ID = '__all__'
 function NotesCard({ body, onOpen }: { callId: string; body: string; onOpen: () => void }) {
   return (
     <button type="button" onClick={onOpen} className="flex max-w-md items-start gap-3 rounded-lg border border-line bg-card p-2.5 text-left shadow-xs transition-shadow hover:shadow-raised">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Sparkles size={17} /></span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink"><Sparkles size={17} /></span>
       <span className="min-w-0">
         <span className="flex items-center gap-2 text-body-md font-semibold text-ink">Meeting notes <TestingBadge /></span>
         <span className="line-clamp-3 block text-body-sm text-ink-muted">{body.replace(/^Meeting notes: /, '')}</span>
-        <span className="mt-1 block text-body-sm font-semibold text-primary">Open summary, action items and transcript</span>
+        <span className="mt-1 block text-body-sm font-semibold text-primary-ink">Open summary, action items and transcript</span>
       </span>
     </button>
   )
@@ -621,7 +633,7 @@ function renderBody(body: string, members: { id: string; name: string }[], menti
     // linkify URLs; highlight task codes softly
     const parts = buf.split(/(https?:\/\/[^\s)]+)/g)
     parts.forEach((p, j) => {
-      if (/^https?:\/\//.test(p)) out.push(<a key={`${i}-u${j}`} href={p} target="_blank" rel="noreferrer noopener" className="text-primary underline">{p}</a>)
+      if (/^https?:\/\//.test(p)) out.push(<a key={`${i}-u${j}`} href={p} target="_blank" rel="noreferrer noopener" className="text-primary-ink underline">{p}</a>)
       else if (hasTask) out.push(...p.split(TASK_RE).map((x, k) => (k % 2 === 1 ? <b key={`${i}-${j}-${k}`} className="font-mono">{x}</b> : x)))
       else out.push(p)
     })
@@ -632,14 +644,14 @@ function renderBody(body: string, members: { id: string; name: string }[], menti
       const all = /^@(all|everyone)\b/i.exec(body.slice(i))
       if (all && (i === 0 || /\s/.test(body[i - 1]))) {
         flush()
-        out.push(<span key={`m${i}`} className="rounded bg-warning/20 px-0.5 font-medium text-amber-800">{all[0]}</span>)
+        out.push(<span key={`m${i}`} className="rounded bg-warning/20 px-0.5 font-medium text-warning-ink">{all[0]}</span>)
         i += all[0].length
         continue
       }
       const hit = names.find((n) => body.startsWith('@' + n.name, i))
       if (hit) {
         flush()
-        out.push(<span key={`m${i}`} className={cn('rounded px-0.5 font-medium', hit.id === meId ? 'bg-warning/20 text-amber-800' : 'bg-primary/10 text-primary')}>@{hit.name}</span>)
+        out.push(<span key={`m${i}`} className={cn('rounded px-0.5 font-medium', hit.id === meId ? 'bg-warning/20 text-warning-ink' : 'bg-primary/10 text-primary-ink')}>@{hit.name}</span>)
         i += hit.name.length + 1
         continue
       }
@@ -667,10 +679,10 @@ function PendingTile({ p, onRemove }: { p: PendingFile; onRemove: () => void }) 
     // A voice message: a wide tile with a proper player, so it can be checked before sending.
     return (
       <div className={cn('relative flex w-72 shrink-0 items-center gap-2 overflow-hidden rounded-btn border bg-card py-2 pl-2 pr-7', p.error ? 'border-danger' : 'border-line')} title={p.error ?? p.file.name}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Mic size={18} /></span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink"><Mic size={18} /></span>
         <div className="min-w-0 flex-1">
           {busy ? <p className="text-body-sm text-ink">Sending {Math.round((p.progress ?? 0) * 100)}%</p> : <audio src={p.url} controls className="h-8 w-full" />}
-          <p className={cn('text-[10px]', p.error ? 'text-danger' : 'text-ink-muted')}>{p.error ? 'Not sent' : `Voice message · ${fmtBytes(p.file.size)}`}</p>
+          <p className={cn('text-[10px]', p.error ? 'text-danger-ink' : 'text-ink-muted')}>{p.error ? 'Not sent' : `Voice message · ${fmtBytes(p.file.size)}`}</p>
         </div>
         {busy && <div className="absolute bottom-0 left-0 h-1 bg-primary transition-[width]" style={{ width: `${Math.round((p.progress ?? 0) * 100)}%` }} />}
         <button type="button" onClick={onRemove} className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black/80" aria-label={busy ? 'Stop sending the voice message' : 'Remove the voice message'} title={busy ? 'Stop sending' : 'Remove'}>
@@ -684,12 +696,12 @@ function PendingTile({ p, onRemove }: { p: PendingFile; onRemove: () => void }) 
       <div className="flex h-20 items-center justify-center bg-slate-100">
         {p.kind === 'image' && p.url ? <img src={p.url} alt={p.file.name} className="h-full w-full object-cover" />
           : p.kind === 'video' && p.url ? <video src={p.url} muted preload="metadata" className="h-full w-full bg-black object-cover" />
-          : <FileText size={26} className="text-primary" />}
+          : <FileText size={26} className="text-primary-ink" />}
         {p.kind === 'video' && <span className="absolute left-1 top-1 rounded bg-black/70 p-0.5 text-white"><Film size={12} /></span>}
       </div>
       <div className="px-1.5 py-1">
         <p className="truncate text-[11px] font-medium text-ink">{p.file.name}</p>
-        <p className={cn('text-[10px]', p.error ? 'text-danger' : 'text-ink-muted')}>{p.error ? 'Not sent' : busy ? `Sending ${Math.round((p.progress ?? 0) * 100)}%` : fmtBytes(p.file.size)}</p>
+        <p className={cn('text-[10px]', p.error ? 'text-danger-ink' : 'text-ink-muted')}>{p.error ? 'Not sent' : busy ? `Sending ${Math.round((p.progress ?? 0) * 100)}%` : fmtBytes(p.file.size)}</p>
       </div>
       {busy && <div className="absolute bottom-0 left-0 h-1 bg-primary transition-[width]" style={{ width: `${Math.round((p.progress ?? 0) * 100)}%` }} />}
       <button type="button" onClick={onRemove} className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white hover:bg-black/80" aria-label={busy ? `Stop sending ${p.file.name}` : `Remove ${p.file.name}`} title={busy ? 'Stop sending' : 'Remove'}>
@@ -732,7 +744,7 @@ function FileBubble({ file, mine }: { file: NonNullable<ChatMessage['file']>; mi
         </div>
       ) : (
         <a href={href} className="inline-flex max-w-full items-center gap-2.5 rounded-lg border border-line bg-card px-3 py-2 text-body-sm shadow-xs hover:bg-slate-50">
-          <FileText size={18} className="shrink-0 text-primary" />
+          <FileText size={18} className="shrink-0 text-primary-ink" />
           <span className="min-w-0"><span className="block truncate font-medium text-ink">{file.name}</span><span className="text-ink-muted">{fmtBytes(file.size ?? 0)}</span></span>
           <Download size={15} className="shrink-0 text-ink-muted" />
         </a>
@@ -750,7 +762,7 @@ function TaskRefCard({ task }: { task: NonNullable<ChatMessage['task']> }) {
         <span className="block truncate text-body-md font-medium text-ink">{task.title}</span>
         <span className="flex items-center gap-2 text-body-sm text-ink-muted">
           <span className="font-mono">{task.code}</span> · {task.status}
-          {task.overdue && <span className="inline-flex items-center gap-0.5 font-semibold text-danger"><AlertTriangle size={11} /> overdue</span>}
+          {task.overdue && <span className="inline-flex items-center gap-0.5 font-semibold text-danger-ink"><AlertTriangle size={11} /> overdue</span>}
         </span>
       </span>
     </Link>
@@ -764,14 +776,14 @@ function CallButtons({ conversationId, compact }: { conversationId: string; comp
   const live = calls.active.find((c) => c.conversationId === conversationId)
   if (mineHere) {
     return (
-      <button type="button" onClick={() => calls.setMinimized(false)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-body-sm font-semibold text-success hover:bg-success/25">
+      <button type="button" onClick={() => calls.setMinimized(false)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-body-sm font-semibold text-success-ink hover:bg-success/25">
         <span className="h-2 w-2 animate-pulse rounded-full bg-success" /> In call
       </button>
     )
   }
   if (live && !live.joined) {
     return (
-      <button type="button" disabled={live.full} onClick={() => void calls.joinCall(live.id, conversationId, live.video)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success px-3 py-1.5 text-body-sm font-semibold text-white hover:bg-success/90 disabled:opacity-50" title={live.full ? 'This call is full' : 'Join the call'}>
+      <button type="button" disabled={live.full} onClick={() => void calls.joinCall(live.id, conversationId, live.video)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success px-3 py-1.5 text-body-sm font-semibold text-success-on hover:bg-success/90 disabled:opacity-50" title={live.full ? 'This call is full' : 'Join the call'}>
         {live.video ? <Video size={14} /> : <Phone size={14} />} Join call · {live.participants.length}
       </button>
     )
@@ -779,10 +791,10 @@ function CallButtons({ conversationId, compact }: { conversationId: string; comp
   const btn = cn('inline-flex shrink-0 items-center gap-1.5 rounded-btn border font-medium transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-success/25', compact ? 'px-2 py-1 text-[12px]' : 'h-8 px-2 text-body-sm sm:px-2.5')
   return (
     <span className="flex shrink-0 items-center gap-1.5">
-      <button type="button" onClick={() => void calls.startCall(conversationId, false)} className={cn(btn, 'border-success/40 bg-success/10 text-success hover:bg-success/20')} aria-label="Start a voice call" title="Voice call">
+      <button type="button" onClick={() => void calls.startCall(conversationId, false)} className={cn(btn, 'border-success/40 bg-success/10 text-success-ink hover:bg-success/20')} aria-label="Start a voice call" title="Voice call">
         <Phone size={compact ? 13 : 15} /> <span className={compact ? '' : 'hidden sm:inline'}>Call</span>
       </button>
-      <button type="button" onClick={() => void calls.startCall(conversationId, true)} className={cn(btn, 'border-success bg-success text-white hover:bg-success/90')} aria-label="Start a video call" title="Video call">
+      <button type="button" onClick={() => void calls.startCall(conversationId, true)} className={cn(btn, 'border-success bg-success text-success-on hover:bg-success/90')} aria-label="Start a video call" title="Video call">
         <Video size={compact ? 14 : 16} /> {compact ? 'Video' : <span className="hidden sm:inline">Video call</span>}
       </button>
     </span>
@@ -799,7 +811,7 @@ function CallCard({ call, conversationId, mine }: { call: NonNullable<ChatMessag
   const kind = call.video ? 'Video call' : 'Voice call'
   return (
     <div className="flex min-w-[220px] items-center gap-3 py-0.5">
-      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', ongoing ? 'bg-success text-white' : missed ? 'bg-danger/10 text-danger' : 'bg-white text-ink-muted')}><Icon size={17} /></span>
+      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', ongoing ? 'bg-success text-success-on' : missed ? 'bg-danger/10 text-danger-ink' : 'bg-white text-ink-muted')}><Icon size={17} /></span>
       <span className="min-w-0 flex-1">
         <span className="block text-body-md font-semibold text-ink">{ongoing ? `${kind} in progress` : missed ? (mine ? 'No answer' : `Missed ${kind.toLowerCase()}`) : kind}</span>
         <span className="block text-body-sm text-ink-muted">
@@ -808,8 +820,8 @@ function CallCard({ call, conversationId, mine }: { call: NonNullable<ChatMessag
       </span>
       {ongoing && calls && (
         inThis
-          ? <button type="button" onClick={() => calls.setMinimized(false)} className="shrink-0 rounded-btn border border-success px-2.5 py-1 text-body-sm font-semibold text-success">Open</button>
-          : <button type="button" onClick={() => void calls.joinCall(call.id, conversationId, call.video)} className="shrink-0 rounded-btn bg-success px-2.5 py-1 text-body-sm font-semibold text-white hover:bg-success/90">Join</button>
+          ? <button type="button" onClick={() => calls.setMinimized(false)} className="shrink-0 rounded-btn border border-success px-2.5 py-1 text-body-sm font-semibold text-success-ink">Open</button>
+          : <button type="button" onClick={() => void calls.joinCall(call.id, conversationId, call.video)} className="shrink-0 rounded-btn bg-success px-2.5 py-1 text-body-sm font-semibold text-success-on hover:bg-success/90">Join</button>
       )}
     </div>
   )

@@ -131,7 +131,7 @@ function SolutionPage({ slug }: { slug: string }) {
                   <HueTile hue={f.hue} size={36}><Icon size={18} /></HueTile>
                   <p className="mt-4 text-[15.5px] font-semibold text-ink">{f.name}</p>
                   <p className="mt-1 text-[13.5px] text-ink-muted">{f.menu}</p>
-                  <span className="mt-3 inline-flex items-center gap-1 text-[13.5px] font-semibold text-primary">See it <IconArrow size={14} className="transition-transform group-hover:translate-x-0.5" /></span>
+                  <span className="mt-3 inline-flex items-center gap-1 text-[13.5px] font-semibold text-primary-ink">See it <IconArrow size={14} className="transition-transform group-hover:translate-x-0.5" /></span>
                 </Link>
               )
             })}

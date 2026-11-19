@@ -8,6 +8,7 @@ import { useToast } from '../../../components/ui/Toast'
 import { useCalls } from '../../../components/calls/CallProvider'
 import { MeetingFormModal } from '../../../components/meetings/MeetingFormModal'
 import { cn } from '../../../lib/cn'
+import { role } from '../../../theme/css'
 
 type View = 'week' | 'month' | 'list'
 const HOUR_PX = 48
@@ -26,7 +27,7 @@ function rangeFor(view: View, anchor: Date): [Date, Date] {
 }
 
 function color(m: Meeting): string {
-  return m.project?.color ?? '#4F46E5'
+  return m.project?.color ?? role('accent')
 }
 
 /** /app/calendar — my meetings: week, month or upcoming list; schedule or "Meet now". */
@@ -75,7 +76,7 @@ export default function CalendarPage() {
     <div className="flex h-full flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto">
-          <h1 className="flex items-center gap-2 text-headline-lg text-ink"><CalendarDays size={24} className="text-primary" /> Calendar</h1>
+          <h1 className="flex items-center gap-2 text-headline-lg text-ink"><CalendarDays size={24} className="text-primary-ink" /> Calendar</h1>
           <p className="text-body-md text-ink-muted">Your meetings. Invite people and they get a notification and a reminder 10 minutes before.</p>
         </div>
         <Button variant="secondary" leadingIcon={<Video size={16} />} onClick={meetNow} disabled={starting || !calls}>{starting ? 'Starting…' : 'Meet now'}</Button>
@@ -93,7 +94,7 @@ export default function CalendarPage() {
         <span className="text-body-lg font-semibold text-ink">{label}</span>
         <div className="ml-auto inline-flex rounded-btn border border-line bg-card p-0.5">
           {(['week', 'month', 'list'] as View[]).map((v) => (
-            <button key={v} type="button" onClick={() => setView(v)} className={cn('rounded-[6px] px-3 py-1 text-body-sm font-semibold capitalize', view === v ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>{v}</button>
+            <button key={v} type="button" onClick={() => setView(v)} className={cn('rounded-[6px] px-3 py-1 text-body-sm font-semibold capitalize', view === v ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>{v}</button>
           ))}
         </div>
       </div>
@@ -173,9 +174,9 @@ function WeekView({ start, meetings, onOpen, onSlot }: { start: Date; meetings: 
       <div className="grid shrink-0 grid-cols-[56px_repeat(7,minmax(0,1fr))] border-b border-line">
         <div />
         {days.map((d) => (
-          <div key={d.toISOString()} className={cn('px-2 py-2 text-center', sameDay(d, now) && 'text-primary')}>
+          <div key={d.toISOString()} className={cn('px-2 py-2 text-center', sameDay(d, now) && 'text-primary-ink')}>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{d.toLocaleDateString(undefined, { weekday: 'short' })}</div>
-            <div className={cn('mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-body-md font-semibold', sameDay(d, now) ? 'bg-primary text-white' : 'text-ink')}>{d.getDate()}</div>
+            <div className={cn('mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-body-md font-semibold', sameDay(d, now) ? 'bg-primary text-primary-on' : 'text-ink')}>{d.getDate()}</div>
           </div>
         ))}
       </div>
@@ -208,7 +209,7 @@ function WeekView({ start, meetings, onOpen, onSlot }: { start: Date; meetings: 
                   type="button"
                   onClick={() => onOpen(p.m)}
                   className={cn('absolute z-[5] overflow-hidden rounded-[6px] border-l-[3px] px-1.5 py-0.5 text-left text-[12px] leading-tight shadow-sm hover:z-20 hover:shadow-card', p.m.myResponse === 'DECLINED' && 'opacity-50 line-through', p.m.myResponse === 'PENDING' && 'border-dashed')}
-                  style={{ top: p.top, height: p.height, left: `calc(${(p.col / p.cols) * 100}% + 2px)`, width: `calc(${100 / p.cols}% - 4px)`, borderLeftColor: color(p.m), backgroundColor: `${color(p.m)}1A` }}
+                  style={{ top: p.top, height: p.height, left: `calc(${(p.col / p.cols) * 100}% + 2px)`, width: `calc(${100 / p.cols}% - 4px)`, borderLeftColor: color(p.m), backgroundColor: `color-mix(in srgb, ${color(p.m)} 10%, transparent)` }}
                   title={`${p.m.title} · ${fmtTime(new Date(p.m.startsAt))} to ${fmtTime(new Date(p.m.endsAt))}`}
                 >
                   <span className="block truncate font-semibold text-ink">{p.m.live && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success align-middle" />}{p.m.title}</span>
@@ -238,7 +239,7 @@ function MonthView({ start, month, meetings, onOpen, onDay }: { start: Date; mon
           const list = meetings.filter((m) => sameDay(new Date(m.startsAt), d))
           return (
             <div key={d.toISOString()} className={cn('min-h-[104px] border-b border-r border-line p-1', d.getMonth() !== month && 'bg-slate-50/60')}>
-              <button type="button" onClick={() => onDay(d)} className={cn('mb-0.5 flex h-6 w-6 items-center justify-center rounded-full text-body-sm font-semibold', sameDay(d, today) ? 'bg-primary text-white' : d.getMonth() === month ? 'text-ink hover:bg-slate-100' : 'text-ink-muted')}>{d.getDate()}</button>
+              <button type="button" onClick={() => onDay(d)} className={cn('mb-0.5 flex h-6 w-6 items-center justify-center rounded-full text-body-sm font-semibold', sameDay(d, today) ? 'bg-primary text-primary-on' : d.getMonth() === month ? 'text-ink hover:bg-slate-100' : 'text-ink-muted')}>{d.getDate()}</button>
               {list.slice(0, 3).map((m) => (
                 <button key={m.id} type="button" onClick={() => onOpen(m)} className={cn('mb-0.5 flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] hover:bg-slate-100', m.myResponse === 'DECLINED' && 'line-through opacity-50')}>
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color(m) }} />
@@ -246,7 +247,7 @@ function MonthView({ start, month, meetings, onOpen, onDay }: { start: Date; mon
                   <span className="truncate font-medium text-ink">{m.title}</span>
                 </button>
               ))}
-              {list.length > 3 && <button type="button" onClick={() => onDay(d)} className="px-1 text-[11px] font-semibold text-primary">+{list.length - 3} more</button>}
+              {list.length > 3 && <button type="button" onClick={() => onDay(d)} className="px-1 text-[11px] font-semibold text-primary-ink">+{list.length - 3} more</button>}
             </div>
           )
         })}
@@ -276,7 +277,7 @@ function ListView({ meetings, onOpen }: { meetings: Meeting[]; onOpen: (m: Meeti
                   <span className="flex items-center gap-1.5 truncate text-body-md font-semibold text-ink">{m.title}{m.seriesId && <Repeat size={13} className="text-ink-muted" />}</span>
                   <span className="block truncate text-body-sm text-ink-muted">{m.organizer.name} · {m.attendees.length + 1} people{m.project ? ` · ${m.project.name}` : ''}</span>
                 </span>
-                {m.live ? <span className="rounded-full bg-success px-2.5 py-1 text-[12px] font-semibold text-white">Live now</span> : <ResponseChip r={m.myResponse} />}
+                {m.live ? <span className="rounded-full bg-success px-2.5 py-1 text-[12px] font-semibold text-success-on">Live now</span> : <ResponseChip r={m.myResponse} />}
               </button>
             ))}
           </div>
@@ -287,8 +288,8 @@ function ListView({ meetings, onOpen }: { meetings: Meeting[]; onOpen: (m: Meeti
 }
 
 export function ResponseChip({ r }: { r: Meeting['myResponse'] }) {
-  if (!r || r === 'ORGANIZER') return r === 'ORGANIZER' ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold text-primary">Organizer</span> : null
-  const map = { PENDING: ['Not answered', 'bg-slate-100 text-ink-muted'], ACCEPTED: ['Going', 'bg-success/15 text-success'], TENTATIVE: ['Maybe', 'bg-warning/15 text-amber-700'], DECLINED: ['Declined', 'bg-danger/10 text-danger'] } as const
+  if (!r || r === 'ORGANIZER') return r === 'ORGANIZER' ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold text-primary-ink">Organizer</span> : null
+  const map = { PENDING: ['Not answered', 'bg-slate-100 text-ink-muted'], ACCEPTED: ['Going', 'bg-success/15 text-success-ink'], TENTATIVE: ['Maybe', 'bg-warning/15 text-warning-ink'], DECLINED: ['Declined', 'bg-danger/10 text-danger-ink'] } as const
   const [t, c] = map[r]
   return <span className={cn('rounded-full px-2 py-0.5 text-[12px] font-semibold', c)}>{t}</span>
 }

@@ -150,7 +150,7 @@ export function ImportModal({ saved, onClose, onImported, onOpenLead, lists, nee
             onClick={() => fileRef.current?.click()}
             className={cn('flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed px-6 py-12 text-center transition-colors', dragOver ? 'border-primary bg-primary/5' : 'border-line hover:border-primary/50')}
           >
-            <FileSpreadsheet size={32} className="text-primary" />
+            <FileSpreadsheet size={32} className="text-primary-ink" />
             <p className="text-body-lg font-semibold text-ink">{reading ? 'Reading the file…' : 'Drop the export here or click to choose'}</p>
             <p className="text-body-sm text-ink-muted">CSV or Excel (.xlsx), up to 20 MB. The file is read on your computer; only the lead rows are sent.</p>
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }} />
@@ -170,17 +170,17 @@ export function ImportModal({ saved, onClose, onImported, onOpenLead, lists, nee
             {list === '__new' && <input value={newList} onChange={(e) => setNewList(e.target.value)} maxLength={40} placeholder="Name it, e.g. Vendors" className="h-8 w-44 rounded-btn border border-line bg-card px-2 text-body-sm text-ink" />}
             <span className="text-ink-muted">Lists are kept apart: importing one never hides leads from another.</span>
           </div>
-          {needsCrm > 0 && <p className="text-body-sm text-warning">{needsCrm} lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an Earthzone update. Update Earthzone before exporting, so this import brings it back.</p>}
+          {needsCrm > 0 && <p className="text-body-sm text-warning-ink">{needsCrm} lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an Earthzone update. Update Earthzone before exporting, so this import brings it back.</p>}
           {columnsChanged && (
             <div className="flex items-start gap-2 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm text-ink">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" />
+              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-ink" />
               <span><b>The export's columns changed since your last import.</b> Check the choices below before importing, so no wrong data is loaded. Ask the CRM team to keep the export columns fixed.</span>
             </div>
           )}
           <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
             {IMPORT_FIELDS.map((f) => (
               <label key={f.key} className="block">
-                <span className="mb-0.5 flex items-center gap-1 text-body-sm font-semibold text-ink">{f.label}{'required' in f && f.required && <span className="text-danger">*</span>}</span>
+                <span className="mb-0.5 flex items-center gap-1 text-body-sm font-semibold text-ink">{f.label}{'required' in f && f.required && <span className="text-danger-ink">*</span>}</span>
                 <select
                   value={mapping?.[f.key] ?? ''}
                   onChange={(e) => setMapping((m) => ({ ...(m as Record<ImportField, string | null>), [f.key]: e.target.value || null }))}
@@ -194,7 +194,7 @@ export function ImportModal({ saved, onClose, onImported, onOpenLead, lists, nee
             ))}
           </div>
           {(missing.length > 0 || noKey) && (
-            <p className="rounded-btn bg-danger/5 px-3 py-2 text-body-sm text-danger">
+            <p className="rounded-btn bg-danger/5 px-3 py-2 text-body-sm text-danger-ink">
               {missing.length > 0 ? `Pick a column for: ${missing.join(', ')}. ` : ''}{noKey ? 'Pick the lead ID, email or phone column so leads are recognised between imports.' : ''}
             </p>
           )}

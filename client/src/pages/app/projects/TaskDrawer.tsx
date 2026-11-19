@@ -108,7 +108,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
       <div className="flex flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-7 p-5 sm:p-7 lg:overflow-y-auto lg:px-10 lg:py-8">
         {task.isOverdue && (
-          <div className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/[0.06] px-3 py-2 text-body-sm text-danger">
+          <div className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/[0.06] px-3 py-2 text-body-sm text-danger-ink">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
             <span><b>Overdue by {fmtSpan(overdueMs)}.</b> Due {fmtDateTime(task.dueAt!)}.{perms.canRequestExtension && !pendingExt ? ' Update the status or request an extension.' : ''}</span>
           </div>
@@ -199,8 +199,8 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
                   <Paperclip size={14} className="text-ink-muted" />
                   <span className="min-w-0 flex-1 truncate font-medium text-ink" title={a.originalName}>{a.originalName}</span>
                   <span className="tabular-nums text-ink-faint">{fmtBytes(a.size)}</span>
-                  <a href={(import.meta.env.VITE_API_URL ?? '/api') + a.downloadUrl.replace(/^\/api/, '')} className="text-ink-muted hover:text-primary" aria-label={`Download ${a.originalName}`}><Download size={14} /></a>
-                  {(a.uploadedBy.id === meId || perms.canManage) && <button type="button" onClick={() => projectsApi.deleteAttachment(a.id).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} aria-label="Remove file"><Trash2 size={14} className="text-ink-muted hover:text-danger" /></button>}
+                  <a href={(import.meta.env.VITE_API_URL ?? '/api') + a.downloadUrl.replace(/^\/api/, '')} className="text-ink-muted hover:text-primary-ink" aria-label={`Download ${a.originalName}`}><Download size={14} /></a>
+                  {(a.uploadedBy.id === meId || perms.canManage) && <button type="button" onClick={() => projectsApi.deleteAttachment(a.id).then(load).then(() => projectsApi.task(code).then((r) => onChanged(r.task))).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} aria-label="Remove file"><Trash2 size={14} className="text-ink-muted hover:text-danger-ink" /></button>}
                 </li>
               ))}
             </ul>
@@ -282,8 +282,8 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             <dd><input type="datetime-local" defaultValue={toLocalInput(task.startAt)} key={`s${task.startAt}`} disabled={!canEdit} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.startAt) patch({ startAt: v }) }} className={cn(propCls, 'w-full')} aria-label="Start date" /></dd>
             <dt className={dtCls}>End date</dt>
             <dd className="flex items-center gap-2">
-              <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(propCls, 'w-full', task.isOverdue && 'text-danger')} aria-label="End date (due)" />
-              {perms.canChangeDue && task.dueAt && <button type="button" className="text-body-sm text-ink-muted hover:text-danger" onClick={() => patch({ dueAt: null })}>Clear</button>}
+              <input type="datetime-local" defaultValue={toLocalInput(task.dueAt)} key={task.dueAt ?? 'none'} disabled={!perms.canChangeDue} onBlur={(e) => { const v = fromLocalInput(e.target.value); if (v !== task.dueAt) patch({ dueAt: v }) }} className={cn(propCls, 'w-full', task.isOverdue && 'text-danger-ink')} aria-label="End date (due)" />
+              {perms.canChangeDue && task.dueAt && <button type="button" className="text-body-sm text-ink-muted hover:text-danger-ink" onClick={() => patch({ dueAt: null })}>Clear</button>}
             </dd>
             <dt className={dtCls}>Priority</dt>
             <dd className="relative">
@@ -304,7 +304,7 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
               <span className="flex -space-x-1.5">{task.watchers.slice(0, 6).map((w) => <PersonAvatar key={w.id} person={w} size={22} ring />)}</span>
               {task.watchers.some((w) => w.id === meId)
                 ? <button type="button" className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink" onClick={() => projectsApi.watch(code, false).then(load)}><BellOff size={13} /> Stop watching</button>
-                : <button type="button" className="inline-flex items-center gap-1 text-body-sm text-primary" onClick={() => projectsApi.watch(code, true).then(load)}><Bell size={13} /> Watch</button>}
+                : <button type="button" className="inline-flex items-center gap-1 text-body-sm text-primary-ink" onClick={() => projectsApi.watch(code, true).then(load)}><Bell size={13} /> Watch</button>}
             </dd>
           </dl>
 
@@ -394,7 +394,7 @@ function IconBtn({ label, onClick, children }: { label: string; onClick: () => v
 
 function linkify(text: string): React.ReactNode[] {
   const parts = text.split(/(https?:\/\/[^\s)]+)/g)
-  return parts.map((p, i) => (/^https?:\/\//.test(p) ? <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-primary underline">{p}</a> : p))
+  return parts.map((p, i) => (/^https?:\/\//.test(p) ? <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-primary-ink underline">{p}</a> : p))
 }
 
 function Comment({ comment, members, mine, canDelete, onChanged }: { comment: TaskDetail['comments'][number]; members: { id: string; name: string }[]; mine: boolean; canDelete: boolean; onChanged: () => void }) {
@@ -410,7 +410,7 @@ function Comment({ comment, members, mine, canDelete, onChanged }: { comment: Ta
           <span className="text-body-sm text-ink-faint" title={fmtDateTime(comment.createdAt)}>{fmtAgo(comment.createdAt)}{comment.editedAt ? ' · edited' : ''}</span>
           <span className="ml-auto flex gap-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             {mine && !editing && <button type="button" onClick={() => setEditing(true)} className="text-body-sm text-ink-muted hover:text-ink">Edit</button>}
-            {canDelete && !editing && <button type="button" onClick={() => projectsApi.deleteComment(comment.id).then(onChanged).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} className="text-body-sm text-ink-muted hover:text-danger">Delete</button>}
+            {canDelete && !editing && <button type="button" onClick={() => projectsApi.deleteComment(comment.id).then(onChanged).catch((e) => addToast({ type: 'error', message: errMsg(e) }))} className="text-body-sm text-ink-muted hover:text-danger-ink">Delete</button>}
           </span>
         </div>
         {editing ? (
@@ -472,7 +472,7 @@ function ActivityList({ rows, people }: { rows: ActivityRow[] | null; columns: B
     <ul className="relative space-y-3 before:absolute before:bottom-2 before:left-[9.5px] before:top-2 before:w-px before:bg-line">
       {rows.map((r) => (
         <li key={r.id} className="relative flex items-start gap-2.5 text-body-sm">
-          {r.user ? <PersonAvatar person={r.user} size={20} /> : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-danger/10"><AlertTriangle size={11} className="text-danger" /></span>}
+          {r.user ? <PersonAvatar person={r.user} size={20} /> : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-danger/10"><AlertTriangle size={11} className="text-danger-ink" /></span>}
           <span className="flex-1 pt-0.5 text-ink-muted">{r.user && <span className="font-medium text-ink">{r.user.name} </span>}{ACTION_TEXT[r.action] ?? r.action.replace(/_/g, ' ')}{detail(r)}</span>
           <span className="shrink-0 pt-0.5 text-ink-faint" title={fmtDateTime(r.createdAt)}>{fmtAgo(r.createdAt)}</span>
         </li>

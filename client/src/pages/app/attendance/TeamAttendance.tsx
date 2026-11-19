@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { TeamRegister } from './TeamRegister'
 import { useSearchParams } from 'react-router-dom'
 import { TeamWfhInbox } from '../../../components/attendance/WfhRequests'
+import { TeamFixInbox } from '../../../components/attendance/FixRequests'
 import { LogIn, Coffee, LogOut, UserX, Settings2, Pencil, CalendarOff, Trash2, Download, MessageSquare, House } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
@@ -93,6 +94,7 @@ export default function TeamAttendance() {
   // Opened from a "asks to work from home" notice: the requests card is outlined.
   const [params] = useSearchParams()
   const wfhFocus = params.get('wfh') === '1'
+  const fixFocus = params.get('fixes') === '1'
   const [tab, setTab] = useState<'overview' | 'register'>(() => (params.get('view') === 'register' ? 'register' : 'overview'))
 
   async function endBreakNow(id: string, name: string) {
@@ -151,23 +153,23 @@ export default function TeamAttendance() {
       header: 'Shifts done',
       align: 'right',
       render: (r) => (
-        <span className={r.presentDays > 0 && r.completedShifts === r.presentDays ? 'font-semibold text-success' : r.completedShifts < r.presentDays ? 'text-warning' : ''}>
+        <span className={r.presentDays > 0 && r.completedShifts === r.presentDays ? 'font-semibold text-success-ink' : r.completedShifts < r.presentDays ? 'text-warning-ink' : ''}>
           {r.completedShifts}/{r.presentDays}
         </span>
       ),
     },
-    { key: 'late', header: 'Late', align: 'right', render: (r) => (r.lateDays ? <span className="font-semibold text-warning">{r.lateDays}</span> : '0') },
+    { key: 'late', header: 'Late', align: 'right', render: (r) => (r.lateDays ? <span className="font-semibold text-warning-ink">{r.lateDays}</span> : '0') },
     { key: 'leave', header: 'Leave', align: 'right', render: (r) => r.leaveDays },
     { key: 'worked', header: 'Worked', align: 'right', render: (r) => formatMinutes(r.totalWorkedMin) },
     { key: 'break', header: 'Break', align: 'right', render: (r) => formatMinutes(r.totalBreakMin) },
-    { key: 'overtime', header: 'Overtime', align: 'right', render: (r) => (r.totalOvertimeMin ? <span className="font-medium text-primary">{formatMinutes(r.totalOvertimeMin)}</span> : '—') },
+    { key: 'overtime', header: 'Overtime', align: 'right', render: (r) => (r.totalOvertimeMin ? <span className="font-medium text-primary-ink">{formatMinutes(r.totalOvertimeMin)}</span> : '—') },
     { key: 'avg', header: 'Avg in', align: 'right', render: (r) => r.avgCheckIn ?? '—' },
     {
       key: 'edit',
       header: '',
       align: 'right',
       render: (r) => (
-        <button onClick={(e) => { e.stopPropagation(); setSelected(r) }} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title={`Edit ${r.name}'s times`}>
+        <button onClick={(e) => { e.stopPropagation(); setSelected(r) }} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink" title={`Edit ${r.name}'s times`}>
           <Pencil size={15} />
         </button>
       ),
@@ -203,7 +205,7 @@ export default function TeamAttendance() {
             <div className="pt-tabs inline-flex flex-wrap gap-1.5">
               <button
                 onClick={() => setDept('ALL')}
-                className={'rounded-full px-3.5 py-1.5 text-body-sm font-medium transition-colors ' + (dept === 'ALL' ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
+                className={'rounded-full px-3.5 py-1.5 text-body-sm font-medium transition-colors ' + (dept === 'ALL' ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
               >
                 All
               </button>
@@ -211,7 +213,7 @@ export default function TeamAttendance() {
                 <button
                   key={d.value}
                   onClick={() => setDept(d.value)}
-                  className={'rounded-full px-3.5 py-1.5 text-body-sm font-medium transition-colors ' + (dept === d.value ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
+                  className={'rounded-full px-3.5 py-1.5 text-body-sm font-medium transition-colors ' + (dept === d.value ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
                 >
                   {d.label}
                 </button>
@@ -239,6 +241,7 @@ export default function TeamAttendance() {
       </div>
 
       <TeamWfhInbox onDecided={reload} highlight={wfhFocus} />
+      <TeamFixInbox onDecided={reload} highlight={fixFocus} />
 
       <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'overview'} onClick={() => setTab('overview')} className={'h-8 rounded-md px-4 text-body-sm font-semibold ' + (tab === 'overview' ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>Overview</button>
@@ -252,10 +255,10 @@ export default function TeamAttendance() {
 
       {s && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <MiniStat icon={<LogIn size={18} />} label="Working now" value={s.inNow} tone="bg-success/10 text-success" />
-          <MiniStat icon={<Coffee size={18} />} label="On break" value={s.onBreakNow} tone="bg-warning/10 text-warning" />
+          <MiniStat icon={<LogIn size={18} />} label="Working now" value={s.inNow} tone="bg-success/10 text-success-ink" />
+          <MiniStat icon={<Coffee size={18} />} label="On break" value={s.onBreakNow} tone="bg-warning/10 text-warning-ink" />
           <MiniStat icon={<LogOut size={18} />} label="Checked out" value={s.outNow} tone="bg-slate-100 text-ink-muted" />
-          <MiniStat icon={<UserX size={18} />} label="Not in yet" value={s.notInNow} tone="bg-danger/10 text-danger" />
+          <MiniStat icon={<UserX size={18} />} label="Not in yet" value={s.notInNow} tone="bg-danger/10 text-danger-ink" />
         </div>
       )}
 
@@ -273,14 +276,14 @@ export default function TeamAttendance() {
                       {initials(b.name)}
                     </span>
                     <span className="text-body-sm font-medium text-ink">{b.name.split(' ')[0]}</span>
-                    {b.workMode && <span title="Working from home"><House size={13} className="text-accent" /></span>}
+                    {b.workMode && <span title="Working from home"><House size={13} className="text-highlight-ink" /></span>}
                     <span className={'h-2 w-2 rounded-full ' + dotColor(b.state)} title={STATE_META[b.state].label} />
                     {b.openBreak && (
                       <>
-                        <span className={'text-[11px] font-semibold ' + (b.openBreak.minutes > (b.openBreak.type === 'BRB' ? 20 : 65) ? 'text-danger' : 'text-warning')} title={`On ${b.openBreak.type === 'BRB' ? 'BRB' : 'break'} since ${b.openBreak.since}`}>
+                        <span className={'text-[11px] font-semibold ' + (b.openBreak.minutes > (b.openBreak.type === 'BRB' ? 20 : 65) ? 'text-danger-ink' : 'text-warning-ink')} title={`On ${b.openBreak.type === 'BRB' ? 'BRB' : 'break'} since ${b.openBreak.since}`}>
                           {b.openBreak.type === 'BRB' ? 'BRB' : 'Break'} {b.openBreak.minutes}m
                         </span>
-                        <button type="button" onClick={() => endBreakNow(b.openBreak!.id, b.name)} className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink-muted hover:border-primary hover:text-primary" title="End this break now">End</button>
+                        <button type="button" onClick={() => endBreakNow(b.openBreak!.id, b.name)} className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink-muted hover:border-primary hover:text-primary-ink" title="End this break now">End</button>
                       </>
                     )}
                   </div>
@@ -452,7 +455,7 @@ function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) =
                 onClick={() => toggleDay(d.n)}
                 className={
                   'h-9 w-10 rounded-btn border text-body-sm font-semibold transition-colors ' +
-                  (on ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink-muted hover:border-primary/40')
+                  (on ? 'border-primary bg-primary text-primary-on' : 'border-line bg-card text-ink-muted hover:border-primary/40')
                 }
                 aria-pressed={on}
               >
@@ -471,7 +474,7 @@ function ShiftFields({ value, onChange }: { value: Shift; onChange: (s: Shift) =
         </select>
       </Field>
       <p className="text-body-sm text-ink-muted">
-        {overnight && <span className="font-semibold text-primary">Overnight shift (crosses midnight). </span>}
+        {overnight && <span className="font-semibold text-primary-ink">Overnight shift (crosses midnight). </span>}
         Late after {value.startTime} + {value.graceMin} min · a day counts as a completed shift once {formatMinutes(value.requiredMinutes)} are worked.
       </p>
     </div>
@@ -663,7 +666,7 @@ function RemoteCard({ userId, remote, onChanged }: { userId: string; remote: boo
   }
   return (
     <div className="mb-4 flex items-start gap-3 rounded-card border border-line bg-bg p-3">
-      <House size={16} className="mt-0.5 shrink-0 text-accent" />
+      <House size={16} className="mt-0.5 shrink-0 text-highlight-ink" />
       <div className="min-w-0 flex-1">
         <p className="text-body-md font-semibold text-ink">Always works from home</p>
         <p className="text-body-sm text-ink-muted">On: they check in and out from any network, every day, and you see their hours here as usual. For a few days only, mark those days Work From Home below instead.</p>
@@ -748,23 +751,23 @@ function MemberModal({ member, range, custom, onClose, onCorrected }: { member: 
                 {r.wfh && r.label !== 'WFH' && <Badge tone="accent">WFH</Badge>}
                 <div className="flex-1 text-body-sm tabular-nums text-ink-muted">
                   {r.checkIn ?? '—'} → {r.checkOut ?? '—'} · {formatMinutes(r.workedMin)}
-                  {r.late && <span className="ml-2 text-warning">Late</span>}
-                  {r.label === 'PRESENT' && r.completed && <span className="ml-2 text-success">Full shift</span>}
-                  {r.label === 'PRESENT' && !r.completed && r.shortMin != null && r.shortMin > 0 && <span className="ml-2 text-warning">Short {formatMinutes(r.shortMin)}</span>}
+                  {r.late && <span className="ml-2 text-warning-ink">Late</span>}
+                  {r.label === 'PRESENT' && r.completed && <span className="ml-2 text-success-ink">Full shift</span>}
+                  {r.label === 'PRESENT' && !r.completed && r.shortMin != null && r.shortMin > 0 && <span className="ml-2 text-warning-ink">Short {formatMinutes(r.shortMin)}</span>}
                 </div>
                 {r.label === 'ON_LEAVE' || r.label === 'OFF' || r.label === 'WFH' ? (
-                  <button onClick={() => unmarkLeave(r.date)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove leave">
+                  <button onClick={() => unmarkLeave(r.date)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Remove leave">
                     <Trash2 size={14} />
                   </button>
                 ) : r.label === 'HOLIDAY' ? null : (
-                  <button onClick={() => startEdit(r)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Edit times / comment">
+                  <button onClick={() => startEdit(r)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink" title="Edit times / comment">
                     <Pencil size={14} />
                   </button>
                 )}
               </div>
               {r.note && editDate !== r.date && (
                 <div className="flex items-start gap-1.5 border-t border-line/70 bg-bg px-3 py-2 text-body-sm text-ink-muted">
-                  <MessageSquare size={13} className="mt-0.5 shrink-0 text-primary" />
+                  <MessageSquare size={13} className="mt-0.5 shrink-0 text-primary-ink" />
                   <span className="text-ink">{r.note}</span>
                 </div>
               )}
@@ -825,7 +828,7 @@ function DayBreaks({ userId, date, onOvertime, onChanged }: { userId: string; da
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-body-sm font-semibold text-ink">Breaks</span>
         <span className="text-[12px] text-ink-muted">
-          Break <b className={used('BREAK') > d.allowance.breakMin ? 'text-danger' : 'text-ink'}>{used('BREAK')}</b>/{d.allowance.breakMin}m · BRB <b className={used('BRB') > d.allowance.brbMin ? 'text-danger' : 'text-ink'}>{used('BRB')}</b>/{d.allowance.brbMin}m
+          Break <b className={used('BREAK') > d.allowance.breakMin ? 'text-danger-ink' : 'text-ink'}>{used('BREAK')}</b>/{d.allowance.breakMin}m · BRB <b className={used('BRB') > d.allowance.brbMin ? 'text-danger-ink' : 'text-ink'}>{used('BRB')}</b>/{d.allowance.brbMin}m
         </span>
       </div>
       {d.breaks.length === 0 && !adding && <p className="text-body-sm text-ink-muted">No breaks on this day.</p>}
@@ -848,15 +851,15 @@ function DayBreaks({ userId, date, onOvertime, onChanged }: { userId: string; da
                   <Badge tone={b.type === 'BRB' ? 'neutral' : 'primary'}>{b.type === 'BRB' ? 'BRB' : 'Break'}</Badge>
                   <span className="tabular-nums text-ink">{b.start} to {b.end ?? 'still running'}</span>
                   <span className="text-ink-muted">· {b.minutes}m</span>
-                  {b.autoEnded && <span className="rounded bg-warning/10 px-1.5 text-[11px] font-semibold text-warning" title="Ended by the break cut-off: the person forgot to end it">cut off</span>}
+                  {b.autoEnded && <span className="rounded bg-warning/10 px-1.5 text-[11px] font-semibold text-warning-ink" title="Ended by the break cut-off: the person forgot to end it">cut off</span>}
                   {b.edited && <span className="text-[11px] text-ink-muted">edited</span>}
                   <span className="ml-auto flex items-center gap-1">
                     {b.running && <Button size="sm" variant="secondary" onClick={() => run(updateBreak(b.id, { end: 'now' }), 'Break ended.')}>End now</Button>}
-                    <button type="button" onClick={() => setEdit({ ...edit, [b.id]: { type: b.type, start: b.start, end: b.end ?? '' } })} className="flex h-7 w-7 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary" title="Change the times"><Pencil size={13} /></button>
+                    <button type="button" onClick={() => setEdit({ ...edit, [b.id]: { type: b.type, start: b.start, end: b.end ?? '' } })} className="flex h-7 w-7 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink" title="Change the times"><Pencil size={13} /></button>
                     {confirmDel === b.id ? (
-                      <button type="button" onClick={() => { setConfirmDel(null); run(deleteBreak(b.id), 'Break removed.') }} onBlur={() => setConfirmDel(null)} autoFocus className="h-7 rounded-btn bg-danger/10 px-2 text-body-sm font-semibold text-danger">Remove?</button>
+                      <button type="button" onClick={() => { setConfirmDel(null); run(deleteBreak(b.id), 'Break removed.') }} onBlur={() => setConfirmDel(null)} autoFocus className="h-7 rounded-btn bg-danger/10 px-2 text-body-sm font-semibold text-danger-ink">Remove?</button>
                     ) : (
-                      <button type="button" onClick={() => setConfirmDel(b.id)} className="flex h-7 w-7 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove this break"><Trash2 size={13} /></button>
+                      <button type="button" onClick={() => setConfirmDel(b.id)} className="flex h-7 w-7 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Remove this break"><Trash2 size={13} /></button>
                     )}
                   </span>
                 </>
@@ -875,7 +878,7 @@ function DayBreaks({ userId, date, onOvertime, onChanged }: { userId: string; da
           <button type="button" onClick={() => setAdding(null)} className="text-ink-muted hover:text-ink">Cancel</button>
         </div>
       ) : d.checkIn && (
-        <button type="button" onClick={() => setAdding({ type: 'BREAK', start: '', end: '' })} className="mt-2 text-body-sm font-semibold text-primary">+ Add a missed break</button>
+        <button type="button" onClick={() => setAdding({ type: 'BREAK', start: '', end: '' })} className="mt-2 text-body-sm font-semibold text-primary-ink">+ Add a missed break</button>
       )}
     </div>
   )

@@ -42,7 +42,7 @@ export function MetraFeedbackForm({ onDone, onCancel }: { onDone: () => void; on
   if (sent) {
     return (
       <div className="flex flex-col items-center px-2 py-8 text-center" role="status">
-        <CheckCircle2 size={34} className="text-success" />
+        <CheckCircle2 size={34} className="text-success-ink" />
         <p className="mt-3 text-body-lg font-semibold text-ink">Thank you</p>
         <p className="mt-1 max-w-[30ch] text-body-md text-ink-muted">Your feedback was sent. It is read and used to make Metra better.</p>
         <Button className="mt-5" variant="secondary" onClick={onDone}>Back to the chat</Button>
@@ -64,8 +64,8 @@ export function MetraFeedbackForm({ onDone, onCancel }: { onDone: () => void; on
                   'flex flex-col items-start gap-1 rounded-card border px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                   on ? (c.key === 'HELPS' ? 'border-primary bg-primary/5' : 'border-warning bg-warning/5') : 'border-line bg-card hover:bg-slate-50',
                 )}>
-                <span className={cn('inline-flex items-center gap-1.5 text-body-md font-semibold', on && c.key === 'HELPS' ? 'text-primary' : 'text-ink')}>
-                  <Icon size={15} className={on && c.key === 'NEEDS_CHANGES' ? 'text-warning' : undefined} />{c.label}
+                <span className={cn('inline-flex items-center gap-1.5 text-body-md font-semibold', on && c.key === 'HELPS' ? 'text-primary-ink' : 'text-ink')}>
+                  <Icon size={15} className={on && c.key === 'NEEDS_CHANGES' ? 'text-warning-ink' : undefined} />{c.label}
                 </span>
                 <span className="text-[12.5px] leading-snug text-ink-muted">{c.hint}</span>
               </button>
@@ -89,7 +89,7 @@ export function MetraFeedbackForm({ onDone, onCancel }: { onDone: () => void; on
         </div>
       )}
 
-      {error && <p role="alert" className="text-body-sm text-danger">{error}</p>}
+      {error && <p role="alert" className="text-body-sm text-danger-ink">{error}</p>}
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12.5px] text-ink-muted">Your admin reads this with your name.</p>

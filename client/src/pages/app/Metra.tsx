@@ -177,14 +177,14 @@ function MetraPageFor() {
               {sources.map((s) => (
                 <li key={s.n} className="rounded-card border border-line bg-card p-3 shadow-card">
                   <div className="flex items-start gap-2">
-                    <span className="mt-px inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1 text-[11px] font-semibold text-primary">{s.n}</span>
+                    <span className="mt-px inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1 text-[11px] font-semibold text-primary-ink">{s.n}</span>
                     <div className="min-w-0 flex-1">
                       <p className="text-body-sm font-semibold text-ink">{s.title}</p>
                       <p className="text-[12px] text-ink-muted">{[s.sourceLabel, sourceDate(s.occurredAt)].filter(Boolean).join(' · ')}</p>
                     </div>
                   </div>
                   {s.snippet && <p className="mt-1.5 line-clamp-4 whitespace-pre-line text-body-sm text-ink-muted">{s.snippet}</p>}
-                  {s.link && <button type="button" onClick={() => openSourceLink(s.link, navigate)} className="mt-1.5 inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline">Open <ExternalLink size={12} /></button>}
+                  {s.link && <button type="button" onClick={() => openSourceLink(s.link, navigate)} className="mt-1.5 inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink hover:underline">Open <ExternalLink size={12} /></button>}
                 </li>
               ))}
             </ul>
@@ -226,7 +226,7 @@ function ConversationRow({ cv, active, renaming, onOpen, onPin, onRename, onRena
         <form onSubmit={(e) => { e.preventDefault(); onRenamed(title) }} className="flex items-center gap-1">
           <input autoFocus value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onCancelRename() } }} aria-label="Chat name"
             className="h-8 min-w-0 flex-1 rounded-btn border border-line bg-card px-2 text-body-sm text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" />
-          <button type="submit" className="rounded-btn p-1.5 text-primary hover:bg-slate-100" aria-label="Save name"><Check size={14} /></button>
+          <button type="submit" className="rounded-btn p-1.5 text-primary-ink hover:bg-slate-100" aria-label="Save name"><Check size={14} /></button>
           <button type="button" onClick={onCancelRename} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100" aria-label="Cancel"><X size={14} /></button>
         </form>
       </li>
@@ -255,5 +255,5 @@ function ConversationRow({ cv, active, renaming, onOpen, onPin, onRename, onRena
 }
 
 function MenuItem({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
-  return <button type="button" role="menuitem" onClick={onClick} className={cn('flex w-full items-center gap-2 rounded-btn px-2 py-1.5 text-left text-body-sm hover:bg-slate-100', danger ? 'text-danger' : 'text-ink')}>{children}</button>
+  return <button type="button" role="menuitem" onClick={onClick} className={cn('flex w-full items-center gap-2 rounded-btn px-2 py-1.5 text-left text-body-sm hover:bg-slate-100', danger ? 'text-danger-ink' : 'text-ink')}>{children}</button>
 }

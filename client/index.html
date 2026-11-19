@@ -23,12 +23,27 @@
   <body>
     <div id="root"></div>
     <script>
-      // Apply the saved light or dark theme before the page paints (no white flash).
+      // Apply the saved look before the page paints (no flash): light or dark, and in the app (not the public
+      // website, see WEBSITE in src/lib/theme.ts) the colour theme and the company's brand colour.
       try {
+        var root = document.documentElement
+        var app = !/^\/(?:$|pricing|security|product|solutions|terms|privacy|cookies|dpa)(?:\/|$)/.test(location.pathname)
         var t = localStorage.getItem('pt-theme')
-        if (t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark')
-          document.documentElement.style.colorScheme = 'dark'
+        var darkOnly = app && localStorage.getItem('pt-theme-dark-only') === '1'
+        if (app) {
+          root.setAttribute('data-theme', localStorage.getItem('pt-theme-id') || 'metriq')
+          var brand = localStorage.getItem('pt-brand-css')
+          if (brand) {
+            var s = document.createElement('style')
+            s.id = 'pt-brand'
+            s.textContent = brand
+            document.head.appendChild(s)
+            root.setAttribute('data-brand', '')
+          }
+        }
+        if (darkOnly || t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          root.classList.add('dark')
+          root.style.colorScheme = 'dark'
           document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0E0F11')
         }
       } catch (e) {}

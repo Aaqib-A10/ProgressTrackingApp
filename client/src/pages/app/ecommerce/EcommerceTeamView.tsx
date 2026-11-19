@@ -112,7 +112,7 @@ export default function EcommerceTeamView() {
                             <div className="flex items-start justify-between gap-2">
                               <span className="text-body-sm font-medium text-ink">{t.title}</span>
                               {t.assignee && (
-                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary" title={t.assignee.name}>{initials(t.assignee.name)}</span>
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary-ink" title={t.assignee.name}>{initials(t.assignee.name)}</span>
                               )}
                             </div>
                             {t.assignee && <p className="mt-0.5 text-[11px] text-ink-muted">{t.assignee.name}{t.dueDate ? ` · due ${t.dueDate}` : ''}</p>}
@@ -140,7 +140,7 @@ export default function EcommerceTeamView() {
                   emptyMessage={query ? 'No agents match your search.' : 'No team members yet.'}
                   totalRow={{ cells: { name: 'Team Totals', status: '', daysLogged: '', totalListings: formatNumber(data.team.totalListings) } }}
                   renderRowBanner={(r) => r.onLeaveToday ? (
-                    <div className="flex items-center gap-2 rounded-btn bg-warning/10 px-3 py-1.5 text-body-sm font-medium text-warning">
+                    <div className="flex items-center gap-2 rounded-btn bg-warning/10 px-3 py-1.5 text-body-sm font-medium text-warning-ink">
                       <Badge tone="warning">On Leave</Badge>{r.name} is On Leave / Off today.
                     </div>
                   ) : null}

@@ -16,7 +16,7 @@ export function ReviewsView({ projectKey, refreshKey, onOpen }: { projectKey: st
     projectsApi.projectReviews(projectKey).then((r) => { setRows(r.reviews); setError('') }).catch((e) => setError(errMsg(e, 'Could not load reviews')))
   }, [projectKey, refreshKey])
 
-  if (error) return <p className="rounded-card border border-danger/30 bg-danger/5 p-4 text-body-md text-danger">{error}</p>
+  if (error) return <p className="rounded-card border border-danger/30 bg-danger/5 p-4 text-body-md text-danger-ink">{error}</p>
   if (!rows) return <div className="h-40 animate-pulse rounded-card bg-slate-100" />
 
   const reviewers = [...new Map(rows.map((r) => [r.reviewer.id, r.reviewer])).values()]
@@ -26,7 +26,7 @@ export function ReviewsView({ projectKey, refreshKey, onOpen }: { projectKey: st
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         {(['', 'APPROVED', 'CHANGES_REQUESTED', 'COMMENT'] as const).map((v) => (
-          <button key={v || 'all'} type="button" onClick={() => setVerdict(v)} className={cn('inline-flex h-8 items-center gap-1 rounded-btn border px-2.5 text-body-sm font-medium', verdict === v ? 'border-primary bg-primary/5 text-primary' : 'border-line bg-card text-ink-muted hover:text-ink')}>
+          <button key={v || 'all'} type="button" onClick={() => setVerdict(v)} className={cn('inline-flex h-8 items-center gap-1 rounded-btn border px-2.5 text-body-sm font-medium', verdict === v ? 'border-primary bg-primary/5 text-primary-ink' : 'border-line bg-card text-ink-muted hover:text-ink')}>
             {v ? <>{VERDICT_META[v].icon}{VERDICT_META[v].label}</> : 'All reviews'}
           </button>
         ))}

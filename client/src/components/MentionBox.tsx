@@ -25,14 +25,14 @@ export function highlightMentions(body: string, mentionIds: string[], members: M
       const all = /^@(all|everyone)\b/i.exec(body.slice(i))
       if (all && (i === 0 || /\s/.test(body[i - 1]))) {
         flush()
-        out.push(<span key={i} className="rounded bg-warning/20 px-1 font-medium text-amber-800">{all[0]}</span>)
+        out.push(<span key={i} className="rounded bg-warning/20 px-1 font-medium text-warning-ink">{all[0]}</span>)
         i += all[0].length
         continue
       }
       const hit = names.find((n) => body.startsWith('@' + n, i))
       if (hit) {
         flush()
-        out.push(<span key={i} className="rounded bg-primary/10 px-1 font-medium text-primary">@{hit}</span>)
+        out.push(<span key={i} className="rounded bg-primary/10 px-1 font-medium text-primary-ink">@{hit}</span>)
         i += hit.length + 1
         continue
       }
@@ -107,12 +107,12 @@ export function MentionBox({ members, onSubmit, allowAll = false }: { members: M
             <li key={m.id}>
               {m.id === ALL_ID ? (
                 <button type="button" onClick={() => pick(m)} className="flex w-full items-center gap-2 border-b border-line px-3 py-1.5 text-left text-body-sm hover:bg-slate-50">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-white">ALL</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-on">ALL</span>
                   <span className="font-semibold text-ink">@all</span><span className="text-ink-muted">everyone on this project</span>
                 </button>
               ) : (
                 <button type="button" onClick={() => pick(m)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-body-sm hover:bg-slate-50">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary">{initials(m.name)}</span>{m.name}
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary-ink">{initials(m.name)}</span>{m.name}
                 </button>
               )}
             </li>

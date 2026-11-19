@@ -6,6 +6,7 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import { MyWfhRequests } from '../../../components/attendance/WfhRequests'
+import { FixDayAction, MyFixRequests, canAskFix, useMyFixRequests } from '../../../components/attendance/FixRequests'
 import { PeriodPicker, periodFor, todayIso, parseIso, addDays, STATUS_STYLE, flagsOf, downloadCsv, hm, type Period } from '../../../components/attendance/period'
 import { cn } from '../../../lib/cn'
 import { getAttendanceHistoryBetween, formatMinutes, type AttendanceDayRow, type HistoryResponse, type HistoryLabel } from '../../../lib/attendanceApi'
@@ -36,6 +37,9 @@ export default function MyAttendance() {
   // Its own period (not the top bar): this month by default, so the whole history shows.
   const [period, setPeriod] = useState<Period>(() => periodFor('MONTH', todayIso()))
   const [view, setViewState] = useState<'list' | 'calendar'>(readView)
+  // Forgot to check in or out: ask the Team Lead to fix that day (components/attendance/FixRequests).
+  const fixes = useMyFixRequests()
+  const today = todayIso()
   function setView(v: 'list' | 'calendar') { setViewState(v); try { localStorage.setItem('attendance.view', v) } catch { /* ignore */ } }
 
   useEffect(() => {
@@ -68,11 +72,11 @@ export default function MyAttendance() {
         </div>
       ),
     },
-    { key: 'checkIn', header: 'Check in', align: 'right', render: (r) => (r.checkIn ? <span className={r.late ? 'font-semibold text-warning' : ''}>{r.checkIn}</span> : '—') },
-    { key: 'checkOut', header: 'Check out', align: 'right', render: (r) => (r.checkOut ? <span className={r.earlyLeave ? 'font-semibold text-warning' : ''}>{r.checkOut}</span> : '—') },
+    { key: 'checkIn', header: 'Check in', align: 'right', render: (r) => (r.checkIn ? <span className={r.late ? 'font-semibold text-warning-ink' : ''}>{r.checkIn}</span> : '—') },
+    { key: 'checkOut', header: 'Check out', align: 'right', render: (r) => (r.checkOut ? <span className={r.earlyLeave ? 'font-semibold text-warning-ink' : ''}>{r.checkOut}</span> : '—') },
     { key: 'worked', header: 'Worked', align: 'right', render: (r) => formatMinutes(r.workedMin) },
     { key: 'break', header: 'Break', align: 'right', render: (r) => (r.breakMin ? formatMinutes(r.breakMin) : '—') },
-    { key: 'overtime', header: 'Overtime', align: 'right', render: (r) => (r.overtimeMin ? <span className="font-medium text-primary">{formatMinutes(r.overtimeMin)}</span> : '—') },
+    { key: 'overtime', header: 'Overtime', align: 'right', render: (r) => (r.overtimeMin ? <span className="font-medium text-primary-ink">{formatMinutes(r.overtimeMin)}</span> : '—') },
     {
       key: 'flags',
       header: 'Flags',
@@ -85,6 +89,7 @@ export default function MyAttendance() {
           {r.label === 'PRESENT' && r.checkIn && !r.checkOut && <Badge tone="primary">Working</Badge>}
           {!r.late && !r.earlyLeave && !r.completed && r.label === 'PRESENT' && r.checkOut && (r.shortMin == null || r.shortMin === 0) && <span className="text-body-sm text-ink-muted">On time</span>}
           {r.label === 'NOT_YET' && data && <span className="text-body-sm text-ink-muted">Shift starts {data.shift.startTime}</span>}
+          {data && canAskFix(r, today) && <FixDayAction row={r} shift={data.shift} requests={fixes.rows ?? []} onSent={fixes.reload} />}
         </div>
       ),
     },
@@ -113,6 +118,7 @@ export default function MyAttendance() {
       )}
 
       <MyWfhRequests />
+      <MyFixRequests rows={fixes.rows} reload={fixes.reload} />
 
       <div className="flex flex-wrap items-center gap-3">
         <PeriodPicker value={period} onChange={setPeriod} modes={['WEEK', 'MONTH', 'RANGE']} maxDays={92} />
@@ -142,7 +148,7 @@ export default function MyAttendance() {
             renderRowBanner={(r) =>
               r.note ? (
                 <div className="flex items-start gap-1.5 rounded-btn bg-primary/5 px-3 py-1.5 text-body-sm">
-                  <MessageSquare size={13} className="mt-0.5 shrink-0 text-primary" />
+                  <MessageSquare size={13} className="mt-0.5 shrink-0 text-primary-ink" />
                   <span className="text-ink"><span className="font-medium text-ink-muted">Team Lead: </span>{r.note}</span>
                 </div>
               ) : null
@@ -175,14 +181,14 @@ function AttendanceCalendar({ start, end, rows }: { start: string; end: string; 
             <div key={d} title={r ? [STATUS_STYLE[r.label].text, r.checkIn && `In ${r.checkIn}`, r.checkOut && `Out ${r.checkOut}`, r.workedMin != null && `Worked ${formatMinutes(r.workedMin)}`, ...flags, r.note && `Note: ${r.note}`].filter(Boolean).join(' · ') : ''}
               className={cn('flex min-h-[92px] flex-col rounded-btn border p-1.5 text-[11px] sm:p-2', st ? st.cell : 'border-line bg-card', d === today && 'ring-2 ring-primary/40')}>
               <div className="flex items-center justify-between">
-                <span className={cn('text-body-sm font-semibold', d === today ? 'text-primary' : 'text-ink')}>{parseIso(d).getDate()}</span>
-                {r?.wfh && <House size={11} className="text-accent" />}
+                <span className={cn('text-body-sm font-semibold', d === today ? 'text-primary-ink' : 'text-ink')}>{parseIso(d).getDate()}</span>
+                {r?.wfh && <House size={11} className="text-highlight-ink" />}
               </div>
               {r?.label === 'PRESENT' ? (
                 <div className="mt-auto space-y-0.5 tabular-nums">
-                  <div className={cn(r.late ? 'font-semibold text-warning' : 'text-ink')}>In {r.checkIn}</div>
-                  <div className={cn(r.earlyLeave ? 'font-semibold text-warning' : 'text-ink')}>{r.checkOut ? `Out ${r.checkOut}` : 'Working…'}</div>
-                  {r.workedMin != null && <div className={cn('font-semibold', r.completed ? 'text-success' : 'text-ink-muted')}>{formatMinutes(r.workedMin)}</div>}
+                  <div className={cn(r.late ? 'font-semibold text-warning-ink' : 'text-ink')}>In {r.checkIn}</div>
+                  <div className={cn(r.earlyLeave ? 'font-semibold text-warning-ink' : 'text-ink')}>{r.checkOut ? `Out ${r.checkOut}` : 'Working…'}</div>
+                  {r.workedMin != null && <div className={cn('font-semibold', r.completed ? 'text-success-ink' : 'text-ink-muted')}>{formatMinutes(r.workedMin)}</div>}
                 </div>
               ) : r ? (
                 <div className="mt-auto font-semibold">{r.label === 'HOLIDAY' && r.offName ? r.offName : st!.text}</div>

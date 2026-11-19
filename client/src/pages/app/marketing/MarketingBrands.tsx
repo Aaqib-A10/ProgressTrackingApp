@@ -61,7 +61,7 @@ export default function MarketingBrands() {
       header: 'Website',
       render: (b) =>
         b.website ? (
-          <a href={b.website} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+          <a href={b.website} target="_blank" rel="noreferrer" className="text-primary-ink hover:underline">
             {b.website.replace(/^https?:\/\//, '')}
           </a>
         ) : (

@@ -46,7 +46,7 @@ export default function QaEvaluate() {
           <button
             key={d}
             onClick={() => setDept(d)}
-            className={'rounded-full px-4 py-1.5 text-body-md font-medium transition-colors ' + (dept === d ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
+            className={'rounded-full px-4 py-1.5 text-body-md font-medium transition-colors ' + (dept === d ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
           >
             {d}
           </button>
@@ -63,7 +63,7 @@ export default function QaEvaluate() {
             {agents.map((a) => (
               <li key={a.id}>
                 <button onClick={() => setAgent(a)} className="flex w-full items-center gap-3 px-5 py-3.5 text-left hover:bg-slate-50">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary">{initials(a.name)}</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary-ink">{initials(a.name)}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-body-md font-medium text-ink">{a.name}</p>
                     <p className="truncate text-body-sm text-ink-muted">{a.email}</p>
@@ -177,7 +177,7 @@ function AgentEvaluation({ dept, agent, onBack }: { dept: Dept; agent: QaAgentRo
 
       <Card>
         <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-headline-md font-semibold text-primary">{initials(agent.name)}</span>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-headline-md font-semibold text-primary-ink">{initials(agent.name)}</span>
           <div className="flex-1">
             <h1 className="text-headline-md text-ink">{agent.name}</h1>
             <p className="text-body-sm text-ink-muted">{agent.email} · {dept}</p>
@@ -239,7 +239,7 @@ function AgentEvaluation({ dept, agent, onBack }: { dept: Dept; agent: QaAgentRo
                     <div key={q.id}>
                       <p className="mb-1.5 text-body-md text-ink">
                         {q.text}
-                        {q.criticalFail && <span className="ml-2 inline-flex items-center gap-1 text-body-sm font-semibold text-danger"><AlertTriangle size={12} /> critical</span>}
+                        {q.criticalFail && <span className="ml-2 inline-flex items-center gap-1 text-body-sm font-semibold text-danger-ink"><AlertTriangle size={12} /> critical</span>}
                       </p>
                       <ScoreInput question={q} value={answers[q.id]} onChange={(v) => setAnswer(q.id, v)} />
                     </div>
@@ -258,7 +258,7 @@ function AgentEvaluation({ dept, agent, onBack }: { dept: Dept; agent: QaAgentRo
       {card && live && (
         <div className="sticky bottom-4 flex items-center justify-between rounded-card border border-line bg-card p-4 shadow-overlay">
           <div className="flex items-center gap-3">
-            <ClipboardCheck size={20} className="text-primary" />
+            <ClipboardCheck size={20} className="text-primary-ink" />
             <div>
               <p className="text-label-md uppercase text-ink-muted">Total · {live.totalEarned} / {live.totalMax} pts</p>
               <p className="text-headline-lg font-bold tabular-nums text-ink">{formatPercent(live.totalScore / 100)}</p>
@@ -325,7 +325,7 @@ export function ScoreInput({ question, value, onChange }: { question: ScorecardF
   const isNA = !!value?.isNA
   const score = value?.score ?? null
   const btn = (active: boolean) =>
-    'h-8 min-w-8 rounded-btn px-2 text-body-sm font-medium transition-colors ' + (active ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')
+    'h-8 min-w-8 rounded-btn px-2 text-body-sm font-medium transition-colors ' + (active ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')
 
   if (question.type === 'YES_NO') {
     return (

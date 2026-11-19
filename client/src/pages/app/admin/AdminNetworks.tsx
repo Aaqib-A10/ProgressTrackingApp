@@ -99,7 +99,7 @@ export default function AdminNetworks() {
 
       {/* Enforcement status banner */}
       <div className={'flex items-start gap-3 rounded-card border p-4 ' + (enforced ? 'border-success/30 bg-success/5' : 'border-warning/30 bg-warning/5')}>
-        {enforced ? <ShieldCheck size={20} className="mt-0.5 shrink-0 text-success" /> : <ShieldAlert size={20} className="mt-0.5 shrink-0 text-warning" />}
+        {enforced ? <ShieldCheck size={20} className="mt-0.5 shrink-0 text-success-ink" /> : <ShieldAlert size={20} className="mt-0.5 shrink-0 text-warning-ink" />}
         <div className="text-body-sm">
           {enforced ? (
             <><b className="text-ink">Enforcement is ON.</b> <span className="text-ink-muted">Only the active networks below can check in. Breaks and check-out are not blocked once someone has checked in. Super Admins and localhost are always allowed.</span></>
@@ -112,7 +112,7 @@ export default function AdminNetworks() {
       {blocked.length > 0 && (
         <Card>
           <div className="mb-3 flex items-center gap-2">
-            <UserX size={18} className="text-danger" />
+            <UserX size={18} className="text-danger-ink" />
             <h2 className="text-body-lg font-semibold text-ink">Stopped at check-in</h2>
             <span className="text-body-sm text-ink-muted">last 7 days</span>
           </div>
@@ -147,11 +147,11 @@ export default function AdminNetworks() {
       {you && !/^(127\.|::1$)/.test(you.ip) && (
         <Card>
           <div className="flex flex-wrap items-center gap-3">
-            <MapPin size={18} className="text-primary" />
+            <MapPin size={18} className="text-primary-ink" />
             <div className="min-w-0 flex-1 text-body-sm">
               <span className="text-ink-muted">Your network right now: </span>
               <code className="break-all font-semibold text-ink">{you.ip}</code>
-              {enforced && <span className={'ml-2 ' + (you.allowed ? 'text-success' : 'text-warning')}>{you.allowed ? 'on the office list' : 'not on the list'}</span>}
+              {enforced && <span className={'ml-2 ' + (you.allowed ? 'text-success-ink' : 'text-warning-ink')}>{you.allowed ? 'on the office list' : 'not on the list'}</span>}
             </div>
             {!you.allowed || !enforced ? (
               you.ipv6 ? (
@@ -203,7 +203,7 @@ export default function AdminNetworks() {
                   {n.cidr.includes(':') && !n.cidr.includes('/') && <span className="ml-2 text-body-sm text-ink-muted">covers its whole /64 line</span>}
                 </div>
                 <Toggle checked={n.isActive} onChange={() => toggle(n)} label={`Toggle ${n.label}`} />
-                <button onClick={() => remove(n)} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Remove">
+                <button onClick={() => remove(n)} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label="Remove">
                   <Trash2 size={16} />
                 </button>
               </li>

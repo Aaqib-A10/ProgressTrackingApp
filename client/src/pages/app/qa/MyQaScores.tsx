@@ -34,7 +34,7 @@ export default function MyQaScores() {
       {evals === null ? (
         <div className="text-body-md text-ink-muted">Loading…</div>
       ) : evals.length === 0 ? (
-        <Card><div className="flex flex-col items-center gap-2 py-12 text-center"><ClipboardCheck size={26} className="text-primary" /><p className="text-body-md text-ink-muted">No QA evaluations yet.</p></div></Card>
+        <Card><div className="flex flex-col items-center gap-2 py-12 text-center"><ClipboardCheck size={26} className="text-primary-ink" /><p className="text-body-md text-ink-muted">No QA evaluations yet.</p></div></Card>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

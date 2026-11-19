@@ -75,7 +75,7 @@ export default function ChatPage() {
           <div className="flex h-full flex-col">
             {share && (
               <div className="flex items-center gap-2 border-b border-primary/15 bg-primary/[0.05] px-4 py-2 text-body-sm text-ink">
-                <Share2 size={14} className="text-primary" /> Sharing <b className="font-mono">{share}</b>. Press Enter to send it here, or pick another chat.
+                <Share2 size={14} className="text-primary-ink" /> Sharing <b className="font-mono">{share}</b>. Press Enter to send it here, or pick another chat.
                 <button type="button" className="ml-auto text-ink-muted" onClick={() => { const n = new URLSearchParams(params); n.delete('share'); setParams(n, { replace: true }) }} aria-label="Cancel sharing"><X size={14} /></button>
               </div>
             )}

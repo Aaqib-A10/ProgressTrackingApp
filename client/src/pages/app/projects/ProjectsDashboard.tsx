@@ -57,7 +57,7 @@ export default function ProjectsDashboard() {
         <Table head={['Person', 'Open', 'Overdue', 'Completed', 'On time', 'Avg days late']} rows={(data?.byMember ?? []).map((m) => [
           <span key="n" className="font-medium text-ink">{m.name}</span>,
           m.open,
-          <span key="o" className={cn(m.overdue > 0 && 'font-semibold text-danger')}>{m.overdue}</span>,
+          <span key="o" className={cn(m.overdue > 0 && 'font-semibold text-danger-ink')}>{m.overdue}</span>,
           m.completed,
           m.onTimeRate == null ? '·' : `${m.onTimeRate}%`,
           m.avgDaysLate == null ? '·' : m.avgDaysLate,
@@ -66,22 +66,22 @@ export default function ProjectsDashboard() {
 
       <Card title="By project" action={<CsvLink href={projectsApi.reportCsvUrl('projects', { from, to, project })} />} flush>
         <Table head={['Project', 'Open', 'In progress', 'Overdue', 'Done in range']} rows={(data?.byProject ?? []).map((p) => [
-          <Link key="p" to={`/app/projects/${p.key}`} className="inline-flex items-center gap-2 font-medium text-ink hover:text-primary"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: p.color }} />{p.name}</Link>,
+          <Link key="p" to={`/app/projects/${p.key}`} className="inline-flex items-center gap-2 font-medium text-ink hover:text-primary-ink"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: p.color }} />{p.name}</Link>,
           p.open, p.inProgress,
-          <span key="o" className={cn(p.overdue > 0 && 'font-semibold text-danger')}>{p.overdue}</span>,
+          <span key="o" className={cn(p.overdue > 0 && 'font-semibold text-danger-ink')}>{p.overdue}</span>,
           p.done,
         ])} empty="No projects." />
       </Card>
 
       <Card title={`Overdue now (${data?.overdue.length ?? 0})`} action={<CsvLink href={projectsApi.reportCsvUrl('overdue', { from, to, project })} />} flush>
         <Table head={['Task', 'Title', 'Project', 'Assignees', 'Status', 'Due', 'Late']} rows={(data?.overdue ?? []).map((t) => [
-          <Link key="c" to={`/app/projects/${t.project.key}?task=${t.code}`} className="font-mono text-body-sm text-primary">{t.code}</Link>,
+          <Link key="c" to={`/app/projects/${t.project.key}?task=${t.code}`} className="font-mono text-body-sm text-primary-ink">{t.code}</Link>,
           <span key="t" className="inline-flex items-center gap-1.5"><PriorityIcon priority={t.priority} />{t.title}</span>,
           t.project.name,
           <AvatarStack key="a" people={t.assignees} size={22} />,
           t.status,
           fmtDateTime(t.dueAt),
-          <span key="l" className="font-semibold text-danger">{t.daysOverdue === 0 ? 'today' : `${t.daysOverdue}d`}</span>,
+          <span key="l" className="font-semibold text-danger-ink">{t.daysOverdue === 0 ? 'today' : `${t.daysOverdue}d`}</span>,
         ])} empty="Nothing is overdue. 🎉" />
       </Card>
     </div>
@@ -89,7 +89,7 @@ export default function ProjectsDashboard() {
 }
 
 function Stat({ icon, label, value, tone, hint }: { icon: React.ReactNode; label: string; value: number | string | undefined; tone: 'primary' | 'danger' | 'success' | 'accent'; hint?: string }) {
-  const cls = { primary: 'text-primary', danger: 'text-danger', success: 'text-success', accent: 'text-accent' }[tone]
+  const cls = { primary: 'text-primary-ink', danger: 'text-danger-ink', success: 'text-success-ink', accent: 'text-highlight-ink' }[tone]
   return (
     <div className="rounded-card border border-line bg-card p-4 shadow-card">
       <div className={cn('flex items-center gap-1.5 text-body-sm', cls)}>{icon}{label}</div>
@@ -100,7 +100,7 @@ function Stat({ icon, label, value, tone, hint }: { icon: React.ReactNode; label
 }
 
 function CsvLink({ href }: { href: string }) {
-  return <a href={href} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Download size={14} /> CSV</a>
+  return <a href={href} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink"><Download size={14} /> CSV</a>
 }
 
 function Table({ head, rows, empty }: { head: string[]; rows: React.ReactNode[][]; empty: string }) {

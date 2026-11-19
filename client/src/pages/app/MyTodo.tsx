@@ -247,7 +247,7 @@ export default function MyTodo() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist">
           {TABS.map((t) => (
-            <button key={t.key} type="button" role="tab" aria-selected={period === t.key} onClick={() => setPeriod(t.key)} className={cn('h-8 rounded-md px-4 text-body-sm font-semibold', period === t.key ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>{t.label}</button>
+            <button key={t.key} type="button" role="tab" aria-selected={period === t.key} onClick={() => setPeriod(t.key)} className={cn('h-8 rounded-md px-4 text-body-sm font-semibold', period === t.key ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>{t.label}</button>
           ))}
         </div>
         <div className="flex items-center gap-1">
@@ -259,7 +259,7 @@ export default function MyTodo() {
           <CalendarDays size={14} /> Pick a date
           <input type="date" value={anchor} onChange={(e) => e.target.value && setAnchor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
         </label>
-        {start !== startOf(period, today) && <button type="button" onClick={() => setAnchor(today)} className="h-8 rounded-btn px-2.5 text-body-sm font-semibold text-primary hover:bg-primary/5">Today</button>}
+        {start !== startOf(period, today) && <button type="button" onClick={() => setAnchor(today)} className="h-8 rounded-btn px-2.5 text-body-sm font-semibold text-primary-ink hover:bg-primary/5">Today</button>}
         {mode === 'mine' && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-btn border border-line bg-card p-0.5" aria-label="Layout">
@@ -279,11 +279,11 @@ export default function MyTodo() {
           <div className="min-w-0 space-y-5">
             <Card>
               <div className="mb-3 flex flex-wrap items-center gap-2 text-body-sm">
-                <span className="rounded-full bg-success/10 px-2.5 py-0.5 font-semibold text-success">{done.length} done</span>
-                {inProgress.length > 0 && <span className="rounded-full bg-warning/10 px-2.5 py-0.5 font-semibold text-warning">{inProgress.length} in progress</span>}
+                <span className="rounded-full bg-success/10 px-2.5 py-0.5 font-semibold text-success-ink">{done.length} done</span>
+                {inProgress.length > 0 && <span className="rounded-full bg-warning/10 px-2.5 py-0.5 font-semibold text-warning-ink">{inProgress.length} in progress</span>}
                 <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-semibold text-ink-muted">{here.length - done.length - inProgress.length} to do</span>
-                {sum('hours') > 0 && <span className="rounded-full bg-primary/10 px-2.5 py-0.5 font-semibold text-primary">{+sum('hours').toFixed(2)} h</span>}
-                {sum('quantity') > 0 && <span className="rounded-full bg-accent/10 px-2.5 py-0.5 font-semibold text-accent">{sum('quantity').toLocaleString()} items</span>}
+                {sum('hours') > 0 && <span className="rounded-full bg-primary/10 px-2.5 py-0.5 font-semibold text-primary-ink">{+sum('hours').toFixed(2)} h</span>}
+                {sum('quantity') > 0 && <span className="rounded-full bg-accent/10 px-2.5 py-0.5 font-semibold text-highlight-ink">{sum('quantity').toLocaleString()} items</span>}
                 <span className="text-ink-muted">{period === 'DAY' ? 'for this day' : `goals and work for this ${NOUN[period]}`}</span>
               </div>
               {review && !(readOnly && canReview) && <ReviewNote review={review} />}
@@ -399,7 +399,7 @@ function AddEntry({ period, date, pastPeriod, tagIdeas, onAdded }: { period: Wor
           className="min-h-[40px] min-w-full flex-1 resize-none rounded-btn border border-line bg-card px-2.5 py-2 text-body-md leading-snug text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10 sm:min-w-0" />
         <div className="inline-flex rounded-btn border border-line bg-card p-0.5 text-body-sm">
           {(['PLANNED', 'IN_PROGRESS', 'DONE'] as WorkStatus[]).map((s) => (
-            <button key={s} type="button" onClick={() => setStatus(s)} className={cn('h-8 rounded-md px-2.5 font-semibold', status === s ? (s === 'DONE' ? 'bg-success text-white' : s === 'IN_PROGRESS' ? 'bg-warning text-white' : 'bg-ink text-card') : 'text-ink-muted')}>{STATUS_LABEL[s]}</button>
+            <button key={s} type="button" onClick={() => setStatus(s)} className={cn('h-8 rounded-md px-2.5 font-semibold', status === s ? (s === 'DONE' ? 'bg-success text-success-on' : s === 'IN_PROGRESS' ? 'bg-warning text-warning-on' : 'bg-ink text-card') : 'text-ink-muted')}>{STATUS_LABEL[s]}</button>
           ))}
         </div>
         <button type="button" onClick={() => setMore((m) => !m)} className="rounded-btn p-2 text-ink-muted hover:bg-slate-100 hover:text-ink" title="Details, time, how many, tag" aria-label="More options"><MoreHorizontal size={16} /></button>
@@ -408,7 +408,7 @@ function AddEntry({ period, date, pastPeriod, tagIdeas, onAdded }: { period: Wor
       {multi && (
         <div className="flex flex-wrap items-center gap-2 rounded-btn bg-primary/5 px-3 py-2 text-body-sm text-ink">
           <span>This has {lines.length} lines.</span>
-          <button type="button" disabled={busy} onClick={addEach} className="rounded-full bg-primary px-3 py-1 font-semibold text-white disabled:opacity-50">Add as {lines.length} separate items</button>
+          <button type="button" disabled={busy} onClick={addEach} className="rounded-full bg-primary px-3 py-1 font-semibold text-primary-on disabled:opacity-50">Add as {lines.length} separate items</button>
           <span className="text-ink-muted">or press Add as one to keep it as a single entry.</span>
         </div>
       )}
@@ -481,7 +481,7 @@ function EntryList({ entries, readOnly, empty, actions, flash }: { entries: Work
           <p className="mb-1 text-label-md uppercase text-ink-muted">{g.label} · {g.rows.length}</p>
           <ul className="divide-y divide-line rounded-btn border border-line">
             {g.rows.map((e) => (
-              <li key={e.id} data-entry-id={e.id} className={cn('group flex items-start gap-3 px-3 py-2.5 transition-colors duration-700', e.blocked && e.status !== 'DONE' && 'bg-danger/5', flash === e.id && 'bg-yellow-100/80 ring-2 ring-inset ring-yellow-400 dark:bg-yellow-400/10')}>
+              <li key={e.id} data-entry-id={e.id} className={cn('group flex items-start gap-3 px-3 py-2.5 transition-colors duration-700', e.blocked && e.status !== 'DONE' && 'bg-danger/5', flash === e.id && 'bg-yellow-muted/80 ring-2 ring-inset ring-yellow-vivid')}>
                 <DoneCheck e={e} readOnly={readOnly} onToggle={() => actions.onStatus(e, e.status === 'DONE' ? 'PLANNED' : 'DONE')} />
                 <div className="min-w-0 flex-1 text-body-md">
                   <EntryText text={e.title} done={e.status === 'DONE'} />
@@ -505,7 +505,7 @@ function Bigger({ title, period, entries, onOpen }: { title: string; period: Wor
     <Card>
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-label-md uppercase text-ink-muted">{title}</h3>
-        <button type="button" onClick={onOpen} className="text-body-sm font-semibold text-primary">Open</button>
+        <button type="button" onClick={onOpen} className="text-body-sm font-semibold text-primary-ink">Open</button>
       </div>
       {entries.length === 0 ? <p className="text-body-sm text-ink-muted">No {NOUN[period]} goals yet.</p> : (
         <ul className="space-y-1.5 text-body-sm">
@@ -550,15 +550,15 @@ function MiniMonth({ anchor, entries, today, onPick }: { anchor: string; entries
           return (
             <button key={d} type="button" onClick={() => onPick(d)} title={s.notes ? `${s.notes} note${s.notes === 1 ? '' : 's'} on this day` : undefined}
               className={cn('relative flex h-8 flex-col items-center justify-center rounded-md text-body-sm',
-                d === anchor ? 'bg-primary text-white' : s.notes ? cn('bg-sky-100 font-semibold text-sky-800 hover:bg-sky-200', d === today && 'ring-1 ring-primary/40') : d === today ? 'font-bold text-primary ring-1 ring-primary/40' : 'text-ink hover:bg-slate-100')}>
+                d === anchor ? 'bg-primary text-primary-on' : s.notes ? cn('bg-blue-muted font-semibold text-blue-ink hover:bg-blue-ring', d === today && 'ring-1 ring-primary/40') : d === today ? 'font-bold text-primary-ink ring-1 ring-primary/40' : 'text-ink hover:bg-slate-100')}>
               {i + 1}
-              {s.notes > 0 && <span className={cn('absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-sm', d === anchor ? 'bg-white' : 'bg-sky-500')} />}
+              {s.notes > 0 && <span className={cn('absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-sm', d === anchor ? 'bg-white' : 'bg-blue-vivid')} />}
               {s.total > 0 && <span className={cn('absolute bottom-1 h-1 w-1 rounded-full', d === anchor ? 'bg-white' : s.done === s.total ? 'bg-success' : 'bg-warning')} />}
             </button>
           )
         })}
       </div>
-      <p className="mt-2 text-[11px] text-ink-muted">Green dot: all done. Amber: some still open. <span className="font-semibold text-sky-700">Blue day: has notes.</span> Click any past day to log what was done.</p>
+      <p className="mt-2 text-[11px] text-ink-muted">Green dot: all done. Amber: some still open. <span className="font-semibold text-blue-ink">Blue day: has notes.</span> Click any past day to log what was done.</p>
     </Card>
   )
 }
@@ -572,10 +572,10 @@ function WeekDays({ start, entries, today, onOpenDay }: { start: string; entries
           const d = addDays(start, i)
           const s = dayStats(entries, d)
           return (
-            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex min-h-[110px] flex-col rounded-btn border p-2 text-left hover:border-primary/50', s.notes ? 'border-sky-300 bg-sky-50' : d === today ? 'border-primary/50 bg-primary/5' : 'border-line', s.notes && d === today && 'ring-2 ring-primary/30')}>
+            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex min-h-[110px] flex-col rounded-btn border p-2 text-left hover:border-primary/50', s.notes ? 'border-blue-ring bg-blue-subtle' : d === today ? 'border-primary/50 bg-primary/5' : 'border-line', s.notes && d === today && 'ring-2 ring-primary/30')}>
               <span className="text-body-sm font-semibold text-ink">{parse(d).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}</span>
               <span className="text-[11px] text-ink-muted">{s.total ? `${s.done}/${s.total} done` : 'Nothing yet'}</span>
-              {s.notes > 0 && <span className="mt-0.5 inline-flex items-center gap-0.5 self-start rounded-full bg-sky-100 px-1.5 text-[10px] font-bold text-sky-700"><StickyNote size={10} />{s.notes} note{s.notes === 1 ? '' : 's'}</span>}
+              {s.notes > 0 && <span className="mt-0.5 inline-flex items-center gap-0.5 self-start rounded-full bg-blue-muted px-1.5 text-[10px] font-bold text-blue-ink"><StickyNote size={10} />{s.notes} note{s.notes === 1 ? '' : 's'}</span>}
               <ul className="mt-1 space-y-0.5">
                 {s.es.slice(0, 4).map((e) => <li key={e.id} className={cn('truncate text-[11px]', e.status === 'DONE' ? 'text-ink-muted line-through' : 'text-ink')}>{e.title}</li>)}
                 {s.es.length > 4 && <li className="text-[11px] text-ink-muted">+{s.es.length - 4} more</li>}
@@ -593,7 +593,7 @@ function MonthCalendar({ start, entries, today, onOpenDay }: { start: string; en
   const days = Number(endOf('MONTH', start).slice(8))
   return (
     <Card>
-      <h3 className="mb-3 text-label-md uppercase text-ink-muted">Days of the month · click a day to plan or log it · <span className="text-sky-700">blue: has notes</span></h3>
+      <h3 className="mb-3 text-label-md uppercase text-ink-muted">Days of the month · click a day to plan or log it · <span className="text-blue-ink">blue: has notes</span></h3>
       <div className="grid grid-cols-7 gap-1.5">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <span key={d} className="text-center text-[11px] font-semibold uppercase text-ink-muted">{d}</span>)}
         {Array.from({ length: lead }, (_, i) => <span key={`x${i}`} />)}
@@ -601,12 +601,12 @@ function MonthCalendar({ start, entries, today, onOpenDay }: { start: string; en
           const d = addDays(start, i)
           const s = dayStats(entries, d)
           return (
-            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex h-20 flex-col rounded-btn border p-1.5 text-left hover:border-primary/50', s.notes ? 'border-sky-300 bg-sky-50' : d === today ? 'border-primary/50 bg-primary/5' : 'border-line', s.notes && d === today && 'ring-2 ring-primary/30')}>
+            <button key={d} type="button" onClick={() => onOpenDay(d)} className={cn('flex h-20 flex-col rounded-btn border p-1.5 text-left hover:border-primary/50', s.notes ? 'border-blue-ring bg-blue-subtle' : d === today ? 'border-primary/50 bg-primary/5' : 'border-line', s.notes && d === today && 'ring-2 ring-primary/30')}>
               <span className="flex items-center justify-between gap-1">
                 <span className="text-body-sm font-semibold text-ink">{i + 1}</span>
-                {s.notes > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-1.5 text-[10px] font-bold text-sky-700" title={`${s.notes} note${s.notes === 1 ? '' : 's'}`}><StickyNote size={10} />{s.notes}</span>}
+                {s.notes > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-muted px-1.5 text-[10px] font-bold text-blue-ink" title={`${s.notes} note${s.notes === 1 ? '' : 's'}`}><StickyNote size={10} />{s.notes}</span>}
               </span>
-              {s.total > 0 && <span className={cn('mt-auto self-start rounded-full px-1.5 text-[10px] font-bold', s.done === s.total ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>{s.done}/{s.total}</span>}
+              {s.total > 0 && <span className={cn('mt-auto self-start rounded-full px-1.5 text-[10px] font-bold', s.done === s.total ? 'bg-success/10 text-success-ink' : 'bg-warning/10 text-warning-ink')}>{s.done}/{s.total}</span>}
             </button>
           )
         })}

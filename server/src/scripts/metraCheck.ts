@@ -113,6 +113,8 @@ const CASES: Case[] = [
   { as: 'ecom', ask: 'what notes did I add on my calendar for tomorrow?', names: () => ['warranty'], note: 'calendar: the notes written on an event' },
   { as: 'ecom', ask: 'kal meri koi meeting hai?', names: () => ['Supplier call'], note: 'calendar: tomorrow (Roman Urdu)' },
   { as: 'ecom', ask: 'what do I have to do today?', names: () => ['Count the returns shelf'], note: 'calendar: today\'s to-do' },
+  { as: 'ecom', ask: 'what is in my notes?', names: () => ['DHL about the Monday pickup'], note: 'Notes: my own sticky note' },
+  { as: 'ecomlead', ask: 'which notes have been shared with me?', names: () => ['DHL about the Monday pickup'], note: 'Notes: a note shared with me' },
   { as: 'ecom', ask: 'are there any holidays in the next 7 days?', names: () => ['Founders Day'], note: 'calendar: holidays' },
   { as: 'ecom', ask: 'what is due in the next 7 days on my calendar?', names: () => ['Upload Walmart bulk file'], note: 'calendar: tasks due' },
   { as: 'ecom', ask: 'am I free tomorrow afternoon?', names: () => ['Supplier call'], note: 'calendar: free or busy' },
@@ -207,6 +209,7 @@ async function main() {
     n += (await prisma.ecommerceDailyEntry.deleteMany({ where: { notes: { startsWith: MARK } } })).count
     n += (await prisma.holiday.deleteMany({ where: { name: { startsWith: MARK } } })).count
     n += (await prisma.workLogEntry.deleteMany({ where: { title: { startsWith: MARK } } })).count
+    n += (await prisma.note.deleteMany({ where: { title: { startsWith: MARK } } })).count
     // A meeting made through the app got a chat of its own: both go.
     const ms = await prisma.meeting.findMany({ where: { title: { startsWith: MARK } }, select: { id: true, conversationId: true } })
     for (const m of ms) if (!(await prisma.meeting.count({ where: { conversationId: m.conversationId, NOT: { title: { startsWith: MARK } } } }))) await prisma.chatConversation.deleteMany({ where: { id: m.conversationId } })
@@ -346,6 +349,9 @@ async function main() {
     // is made as the app makes it (its own chat, then the meeting) but without the chat message announcing it.
     const todo = await apiAs(people.ecom, 'POST', '/api/worklog', { body: { title: `${MARK} Count the returns shelf`, date: today.toISODate(), period: 'DAY' } })
     if (todo.status >= 400) { console.error(`Could not seed the to-do (${todo.status}): ${JSON.stringify(todo.body).slice(0, 200)}`); process.exit(1) }
+    // A sticky note (Notes), shared with the team lead to read.
+    const note = await apiAs(people.ecom, 'POST', '/api/notes', { body: { title: `${MARK} Call DHL about the Monday pickup`, body: 'Ask for the 3 PM slot and the pallet rate.', tags: ['shipping'], shares: [{ userId: people.ecomlead.id, canEdit: false }] } })
+    if (note.status >= 400) { console.error(`Could not seed the note (${note.status}): ${JSON.stringify(note.body).slice(0, 200)}`); process.exit(1) }
     const title = `${MARK} Supplier call with Zenith`
     const conv = await prisma.chatConversation.create({ data: { type: 'GROUP', name: title, createdById: people.ecom.id, members: { create: [{ userId: people.ecom.id, isAdmin: true }] } } })
     await prisma.meeting.create({ data: { title, agenda: 'Ask about the 90-day warranty and the pallet price for 7060 towers.', startsAt: at(1, 15), endsAt: at(1, 16), organizerId: people.ecom.id, conversationId: conv.id } })

@@ -188,8 +188,8 @@ export default function AdsCampaigns() {
       align: 'right',
       render: (c) => (
         <div className="flex items-center justify-end gap-3">
-          <button onClick={() => openEdit(c)} className="text-ink-muted hover:text-primary" title="Edit"><Pencil size={16} /></button>
-          <button onClick={() => remove(c)} className="text-ink-muted hover:text-danger" title="Delete"><Trash2 size={16} /></button>
+          <button onClick={() => openEdit(c)} className="text-ink-muted hover:text-primary-ink" title="Edit"><Pencil size={16} /></button>
+          <button onClick={() => remove(c)} className="text-ink-muted hover:text-danger-ink" title="Delete"><Trash2 size={16} /></button>
         </div>
       ),
     },

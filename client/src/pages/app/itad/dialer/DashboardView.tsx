@@ -48,7 +48,7 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
                 className={cn('relative overflow-hidden rounded-card text-left transition-shadow hover:shadow-overlay',
                   tone === 'prime' ? 'border-2 border-success bg-success/[0.12] shadow-[0_0_0_4px_rgba(34,197,94,0.15)]' : tone === 'green' ? 'border border-success/40 bg-success/[0.05]' : tone === 'amber' ? 'border border-warning/50 bg-warning/[0.06]' : 'border border-line bg-card')}>
                 {tone === 'prime' && (
-                  <div className="flex items-center gap-1.5 bg-success px-4 py-1.5 text-[12px] font-bold uppercase tracking-wide text-white">
+                  <div className="flex items-center gap-1.5 bg-success px-4 py-1.5 text-[12px] font-bold uppercase tracking-wide text-success-on">
                     <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-white" /></span>
                     <Zap size={13} className="fill-white" /> Prime time · {fmtSpan(w.primeLeft ?? 0)} left
                   </div>
@@ -57,7 +57,7 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
                   <div className="flex items-center justify-between gap-2">
                     <span className={cn('rounded px-2 py-0.5 text-[11px] font-bold', tone === 'prime' ? 'bg-success/20 text-ink' : 'bg-slate-100 text-ink')}>{w.region} · {REGION_META[w.region].name}</span>
                     {tone !== 'prime' && (
-                      <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', tone === 'green' ? 'bg-success/15 text-success' : tone === 'amber' ? 'bg-warning/15 text-warning' : 'bg-slate-100 text-ink-muted')}>
+                      <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', tone === 'green' ? 'bg-success/15 text-success-ink' : tone === 'amber' ? 'bg-warning/15 text-warning-ink' : 'bg-slate-100 text-ink-muted')}>
                         {w.open ? (w.closingSoon ? `Closes in ${fmtSpan(w.minutesLeft)}` : 'Open now') : w.weekend ? 'Weekend' : `Opens in ${fmtSpan(w.minutesUntilOpen)}`}
                       </span>
                     )}
@@ -65,7 +65,7 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
                   <p className={cn('mt-2 font-bold leading-none tabular-nums text-ink', tone === 'prime' ? 'text-[32px]' : 'text-[28px]')}>{w.localTime}</p>
                   <p className="mt-2 text-body-md text-ink"><b className="tabular-nums">{num(list.length)}</b> to dial</p>
                   {tone !== 'prime' && w.primeIn != null && w.primeIn <= 180 && (
-                    <p className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-success"><Zap size={12} className="fill-success" />Prime in {fmtSpan(w.primeIn)}</p>
+                    <p className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-success-ink"><Zap size={12} className="fill-success" />Prime in {fmtSpan(w.primeIn)}</p>
                   )}
                 </div>
               </button>
@@ -75,7 +75,7 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
       </Panel>
 
       {/* Funnel strip */}
-      <Panel title="Funnel" action={<button type="button" onClick={() => go('funnel')} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary">Open <ArrowRight size={14} /></button>}>
+      <Panel title="Funnel" action={<button type="button" onClick={() => go('funnel')} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink">Open <ArrowRight size={14} /></button>}>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Metric label="Total leads" value={num(f.total)} info="All the leads on your list (duplicates waiting for a manager are not counted)." />
           <Metric label="Attempted+" value={num(f.attempted)} sub={pct(f.attemptRate)} info="Leads tried at least once. The rate is Attempted+ ÷ Total." />
@@ -86,7 +86,7 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
 
       <div className={cn('grid gap-4', duplicates > 0 ? 'lg:grid-cols-[1fr_1fr_280px]' : 'lg:grid-cols-2')}>
         {/* Follow-ups */}
-        <Panel title={`Follow-ups due · ${fu.length}`} info={<>Leads reached or interested that then went quiet: {Object.entries(settings.followUp).map(([s, d]) => `${s} after ${d} days`).join(', ')} (your own days in Settings). Red when twice as old.</>} action={fu.length > 0 ? <button type="button" onClick={() => go('followups')} className="text-body-sm font-semibold text-primary">See all</button> : undefined}>
+        <Panel title={`Follow-ups due · ${fu.length}`} info={<>Leads reached or interested that then went quiet: {Object.entries(settings.followUp).map(([s, d]) => `${s} after ${d} days`).join(', ')} (your own days in Settings). Red when twice as old.</>} action={fu.length > 0 ? <button type="button" onClick={() => go('followups')} className="text-body-sm font-semibold text-primary-ink">See all</button> : undefined}>
           {fu.length === 0 ? <p className="text-body-sm text-ink-muted">Nothing went quiet.</p> : (
             <ul className="divide-y divide-line">
               {fu.slice(0, 8).map((x) => (
@@ -96,7 +96,7 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
                       <span className="block truncate text-body-md font-semibold text-ink">{x.lead.company}</span>
                       <span className="block text-body-sm text-ink-muted">{x.callBackDue ? 'Call back due' : x.lead.status} · {leadState(x.lead) ?? 'No state'}</span>
                     </span>
-                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold', x.severity === 'late' || x.callBackDue ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning')}>{x.days}d</span>
+                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold', x.severity === 'late' || x.callBackDue ? 'bg-danger/10 text-danger-ink' : 'bg-warning/10 text-warning-ink')}>{x.days}d</span>
                   </button>
                 </li>
               ))}
@@ -107,8 +107,8 @@ export function DashboardView({ data, leads, settings, now, filters, setFilter, 
         <InsightCard data={data} leads={live} settings={settings} now={now} table={table} onOpenLeads={onOpenLeads} onOpenLead={onOpenLead} go={go} />
 
         {duplicates > 0 && (
-          <Panel title="Duplicates" info="Leads found in two reps' files. They are kept out of the counts until a manager decides who keeps each one." action={<button type="button" onClick={() => go('duplicates')} className="text-body-sm font-semibold text-primary">Resolve</button>}>
-            <p className="flex items-center gap-2 text-body-md text-ink"><Copy size={16} className="text-danger" /><b className="tabular-nums text-danger">{duplicates}</b> waiting</p>
+          <Panel title="Duplicates" info="Leads found in two reps' files. They are kept out of the counts until a manager decides who keeps each one." action={<button type="button" onClick={() => go('duplicates')} className="text-body-sm font-semibold text-primary-ink">Resolve</button>}>
+            <p className="flex items-center gap-2 text-body-md text-ink"><Copy size={16} className="text-danger-ink" /><b className="tabular-nums text-danger-ink">{duplicates}</b> waiting</p>
           </Panel>
         )}
       </div>
@@ -157,7 +157,7 @@ function InsightCard({ data, leads, settings, now, table, onOpenLeads, onOpenLea
   return (
     <section className="rounded-card border border-line bg-card p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center gap-1">
-        {TABS.map((t) => <button key={t.k} type="button" onClick={() => setTab(t.k)} className={cn('rounded-full px-2.5 py-1 text-[12px] font-semibold', tab === t.k ? 'bg-primary text-white' : 'text-ink-muted hover:bg-slate-100 hover:text-ink')}>{t.label}</button>)}
+        {TABS.map((t) => <button key={t.k} type="button" onClick={() => setTab(t.k)} className={cn('rounded-full px-2.5 py-1 text-[12px] font-semibold', tab === t.k ? 'bg-primary text-primary-on' : 'text-ink-muted hover:bg-slate-100 hover:text-ink')}>{t.label}</button>)}
         <InfoTip className="ml-1">{cur.info}</InfoTip>
       </div>
       {tab === 'due' && (() => {
@@ -172,12 +172,12 @@ function InsightCard({ data, leads, settings, now, table, onOpenLeads, onOpenLea
                 return (
                   <li key={l.id}><button type="button" onClick={() => onOpenLead(l.id, due.map((x) => x.id))} className="flex w-full items-center justify-between gap-2 py-1.5 text-left">
                     <span className="min-w-0 truncate font-semibold text-ink">{l.company}</span>
-                    <span className={cn('shrink-0 text-body-sm font-semibold tabular-nums', late ? 'text-danger' : 'text-ink')}>{at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                    <span className={cn('shrink-0 text-body-sm font-semibold tabular-nums', late ? 'text-danger-ink' : 'text-ink')}>{at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
                   </button></li>
                 )
               })}
             </ul>
-            {due.length > 3 && <button type="button" onClick={() => go('followups')} className="mt-2 text-body-sm font-semibold text-primary">See all {due.length}</button>}
+            {due.length > 3 && <button type="button" onClick={() => go('followups')} className="mt-2 text-body-sm font-semibold text-primary-ink">See all {due.length}</button>}
           </>
         )
       })()}
@@ -206,8 +206,8 @@ function InsightCard({ data, leads, settings, now, table, onOpenLeads, onOpenLea
             <Stat label="Moved forward" value={num(s.movedForward)} tone={s.movedForward ? 'green' : undefined} />
             <Stat label="Moved back" value={num(s.movedBack)} tone={s.movedBack ? 'amber' : undefined} />
             <Stat label="New leads" value={num(s.added)} />
-            <div><p className="text-ink-muted">Connect rate</p><p className="flex items-center gap-1 text-headline-md font-bold tabular-nums text-ink">{pct(s.funnelNow.connectRate)}{dc != null && dc !== 0 && <span className={cn('inline-flex items-center text-body-sm', dc > 0 ? 'text-success' : 'text-danger')}>{dc > 0 ? <ArrowUp size={13} /> : <ArrowDown size={13} />}{Math.abs(dc * 100).toFixed(1)}</span>}</p></div>
-            <button type="button" onClick={() => go('history')} className="col-span-2 text-left text-body-sm font-semibold text-primary">Import details</button>
+            <div><p className="text-ink-muted">Connect rate</p><p className="flex items-center gap-1 text-headline-md font-bold tabular-nums text-ink">{pct(s.funnelNow.connectRate)}{dc != null && dc !== 0 && <span className={cn('inline-flex items-center text-body-sm', dc > 0 ? 'text-success-ink' : 'text-danger-ink')}>{dc > 0 ? <ArrowUp size={13} /> : <ArrowDown size={13} />}{Math.abs(dc * 100).toFixed(1)}</span>}</p></div>
+            <button type="button" onClick={() => go('history')} className="col-span-2 text-left text-body-sm font-semibold text-primary-ink">Import details</button>
           </div>
         )
       })()}
@@ -240,7 +240,7 @@ function InsightCard({ data, leads, settings, now, table, onOpenLeads, onOpenLea
             {best.map((b) => (
               <li key={b.kind + b.key}><button type="button" onClick={() => onOpenLeads(`${b.key} · untouched leads`, b.untouched)} className="flex w-full items-center justify-between gap-2 py-1.5 text-left text-body-sm">
                 <span className="min-w-0 truncate"><span className="text-ink-muted">{b.kind} </span><b className="text-ink">{b.key}</b></span>
-                <span className="shrink-0 text-ink"><span className="font-semibold text-success">{pct(b.rate, 0)}</span> · <b className="tabular-nums">{b.untouched.length}</b> untouched</span>
+                <span className="shrink-0 text-ink"><span className="font-semibold text-success-ink">{pct(b.rate, 0)}</span> · <b className="tabular-nums">{b.untouched.length}</b> untouched</span>
               </button></li>
             ))}
           </ul>
@@ -254,7 +254,7 @@ function InsightCard({ data, leads, settings, now, table, onOpenLeads, onOpenLea
             {flagged.map((r) => (
               <li key={r.state}><button type="button" onClick={() => onOpenLeads(`${r.state} · tried, not converted`, leads.filter((l) => leadState(l) === r.state && (l.status === 'Contact Attempted' || l.status === 'Voicemail Sent')))} className="flex w-full items-center justify-between gap-2 py-1.5 text-left text-body-sm">
                 <span className="font-semibold text-ink">{r.state}</span>
-                <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold', r.flag === 'red' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning')}>{r.stuck} stuck · {Math.round(r.stuckShare * 100)}%</span>
+                <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-bold', r.flag === 'red' ? 'bg-danger/10 text-danger-ink' : 'bg-warning/10 text-warning-ink')}>{r.stuck} stuck · {Math.round(r.stuckShare * 100)}%</span>
               </button></li>
             ))}
           </ul>
@@ -265,7 +265,7 @@ function InsightCard({ data, leads, settings, now, table, onOpenLeads, onOpenLea
 }
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'green' | 'amber' }) {
-  return <div><p className="text-ink-muted">{label}</p><p className={cn('text-headline-md font-bold tabular-nums', tone === 'green' ? 'text-success' : tone === 'amber' ? 'text-warning' : 'text-ink')}>{value}</p></div>
+  return <div><p className="text-ink-muted">{label}</p><p className={cn('text-headline-md font-bold tabular-nums', tone === 'green' ? 'text-success-ink' : tone === 'amber' ? 'text-warning-ink' : 'text-ink')}>{value}</p></div>
 }
 
 // ------------------------------------------------------------------ state table (top 10)
@@ -277,8 +277,8 @@ function StateTableView({ rows, settings, leads, now, onOpenLeads }: { rows: Ret
     onOpenLeads(`${state} · ${label}`, leads.filter((l) => leadState(l) === state && (col == null || columnOf(l, settings) === col)))
   const cellTone = (r: (typeof rows)[number], col: StatusColumn) => {
     if ((col !== 'attempted' && col !== 'voicemail') || !r.cells[col]) return ''
-    if (r.flag === 'red' || r.cells[col] > settings.highlight.redCount) return 'bg-danger/10 font-bold text-danger'
-    if (r.flag === 'amber') return 'bg-warning/10 font-semibold text-warning'
+    if (r.flag === 'red' || r.cells[col] > settings.highlight.redCount) return 'bg-danger/10 font-bold text-danger-ink'
+    if (r.flag === 'amber') return 'bg-warning/10 font-semibold text-warning-ink'
     return ''
   }
   return (
@@ -308,7 +308,7 @@ function StateTableView({ rows, settings, leads, now, onOpenLeads }: { rows: Ret
           ))}
         </tbody>
       </table>
-      {rows.length > 10 && <div className="pt-3 text-center"><button type="button" onClick={() => setAll((v) => !v)} className="text-body-sm font-semibold text-primary">{all ? 'Show the top 10' : `See all ${rows.length} states`}</button></div>}
+      {rows.length > 10 && <div className="pt-3 text-center"><button type="button" onClick={() => setAll((v) => !v)} className="text-body-sm font-semibold text-primary-ink">{all ? 'Show the top 10' : `See all ${rows.length} states`}</button></div>}
     </div>
   )
 }
@@ -322,7 +322,7 @@ function IndustryPanel({ leads, settings, state, onPickState, onPickIndustry, go
     <Panel
       title={state ? `${state} · by industry` : 'Leads by industry and state'}
       info={`Top 8 by leads. Click an industry or a state to filter the dashboard. Positive rate shows n/a for groups under ${settings.minSegment} leads.`}
-      action={<button type="button" onClick={() => go('industries')} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary">See all <ArrowRight size={14} /></button>}
+      action={<button type="button" onClick={() => go('industries')} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink">See all <ArrowRight size={14} /></button>}
     >
       <div className={cn('grid gap-6', !state && 'lg:grid-cols-2')}>
         <ul className="space-y-2">

@@ -119,7 +119,7 @@ export function MeetingFormModal({ meeting, initialStart, initialAttendees, onCl
           <div className="rounded-btn border border-line p-2 focus-within:border-primary">
             <div className="flex flex-wrap gap-1.5">
               {people.map((id) => (
-                <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-0.5 pr-2 text-body-sm text-primary">
+                <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-0.5 pr-2 text-body-sm text-primary-ink">
                   <PersonAvatar person={{ id, name: nameOf(id) }} size={20} /> {nameOf(id)}
                   <button type="button" onClick={() => setPeople((p) => p.filter((x) => x !== id))} aria-label={`Remove ${nameOf(id)}`}><X size={13} /></button>
                 </span>
@@ -153,7 +153,7 @@ export function MeetingFormModal({ meeting, initialStart, initialAttendees, onCl
         <div className="-mt-2 flex flex-wrap items-center gap-1.5 text-body-sm">
           <span className="text-ink-muted">Length:</span>
           {DURATIONS.map((d) => (
-            <button key={d} type="button" onClick={() => setDuration(d)} className={`rounded-full border px-2.5 py-0.5 ${minutes === d ? 'border-primary bg-primary/10 font-semibold text-primary' : 'border-line text-ink-muted hover:bg-slate-50'}`}>{d < 60 ? `${d} min` : d === 60 ? '1 hour' : '1.5 hours'}</button>
+            <button key={d} type="button" onClick={() => setDuration(d)} className={`rounded-full border px-2.5 py-0.5 ${minutes === d ? 'border-primary bg-primary/10 font-semibold text-primary-ink' : 'border-line text-ink-muted hover:bg-slate-50'}`}>{d < 60 ? `${d} min` : d === 60 ? '1 hour' : '1.5 hours'}</button>
           ))}
           {!DURATIONS.includes(minutes) && minutes > 0 && <span className="text-ink-muted">({minutes} min)</span>}
         </div>
@@ -194,11 +194,11 @@ export function MeetingFormModal({ meeting, initialStart, initialAttendees, onCl
 
         <label className="flex items-start gap-2.5 rounded-btn border border-line p-3 text-body-sm">
           <input type="checkbox" checked={autoNotes} onChange={(e) => setAutoNotes(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
-          <span><span className="flex items-center gap-1.5 font-semibold text-ink"><Sparkles size={14} className="text-primary" /> Take AI notes automatically</span><span className="text-ink-muted">When the meeting starts, the note taker turns on by itself. Afterwards everyone gets the summary, decisions and action items in the meeting chat.</span></span>
+          <span><span className="flex items-center gap-1.5 font-semibold text-ink"><Sparkles size={14} className="text-primary-ink" /> Take AI notes automatically</span><span className="text-ink-muted">When the meeting starts, the note taker turns on by itself. Afterwards everyone gets the summary, decisions and action items in the meeting chat.</span></span>
         </label>
 
         <TextArea label="Agenda (optional)" value={agenda} onChange={(e) => setAgenda(e.target.value)} rows={4} maxLength={5000} placeholder={'What do you want to cover?\n1. …\n2. …'} />
-        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{error}</p>}
+        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{error}</p>}
       </div>
     </Modal>
   )

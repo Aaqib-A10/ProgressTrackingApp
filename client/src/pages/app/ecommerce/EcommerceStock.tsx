@@ -197,7 +197,7 @@ function LogModal({ open, onClose, onCreated }: { open: boolean; onClose: () => 
               const meta = ACTION[a]
               return (
                 <button type="button" key={a} onClick={() => setAction(a)}
-                  className={'flex items-center justify-center gap-2 rounded-btn border px-3 py-2 text-body-md font-medium transition-colors ' + (action === a ? 'border-primary bg-primary/5 text-primary' : 'border-line text-ink-muted hover:bg-slate-50')}>
+                  className={'flex items-center justify-center gap-2 rounded-btn border px-3 py-2 text-body-md font-medium transition-colors ' + (action === a ? 'border-primary bg-primary/5 text-primary-ink' : 'border-line text-ink-muted hover:bg-slate-50')}>
                   <meta.icon size={16} />{meta.label}
                 </button>
               )
@@ -257,7 +257,7 @@ function IconBtn({ label, onClick, children, danger, active }: { label: string; 
   return (
     <button type="button" title={label} aria-label={label} onClick={onClick}
       className={'inline-flex h-8 w-8 items-center justify-center rounded-btn border transition-colors ' +
-        (active ? 'border-primary bg-primary/5 text-primary' : danger ? 'border-line text-ink-muted hover:border-red-300 hover:bg-red-50 hover:text-red-600' : 'border-line text-ink-muted hover:bg-slate-100 hover:text-ink')}>
+        (active ? 'border-primary bg-primary/5 text-primary-ink' : danger ? 'border-line text-ink-muted hover:border-danger/40 hover:bg-danger-muted hover:text-danger-ink' : 'border-line text-ink-muted hover:bg-slate-100 hover:text-ink')}>
       {children}
     </button>
   )
@@ -325,7 +325,7 @@ function EditModal({ request, members, isLead, onClose, onSaved }: { request: St
               const meta = ACTION[a]
               return (
                 <button type="button" key={a} onClick={() => setAction(a)}
-                  className={'flex items-center justify-center gap-2 rounded-btn border px-3 py-2 text-body-md font-medium transition-colors ' + (action === a ? 'border-primary bg-primary/5 text-primary' : 'border-line text-ink-muted hover:bg-slate-50')}>
+                  className={'flex items-center justify-center gap-2 rounded-btn border px-3 py-2 text-body-md font-medium transition-colors ' + (action === a ? 'border-primary bg-primary/5 text-primary-ink' : 'border-line text-ink-muted hover:bg-slate-50')}>
                   <meta.icon size={16} />{meta.label}
                 </button>
               )

@@ -39,10 +39,10 @@ export default function RdpRecords() {
           <p className="mt-0.5 text-body-md text-ink-muted">Remote machines, who uses them, and full assignment history.</p>
         </div>
         <div className="inline-flex rounded-btn border border-line bg-card p-0.5">
-          <button onClick={() => setView('rdps')} className={'flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'rdps' ? 'bg-primary/10 text-primary' : 'text-ink-muted hover:text-ink')}>
+          <button onClick={() => setView('rdps')} className={'flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'rdps' ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:text-ink')}>
             <Server size={15} /> Machines
           </button>
-          <button onClick={() => setView('agents')} className={'flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'agents' ? 'bg-primary/10 text-primary' : 'text-ink-muted hover:text-ink')}>
+          <button onClick={() => setView('agents')} className={'flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'agents' ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:text-ink')}>
             <Users size={15} /> By agent
           </button>
         </div>
@@ -194,7 +194,7 @@ function RdpDetailModal({ rdp, onClose, onChanged }: { rdp: RdpRow; onClose: () 
         <Badge tone={rdp.active ? 'success' : 'neutral'} dot>{rdp.active ? 'Active' : 'Retired'}</Badge>
         <span className="ml-auto flex gap-2">
           <Button size="sm" variant="secondary" onClick={retire}>{rdp.active ? 'Retire' : 'Reactivate'}</Button>
-          <Button size="sm" variant="ghost" className="!text-danger hover:!bg-danger/10" onClick={del}>Delete</Button>
+          <Button size="sm" variant="ghost" className="!text-danger-ink hover:!bg-danger/10" onClick={del}>Delete</Button>
         </span>
       </div>
 
@@ -222,7 +222,7 @@ function RdpDetailModal({ rdp, onClose, onChanged }: { rdp: RdpRow; onClose: () 
                     <span className="text-body-sm text-ink-muted">since {fmtDate(a.assignedAt)}</span>
                     <span className="ml-auto flex gap-1">
                       <Button size="sm" variant="secondary" onClick={() => end(a.id)}>End</Button>
-                      <button onClick={() => remove(a.id)} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" title="Delete row"><Trash2 size={15} /></button>
+                      <button onClick={() => remove(a.id)} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Delete row"><Trash2 size={15} /></button>
                     </span>
                   </li>
                 ))}
@@ -240,7 +240,7 @@ function RdpDetailModal({ rdp, onClose, onChanged }: { rdp: RdpRow; onClose: () 
                   <li key={a.id} className="flex items-center gap-3 rounded-btn bg-slate-50 px-3 py-2">
                     <span className="font-medium text-ink">{a.agentName}</span>
                     <span className="text-body-sm text-ink-muted">{fmtDate(a.assignedAt)} → {a.unassignedAt ? fmtDate(a.unassignedAt) : '—'}</span>
-                    <button onClick={() => remove(a.id)} className="ml-auto rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" title="Delete row"><Trash2 size={15} /></button>
+                    <button onClick={() => remove(a.id)} className="ml-auto rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Delete row"><Trash2 size={15} /></button>
                   </li>
                 ))}
               </ul>
@@ -336,7 +336,7 @@ function AgentHistoryModal({ name, onClose }: { name: string; onClose: () => voi
               <span className="font-medium text-ink">{r.provider}</span>
               <span className="font-mono text-body-sm text-ink">{r.address}</span>
               <span className="ml-auto text-body-sm text-ink-muted">
-                {fmtDate(r.assignedAt)} → {r.active ? <span className="font-semibold text-success">present</span> : fmtDate(r.unassignedAt!)}
+                {fmtDate(r.assignedAt)} → {r.active ? <span className="font-semibold text-success-ink">present</span> : fmtDate(r.unassignedAt!)}
               </span>
             </li>
           ))}

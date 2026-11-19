@@ -20,6 +20,7 @@ import { feedbackRouter } from './routes/feedback'
 import { qaRouter } from './routes/qa'
 import { attachmentsRouter } from './routes/attachments'
 import { todosRouter } from './routes/todos'
+import { notesRouter } from './routes/notes'
 import { worklogRouter } from './routes/worklog'
 import { customRouter } from './routes/customBlocks'
 import { tasksRouter } from './routes/tasks'
@@ -70,6 +71,7 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/qa', qaRouter],
   ['/api/attachments', attachmentsRouter],
   ['/api/todos', todosRouter],
+  ['/api/notes', notesRouter],
   ['/api/worklog', worklogRouter],
   ['/api/custom', customRouter],
   ['/api/tasks', tasksRouter],

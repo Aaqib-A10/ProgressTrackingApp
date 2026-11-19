@@ -57,9 +57,10 @@ describe('full history', () => {
     // Weekend days are weekly off (shown), future working days are not listed.
     expect(labels['2026-10-24']).toBe('WEEKLY_OFF')
     expect(labels['2026-10-26']).toBeUndefined()
-    // Without all=1 the absent day is not invented (the old behaviour other screens rely on).
-    const old = await request(app).get('/api/attendance/history?range=custom&start=2026-10-19&end=2026-10-23').set(...auth(w.leadgenMember)).expect(200)
-    expect((old.body.rows as Row[]).some((x) => x.date === '2026-10-21')).toBe(false)
+    // Every screen shows the missed day now (all=1 or not): a forgotten check-in must never just vanish.
+    const plain = await request(app).get('/api/attendance/history?range=custom&start=2026-10-19&end=2026-10-23').set(...auth(w.leadgenMember)).expect(200)
+    expect((plain.body.rows as Row[]).find((x) => x.date === '2026-10-21')?.label).toBe('ABSENT')
+    expect(plain.body.summary.absentDays).toBe(1)
   })
 
   it('nothing before the person joined', async () => {

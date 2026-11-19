@@ -43,6 +43,31 @@ describe('company settings', () => {
     expect(await runAsCompany(HOME_COMPANY_ID, () => companyTz())).toBe('Asia/Karachi')
   })
 
+  it('colour themes: the admin sets the company theme and brand colour, each person can pick their own', async () => {
+    // Only a theme from the list and a #rrggbb colour; only those who can edit the company.
+    await request(app).patch('/api/company').set(...auth(echo.admin)).send({ theme: 'y2k' }).expect(400)
+    await request(app).patch('/api/company').set(...auth(echo.admin)).send({ brandColor: 'red' }).expect(400)
+    await request(app).patch('/api/company').set(...auth(echo.member)).send({ theme: 'stone' }).expect(403)
+    let r = await request(app).patch('/api/company').set(...auth(echo.admin)).send({ theme: 'stone', brandColor: '#1D4ED8' }).expect(200)
+    expect(r.body.company).toMatchObject({ theme: 'stone', brandColor: '#1d4ed8' })
+    // Everyone in the company gets it with who they are; nobody has their own pick yet.
+    r = await request(app).get('/api/auth/me').set(...auth(echo.member)).expect(200)
+    expect(r.body.user).toMatchObject({ uiTheme: null, company: { theme: 'stone', brandColor: '#1d4ed8' } })
+    // A person's own pick (any role), checked against the list; null goes back to the company's.
+    await request(app).put('/api/auth/me/theme').set(...auth(echo.member)).send({ theme: 'nope' }).expect(400)
+    await request(app).put('/api/auth/me/theme').set(...auth(echo.member)).send({}).expect(400)
+    await request(app).put('/api/auth/me/theme').set(...auth(echo.member)).send({ theme: 'gothic' }).expect(200)
+    expect((await request(app).get('/api/auth/me').set(...auth(echo.member)).expect(200)).body.user.uiTheme).toBe('gothic')
+    expect((await request(app).get('/api/auth/me').set(...auth(echo.lead)).expect(200)).body.user.uiTheme).toBeNull()
+    await request(app).put('/api/auth/me/theme').set(...auth(echo.member)).send({ theme: null }).expect(200)
+    expect((await request(app).get('/api/auth/me').set(...auth(echo.member)).expect(200)).body.user.uiTheme).toBeNull()
+    // Clearing the company's look goes back to Metriq's own; the company's other settings stay.
+    r = await request(app).patch('/api/company').set(...auth(echo.admin)).send({ theme: null, brandColor: null }).expect(200)
+    expect(r.body.company).toMatchObject({ theme: null, brandColor: null, name: 'Echo Ltd' })
+    // Another company never sees it.
+    expect((await request(app).get('/api/auth/me').set(...auth(w.itadMember)).expect(200)).body.user.company?.theme ?? null).toBeNull()
+  })
+
   it('departments: General ones as needed, one of each built-in kind, empty ones can go', async () => {
     let r = await request(app).post('/api/company/departments').set(...auth(echo.admin)).send({ name: 'Operations', type: 'GENERAL' }).expect(201)
     r = await request(app).post('/api/company/departments').set(...auth(echo.admin)).send({ name: 'Finance team' }).expect(201)

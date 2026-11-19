@@ -40,7 +40,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         />
         {rightSlot && <div className="absolute right-2 top-1/2 -translate-y-1/2">{rightSlot}</div>}
       </div>
-      {error && <p className="mt-1 text-body-sm text-danger">{error}</p>}
+      {error && <p className="mt-1 text-body-sm text-danger-ink">{error}</p>}
     </div>
   )
 })
@@ -79,7 +79,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         aria-invalid={!!error}
         {...props}
       />
-      {error && <p className="mt-1 text-body-sm text-danger">{error}</p>}
+      {error && <p className="mt-1 text-body-sm text-danger-ink">{error}</p>}
     </div>
   )
 })

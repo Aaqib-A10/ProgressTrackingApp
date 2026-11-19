@@ -73,11 +73,11 @@ export default function Login() {
       </p>
 
       {params.get('error') && (
-        <div className="mt-4 rounded-btn border border-danger/30 bg-danger/10 px-3 py-2 text-body-sm text-danger">{params.get('error')}</div>
+        <div className="mt-4 rounded-btn border border-danger/30 bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{params.get('error')}</div>
       )}
 
       {sessionEnded && (
-        <div className="mt-4 rounded-btn border border-warning/30 bg-warning/10 px-3 py-2 text-body-sm text-warning">
+        <div className="mt-4 rounded-btn border border-warning/30 bg-warning/10 px-3 py-2 text-body-sm text-warning-ink">
           Your session ended. Please sign in again to continue.
         </div>
       )}
@@ -103,14 +103,14 @@ export default function Login() {
             autoComplete="current-password"
           />
           <div className="mt-1.5 flex justify-end">
-            <Link to="/forgot-password" className="text-body-sm font-medium text-primary hover:underline">
+            <Link to="/forgot-password" className="text-body-sm font-medium text-primary-ink hover:underline">
               Forgot password?
             </Link>
           </div>
         </div>
 
         {formError && (
-          <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{formError}</p>
+          <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{formError}</p>
         )}
 
         <Button type="submit" className="w-full" disabled={submitting}>
@@ -122,9 +122,9 @@ export default function Login() {
 
       <p className="mt-6 text-center text-body-sm text-ink-muted">
         {open ? (
-          <>New to Metriq?{' '}<Link to="/start" className="font-semibold text-primary hover:underline">Start free</Link></>
+          <>New to Metriq?{' '}<Link to="/start" className="font-semibold text-primary-ink hover:underline">Start free</Link></>
         ) : (
-          <>Don&apos;t have an account?{' '}<Link to="/signup" className="font-semibold text-primary hover:underline">Sign up</Link></>
+          <>Don&apos;t have an account?{' '}<Link to="/signup" className="font-semibold text-primary-ink hover:underline">Sign up</Link></>
         )}
       </p>
       <p className="mt-3 text-center text-body-sm text-ink-faint">

@@ -56,16 +56,16 @@ export function PictureEditor({ kind, id, label, preview, canEdit = true, onChan
       <div className="relative">
         {preview}
         {canEdit && (
-          <button type="button" onClick={() => input.current?.click()} disabled={busy} className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white shadow-card ring-2 ring-card hover:bg-primary/90 disabled:opacity-60" aria-label={`Change ${label.toLowerCase()}`} title={`Change ${label.toLowerCase()}`}>
+          <button type="button" onClick={() => input.current?.click()} disabled={busy} className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-on shadow-card ring-2 ring-card hover:bg-primary/90 disabled:opacity-60" aria-label={`Change ${label.toLowerCase()}`} title={`Change ${label.toLowerCase()}`}>
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
           </button>
         )}
       </div>
       {canEdit && (
         <div className="space-y-1">
-          <button type="button" onClick={() => input.current?.click()} disabled={busy} className="block text-body-sm font-semibold text-primary hover:underline">{has ? 'Change picture' : 'Upload a picture'}</button>
+          <button type="button" onClick={() => input.current?.click()} disabled={busy} className="block text-body-sm font-semibold text-primary-ink hover:underline">{has ? 'Change picture' : 'Upload a picture'}</button>
           {has && (
-            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await removeAvatar(kind, id); addToast({ type: 'success', message: `${label} removed` }); onChanged?.() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setBusy(false) } }} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-danger">
+            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await removeAvatar(kind, id); addToast({ type: 'success', message: `${label} removed` }); onChanged?.() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setBusy(false) } }} className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-danger-ink">
               <Trash2 size={13} /> Remove
             </button>
           )}

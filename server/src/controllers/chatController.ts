@@ -105,6 +105,15 @@ function groupReactions(rows: { emoji: string; userId: string }[]): { emoji: str
   return [...map].map(([emoji, userIds]) => ({ emoji, userIds }))
 }
 
+/** The "Message yourself" chat: a direct chat whose key is my id twice (only me in it). */
+const selfKey = (userId: string) => `${userId}:${userId}`
+const isSelfChat = (c: { type: string; directKey: string | null }, userId: string) => c.type === 'DIRECT' && c.directKey === selfKey(userId)
+/** A direct chat's title for me: the other person, or "Name (You)" for my own chat. */
+function directTitle(c: { type: string; directKey: string | null; members: { userId: string; user: { name: string } }[] }, meId: string): string {
+  if (isSelfChat(c, meId)) return `${c.members.find((x) => x.userId === meId)?.user.name ?? 'Me'} (You)`
+  return c.members.find((x) => x.userId !== meId)?.user.name ?? 'Direct message'
+}
+
 async function membership(conversationId: string, userId: string) {
   const m = await prisma.chatMember.findUnique({ where: { conversationId_userId: { conversationId, userId } }, include: { conversation: true } })
   if (!m) throw new HttpError(404, 'Conversation not found')
@@ -170,11 +179,13 @@ export async function listConversations(req: AuthedRequest, res: Response): Prom
     const c = m.conversation
     const others = c.members.filter((x) => x.userId !== me.id)
     const last = lastBy.get(c.id)
-    const title = c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.type === 'PROJECT' ? (c.name ?? c.project?.key ?? 'project') : c.name ?? 'Group'
+    const self = isSelfChat(c, me.id)
+    const title = c.type === 'DIRECT' ? directTitle(c, me.id) : c.type === 'PROJECT' ? (c.name ?? c.project?.key ?? 'project') : c.name ?? 'Group'
     return {
       id: c.id,
       type: c.type,
       title,
+      self,
       projectKey: c.project?.key ?? null,
       color: c.project?.color ?? null,
       archived: c.project?.status === 'ARCHIVED',
@@ -201,10 +212,11 @@ export async function createConversation(req: AuthedRequest, res: Response): Pro
   const me = viewer(req)
   const body = parse(createSchema, req.body)
   if (body.type === 'DIRECT') {
-    if (body.userId === me.id) throw new HttpError(422, 'You cannot message yourself')
-    const other = await prisma.user.findFirst({ where: { id: body.userId, isActive: true, status: 'ACTIVE' }, select: { id: true } })
+    // "Message yourself" (notes, links and files to keep, like WhatsApp): a direct chat with only me in it.
+    const self = body.userId === me.id
+    const other = self ? { id: me.id } : await prisma.user.findFirst({ where: { id: body.userId, isActive: true, status: 'ACTIVE' }, select: { id: true } })
     if (!other) throw new HttpError(422, 'That person is not an active PulseTrack user')
-    const directKey = [me.id, other.id].sort().join(':')
+    const directKey = self ? selfKey(me.id) : [me.id, other.id].sort().join(':')
     const existing = await prisma.chatConversation.findUnique({ where: { directKey } })
     if (existing) {
       res.json({ conversation: { id: existing.id } })
@@ -212,7 +224,7 @@ export async function createConversation(req: AuthedRequest, res: Response): Pro
     }
     try {
       const c = await prisma.chatConversation.create({
-        data: { type: 'DIRECT', directKey, createdById: me.id, members: { create: [{ userId: me.id }, { userId: other.id }] } },
+        data: { type: 'DIRECT', directKey, createdById: me.id, members: { create: self ? [{ userId: me.id }] : [{ userId: me.id }, { userId: other.id }] } },
       })
       res.status(201).json({ conversation: { id: c.id } })
     } catch (e) {
@@ -264,7 +276,8 @@ export async function getConversation(req: AuthedRequest, res: Response): Promis
       type: c.type,
       canChangePicture,
       picture: pic?.avatarById ? { by: picBy?.name ?? 'Someone', at: pic.avatarAt?.toISOString() ?? null } : null,
-      title: c.type === 'DIRECT' ? others[0]?.user.name ?? 'Direct message' : c.name,
+      title: c.type === 'DIRECT' ? directTitle(c, me.id) : c.name,
+      self: isSelfChat(c, me.id),
       name: c.name,
       project: c.project,
       canManage: c.type === 'GROUP' && m.isAdmin,
@@ -764,6 +777,7 @@ const startingCalls = new Map<string, Promise<unknown>>()
 export async function startCall(req: AuthedRequest, res: Response): Promise<void> {
   const me = viewer(req)
   const m = await membership(req.params.id, me.id)
+  if (isSelfChat(m.conversation, me.id)) throw new HttpError(422, 'There is nobody to call in your own chat')
   const video = req.body?.video !== false
   while (startingCalls.has(m.conversationId)) await startingCalls.get(m.conversationId)!.catch(() => undefined)
   let done!: () => void

@@ -3,6 +3,7 @@ import { getMe, checkIn, checkOut, startOvertime, startBreak, endBreak, history,
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
 import { createWfhRequest, myWfhRequests, cancelWfhRequest, teamWfhRequests, decideWfhRequest } from '../controllers/wfhRequestController'
+import { createFixRequest, myFixRequests, cancelFixRequest, teamFixRequests, decideFixRequest } from '../controllers/attendanceFixController'
 
 export const attendanceRouter = Router()
 
@@ -23,6 +24,13 @@ attendanceRouter.get('/wfh-requests/mine', asyncHandler(myWfhRequests))
 attendanceRouter.get('/wfh-requests/team', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(teamWfhRequests))
 attendanceRouter.post('/wfh-requests/:id/decision', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(decideWfhRequest))
 attendanceRouter.delete('/wfh-requests/:id', asyncHandler(cancelWfhRequest))
+
+// Forgot to check in (or out): anyone asks for a day's times, their Team Lead (or a Super Admin) decides.
+attendanceRouter.post('/fix-requests', asyncHandler(createFixRequest))
+attendanceRouter.get('/fix-requests/mine', asyncHandler(myFixRequests))
+attendanceRouter.get('/fix-requests/team', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(teamFixRequests))
+attendanceRouter.post('/fix-requests/:id/decision', requireRole('TEAM_LEAD', 'SUPER_ADMIN'), asyncHandler(decideFixRequest))
+attendanceRouter.delete('/fix-requests/:id', asyncHandler(cancelFixRequest))
 
 // History — own by default; TL/Admin may pass ?userId= within their scope.
 attendanceRouter.get('/history', asyncHandler(history))

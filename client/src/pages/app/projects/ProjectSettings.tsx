@@ -32,7 +32,7 @@ export default function ProjectSettings() {
   const load = () => projectsApi.board(key).then((d) => { setData(d); if (!d.perms.canManage) setDenied(true) }).catch(() => setDenied(true))
   useEffect(() => { load() }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (denied) return <div className="py-20 text-center text-body-md text-ink-muted">Only project admins can change these settings. <Link to={`/app/projects/${key}`} className="text-primary">Back to the board</Link></div>
+  if (denied) return <div className="py-20 text-center text-body-md text-ink-muted">Only project admins can change these settings. <Link to={`/app/projects/${key}`} className="text-primary-ink">Back to the board</Link></div>
   if (!data) return <p className="text-body-md text-ink-muted">Loading…</p>
 
   return (
@@ -128,13 +128,13 @@ function Members({ data, onChanged }: { data: BoardData; onChanged: () => void }
           <li key={m.id} className="flex flex-wrap items-center gap-3 py-2.5">
             <PersonAvatar person={m} size={32} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-body-md font-medium text-ink">{m.name}{m.id === data.me.id && <span className="text-ink-muted"> (you)</span>}{!m.isActive && <span className="ml-1 text-body-sm text-danger">inactive</span>}</p>
+              <p className="truncate text-body-md font-medium text-ink">{m.name}{m.id === data.me.id && <span className="text-ink-muted"> (you)</span>}{!m.isActive && <span className="ml-1 text-body-sm text-danger-ink">inactive</span>}</p>
               <p className="truncate text-body-sm text-ink-muted">{m.email}</p>
             </div>
             <select value={m.role} onChange={(e) => act(() => projectsApi.setMemberRole(key, m.id, e.target.value as PmRole), 'Role updated')} className="h-8 rounded-btn border border-line bg-card px-2 text-body-sm" aria-label={`Role for ${m.name}`}>
               {(['ADMIN', 'MEMBER', 'VIEWER'] as PmRole[]).map((r) => <option key={r} value={r}>{ROLE_META[r]}</option>)}
             </select>
-            <button type="button" onClick={() => { if (window.confirm(`Remove ${m.name} from ${data.project.name}?`)) act(() => projectsApi.removeMember(key, m.id), 'Removed') }} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Remove ${m.name}`}><Trash2 size={15} /></button>
+            <button type="button" onClick={() => { if (window.confirm(`Remove ${m.name} from ${data.project.name}?`)) act(() => projectsApi.removeMember(key, m.id), 'Removed') }} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label={`Remove ${m.name}`}><Trash2 size={15} /></button>
           </li>
         ))}
       </ul>
@@ -204,9 +204,9 @@ function Columns({ data, onChanged }: { data: BoardData; onChanged: () => void }
               {(['TODO', 'IN_PROGRESS', 'DONE'] as ColumnCategory[]).map((x) => <option key={x} value={x}>{CATEGORY_LABEL[x]}</option>)}
             </select>
             <input type="number" min={1} placeholder="WIP limit" defaultValue={c.wipLimit ?? ''} onBlur={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); if (v !== c.wipLimit) run(() => projectsApi.updateColumn(c.id, { wipLimit: v })) }} className={cn(fieldCls, 'h-8 w-24 text-body-sm')} aria-label="Work in progress limit" />
-            <button type="button" onClick={() => run(() => projectsApi.updateColumn(c.id, { isDefault: true }))} title={c.isDefault ? 'New tasks land here' : 'Make this where new tasks land'} className={cn('rounded-btn p-1.5', c.isDefault ? 'text-warning' : 'text-ink-muted hover:text-warning')} aria-label="Default column"><Star size={15} fill={c.isDefault ? 'currentColor' : 'none'} /></button>
+            <button type="button" onClick={() => run(() => projectsApi.updateColumn(c.id, { isDefault: true }))} title={c.isDefault ? 'New tasks land here' : 'Make this where new tasks land'} className={cn('rounded-btn p-1.5', c.isDefault ? 'text-warning-ink' : 'text-ink-muted hover:text-warning-ink')} aria-label="Default column"><Star size={15} fill={c.isDefault ? 'currentColor' : 'none'} /></button>
             <span className="ml-auto text-body-sm text-ink-muted">{counts.get(c.id) ?? 0} tasks</span>
-            <button type="button" onClick={() => { setDeleting(c); setMoveTo((cols.find((x) => x.id !== c.id && x.category === c.category) ?? cols.find((x) => x.id !== c.id && c.category !== 'DONE'))?.id ?? '') }} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label={`Delete ${c.name}`}><Trash2 size={15} /></button>
+            <button type="button" onClick={() => { setDeleting(c); setMoveTo((cols.find((x) => x.id !== c.id && x.category === c.category) ?? cols.find((x) => x.id !== c.id && c.category !== 'DONE'))?.id ?? '') }} className="rounded-btn p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label={`Delete ${c.name}`}><Trash2 size={15} /></button>
           </li>
         ))}
       </ul>
@@ -221,7 +221,7 @@ function Columns({ data, onChanged }: { data: BoardData; onChanged: () => void }
             <div className="space-y-2">
               <p className="text-body-md text-ink">{deleting.category === 'DONE' ? 'Its finished tasks (older ones too) move to:' : `Move its ${counts.get(deleting.id)} task(s) to:`}</p>
               <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className={fieldCls}>{cols.filter((x) => x.id !== deleting.id && (deleting.category !== 'DONE' || x.category === 'DONE')).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-              {deleting.category === 'DONE' && !cols.some((x) => x.id !== deleting.id && x.category === 'DONE') && <p className="text-body-sm text-danger">Add another Done type column first, so finished tasks stay finished.</p>}
+              {deleting.category === 'DONE' && !cols.some((x) => x.id !== deleting.id && x.category === 'DONE') && <p className="text-body-sm text-danger-ink">Add another Done type column first, so finished tasks stay finished.</p>}
             </div>
           ) : <p className="text-body-md text-ink">The column is empty.</p>}
         </Modal>
@@ -242,7 +242,7 @@ function Labels({ data, onChanged }: { data: BoardData; onChanged: () => void })
           <li key={l.id} className="flex items-center gap-1 rounded-full border border-line py-0.5 pl-1 pr-1">
             <input type="color" value={l.color} onChange={(e) => run(() => projectsApi.updateLabel(l.id, { color: e.target.value }))} className="h-5 w-5 cursor-pointer rounded-full border-0 p-0" aria-label={`${l.name} color`} />
             <LabelChip label={l} />
-            <button type="button" onClick={() => { if (window.confirm(`Delete label "${l.name}"?`)) run(() => projectsApi.deleteLabel(l.id)) }} className="text-ink-muted hover:text-danger" aria-label={`Delete ${l.name}`}><Trash2 size={13} /></button>
+            <button type="button" onClick={() => { if (window.confirm(`Delete label "${l.name}"?`)) run(() => projectsApi.deleteLabel(l.id)) }} className="text-ink-muted hover:text-danger-ink" aria-label={`Delete ${l.name}`}><Trash2 size={13} /></button>
           </li>
         ))}
         {data.labels.length === 0 && <li className="text-body-sm text-ink-muted">No labels yet.</li>}
@@ -274,7 +274,7 @@ function Alerts({ data, onSaved }: { data: BoardData; onSaved: () => void }) {
           <div className="flex flex-wrap gap-2">
             {OPTIONS.map((o) => {
               const on = offsets.includes(o.m)
-              return <button key={o.m} type="button" onClick={() => setOffsets((s) => (on ? s.filter((x) => x !== o.m) : s.length >= 4 ? s : [...s, o.m]))} className={cn('rounded-full border px-3 py-1 text-body-sm font-medium', on ? 'border-primary bg-primary text-white' : 'border-line text-ink-muted hover:bg-slate-50')}>{o.l}</button>
+              return <button key={o.m} type="button" onClick={() => setOffsets((s) => (on ? s.filter((x) => x !== o.m) : s.length >= 4 ? s : [...s, o.m]))} className={cn('rounded-full border px-3 py-1 text-body-sm font-medium', on ? 'border-primary bg-primary text-primary-on' : 'border-line text-ink-muted hover:bg-slate-50')}>{o.l}</button>
             })}
           </div>
         </div>

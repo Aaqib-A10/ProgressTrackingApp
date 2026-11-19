@@ -221,7 +221,7 @@ function TypeGrid({ type, marketplaces, cells, setCell, disabled }: {
             <tr className="border-t-2 border-line bg-slate-50">
               <th scope="row" className="px-4 py-2.5 text-left text-body-md font-bold text-ink">Total</th>
               {marketplaces.map((m) => <td key={m.id} className="px-3 py-2.5 text-right text-body-md font-semibold tabular-nums text-ink">{colTotal(m.id) || '—'}</td>)}
-              <td className="px-4 py-2.5 text-right text-body-md font-bold tabular-nums text-primary">{sectionTotal.toLocaleString()}</td>
+              <td className="px-4 py-2.5 text-right text-body-md font-bold tabular-nums text-primary-ink">{sectionTotal.toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>

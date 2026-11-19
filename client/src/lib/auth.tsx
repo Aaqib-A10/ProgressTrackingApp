@@ -3,6 +3,7 @@ import { api, setShownUser, setUnauthorizedHandler } from './api'
 import { disablePush } from './push'
 import { isNativeApp } from '../mobile/native'
 import type { CurrentUser, Department } from './types'
+import { applyAppearance } from './theme'
 
 /** Set by the 401 handler so the login screen can explain the bounce. */
 export const SESSION_EXPIRED_KEY = 'pt.sessionExpired'
@@ -59,6 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
+  // Their colour theme and their company's brand colour, as soon as we know who they are (lib/theme).
+  useEffect(() => {
+    if (user) applyAppearance({ own: user.uiTheme, company: user.company?.theme, brand: user.company?.brandColor })
+  }, [user?.uiTheme, user?.company?.theme, user?.company?.brandColor, user])
+
   // When an authenticated request 401s (session expired or revoked server-side),
   // drop the user so the route guard redirects to /login, and flag why.
   useEffect(() => {
@@ -96,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isNativeApp()) await disablePush().catch(() => undefined)
     await api.post('/auth/logout')
     setUser(null)
+    // The next person on this computer starts in Metriq's own colours, not this person's theme or company brand.
+    applyAppearance({})
   }, [])
 
   const updateProfile = useCallback(async (name: string) => {

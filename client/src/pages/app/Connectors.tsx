@@ -71,7 +71,7 @@ function ConnectorList() {
                 <ChevronRight size={18} className="text-ink-faint transition-transform group-hover:translate-x-0.5" />
               </div>
               <p className="mt-3 flex-1 text-body-sm text-ink-muted">{c.tagline}</p>
-              <p className={cn('mt-3 inline-flex items-center gap-1.5 text-body-sm font-semibold', n ? 'text-success' : 'text-ink-muted')}>
+              <p className={cn('mt-3 inline-flex items-center gap-1.5 text-body-sm font-semibold', n ? 'text-success-ink' : 'text-ink-muted')}>
                 {keys == null ? 'Checking…' : n ? <><Check size={14} /> Connected · {n} key{n === 1 ? '' : 's'} on</> : 'Not connected'}
               </p>
             </Link>
@@ -82,7 +82,7 @@ function ConnectorList() {
       ))}
       <Card>
         <div className="flex gap-3 text-body-sm text-ink-muted">
-          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-success" />
+          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-success-ink" />
           <p>Every connector sees only what you can see in Metriq, and everything it does shows under your name, through the same checks and notifications as the app. Each key works until you switch it off; switching it off stops that app at once.</p>
         </div>
       </Card>
@@ -125,7 +125,7 @@ function ConnectorDetail({ c }: { c: Connector }) {
           <h1 className="text-headline-lg text-ink">{c.name}</h1>
           <p className="text-body-md text-ink-muted">{c.tagline}</p>
         </div>
-        {keys.length > 0 && <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-body-sm font-semibold text-success"><Check size={14} /> Connected</span>}
+        {keys.length > 0 && <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-body-sm font-semibold text-success-ink"><Check size={14} /> Connected</span>}
       </div>
 
       {/* 1. The key */}
@@ -160,11 +160,11 @@ function ConnectorDetail({ c }: { c: Connector }) {
                   </div>
                   {confirmOff === k.id ? (
                     <span className="flex items-center gap-1">
-                      <button type="button" onClick={() => off(k)} className="rounded px-2 py-1 font-semibold text-danger hover:bg-danger/10">Switch off</button>
+                      <button type="button" onClick={() => off(k)} className="rounded px-2 py-1 font-semibold text-danger-ink hover:bg-danger/10">Switch off</button>
                       <button type="button" onClick={() => setConfirmOff(null)} className="rounded px-2 py-1 text-ink-muted hover:bg-slate-100">Keep</button>
                     </span>
                   ) : (
-                    <button type="button" onClick={() => setConfirmOff(k.id)} className="inline-flex items-center gap-1 rounded-btn border border-line px-2.5 py-1 font-semibold text-ink-muted hover:border-danger/40 hover:text-danger"><Power size={13} /> Switch off</button>
+                    <button type="button" onClick={() => setConfirmOff(k.id)} className="inline-flex items-center gap-1 rounded-btn border border-line px-2.5 py-1 font-semibold text-ink-muted hover:border-danger/40 hover:text-danger-ink"><Power size={13} /> Switch off</button>
                   )}
                 </li>
               ))}
@@ -226,7 +226,7 @@ function ConnectorDetail({ c }: { c: Connector }) {
             <div key={g.group}>
               <p className="text-body-sm font-semibold text-ink">{g.group}{g.healthOnly && <span className="ml-1.5 font-normal text-ink-muted">(developers and Super Admins)</span>}</p>
               <ul className="mt-1 space-y-1 text-body-sm text-ink-muted">
-                {g.items.map((i) => <li key={i} className="flex gap-1.5"><Check size={14} className="mt-0.5 shrink-0 text-success" />{i}</li>)}
+                {g.items.map((i) => <li key={i} className="flex gap-1.5"><Check size={14} className="mt-0.5 shrink-0 text-success-ink" />{i}</li>)}
               </ul>
             </div>
           ))}

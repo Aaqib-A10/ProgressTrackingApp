@@ -11,25 +11,25 @@ import { cn } from '../../lib/cn'
 import { NotificationPrefsModal } from '../../components/projects/NotificationPrefsModal'
 
 const ICON: Record<string, JSX.Element> = {
-  TASK_OVERDUE: <AlertTriangle size={16} className="text-danger" />,
-  TASK_DUE_SOON: <CalendarClock size={16} className="text-warning" />,
-  TASK_ASSIGNED: <ClipboardList size={16} className="text-primary" />,
-  TASK_COMPLETED: <CheckCircle2 size={16} className="text-success" />,
-  TASK_COMMENT: <MessageSquare size={16} className="text-primary" />,
-  MENTION: <AtSign size={16} className="text-primary" />,
-  PROJECT_MEMBER_ADDED: <UserPlus size={16} className="text-accent" />,
-  EXTENSION_REQUESTED: <CalendarClock size={16} className="text-warning" />,
-  TASK_REVIEW: <ClipboardCheck size={16} className="text-accent" />,
-  MEETING: <CalendarDays size={16} className="text-primary" />,
-  CHAT_MESSAGE: <MessageSquare size={16} className="text-primary" />,
-  LEAD_NEW: <Inbox size={16} className="text-primary" />,
-  LEAD_ASSIGNED: <Inbox size={16} className="text-accent" />,
-  LEAD_SLA: <AlertTriangle size={16} className="text-danger" />,
-  LEAD_TASK: <CalendarClock size={16} className="text-warning" />,
-  LEAD_COMMENT: <MessageSquare size={16} className="text-primary" />,
-  LEAD_REVIEW: <Flag size={16} className="text-warning" />,
-  LEAD_DECISION: <CheckCircle2 size={16} className="text-success" />,
-  AI_INSIGHT: <Sparkles size={16} className="text-accent" />,
+  TASK_OVERDUE: <AlertTriangle size={16} className="text-danger-ink" />,
+  TASK_DUE_SOON: <CalendarClock size={16} className="text-warning-ink" />,
+  TASK_ASSIGNED: <ClipboardList size={16} className="text-primary-ink" />,
+  TASK_COMPLETED: <CheckCircle2 size={16} className="text-success-ink" />,
+  TASK_COMMENT: <MessageSquare size={16} className="text-primary-ink" />,
+  MENTION: <AtSign size={16} className="text-primary-ink" />,
+  PROJECT_MEMBER_ADDED: <UserPlus size={16} className="text-highlight-ink" />,
+  EXTENSION_REQUESTED: <CalendarClock size={16} className="text-warning-ink" />,
+  TASK_REVIEW: <ClipboardCheck size={16} className="text-highlight-ink" />,
+  MEETING: <CalendarDays size={16} className="text-primary-ink" />,
+  CHAT_MESSAGE: <MessageSquare size={16} className="text-primary-ink" />,
+  LEAD_NEW: <Inbox size={16} className="text-primary-ink" />,
+  LEAD_ASSIGNED: <Inbox size={16} className="text-highlight-ink" />,
+  LEAD_SLA: <AlertTriangle size={16} className="text-danger-ink" />,
+  LEAD_TASK: <CalendarClock size={16} className="text-warning-ink" />,
+  LEAD_COMMENT: <MessageSquare size={16} className="text-primary-ink" />,
+  LEAD_REVIEW: <Flag size={16} className="text-warning-ink" />,
+  LEAD_DECISION: <CheckCircle2 size={16} className="text-success-ink" />,
+  AI_INSIGHT: <Sparkles size={16} className="text-highlight-ink" />,
 }
 
 type Tab = 'all' | NotifyCategory
@@ -94,7 +94,7 @@ export default function Notifications() {
             <span className="block text-body-sm text-ink-muted">{n.body}</span>
             {(n.leadStatus || isMuted) && (
               <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
-                {n.leadStatus && <span className="rounded-full bg-primary/10 px-1.5 font-semibold text-primary">{n.leadStatus}</span>}
+                {n.leadStatus && <span className="rounded-full bg-primary/10 px-1.5 font-semibold text-primary-ink">{n.leadStatus}</span>}
                 {isMuted && <span className="inline-flex items-center gap-1"><BellOff size={11} /> muted</span>}
               </span>
             )}
@@ -115,7 +115,7 @@ export default function Notifications() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-btn border border-line bg-card p-0.5">
-            {(['all', 'unread'] as const).map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn('h-7 rounded-md px-3 text-body-sm font-semibold capitalize', filter === f ? 'bg-primary text-white' : 'text-ink-muted')}>{f}</button>)}
+            {(['all', 'unread'] as const).map((f) => <button key={f} type="button" onClick={() => setFilter(f)} className={cn('h-7 rounded-md px-3 text-body-sm font-semibold capitalize', filter === f ? 'bg-primary text-primary-on' : 'text-ink-muted')}>{f}</button>)}
           </div>
           <Button size="sm" variant="secondary" leadingIcon={<Settings size={15} />} onClick={() => setPrefsOpen(true)}><span className="max-sm:hidden">Notification </span>Settings</Button>
           <Button size="sm" variant="secondary" leadingIcon={<CheckCheck size={15} />} onClick={markTabRead}>Mark all read</Button>

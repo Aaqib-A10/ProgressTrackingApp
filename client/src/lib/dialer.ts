@@ -9,10 +9,10 @@ import type { DialerLead, DialerSettings, DialerTask, FunnelNumbers, RegionCode 
 export const PKT = 'Asia/Karachi'
 export const REGIONS: RegionCode[] = ['ET', 'CT', 'MT', 'PT']
 export const REGION_META: Record<RegionCode, { name: string; zone: string; tone: string; soft: string }> = {
-  ET: { name: 'Eastern', zone: 'America/New_York', tone: 'bg-[#1E3A5F] text-white', soft: 'bg-[#1E3A5F]/10 text-[#1E3A5F]' },
-  CT: { name: 'Central', zone: 'America/Chicago', tone: 'bg-[#0F766E] text-white', soft: 'bg-[#0F766E]/10 text-[#0F766E]' },
-  MT: { name: 'Mountain', zone: 'America/Denver', tone: 'bg-[#92400E] text-white', soft: 'bg-[#92400E]/10 text-[#92400E]' },
-  PT: { name: 'Pacific', zone: 'America/Los_Angeles', tone: 'bg-[#6D28D9] text-white', soft: 'bg-[#6D28D9]/10 text-[#6D28D9]' },
+  ET: { name: 'Eastern', zone: 'America/New_York', tone: 'bg-blue-vivid text-blue-on', soft: 'bg-blue-muted text-blue-ink' },
+  CT: { name: 'Central', zone: 'America/Chicago', tone: 'bg-teal-vivid text-teal-on', soft: 'bg-teal-muted text-teal-ink' },
+  MT: { name: 'Mountain', zone: 'America/Denver', tone: 'bg-orange-vivid text-orange-on', soft: 'bg-orange-muted text-orange-ink' },
+  PT: { name: 'Pacific', zone: 'America/Los_Angeles', tone: 'bg-purple-vivid text-purple-on', soft: 'bg-purple-muted text-purple-ink' },
 }
 
 // ------------------------------------------------------------------ time

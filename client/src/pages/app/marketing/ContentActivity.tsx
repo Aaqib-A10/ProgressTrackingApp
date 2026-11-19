@@ -134,7 +134,7 @@ function ContentTitle({ title }: { title: string }) {
         : u.hostname.replace(/^www\./, '') + (u.pathname.length > 1 ? u.pathname.slice(0, 40) + (u.pathname.length > 40 ? '…' : '') : '')
     } catch { /* not a valid address: show as text */ }
     return (
-      <a href={t} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline" title={t}>
+      <a href={t} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 font-medium text-primary-ink hover:underline" title={t}>
         <ExternalLink size={14} className="shrink-0" /> {label}
       </a>
     )

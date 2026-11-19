@@ -56,9 +56,9 @@ export function TaskHistoryView({ data, showOwner, onOpenLead }: { data: DialerD
         {showOwner && <span className="text-ink-muted">Rep: pick one at the top of the page.</span>}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <Column title="Overdue" tone="text-rose-600 dark:text-rose-300" rows={cols.overdue} showOwner={showOwner} onOpen={onOpenLead} onTick={tick} me={data.me.id} />
+        <Column title="Overdue" tone="text-red-ink" rows={cols.overdue} showOwner={showOwner} onOpen={onOpenLead} onTick={tick} me={data.me.id} />
         <Column title="Due today / upcoming" tone="text-ink" rows={cols.next} showOwner={showOwner} onOpen={onOpenLead} onTick={tick} me={data.me.id} />
-        <Column title="Completed" tone="text-success" rows={cols.done} showOwner={showOwner} onOpen={onOpenLead} onReopen={reopen} me={data.me.id} />
+        <Column title="Completed" tone="text-success-ink" rows={cols.done} showOwner={showOwner} onOpen={onOpenLead} onReopen={reopen} me={data.me.id} />
       </div>
     </div>
   )
@@ -81,13 +81,13 @@ function Column({ title, tone, rows, showOwner, onOpen, onTick, onReopen, me }: 
           <li key={t.id} className="rounded-btn border border-line bg-card p-2.5 shadow-xs">
             <div className="flex items-start gap-2">
               {onTick && t.ownerId === me
-                ? <button type="button" onClick={() => onTick(t)} className="mt-0.5 text-ink-faint hover:text-success" aria-label="Mark done"><Circle size={16} /></button>
-                : t.status === 'DONE' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success" /> : <Clock3 size={16} className="mt-0.5 shrink-0 text-ink-faint" />}
+                ? <button type="button" onClick={() => onTick(t)} className="mt-0.5 text-ink-faint hover:text-success-ink" aria-label="Mark done"><Circle size={16} /></button>
+                : t.status === 'DONE' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success-ink" /> : <Clock3 size={16} className="mt-0.5 shrink-0 text-ink-faint" />}
               <button type="button" onClick={() => onOpen(t.leadId)} className="min-w-0 flex-1 text-left">
                 <span className="block truncate text-body-sm font-semibold text-ink hover:underline">{t.company}</span>
                 <span className="block text-[12px] text-ink-muted">{TASK_KINDS.find((k) => k.key === t.kind)?.label ?? t.kind}{t.reason === 'CALL_LATER' ? ' · call back' : t.reason === 'FOLLOW_UP_RULE' ? ' · follow-up rule' : ''}{showOwner ? ` · ${t.owner}` : ''}</span>
                 {t.status === 'DONE'
-                  ? <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px]"><span className="text-ink">{when(t.doneAt)}</span>{t.outcome && <span className="rounded-full bg-slate-100 px-1.5 text-ink">{t.outcome}</span>}{t.onTime != null && <span className={cn('rounded-full px-1.5 font-semibold', t.onTime ? 'bg-success/10 text-success' : 'bg-warning/15 text-warning')}>{t.onTime ? 'on time' : 'late'}</span>}</span>
+                  ? <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px]"><span className="text-ink">{when(t.doneAt)}</span>{t.outcome && <span className="rounded-full bg-slate-100 px-1.5 text-ink">{t.outcome}</span>}{t.onTime != null && <span className={cn('rounded-full px-1.5 font-semibold', t.onTime ? 'bg-success/10 text-success-ink' : 'bg-warning/15 text-warning-ink')}>{t.onTime ? 'on time' : 'late'}</span>}</span>
                   : <span className="mt-1 block text-[12px] text-ink">Due {when(t.dueAt)}</span>}
                 {t.note && <span className="mt-0.5 block truncate text-[12px] text-ink-muted">{t.note}</span>}
               </button>
@@ -95,12 +95,12 @@ function Column({ title, tone, rows, showOwner, onOpen, onTick, onReopen, me }: 
             {t.status === 'DONE' && t.autoClosedBy && (
               <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-line pt-1.5 text-[12px]">
                 <span className="min-w-0 flex-1 text-ink-muted">Completed automatically — {t.autoClosedBy}</span>
-                {onReopen && t.ownerId === me && <button type="button" onClick={() => onReopen(t)} className="inline-flex items-center gap-1 font-semibold text-primary"><RotateCcw size={12} />Reopen</button>}
+                {onReopen && t.ownerId === me && <button type="button" onClick={() => onReopen(t)} className="inline-flex items-center gap-1 font-semibold text-primary-ink"><RotateCcw size={12} />Reopen</button>}
               </div>
             )}
           </li>
         ))}
-        {rows.length > n && <li><button type="button" onClick={() => setN(n + 30)} className="w-full py-1.5 text-center text-body-sm font-semibold text-primary">Show more</button></li>}
+        {rows.length > n && <li><button type="button" onClick={() => setN(n + 30)} className="w-full py-1.5 text-center text-body-sm font-semibold text-primary-ink">Show more</button></li>}
       </ul>
     </section>
   )

@@ -346,10 +346,10 @@ function PeoplePanel() {
               <PersonAvatar person={{ id: p.id, name: p.id === ctx.meId ? (ctx.meta?.members.find((m) => m.id === ctx.meId)?.name ?? 'You') : p.name }} size={26} />
               <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
               {p.hand && <Hand size={14} className="text-amber-500" aria-label="Hand raised" />}
-              {p.rec && <CircleDot size={14} className="text-danger" aria-label="Recording" />}
+              {p.rec && <CircleDot size={14} className="text-danger-ink" aria-label="Recording" />}
               {p.id !== ctx.meId && p.mic
-                ? <button type="button" onClick={() => ctx.muteOthers(p.id)} className="inline-flex items-center gap-1 rounded-btn px-1.5 py-0.5 text-[12px] text-ink-muted hover:bg-slate-100 hover:text-danger" title={`Mute ${p.name}`}><Mic size={14} /> Mute</button>
-                : p.mic ? <Mic size={14} className="text-ink-muted" /> : <MicOff size={14} className="text-danger" />}
+                ? <button type="button" onClick={() => ctx.muteOthers(p.id)} className="inline-flex items-center gap-1 rounded-btn px-1.5 py-0.5 text-[12px] text-ink-muted hover:bg-slate-100 hover:text-danger-ink" title={`Mute ${p.name}`}><Mic size={14} /> Mute</button>
+                : p.mic ? <Mic size={14} className="text-ink-muted" /> : <MicOff size={14} className="text-danger-ink" />}
             </li>
           ))}
           {[...ringing].map((id) => (
@@ -384,7 +384,7 @@ function PeoplePanel() {
               >
                 <PersonAvatar person={u} size={26} presence={u.presence} />
                 <span className="min-w-0 flex-1"><span className="block truncate font-medium text-ink">{u.name}</span>{u.department && <span className="block truncate text-[11px] text-ink-muted">{u.department}</span>}</span>
-                <span className="shrink-0 text-[12px] font-semibold text-primary">{ringing.has(u.id) ? 'Ringing' : busy === u.id ? '…' : 'Call'}</span>
+                <span className="shrink-0 text-[12px] font-semibold text-primary-ink">{ringing.has(u.id) ? 'Ringing' : busy === u.id ? '…' : 'Call'}</span>
               </button>
             </li>
           ))}
@@ -418,7 +418,7 @@ function NotesPanel() {
     <div className="flex h-full flex-col p-3 text-body-sm">
       {!call.noteTaker ? (
         <div className="space-y-3">
-          <p className="flex items-start gap-2 text-ink"><Sparkles size={16} className="mt-0.5 shrink-0 text-primary" /> The AI note taker writes down what everyone says. When you stop it or the call ends, you get a summary, decisions and action items in the chat.</p>
+          <p className="flex items-start gap-2 text-ink"><Sparkles size={16} className="mt-0.5 shrink-0 text-primary-ink" /> The AI note taker writes down what everyone says. When you stop it or the call ends, you get a summary, decisions and action items in the chat.</p>
           <p className="text-ink-muted">Everyone in the call sees that notes are on. {call.sttMode === 'server' ? "Everyone's voice is written down with their name, in Roman Urdu (English stays English). The notes come in Roman Urdu; you can switch them to English or Urdu." : "Each person's own browser turns their voice into text (works in Chrome and Edge)."}</p>
           <LangPicker />
           <button type="button" disabled={busy} onClick={() => void toggle(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-btn bg-primary px-3 py-2 font-semibold text-white hover:bg-primary/90 disabled:opacity-60">
@@ -428,13 +428,13 @@ function NotesPanel() {
       ) : (
         <>
           <div className="mb-2 space-y-2">
-            <p className="flex items-center gap-2 font-semibold text-primary"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" /> AI notes are on <TestingBadge /></p>
+            <p className="flex items-center gap-2 font-semibold text-primary-ink"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" /> AI notes are on <TestingBadge /></p>
             <TranscriberStatus />
             <LangPicker />
           </div>
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto rounded-btn bg-slate-50 p-2">
             {lines.length === 0 && <p className="py-6 text-center text-ink-muted">Listening… speech appears here.</p>}
-            {lines.map((l) => <p key={l.id}><b className="text-primary">{l.name}:</b> <span dir="auto">{l.text}</span></p>)}
+            {lines.map((l) => <p key={l.id}><b className="text-primary-ink">{l.name}:</b> <span dir="auto">{l.text}</span></p>)}
             <div ref={endRef} />
           </div>
           <button type="button" disabled={busy} onClick={() => void toggle(false)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-btn border border-line px-3 py-2 font-semibold text-ink hover:bg-slate-50 disabled:opacity-60">
@@ -451,9 +451,9 @@ function TranscriberStatus() {
   const call = ctx.call!
   if (!call.mic) return <p className="text-ink-muted">Your microphone is muted, so nothing of yours is being written down.</p>
   if (call.sttMode === 'server') return <p className="text-ink-muted">Your speech is being written down. Lines appear here 2 to 3 seconds after you finish a sentence.</p>
-  if (!speechSupported()) return <p className="rounded-btn bg-warning/15 px-2 py-1.5 text-amber-800">Your browser cannot turn speech into text, so your words are not in the notes. Use Chrome or Edge.</p>
-  if (ctx.transcriber === 'blocked') return <p className="rounded-btn bg-danger/10 px-2 py-1.5 text-danger">Speech-to-text was blocked. Allow the microphone for this site and try again.</p>
-  if (ctx.transcriber === 'error') return <p className="text-amber-700">Speech-to-text hiccupped; it keeps retrying.</p>
+  if (!speechSupported()) return <p className="rounded-btn bg-warning/15 px-2 py-1.5 text-warning-ink">Your browser cannot turn speech into text, so your words are not in the notes. Use Chrome or Edge.</p>
+  if (ctx.transcriber === 'blocked') return <p className="rounded-btn bg-danger/10 px-2 py-1.5 text-danger-ink">Speech-to-text was blocked. Allow the microphone for this site and try again.</p>
+  if (ctx.transcriber === 'error') return <p className="text-warning-ink">Speech-to-text hiccupped; it keeps retrying.</p>
   return <p className="text-ink-muted">Your speech is being written down.</p>
 }
 
@@ -493,7 +493,7 @@ export function TileView({ tile, compact, contain, pin }: { tile: Tile; compact?
       <video ref={ref} autoPlay playsInline muted className={cn('h-full w-full', contain || tile.screen ? 'object-contain' : 'object-cover', tile.mirror && '-scale-x-100', !tile.showVideo && 'hidden')} />
       {!tile.showVideo && <PersonAvatar person={{ id: tile.id, name: tile.avatarName ?? tile.name }} size={compact ? 44 : 84} />}
       <span className={cn('absolute bottom-2 left-2 inline-flex max-w-[85%] items-center gap-1 rounded bg-black/55 px-2 py-0.5 font-medium', compact ? 'text-[11px]' : 'text-body-sm')}>
-        {!tile.mic && <MicOff size={compact ? 11 : 13} className="shrink-0 text-danger" />}
+        {!tile.mic && <MicOff size={compact ? 11 : 13} className="shrink-0 text-danger-ink" />}
         <span className="truncate">{tile.name}{tile.screen ? ' (sharing screen)' : ''}</span>
       </span>
       {tile.hand && <span className="absolute left-2 top-2 rounded-full bg-amber-400 p-1.5 text-slate-900" aria-label="Hand raised"><Hand size={compact ? 12 : 16} /></span>}

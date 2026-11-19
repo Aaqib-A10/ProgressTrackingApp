@@ -78,7 +78,7 @@ export function TeamRegister({ department, groupByDept, onOpenPerson }: { depart
                   {data.dates.map((d) => {
                     const dt = parseIso(d)
                     return (
-                      <th key={d} className={cn('min-w-[64px] border-b border-line px-1 py-2 text-center font-semibold', d === today ? 'bg-primary/5 text-primary' : 'text-ink-muted', (dt.getDay() === 0 || dt.getDay() === 6) && d !== today && 'bg-slate-50')}>
+                      <th key={d} className={cn('min-w-[64px] border-b border-line px-1 py-2 text-center font-semibold', d === today ? 'bg-primary/5 text-primary-ink' : 'text-ink-muted', (dt.getDay() === 0 || dt.getDay() === 6) && d !== today && 'bg-slate-50')}>
                         <div className="text-[10px] uppercase">{dt.toLocaleDateString('en-US', { weekday: 'short' })}</div>
                         <div className="text-body-sm text-ink">{dt.getDate()}</div>
                       </th>
@@ -100,9 +100,9 @@ export function TeamRegister({ department, groupByDept, onOpenPerson }: { depart
                       </td>
                       {m.cells.map((r, j) => <td key={data.dates[j]} className="border-b border-line p-0.5"><RegisterCell r={r} today={data.dates[j] === today} onClick={r ? () => setCell({ m, r }) : undefined} /></td>)}
                       <Tot v={m.totals.present} />
-                      <Tot v={m.totals.absent} tone={m.totals.absent ? 'text-danger' : ''} />
-                      <Tot v={m.totals.late} tone={m.totals.late ? 'text-warning' : ''} />
-                      <Tot v={m.totals.leftEarly} tone={m.totals.leftEarly ? 'text-warning' : ''} />
+                      <Tot v={m.totals.absent} tone={m.totals.absent ? 'text-danger-ink' : ''} />
+                      <Tot v={m.totals.late} tone={m.totals.late ? 'text-warning-ink' : ''} />
+                      <Tot v={m.totals.leftEarly} tone={m.totals.leftEarly ? 'text-warning-ink' : ''} />
                       <Tot v={formatMinutes(m.totals.workedMin)} />
                       <Tot v={m.totals.avgCheckIn ?? '—'} />
                     </tr>
@@ -133,14 +133,14 @@ function RegisterCell({ r, today, onClick }: { r: AttendanceDayRow | null; today
     <button type="button" onClick={onClick} title={title} className={cn('relative flex h-[46px] w-full flex-col items-center justify-center rounded border tabular-nums leading-tight hover:ring-2 hover:ring-primary/30', st.cell, today && 'ring-1 ring-primary/40')}>
       {r.label === 'PRESENT' ? (
         <>
-          <span className={cn('font-semibold', r.late ? 'text-warning' : 'text-ink')}>{r.checkIn}</span>
-          <span className={cn(r.earlyLeave ? 'font-semibold text-warning' : 'text-ink-muted')}>{r.checkOut ?? '…'}</span>
+          <span className={cn('font-semibold', r.late ? 'text-warning-ink' : 'text-ink')}>{r.checkIn}</span>
+          <span className={cn(r.earlyLeave ? 'font-semibold text-warning-ink' : 'text-ink-muted')}>{r.checkOut ?? '…'}</span>
         </>
       ) : (
         <span className="font-bold">{st.short}</span>
       )}
-      {r.wfh && <House size={9} className="absolute right-0.5 top-0.5 text-accent" />}
-      {r.note && <MessageSquare size={9} className="absolute bottom-0.5 right-0.5 text-primary" />}
+      {r.wfh && <House size={9} className="absolute right-0.5 top-0.5 text-highlight-ink" />}
+      {r.note && <MessageSquare size={9} className="absolute bottom-0.5 right-0.5 text-primary-ink" />}
     </button>
   )
 }
@@ -173,8 +173,8 @@ function DayTable({ members, groupByDept, onOpenPerson, onCell }: { members: Reg
                   <tr key={m.userId} onClick={() => r && onCell(m, r)} className="cursor-pointer hover:bg-slate-50/60">
                     <td className="px-3 py-2"><button type="button" onClick={(e) => { e.stopPropagation(); onOpenPerson(m.userId) }} className="font-medium text-ink hover:underline">{m.name}</button><div className="text-[11px] text-ink-muted">{m.shift.startTime}–{m.shift.endTime}</div></td>
                     <td className="px-3">{r ? <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold', STATUS_STYLE[r.label].cell)}>{r.label === 'HOLIDAY' && r.offName ? r.offName : STATUS_STYLE[r.label].text}{r.wfh && <House size={10} />}</span> : '—'}</td>
-                    <td className={cn('px-3 text-right tabular-nums', r?.late && 'font-semibold text-warning')}>{r?.checkIn ?? '—'}</td>
-                    <td className={cn('px-3 text-right tabular-nums', r?.earlyLeave && 'font-semibold text-warning')}>{r?.checkOut ?? (r?.checkIn ? 'Working' : '—')}</td>
+                    <td className={cn('px-3 text-right tabular-nums', r?.late && 'font-semibold text-warning-ink')}>{r?.checkIn ?? '—'}</td>
+                    <td className={cn('px-3 text-right tabular-nums', r?.earlyLeave && 'font-semibold text-warning-ink')}>{r?.checkOut ?? (r?.checkIn ? 'Working' : '—')}</td>
                     <td className="px-3 text-right tabular-nums">{formatMinutes(r?.workedMin)}</td>
                     <td className="px-3 text-right tabular-nums">{r?.breakMin ? formatMinutes(r.breakMin) : '—'}</td>
                     <td className="px-3 text-right tabular-nums">{r?.overtimeMin ? formatMinutes(r.overtimeMin) : '—'}</td>
@@ -194,10 +194,10 @@ function Legend() {
   return (
     <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-2.5 text-[11px] text-ink-muted">
       <span>Each box: check in on top, check out below.</span>
-      <span className="font-semibold text-warning">Amber = late in or left early</span>
+      <span className="font-semibold text-warning-ink">Amber = late in or left early</span>
       {(['ABSENT', 'ON_LEAVE', 'WEEKLY_OFF', 'HOLIDAY', 'NOT_YET'] as const).map((k) => <span key={k} className="inline-flex items-center gap-1"><b>{STATUS_STYLE[k].short}</b> {STATUS_STYLE[k].text}</span>)}
-      <span className="inline-flex items-center gap-1"><House size={11} className="text-accent" /> from home</span>
-      <span className="inline-flex items-center gap-1"><MessageSquare size={11} className="text-primary" /> lead note</span>
+      <span className="inline-flex items-center gap-1"><House size={11} className="text-highlight-ink" /> from home</span>
+      <span className="inline-flex items-center gap-1"><MessageSquare size={11} className="text-primary-ink" /> lead note</span>
     </div>
   )
 }
@@ -211,8 +211,8 @@ function CellDetail({ m, r, onClose, onOpenPerson }: { m: RegisterMember; r: Att
       <div className="text-body-sm">
         {line('Status', r.label === 'HOLIDAY' && r.offName ? r.offName : st.text)}
         {line('Shift', `${m.shift.startTime} to ${m.shift.endTime}`)}
-        {line('Check in', <span className={r.late ? 'text-warning' : ''}>{r.checkIn ?? '—'}{r.late ? ' (late)' : ''}</span>)}
-        {line('Check out', <span className={r.earlyLeave ? 'text-warning' : ''}>{r.checkOut ?? (r.checkIn ? 'Still working' : '—')}{r.earlyLeave ? ' (left early)' : ''}</span>)}
+        {line('Check in', <span className={r.late ? 'text-warning-ink' : ''}>{r.checkIn ?? '—'}{r.late ? ' (late)' : ''}</span>)}
+        {line('Check out', <span className={r.earlyLeave ? 'text-warning-ink' : ''}>{r.checkOut ?? (r.checkIn ? 'Still working' : '—')}{r.earlyLeave ? ' (left early)' : ''}</span>)}
         {line('Worked', formatMinutes(r.workedMin))}
         {line('Break', r.breakMin ? formatMinutes(r.breakMin) : '—')}
         {line('Overtime', r.overtimeMin ? formatMinutes(r.overtimeMin) : '—')}

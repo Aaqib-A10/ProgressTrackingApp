@@ -98,7 +98,7 @@ export default function AdminLeave() {
             {holidays.map((h) => (
               <li key={h.id} className="flex items-center justify-between py-2">
                 <span className="text-body-md text-ink"><span className="tabular-nums text-ink-muted">{h.date}</span> · {h.name}</span>
-                {canEditHolidays && <button onClick={() => removeHoliday(h.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger"><Trash2 size={15} /></button>}
+                {canEditHolidays && <button onClick={() => removeHoliday(h.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger-ink"><Trash2 size={15} /></button>}
               </li>
             ))}
             {holidays.length === 0 && <li className="py-3 text-body-sm text-ink-muted">No holidays yet.</li>}
@@ -136,7 +136,7 @@ export default function AdminLeave() {
                   <span className="tabular-nums text-ink-muted">{l.date}</span> · {l.userName}
                   <Badge tone={LEAVE_TONE[l.type]}>{l.type.replace('_', ' ').toLowerCase()}</Badge>
                 </span>
-                <button onClick={() => removeLeave(l.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger"><Trash2 size={15} /></button>
+                <button onClick={() => removeLeave(l.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger-ink"><Trash2 size={15} /></button>
               </li>
             ))}
             {leave.length === 0 && <li className="py-3 text-body-sm text-ink-muted">No leave recorded.</li>}

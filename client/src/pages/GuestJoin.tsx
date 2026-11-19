@@ -100,7 +100,7 @@ export default function GuestJoin() {
             <>
               <h1 className="text-h3 font-bold">{title}</h1>
               <div className="mt-4 flex items-center gap-3 rounded-btn bg-primary/5 p-3">
-                <Loader2 size={20} className="shrink-0 animate-spin text-primary" />
+                <Loader2 size={20} className="shrink-0 animate-spin text-primary-ink" />
                 <p className="text-body-md">Waiting for someone in the meeting to let you in…</p>
               </div>
               <p className="mt-3 text-body-sm text-ink-muted">Keep this page open. When you are let in, allow your microphone (and camera) if the browser asks.</p>
@@ -109,11 +109,11 @@ export default function GuestJoin() {
             <form onSubmit={(e) => { e.preventDefault(); void knock() }}>
               <p className="text-body-sm text-ink-muted">You are invited to</p>
               <h1 className="text-h3 font-bold">{title}</h1>
-              {!live && <p className="mt-3 flex items-center gap-2 rounded-btn bg-amber-50 px-3 py-2 text-body-sm text-amber-800"><Loader2 size={14} className="animate-spin" /> The meeting has not started yet. This page checks again by itself.</p>}
+              {!live && <p className="mt-3 flex items-center gap-2 rounded-btn bg-warning-muted px-3 py-2 text-body-sm text-warning-ink"><Loader2 size={14} className="animate-spin" /> The meeting has not started yet. This page checks again by itself.</p>}
               <label className="mt-4 block text-body-sm font-semibold">Your name
                 <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="e.g. Sara Khan" className="mt-1 h-11 w-full rounded-btn border border-line px-3 text-body-md focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
               </label>
-              {error && <p className="mt-2 text-body-sm text-danger">{error}</p>}
+              {error && <p className="mt-2 text-body-sm text-danger-ink">{error}</p>}
               <button type="submit" disabled={busy || !live} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-btn bg-primary font-semibold text-white hover:bg-primary/90 disabled:opacity-50">
                 {busy && <Loader2 size={16} className="animate-spin" />} Ask to join
               </button>

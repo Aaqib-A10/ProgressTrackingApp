@@ -8,9 +8,9 @@ import { avatarUrl, useAvatarIndex } from '../../lib/avatars'
 
 export const PRIORITY_META: Record<PmPriority, { label: string; cls: string; icon: JSX.Element }> = {
   LOW: { label: 'Low', cls: 'text-slate-500', icon: <ArrowDown size={14} /> },
-  MEDIUM: { label: 'Medium', cls: 'text-primary', icon: <Minus size={14} /> },
-  HIGH: { label: 'High', cls: 'text-warning', icon: <ArrowUp size={14} /> },
-  URGENT: { label: 'Urgent', cls: 'text-danger', icon: <ChevronsUp size={14} /> },
+  MEDIUM: { label: 'Medium', cls: 'text-primary-ink', icon: <Minus size={14} /> },
+  HIGH: { label: 'High', cls: 'text-warning-ink', icon: <ArrowUp size={14} /> },
+  URGENT: { label: 'Urgent', cls: 'text-danger-ink', icon: <ChevronsUp size={14} /> },
 }
 export const PRIORITIES: PmPriority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
 
@@ -24,7 +24,7 @@ export const SWATCHES = ['#4F46E5', '#14B8A6', '#22C55E', '#F59E0B', '#EF4444', 
 export function PriorityGlyph({ priority, size = 14 }: { priority: PmPriority; size?: number }) {
   if (priority === 'URGENT') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden className="text-danger">
+      <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden className="text-danger-ink">
         <rect x="1" y="1" width="14" height="14" rx="3.5" fill="currentColor" />
         <rect x="7.1" y="4" width="1.8" height="5.2" rx="0.9" fill="white" />
         <rect x="7.1" y="10.6" width="1.8" height="1.8" rx="0.9" fill="white" />
@@ -44,7 +44,7 @@ export function PriorityGlyph({ priority, size = 14 }: { priority: PmPriority; s
 export function PriorityIcon({ priority, withLabel }: { priority: PmPriority; withLabel?: boolean }) {
   const m = PRIORITY_META[priority]
   return (
-    <span className={cn('inline-flex items-center gap-1 text-[12px] font-medium', priority === 'URGENT' ? 'text-danger' : 'text-ink-muted')} title={`${m.label} priority`} aria-label={`${m.label} priority`}>
+    <span className={cn('inline-flex items-center gap-1 text-[12px] font-medium', priority === 'URGENT' ? 'text-danger-ink' : 'text-ink-muted')} title={`${m.label} priority`} aria-label={`${m.label} priority`}>
       <PriorityGlyph priority={priority} />
       {withLabel && m.label}
     </span>
@@ -163,8 +163,8 @@ export function DueChip({ dueAt, category, compact }: { dueAt: string | null; ca
   if (st === 'none') return null
   const cls = {
     normal: 'text-ink-muted border-line',
-    soon: 'text-warning border-warning/30 bg-warning/[0.06]',
-    overdue: 'text-danger border-danger/30 bg-danger/[0.06]',
+    soon: 'text-warning-ink border-warning/30 bg-warning/[0.06]',
+    overdue: 'text-danger-ink border-danger/30 bg-danger/[0.06]',
     done: 'text-ink-faint border-line',
   }[st]
   return (

@@ -22,10 +22,10 @@ function formatBytes(n: number): string {
 function FileGlyph({ name, mime }: { name: string; mime: string }) {
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
   if (['xls', 'xlsx', 'csv'].includes(ext) || mime.includes('spreadsheet') || mime.includes('csv')) {
-    return <FileSpreadsheet size={18} className="text-success" />
+    return <FileSpreadsheet size={18} className="text-success-ink" />
   }
   if (['doc', 'docx', 'pdf', 'txt', 'rtf'].includes(ext) || mime.includes('word') || mime.includes('pdf')) {
-    return <FileText size={18} className="text-primary" />
+    return <FileText size={18} className="text-primary-ink" />
   }
   return <FileIcon size={18} className="text-ink-muted" />
 }
@@ -114,7 +114,7 @@ export function AttachmentsCard({ kind, date, disabled }: AttachmentsCardProps) 
         >
           <Paperclip size={22} className="text-ink-muted" />
           <span className="text-body-sm text-ink-muted">
-            <span className="font-semibold text-primary">Click to upload</span> Excel, Word, PDF or other files
+            <span className="font-semibold text-primary-ink">Click to upload</span> Excel, Word, PDF or other files
           </span>
         </button>
       ) : (
@@ -128,7 +128,7 @@ export function AttachmentsCard({ kind, date, disabled }: AttachmentsCardProps) 
               </div>
               <a
                 href={attachmentHref(f.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary"
+                className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink"
                 aria-label={`Download ${f.originalName}`}
               >
                 <Download size={16} />
@@ -137,7 +137,7 @@ export function AttachmentsCard({ kind, date, disabled }: AttachmentsCardProps) 
                 <button
                   type="button"
                   onClick={() => remove(f.id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger"
+                  className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink"
                   aria-label={`Remove ${f.originalName}`}
                 >
                   <Trash2 size={16} />

@@ -129,8 +129,8 @@ export default function FinancialReports() {
     { key: 'staff', header: 'Staff', align: 'right', render: (t) => formatNumber(t.staff) },
     { key: 'cost', header: 'Cost', align: 'right', render: (t) => money(t.cost) },
     { key: 'revenue', header: 'Revenue', align: 'right', render: (t) => (t.revenue == null ? <span className="text-ink-muted">—</span> : money(t.revenue)) },
-    { key: 'net', header: 'Net Return', align: 'right', render: (t) => (t.netReturn == null ? <span className="text-ink-muted">—</span> : <span className={t.netReturn >= 0 ? 'text-success' : 'text-danger'}>{money(t.netReturn)}</span>) },
-    { key: 'roi', header: 'ROI', align: 'right', render: (t) => (t.roi == null ? <span className="text-ink-muted">—</span> : <span className={t.roi >= 0 ? 'font-semibold text-success' : 'font-semibold text-danger'}>{pct(t.roi)}</span>) },
+    { key: 'net', header: 'Net Return', align: 'right', render: (t) => (t.netReturn == null ? <span className="text-ink-muted">—</span> : <span className={t.netReturn >= 0 ? 'text-success-ink' : 'text-danger-ink'}>{money(t.netReturn)}</span>) },
+    { key: 'roi', header: 'ROI', align: 'right', render: (t) => (t.roi == null ? <span className="text-ink-muted">—</span> : <span className={t.roi >= 0 ? 'font-semibold text-success-ink' : 'font-semibold text-danger-ink'}>{pct(t.roi)}</span>) },
   ]
   const totalRow = report && {
     cells: {
@@ -179,8 +179,8 @@ export default function FinancialReports() {
     { key: 'endDate', header: 'End', render: (s) => (s.endDate ? s.endDate.slice(0, 7) : '—') },
     { key: 'actions', header: '', align: 'right', render: (s) => (
       <div className="flex items-center justify-end gap-2">
-        <button onClick={() => editSalary(s)} className="text-ink-muted hover:text-primary" title="Edit"><Pencil size={16} /></button>
-        <button onClick={() => removeSalary(s)} className="text-ink-muted hover:text-danger" title="Delete"><Trash2 size={16} /></button>
+        <button onClick={() => editSalary(s)} className="text-ink-muted hover:text-primary-ink" title="Edit"><Pencil size={16} /></button>
+        <button onClick={() => removeSalary(s)} className="text-ink-muted hover:text-danger-ink" title="Delete"><Trash2 size={16} /></button>
       </div>
     ) },
   ]
@@ -215,7 +215,7 @@ export default function FinancialReports() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard label={isAll ? 'Total Cost' : `${teamLabel(dept as Department)} Cost`} value={money(box.cost)} caption={`${box.staff} active staff`} />
           <StatCard label="Revenue" value={money(box.revenue)} caption={box.revenue == null ? 'no deal tracking yet' : 'won deals in range'} />
-          <StatCard label="Net Return" value={money(box.netReturn)} valueClassName={`text-metric-lg ${(box.netReturn ?? 0) >= 0 ? 'text-success' : 'text-danger'}`} caption="revenue − cost" />
+          <StatCard label="Net Return" value={money(box.netReturn)} valueClassName={`text-metric-lg ${(box.netReturn ?? 0) >= 0 ? 'text-success-ink' : 'text-danger-ink'}`} caption="revenue − cost" />
           <StatCard label="ROI" value={pct(box.roi)} caption="(revenue − cost) ÷ cost" />
         </div>
       )}

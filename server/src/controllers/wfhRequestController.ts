@@ -47,7 +47,7 @@ function view(r: NonNullable<Row>) {
 }
 
 /** Who approves this person's requests: their department's Team Leads, else the Super Admins. */
-async function approversFor(user: { id: string; role: string; departmentId: string | null }): Promise<string[]> {
+export async function approversFor(user: { id: string; role: string; departmentId: string | null }): Promise<string[]> {
   if (user.role !== 'TEAM_LEAD' && user.role !== 'SUPER_ADMIN' && user.departmentId) {
     const leads = await prisma.user.findMany({ where: { role: 'TEAM_LEAD', departmentId: user.departmentId, isActive: true, status: 'ACTIVE', id: { not: user.id } }, select: { id: true } })
     if (leads.length) return leads.map((l) => l.id)
@@ -57,7 +57,7 @@ async function approversFor(user: { id: string; role: string; departmentId: stri
 }
 
 /** May `me` decide a request from `owner`? */
-function canDecide(me: { id: string; role: string; departmentId: string | null }, owner: { id: string; role: string; departmentId: string | null }): boolean {
+export function canDecide(me: { id: string; role: string; departmentId: string | null }, owner: { id: string; role: string; departmentId: string | null }): boolean {
   if (me.id === owner.id) return false
   if (me.role === 'SUPER_ADMIN') return true
   return me.role === 'TEAM_LEAD' && !!me.departmentId && me.departmentId === owner.departmentId && owner.role !== 'TEAM_LEAD' && owner.role !== 'SUPER_ADMIN'

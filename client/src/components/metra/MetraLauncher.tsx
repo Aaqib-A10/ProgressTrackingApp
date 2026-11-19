@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { MetraMark } from './MetraMark'
 import { pageModule } from '../../lib/staleChunks'
 import { OPEN_METRA_EVENT, metraReady, useMetraStatus } from '../../lib/metraApi'
+import { registerDockButton, useDock } from '../../lib/dock'
 
 // The panel downloads the first time it is opened.
 const MetraPanel = lazy(() => pageModule(() => import('./MetraPanel'))().then((m) => ({ default: m.MetraPanel })))
@@ -22,6 +23,9 @@ export function MetraLauncher({ firstName }: { firstName?: string }) {
   const onPageRef = useRef(onPage)
   onPageRef.current = onPage
   const ready = metraReady(status)
+  // One of the corner buttons: it can be put aside with Quick Log (lib/dock, layout/DockTab).
+  const { tucked } = useDock(pathname)
+  useEffect(() => registerDockButton('metra', ready && !onPage), [ready, onPage])
 
   useEffect(() => {
     if (!ready) return
@@ -49,8 +53,9 @@ export function MetraLauncher({ firstName }: { firstName?: string }) {
           <MetraPanel open={open} onClose={close} status={status} firstName={firstName} question={question} />
         </Suspense>
       )}
-      {!onPage && !pathname.startsWith('/app/chat') && !open && (
-        // Phones: above the bottom tab bar and the Quick Log button. Computers: the bottom-right corner (the chat bubble is gone).
+      {!onPage && !tucked && !open && (
+        // Phones: above the bottom tab bar and the Quick Log button. Computers: the bottom-right corner, Quick Log above it.
+        // On the chat page the corner buttons start put aside (lib/dock), so the message box is never under them.
         <div className="fixed right-3 z-40 bottom-[calc(8.25rem+env(safe-area-inset-bottom))] md:bottom-8 md:right-8 motion-safe:animate-metra-float">
           <button
             ref={button}

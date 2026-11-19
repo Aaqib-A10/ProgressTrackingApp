@@ -31,7 +31,7 @@ export default function ForgotPassword() {
     <AuthLayout headline="Reset your password and get back to tracking.">
       {sent ? (
         <div>
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success/10 text-success">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success/10 text-success-ink">
             <MailCheck size={24} />
           </div>
           <h1 className="text-headline-lg text-ink">Check your email</h1>
@@ -40,13 +40,13 @@ export default function ForgotPassword() {
           </p>
           {devToken && (
             <div className="mt-4 rounded-btn border border-warning/30 bg-warning/10 p-3 text-body-sm text-ink">
-              <p className="font-semibold text-warning">Dev mode (no email configured)</p>
-              <Link to={`/reset-password?token=${devToken}`} className="mt-1 block break-all font-medium text-primary hover:underline">
+              <p className="font-semibold text-warning-ink">Dev mode (no email configured)</p>
+              <Link to={`/reset-password?token=${devToken}`} className="mt-1 block break-all font-medium text-primary-ink hover:underline">
                 Open reset link →
               </Link>
             </div>
           )}
-          <Link to="/login" className="mt-6 block text-center text-body-sm font-semibold text-primary hover:underline">
+          <Link to="/login" className="mt-6 block text-center text-body-sm font-semibold text-primary-ink hover:underline">
             Back to log in
           </Link>
         </div>
@@ -60,7 +60,7 @@ export default function ForgotPassword() {
               {submitting ? 'Sending…' : 'Send reset link'}
             </Button>
           </form>
-          <Link to="/login" className="mt-6 block text-center text-body-sm font-semibold text-primary hover:underline">
+          <Link to="/login" className="mt-6 block text-center text-body-sm font-semibold text-primary-ink hover:underline">
             Back to log in
           </Link>
         </>

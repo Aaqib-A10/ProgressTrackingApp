@@ -15,7 +15,7 @@ export function errMsg(e: unknown, fallback: string): string {
 }
 
 export function linkify(text: string): React.ReactNode[] {
-  return text.split(/(https?:\/\/[^\s)]+)/g).map((p, i) => (/^https?:\/\//.test(p) ? <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-primary underline">{p}</a> : p))
+  return text.split(/(https?:\/\/[^\s)]+)/g).map((p, i) => (/^https?:\/\//.test(p) ? <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-primary-ink underline">{p}</a> : p))
 }
 
 /** Entry text that keeps its line breaks; long text is folded to a few lines with "Show more". */
@@ -25,7 +25,7 @@ export function EntryText({ text, done, className, lines = 4 }: { text: string; 
   return (
     <div className={className}>
       <p className={cn('whitespace-pre-wrap break-words', done ? 'text-ink-muted' : 'font-medium text-ink', long && !open && (lines === 3 ? 'line-clamp-3' : 'line-clamp-4'))}>{linkify(text)}</p>
-      {long && <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }} className="mt-0.5 text-[12px] font-semibold text-primary">{open ? 'Show less' : 'Show more'}</button>}
+      {long && <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }} className="mt-0.5 text-[12px] font-semibold text-primary-ink">{open ? 'Show less' : 'Show more'}</button>}
     </div>
   )
 }
@@ -34,10 +34,10 @@ export function Chips({ e }: { e: WorkEntry }) {
   if (!(e.tag || e.hours != null || e.quantity != null || e.private || (e.blocked && e.status !== 'DONE') || e.status === 'IN_PROGRESS')) return null
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-      {e.blocked && e.status !== 'DONE' && <span className="inline-flex items-center gap-0.5 rounded-full bg-danger/10 px-2 py-0.5 font-semibold text-danger"><LifeBuoy size={10} />Needs help</span>}
-      {e.status === 'IN_PROGRESS' && <span className="rounded-full bg-warning/10 px-2 py-0.5 font-semibold text-warning">In progress</span>}
-      {e.tag && <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary"><Hash size={10} />{e.tag}</span>}
-      {e.quantity != null && <span className="rounded-full bg-accent/10 px-2 py-0.5 font-semibold text-accent">{e.quantity.toLocaleString()} items</span>}
+      {e.blocked && e.status !== 'DONE' && <span className="inline-flex items-center gap-0.5 rounded-full bg-danger/10 px-2 py-0.5 font-semibold text-danger-ink"><LifeBuoy size={10} />Needs help</span>}
+      {e.status === 'IN_PROGRESS' && <span className="rounded-full bg-warning/10 px-2 py-0.5 font-semibold text-warning-ink">In progress</span>}
+      {e.tag && <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary-ink"><Hash size={10} />{e.tag}</span>}
+      {e.quantity != null && <span className="rounded-full bg-accent/10 px-2 py-0.5 font-semibold text-highlight-ink">{e.quantity.toLocaleString()} items</span>}
       {e.hours != null && <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-ink-muted"><Clock size={10} />{e.hours} h</span>}
       {e.private && <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-ink-muted"><Lock size={10} />private</span>}
     </div>
@@ -47,7 +47,7 @@ export function Chips({ e }: { e: WorkEntry }) {
 export function IconBtn({ label, onClick, children, danger, active }: { label: string; onClick: () => void; children: React.ReactNode; danger?: boolean; active?: boolean }) {
   return (
     <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onClick() }} title={label} aria-label={label}
-      className={cn('rounded-btn p-1.5 hover:bg-slate-100', active ? 'text-danger' : 'text-ink-muted', danger ? 'hover:text-danger' : 'hover:text-ink')}>
+      className={cn('rounded-btn p-1.5 hover:bg-slate-100', active ? 'text-danger-ink' : 'text-ink-muted', danger ? 'hover:text-danger-ink' : 'hover:text-ink')}>
       {children}
     </button>
   )
@@ -71,7 +71,7 @@ export function RowActions({ e, a, compact }: { e: WorkEntry; a: EntryActions; c
       {e.status !== 'DONE' && <IconBtn label={e.blocked ? 'No longer needs help' : 'Needs help from my lead'} active={e.blocked} onClick={() => a.onBlocked(e)}><LifeBuoy size={15} /></IconBtn>}
       {e.status !== 'DONE' && <IconBtn label={`Move to next ${NOUN[e.period]}`} onClick={() => a.onCarry(e)}><Redo2 size={15} /></IconBtn>}
       <button type="button" onPointerDown={(ev) => ev.stopPropagation()} onClick={(ev) => { ev.stopPropagation(); a.onNotes(e) }} title={e.notes?.length ? `Notes (${e.notes.length})` : 'Add a note (WhatsApp, email, call)'} aria-label="Notes"
-        className={cn('inline-flex items-center gap-0.5 rounded-btn p-1.5 hover:bg-sky-50 hover:text-sky-700', e.notes?.length ? 'text-sky-700' : 'text-ink-muted')}>
+        className={cn('inline-flex items-center gap-0.5 rounded-btn p-1.5 hover:bg-blue-subtle hover:text-blue-ink', e.notes?.length ? 'text-blue-ink' : 'text-ink-muted')}>
         <StickyNote size={15} />{e.notes?.length ? <span className="text-[11px] font-bold">{e.notes.length}</span> : null}
       </button>
       <IconBtn label="Edit" onClick={() => a.onEdit(e)}><Pencil size={15} /></IconBtn>
@@ -84,7 +84,7 @@ export function DoneCheck({ e, readOnly, onToggle }: { e: WorkEntry; readOnly?: 
   return (
     <button type="button" disabled={readOnly} onPointerDown={(ev) => ev.stopPropagation()} onClick={(ev) => { ev.stopPropagation(); onToggle() }} aria-label={e.status === 'DONE' ? 'Mark as to do' : 'Mark as done'}
       className={cn('mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
-        e.status === 'DONE' ? 'border-success bg-success text-white' : e.status === 'IN_PROGRESS' ? 'border-warning hover:border-success' : 'border-line hover:border-success', readOnly && 'cursor-default')}>
+        e.status === 'DONE' ? 'border-success bg-success text-success-on' : e.status === 'IN_PROGRESS' ? 'border-warning hover:border-success' : 'border-line hover:border-success', readOnly && 'cursor-default')}>
       {e.status === 'DONE' && <Check size={12} strokeWidth={3} />}
       {e.status === 'IN_PROGRESS' && <span className="h-2 w-2 rounded-full bg-warning" />}
     </button>
@@ -94,9 +94,9 @@ export function DoneCheck({ e, readOnly, onToggle }: { e: WorkEntry; readOnly?: 
 // ------------------------------------------------------------------ reviews
 
 export const RATING_STYLE: Record<'GOOD' | 'NEEDS_WORK' | 'SEEN' | 'NONE', { bar: string; chip: string; label: string }> = {
-  GOOD: { bar: 'border-l-success', chip: 'bg-success/10 text-success', label: 'Good work' },
-  NEEDS_WORK: { bar: 'border-l-danger', chip: 'bg-danger/10 text-danger', label: 'Needs work' },
-  SEEN: { bar: 'border-l-warning', chip: 'bg-warning/10 text-warning', label: 'Seen' },
+  GOOD: { bar: 'border-l-success', chip: 'bg-success/10 text-success-ink', label: 'Good work' },
+  NEEDS_WORK: { bar: 'border-l-danger', chip: 'bg-danger/10 text-danger-ink', label: 'Needs work' },
+  SEEN: { bar: 'border-l-warning', chip: 'bg-warning/10 text-warning-ink', label: 'Seen' },
   NONE: { bar: 'border-l-slate-200', chip: 'bg-slate-100 text-ink-muted', label: 'Not reviewed' },
 }
 export const ratingKey = (r: WorkReview | null) => (!r ? 'NONE' : r.rating ?? 'SEEN')
@@ -121,15 +121,15 @@ export function ReviewBox({ review, onSave, onClear, busy }: { review: WorkRevie
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        <button type="button" onClick={() => setRating(rating === 'GOOD' ? null : 'GOOD')} className={pill(rating === 'GOOD', 'border-success bg-success/10 text-success')}><ThumbsUp size={14} /> Good work</button>
-        <button type="button" onClick={() => setRating(rating === 'NEEDS_WORK' ? null : 'NEEDS_WORK')} className={pill(rating === 'NEEDS_WORK', 'border-danger bg-danger/10 text-danger')}><ThumbsDown size={14} /> Needs work</button>
+        <button type="button" onClick={() => setRating(rating === 'GOOD' ? null : 'GOOD')} className={pill(rating === 'GOOD', 'border-success bg-success/10 text-success-ink')}><ThumbsUp size={14} /> Good work</button>
+        <button type="button" onClick={() => setRating(rating === 'NEEDS_WORK' ? null : 'NEEDS_WORK')} className={pill(rating === 'NEEDS_WORK', 'border-danger bg-danger/10 text-danger-ink')}><ThumbsDown size={14} /> Needs work</button>
         {review && <span className="ml-auto text-[11px] text-ink-muted">Reviewed by {review.reviewerName}</span>}
       </div>
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} rows={2} placeholder="Comment for them (optional)"
         className="w-full rounded-btn border border-line bg-card px-3 py-2 text-body-sm text-ink focus:border-primary focus:outline-none" />
       <div className="flex items-center gap-2">
         <Button size="sm" disabled={busy || !changed} onClick={() => onSave(rating, comment.trim())} leadingIcon={<Eye size={14} />}>{review ? 'Update review' : rating ? 'Save review' : 'Mark as seen'}</Button>
-        {review && <button type="button" onClick={onClear} disabled={busy} className="text-body-sm font-semibold text-ink-muted hover:text-danger">Remove review</button>}
+        {review && <button type="button" onClick={onClear} disabled={busy} className="text-body-sm font-semibold text-ink-muted hover:text-danger-ink">Remove review</button>}
       </div>
     </div>
   )

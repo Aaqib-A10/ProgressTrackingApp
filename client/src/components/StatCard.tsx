@@ -45,7 +45,7 @@ export function StatCard({ label, value, delta, deltaLabel, caption, icon, child
           <span
             className={cn(
               'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-[12px] font-medium tabular-nums',
-              positive ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger',
+              positive ? 'bg-success/10 text-success-ink' : 'bg-danger/10 text-danger-ink',
             )}
           >
             {positive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}

@@ -7,7 +7,7 @@ import { useAuth } from './auth'
 
 // Company settings (Phase 1, step 4): the company, its departments and its own roles.
 
-export interface CompanyInfo { id: string; name: string; kind: 'TEAM' | 'PERSONAL'; timeZone: string; plan: string; status: string; createdAt: string; home: boolean; supportAccessUntil: string | null }
+export interface CompanyInfo { id: string; name: string; kind: 'TEAM' | 'PERSONAL'; timeZone: string; plan: string; status: string; createdAt: string; home: boolean; supportAccessUntil: string | null; theme: string | null; brandColor: string | null }
 export interface CompanyUsage { plan: string; people: { used: number; limit: number | null }; storage: { usedBytes: number; limitBytes: number | null }; aiHours: { used: number; limit: number | null } }
 export interface CompanyDepartment { id: string; name: string; type: Department; kind: string; people: number; createdAt: string; sectionsOff: string[]; layout: DepartmentLayout | null; dashboard: DepartmentDashboard | null }
 /** Department Studio, part B: the cards on its member and team lead dashboards. */
@@ -27,7 +27,7 @@ export interface CompanyPerson { id: string; name: string; email: string; role: 
 export const companyApi = {
   get: () => api.get<{ company: CompanyInfo; canEdit: boolean; timeZoneLocked: boolean; usage: CompanyUsage | null }>('/company'),
   supportAccess: (hours: 0 | 24 | 72 | 168) => api.post<{ supportAccessUntil: string | null }>('/company/support-access', { hours }),
-  update: (input: { name?: string; timeZone?: string }) => api.patch<{ company: CompanyInfo }>('/company', input),
+  update: (input: { name?: string; timeZone?: string; theme?: string | null; brandColor?: string | null }) => api.patch<{ company: CompanyInfo }>('/company', input),
   departments: () => api.get<{ departments: CompanyDepartment[]; kinds: DepartmentKind[] }>('/company/departments'),
   addDepartment: (input: { name: string; type: Department; sectionsOff?: string[] }) => api.post<{ departments: CompanyDepartment[] }>('/company/departments', input),
   setSections: (id: string, sectionsOff: string[]) => api.patch<{ departments: CompanyDepartment[] }>(`/company/departments/${id}/sections`, { sectionsOff }),

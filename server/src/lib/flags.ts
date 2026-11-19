@@ -83,6 +83,13 @@ export const FLAGS = {
     client: true,
     scope: 'company',
   },
+  notes: {
+    label: 'Notes',
+    description: 'Sticky notes for the day (menu: Notes): text or checklists, colours, tags, reminders, shared with people and @mentions. Off: the Notes menu item is hidden.',
+    default: true,
+    client: true,
+    scope: 'company',
+  },
   'deal-board': {
     label: 'Deal board and contacts',
     description: 'The CRM views inside Lead Management: the deal board with deal values, the contacts list, more people on one lead, deal value and currency. Off for 99 Technologies until you want them to have it: their Leads menu and lead page stay as they are.',

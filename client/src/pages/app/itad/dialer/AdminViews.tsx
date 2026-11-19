@@ -31,11 +31,12 @@ export function HistoryView({ rep, refreshKey, onOpenLead }: { rep: string; refr
     'Attempt rate': rate(r.funnel.attemptRate), 'Connect rate': rate(r.funnel.connectRate), 'Win rate': rate(r.funnel.winRate), 'Positive rate': rate(r.funnel.positiveRate),
   }))
   const few = crm.length < 5
-  const LINES: [string, string][] = [['Attempt rate', '#94A3B8'], ['Connect rate', '#4F46E5'], ['Win rate', '#22C55E'], ['Positive rate', '#F59E0B']]
+  // Theme colours, read when the chart draws (SVG attributes need real colours, not CSS variables).
+  const LINES: [string, string][] = [['Attempt rate', CHART.target], ['Connect rate', CHART.primary], ['Win rate', CHART.success], ['Positive rate', CHART.warning]]
   return (
     <div className="space-y-4">
       <Panel title="Rates after each import" info="The four funnel rates in %, one point per import of your CRM export (other lists are left out). Until there are about five imports a table is clearer than a chart. Import at the start of every shift for the finest history."
-        action={!few ? <button type="button" onClick={() => setShowChart((v) => !v)} className="text-body-sm font-semibold text-primary">{showChart ? 'Show as table' : 'Show as chart'}</button> : undefined}>
+        action={!few ? <button type="button" onClick={() => setShowChart((v) => !v)} className="text-body-sm font-semibold text-primary-ink">{showChart ? 'Show as table' : 'Show as chart'}</button> : undefined}>
         {few || !showChart ? (
           <div className="-mx-1 overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-body-sm">
@@ -49,7 +50,7 @@ export function HistoryView({ rep, refreshKey, onOpenLead }: { rep: string; refr
                       <td className="px-2 text-right tabular-nums text-ink">{num(r.funnel.total)}</td>
                       {(['attemptRate', 'connectRate', 'winRate', 'positiveRate'] as const).map((k) => {
                         const d = prev && r.funnel[k] != null && prev.funnel[k] != null ? r.funnel[k]! - prev.funnel[k]! : null
-                        return <td key={k} className="px-2 text-right tabular-nums text-ink">{pct(r.funnel[k])}{d != null && Math.abs(d) >= 0.0005 && <span className={cn('ml-1 text-[11px]', d > 0 ? 'text-success' : 'text-danger')}>{d > 0 ? '+' : ''}{(d * 100).toFixed(1)}</span>}</td>
+                        return <td key={k} className="px-2 text-right tabular-nums text-ink">{pct(r.funnel[k])}{d != null && Math.abs(d) >= 0.0005 && <span className={cn('ml-1 text-[11px]', d > 0 ? 'text-success-ink' : 'text-danger-ink')}>{d > 0 ? '+' : ''}{(d * 100).toFixed(1)}</span>}</td>
                       })}
                     </tr>
                   )
@@ -74,7 +75,7 @@ export function HistoryView({ rep, refreshKey, onOpenLead }: { rep: string; refr
         )}
       </Panel>
       <Panel title={`Imports · ${rows.length}`} info="Every import is kept with its summary. Click a status change to see the leads behind it. By week or month: the imports of each period added up."
-        action={<div className="inline-flex rounded-btn border border-line bg-card p-0.5">{(['import', 'week', 'month'] as const).map((k) => <button key={k} type="button" onClick={() => setGroup(k)} className={cn('h-7 rounded-md px-2.5 text-body-sm font-semibold', by === k ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>{k === 'import' ? 'Each import' : k === 'week' ? 'By week' : 'By month'}</button>)}</div>}>
+        action={<div className="inline-flex rounded-btn border border-line bg-card p-0.5">{(['import', 'week', 'month'] as const).map((k) => <button key={k} type="button" onClick={() => setGroup(k)} className={cn('h-7 rounded-md px-2.5 text-body-sm font-semibold', by === k ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>{k === 'import' ? 'Each import' : k === 'week' ? 'By week' : 'By month'}</button>)}</div>}>
         {by !== 'import' ? <PeriodList rows={rows} by={by} open={open} setOpen={setOpen} onOpenLead={onOpenLead} /> : <>
         <ul className="divide-y divide-line">
           {p.rows.map((r) => (
@@ -159,7 +160,7 @@ export function DuplicatesView({ onChanged }: { onChanged: () => void }) {
   if (!rows) return <div className="h-40 animate-pulse rounded-card bg-slate-100" />
   return (
     <Panel title={`Same lead in two reps' files · ${rows.length}`}>
-      {rows.length === 0 ? <p className="py-6 text-center text-body-md text-success">No duplicates. Every lead has one owner.</p> : (
+      {rows.length === 0 ? <p className="py-6 text-center text-body-md text-success-ink">No duplicates. Every lead has one owner.</p> : (
         <ul className="divide-y divide-line">
           {pd.rows.map((g) => (
             <li key={g.matchKey} className="py-3">
@@ -209,7 +210,7 @@ function MyFollowUpDays({ defaults, onSaved }: { defaults: Record<string, number
           </div>
         ))}
       </div>
-      {bad && <p className="mt-2 text-body-sm text-danger">Pick {limits.min} to {limits.max} days.</p>}
+      {bad && <p className="mt-2 text-body-sm text-danger-ink">Pick {limits.min} to {limits.max} days.</p>}
       <div className="mt-3 flex gap-2">
         <Button size="sm" disabled={busy || bad} onClick={() => save(Object.fromEntries(Object.entries(mine).filter(([k, v]) => v !== defaults[k])), 'Your follow-up days are saved.')}>Save mine</Button>
         <Button size="sm" variant="secondary" leadingIcon={<RotateCcw size={13} />} disabled={busy || !Object.keys(mine).length} onClick={() => save({}, 'Back to the default days.')}>Reset to default</Button>
@@ -243,7 +244,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
             <tbody className="divide-y divide-line">
               {statuses.map((st) => (
                 <tr key={st}>
-                  <td className="py-1.5 text-ink">{st}{s.stageMap[st] == null && <span className="ml-1 rounded bg-warning/10 px-1 text-[10px] font-semibold text-warning">new</span>}</td>
+                  <td className="py-1.5 text-ink">{st}{s.stageMap[st] == null && <span className="ml-1 rounded bg-warning/10 px-1 text-[10px] font-semibold text-warning-ink">new</span>}</td>
                   <td>
                     <select disabled={!canEdit} value={s.stageMap[st] ?? 1} onChange={(e) => set('stageMap', { ...s.stageMap, [st]: Number(e.target.value) })} className={inp}>
                       <option value={1}>1 · New or assigned</option><option value={2}>2 · Attempted</option><option value={3}>3 · Connected</option><option value={4}>4 · Positive</option>
@@ -266,11 +267,11 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
                   <input type="number" min={1} max={365} disabled={!canEdit} value={d} onChange={(e) => set('followUp', { ...s.followUp, [st]: Number(e.target.value) })} className={cn(inp, 'w-24')} />
                   <span className="text-ink-muted">days</span>
                   {defaults.followUp[st] != null && defaults.followUp[st] !== d && <span className="text-[11px] text-ink-muted" title="The ITAD update of 12 Nov suggests this value; the saved one is kept until you change it">suggested {defaults.followUp[st]}</span>}
-                  {canEdit && <button type="button" onClick={() => { const n = { ...s.followUp }; delete n[st]; set('followUp', n) }} className="text-[11px] text-ink-muted hover:text-danger">remove</button>}
+                  {canEdit && <button type="button" onClick={() => { const n = { ...s.followUp }; delete n[st]; set('followUp', n) }} className="text-[11px] text-ink-muted hover:text-danger-ink">remove</button>}
                 </div>
               ))}
               {canEdit && Object.entries(defaults.followUp).some(([st, d]) => s.followUp[st] !== d) && (
-                <button type="button" onClick={() => set('followUp', { ...s.followUp, ...defaults.followUp })} className="text-body-sm font-semibold text-primary">Use the suggested days ({Object.entries(defaults.followUp).map(([st, d]) => `${st} ${d}`).join(', ')})</button>
+                <button type="button" onClick={() => set('followUp', { ...s.followUp, ...defaults.followUp })} className="text-body-sm font-semibold text-primary-ink">Use the suggested days ({Object.entries(defaults.followUp).map(([st, d]) => `${st} ${d}`).join(', ')})</button>
               )}
               {canEdit && (
                 <select value="" onChange={(e) => e.target.value && set('followUp', { ...s.followUp, [e.target.value]: 14 })} className={inp}>
@@ -344,7 +345,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
             <div className="flex flex-wrap gap-1.5">
               {Object.keys(s.followUp).map((st) => {
                 const on = (s.outcomeChipStatuses ?? ['Pipeline', 'Interested']).includes(st)
-                return <button key={st} type="button" disabled={!canEdit} onClick={() => set('outcomeChipStatuses', on ? (s.outcomeChipStatuses ?? ['Pipeline', 'Interested']).filter((x) => x !== st) : [...(s.outcomeChipStatuses ?? ['Pipeline', 'Interested']), st])} className={cn('rounded-full border px-3 py-1 font-medium', on ? 'border-primary bg-primary text-white' : 'border-line text-ink')}>{st}</button>
+                return <button key={st} type="button" disabled={!canEdit} onClick={() => set('outcomeChipStatuses', on ? (s.outcomeChipStatuses ?? ['Pipeline', 'Interested']).filter((x) => x !== st) : [...(s.outcomeChipStatuses ?? ['Pipeline', 'Interested']), st])} className={cn('rounded-full border px-3 py-1 font-medium', on ? 'border-primary bg-primary text-primary-on' : 'border-line text-ink')}>{st}</button>
               })}
             </div>
           </div>
@@ -390,7 +391,7 @@ function NotesSettings({ s, set, canEdit, statuses }: { s: DialerSettings; set: 
           <div className="flex flex-wrap gap-1.5">
             {[...new Set([...Object.keys(s.followUp), ...noteOnly])].filter((st) => statuses.includes(st) || noteOnly.includes(st)).map((st) => {
               const on = noteOnly.includes(st)
-              return <button key={st} type="button" disabled={!canEdit || !fromNotes} onClick={() => set('noteOnlyStatuses', on ? noteOnly.filter((x) => x !== st) : [...noteOnly, st])} className={cn('rounded-full border px-3 py-1 font-medium', on ? 'border-primary bg-primary text-white' : 'border-line text-ink')}>{st}</button>
+              return <button key={st} type="button" disabled={!canEdit || !fromNotes} onClick={() => set('noteOnlyStatuses', on ? noteOnly.filter((x) => x !== st) : [...noteOnly, st])} className={cn('rounded-full border px-3 py-1 font-medium', on ? 'border-primary bg-primary text-primary-on' : 'border-line text-ink')}>{st}</button>
             })}
           </div>
         </div>
@@ -404,13 +405,13 @@ function NotesSettings({ s, set, canEdit, statuses }: { s: DialerSettings; set: 
                 {canEdit && <>
                   <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="rounded p-1 text-ink-muted disabled:opacity-30" aria-label={`Move ${MATCH_LABEL[k]} up`}><ArrowUp size={14} /></button>
                   <button type="button" disabled={i === order.length - 1} onClick={() => move(i, 1)} className="rounded p-1 text-ink-muted disabled:opacity-30" aria-label={`Move ${MATCH_LABEL[k]} down`}><ArrowDown size={14} /></button>
-                  <button type="button" disabled={order.length === 1} onClick={() => set('ezMatchOrder', order.filter((x) => x !== k))} className="rounded p-1 text-[11px] text-ink-muted hover:text-danger disabled:opacity-30">remove</button>
+                  <button type="button" disabled={order.length === 1} onClick={() => set('ezMatchOrder', order.filter((x) => x !== k))} className="rounded p-1 text-[11px] text-ink-muted hover:text-danger-ink disabled:opacity-30">remove</button>
                 </>}
               </li>
             ))}
           </ol>
           {canEdit && MATCH_ALL.some((k) => !order.includes(k)) && (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">{MATCH_ALL.filter((k) => !order.includes(k)).map((k) => <button key={k} type="button" onClick={() => set('ezMatchOrder', [...order, k])} className="rounded-full border border-dashed border-line px-2.5 py-1 text-ink hover:border-primary hover:text-primary">+ {MATCH_LABEL[k]}</button>)}</div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">{MATCH_ALL.filter((k) => !order.includes(k)).map((k) => <button key={k} type="button" onClick={() => set('ezMatchOrder', [...order, k])} className="rounded-full border border-dashed border-line px-2.5 py-1 text-ink hover:border-primary hover:text-primary-ink">+ {MATCH_LABEL[k]}</button>)}</div>
           )}
           <p className="mt-1.5 text-[11px] text-ink-muted">A row that matches two leads is left out and shown in the preview.</p>
         </div>

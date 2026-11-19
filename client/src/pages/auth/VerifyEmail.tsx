@@ -19,18 +19,18 @@ export default function VerifyEmail() {
       {state === 'checking' && <p className="text-body-md text-ink-muted">Checking the link…</p>}
       {state === 'ok' && (
         <div className="text-center">
-          <MailCheck size={32} className="mx-auto text-success" />
+          <MailCheck size={32} className="mx-auto text-success-ink" />
           <h1 className="mt-3 text-headline-lg text-ink">Email confirmed</h1>
           <p className="mt-1 text-body-md text-ink-muted">You can invite your people now.</p>
-          <Link to="/app/setup" className="mt-5 inline-block font-semibold text-primary hover:underline">Back to Metriq</Link>
+          <Link to="/app/setup" className="mt-5 inline-block font-semibold text-primary-ink hover:underline">Back to Metriq</Link>
         </div>
       )}
       {state === 'bad' && (
         <div className="text-center">
-          <MailX size={32} className="mx-auto text-danger" />
+          <MailX size={32} className="mx-auto text-danger-ink" />
           <h1 className="mt-3 text-headline-lg text-ink">That link does not work</h1>
           <p className="mt-1 text-body-md text-ink-muted">{error || 'It may be old. Sign in and send a new one from the banner at the top.'}</p>
-          <Link to="/login" className="mt-5 inline-block font-semibold text-primary hover:underline">Sign in</Link>
+          <Link to="/login" className="mt-5 inline-block font-semibold text-primary-ink hover:underline">Sign in</Link>
         </div>
       )}
     </AuthLayout>

@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button'
 export default function ResetSuccess() {
   return (
     <AuthLayout headline="You're all set.">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success/10 text-success">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success/10 text-success-ink">
         <CheckCircle2 size={28} />
       </div>
       <h1 className="text-headline-lg text-ink">Password reset</h1>

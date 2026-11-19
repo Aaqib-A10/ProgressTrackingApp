@@ -1,14 +1,19 @@
 /** @type {import('tailwindcss').Config} */
 const v = (name) => `rgb(var(--${name}) / <alpha-value>)`
+// A colour role of the theme system (src/theme/roles.ts): --c-<role> channels in src/theme/theme.css.
+const c = (role) => `rgb(var(--c-${role}) / <alpha-value>)`
+// A status colour: the solid colour, its pale surface (-muted), readable text on cards and on that surface (-ink),
+// and the text on the solid colour (-on). bg-success-muted text-success-ink, bg-error text-error-on.
+const status = (role, solid = c(role)) => ({ DEFAULT: solid, muted: c(`${role}-muted`), ink: c(`text-${role}`), on: c(`on-${role}`) })
 
 export default {
   darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
-      // Metriq design tokens. Every colour is a CSS variable (index.css), so the whole app
-      // follows one palette and can switch themes. Neutrals are a calm grey (Linear style),
-      // and the slate scale used across screens maps to the same greys.
+      // Metriq design tokens. Every colour is a CSS variable from the theme (src/theme/theme.css),
+      // so the whole app follows one palette and can switch themes. Neutrals are a calm grey (Linear
+      // style), and the slate scale used across screens maps to the same greys.
       colors: {
         primary: {
           DEFAULT: v('primary'), // main actions, focus, selection
@@ -16,11 +21,23 @@ export default {
           100: v('primary-100'),
           600: v('primary'),
           700: v('primary-700'),
+          ink: c('text-accent'), // the accent as text (links) that reads on cards
+          on: c('on-accent'), // text on a primary button
         },
         accent: v('accent'),
-        success: v('success'),
-        warning: v('warning'),
-        danger: v('danger'),
+        success: status('success', v('success')),
+        warning: status('warning', v('warning')),
+        danger: status('error', v('danger')),
+        // Theme roles with no older name (src/theme/roles.ts). New code uses these.
+        error: status('error'),
+        info: status('info'),
+        highlight: status('highlight'), // the second brand colour (teal in Metriq; `accent` is the same colour)
+        neutral: Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((n) => [n, c(`neutral-${n}`)])),
+        // Named hues from the theme (src/theme/roles.ts HUES): bg-orange-subtle, bg-blue-muted, border-purple-ring,
+        // bg-teal-vivid, text-red-ink, text-green-on. They follow the theme and dark mode; never use numbered shades
+        // (bg-orange-50) in a screen: those are the same in every theme (`npm run ui:check -w client` fails on them).
+        ...Object.fromEntries(['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink'].map((h) => [h, { subtle: c(`${h}-subtle`), muted: c(`${h}-muted`), ring: c(`${h}-ring`), vivid: c(`${h}-vivid`), ink: c(`text-${h}`), on: c(`on-${h}`) }])),
+        chart: Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, c(`chart-${n}`)])),
         bg: v('bg'), // app canvas
         card: v('card'), // surfaces
         sidebar: v('sidebar'), // navigation rail

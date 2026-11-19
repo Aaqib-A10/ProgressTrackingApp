@@ -159,7 +159,7 @@ function FormEditor({ form, onDone }: { form: ReportForm | null; onDone: () => v
                       {f.options.map((o, k) => (
                         <span key={k} className="inline-flex items-center gap-1 rounded-full border border-line bg-slate-50 pl-2.5 pr-1">
                           <input className="w-28 bg-transparent py-1 text-body-sm text-ink focus:outline-none" value={o} placeholder={`Choice ${k + 1}`} maxLength={80} onChange={(e) => set(i, { options: f.options.map((x, m) => (m === k ? e.target.value : x)) })} aria-label={`Choice ${k + 1}`} />
-                          <button type="button" className="rounded-full p-1 text-ink-muted hover:text-danger" onClick={() => set(i, { options: f.options.filter((_, m) => m !== k) })} aria-label="Remove choice"><Trash2 size={12} /></button>
+                          <button type="button" className="rounded-full p-1 text-ink-muted hover:text-danger-ink" onClick={() => set(i, { options: f.options.filter((_, m) => m !== k) })} aria-label="Remove choice"><Trash2 size={12} /></button>
                         </span>
                       ))}
                       <button type="button" className="rounded-full border border-dashed border-line px-2.5 py-1 text-body-sm text-ink-muted hover:text-ink" onClick={() => set(i, { options: [...f.options, ''] })}>+ Choice</button>
@@ -193,7 +193,7 @@ function FormEditor({ form, onDone }: { form: ReportForm | null; onDone: () => v
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={save} disabled={saving || name.trim().length < 2 || fields.some((f) => !f.label.trim())}>{saving ? 'Saving…' : form ? 'Save form' : 'Make form'}</Button>
         <Button variant="secondary" onClick={onDone}>Cancel</Button>
-        {form && <Button variant="ghost" className="ml-auto text-danger" onClick={remove} disabled={saving}>Remove form</Button>}
+        {form && <Button variant="ghost" className="ml-auto text-danger-ink" onClick={remove} disabled={saving}>Remove form</Button>}
       </div>
     </div>
   )

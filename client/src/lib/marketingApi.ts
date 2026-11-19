@@ -2,6 +2,7 @@ import { api } from './api'
 import type { RangeKey, CustomRange } from '../components/layout/RangeSelector'
 import type { BadgeTone } from '../components/ui/Badge'
 import { rangeQuery } from './range'
+import { role } from '../theme/css'
 
 export type Discipline = 'SEO' | 'SOCIAL' | 'CONTENT'
 export type TaskStatus = 'BACKLOG' | 'IN_PROGRESS' | 'IN_REVIEW' | 'SCHEDULED' | 'PUBLISHED'
@@ -140,16 +141,16 @@ export function getMarketingTeam() {
 }
 
 export const DISCIPLINE_META: Record<Discipline, { label: string; color: string }> = {
-  SEO: { label: 'SEO', color: '#4F46E5' },
-  SOCIAL: { label: 'Social', color: '#14B8A6' },
-  CONTENT: { label: 'Content', color: '#F59E0B' },
+  SEO: { label: 'SEO', color: role('accent') },
+  SOCIAL: { label: 'Social', color: role('teal-vivid') },
+  CONTENT: { label: 'Content', color: role('yellow-vivid') },
 }
 
 export const PRIORITY_META: Record<Priority, { label: string; tone: BadgeTone; color: string }> = {
-  LOW: { label: 'Low', tone: 'neutral', color: '#64748B' },
-  MEDIUM: { label: 'Medium', tone: 'primary', color: '#4F46E5' },
-  HIGH: { label: 'High', tone: 'warning', color: '#F59E0B' },
-  URGENT: { label: 'Urgent', tone: 'danger', color: '#EF4444' },
+  LOW: { label: 'Low', tone: 'neutral', color: role('neutral-500') },
+  MEDIUM: { label: 'Medium', tone: 'primary', color: role('accent') },
+  HIGH: { label: 'High', tone: 'warning', color: role('warning') },
+  URGENT: { label: 'Urgent', tone: 'danger', color: role('error') },
 }
 export const PRIORITY_ORDER: Priority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
 

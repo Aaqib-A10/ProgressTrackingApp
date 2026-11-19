@@ -195,7 +195,7 @@ export const CONNECTORS: Connector[] = [
     name: 'Any other AI app',
     maker: 'MCP',
     mark: '+',
-    tone: 'bg-primary/10 text-primary',
+    tone: 'bg-primary/10 text-primary-ink',
     tagline: 'Any app or tool that can add a remote MCP server (connector) by its address.',
     keyName: 'My AI app',
     ways: [

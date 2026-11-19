@@ -164,7 +164,7 @@ export default function ProjectBoard() {
         <AlertTriangle size={28} className="text-ink-muted" />
         <p className="text-body-lg text-ink">Project not found</p>
         <p className="text-body-md text-ink-muted">It doesn't exist, or you're not a member of it.</p>
-        <Link to="/app/projects" className="text-body-md font-semibold text-primary">Back to projects</Link>
+        <Link to="/app/projects" className="text-body-md font-semibold text-primary-ink">Back to projects</Link>
       </div>
     )
   }
@@ -209,7 +209,7 @@ export default function ProjectBoard() {
       </div>
 
       {myOverdue > 0 && (
-        <button type="button" onClick={() => { const n = new URLSearchParams(params); n.set('due', 'overdue'); n.set('mine', '1'); setParams(n, { replace: true }) }} className="flex w-full items-center gap-2 rounded-lg border border-danger/25 bg-danger/[0.05] px-3.5 py-2 text-left text-[13px] text-danger transition-colors hover:bg-danger/[0.08]">
+        <button type="button" onClick={() => { const n = new URLSearchParams(params); n.set('due', 'overdue'); n.set('mine', '1'); setParams(n, { replace: true }) }} className="flex w-full items-center gap-2 rounded-lg border border-danger/25 bg-danger/[0.05] px-3.5 py-2 text-left text-[13px] text-danger-ink transition-colors hover:bg-danger/[0.08]">
           <AlertTriangle size={15} /> You have {myOverdue} overdue task{myOverdue > 1 ? 's' : ''} in this project. <span className="font-semibold underline">Show them</span>
         </button>
       )}
@@ -224,7 +224,7 @@ export default function ProjectBoard() {
         <FilterSelect label="Priority" value={priority} onChange={(v) => setParam('priority', v)} options={PRIORITIES.map((p) => ({ v: p, l: PRIORITY_META[p].label }))} />
         {data.labels.length > 0 && <FilterSelect label="Label" value={label} onChange={(v) => setParam('label', v)} options={data.labels.map((l) => ({ v: l.id, l: l.name }))} />}
         <FilterSelect label="Due" value={due} onChange={(v) => setParam('due', v)} options={[{ v: 'overdue', l: 'Overdue' }, { v: 'today', l: 'Due today' }, { v: 'week', l: 'Due this week' }, { v: 'none', l: 'No due date' }]} />
-        <label className={cn('inline-flex h-7 cursor-pointer items-center gap-2 rounded-btn border px-2.5 text-[12.5px] font-medium shadow-xs transition-colors', mine ? 'border-primary/40 bg-primary/[0.06] text-primary' : 'border-line bg-card text-ink-muted hover:border-line-strong')}>
+        <label className={cn('inline-flex h-7 cursor-pointer items-center gap-2 rounded-btn border px-2.5 text-[12.5px] font-medium shadow-xs transition-colors', mine ? 'border-primary/40 bg-primary/[0.06] text-primary-ink' : 'border-line bg-card text-ink-muted hover:border-line-strong')}>
           <input type="checkbox" checked={mine} onChange={(e) => setParam('mine', e.target.checked ? '1' : null)} className="h-3.5 w-3.5 accent-primary" /> Only my tasks
         </label>
         {filtersOn && (
@@ -294,7 +294,7 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
       value={value}
       onChange={(e) => onChange(e.target.value || null)}
       aria-label={label}
-      className={cn('h-7 rounded-btn border px-2 text-[12.5px] font-medium shadow-xs transition-colors focus:border-primary focus:outline-none', value ? 'border-primary/40 bg-primary/[0.06] text-primary' : 'border-line bg-card text-ink-muted hover:border-line-strong')}
+      className={cn('h-7 rounded-btn border px-2 text-[12.5px] font-medium shadow-xs transition-colors focus:border-primary focus:outline-none', value ? 'border-primary/40 bg-primary/[0.06] text-primary-ink' : 'border-line bg-card text-ink-muted hover:border-line-strong')}
     >
       <option value="">{label}: All</option>
       {options.map((o) => <option key={o.v} value={o.v}>{label}: {o.l}</option>)}

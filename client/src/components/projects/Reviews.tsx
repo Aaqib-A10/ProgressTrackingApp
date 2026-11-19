@@ -6,9 +6,9 @@ import type { ReviewVerdict, TaskReview } from '../../lib/projectsApi'
 import { PersonAvatar, fieldCls, fmtAgo, fmtDateTime } from './pmUi'
 
 export const VERDICT_META: Record<ReviewVerdict, { label: string; short: string; cls: string; icon: JSX.Element }> = {
-  APPROVED: { label: 'Approved', short: 'Approved', cls: 'bg-success/10 text-success', icon: <CheckCircle2 size={13} /> },
-  CHANGES_REQUESTED: { label: 'Changes requested', short: 'Changes', cls: 'bg-warning/15 text-amber-700', icon: <RotateCcw size={13} /> },
-  COMMENT: { label: 'Feedback', short: 'Feedback', cls: 'bg-primary/10 text-primary', icon: <MessageSquareText size={13} /> },
+  APPROVED: { label: 'Approved', short: 'Approved', cls: 'bg-success/10 text-success-ink', icon: <CheckCircle2 size={13} /> },
+  CHANGES_REQUESTED: { label: 'Changes requested', short: 'Changes', cls: 'bg-warning/15 text-warning-ink', icon: <RotateCcw size={13} /> },
+  COMMENT: { label: 'Feedback', short: 'Feedback', cls: 'bg-primary/10 text-primary-ink', icon: <MessageSquareText size={13} /> },
 }
 
 const VERDICTS: ReviewVerdict[] = ['APPROVED', 'CHANGES_REQUESTED', 'COMMENT']
@@ -23,7 +23,7 @@ export function Stars({ value, onChange, size = 14 }: { value: number | null; on
     <span className="inline-flex items-center gap-0.5" aria-label={value ? `${value} out of 5` : 'No rating'}>
       {[1, 2, 3, 4, 5].map((n) => {
         const on = (value ?? 0) >= n
-        const icon = <Star size={size} className={on ? 'fill-amber-400 text-amber-400' : 'text-slate-300'} />
+        const icon = <Star size={size} className={on ? 'fill-yellow-vivid text-yellow-vivid' : 'text-slate-300'} />
         return onChange
           ? <button key={n} type="button" onClick={() => onChange(value === n ? null : n)} aria-label={`${n} star${n > 1 ? 's' : ''}`} className="rounded p-0.5 hover:bg-slate-100">{icon}</button>
           : <span key={n}>{icon}</span>
@@ -42,7 +42,7 @@ export function ReviewItem({ review, canDelete, onDelete }: { review: TaskReview
         <VerdictBadge verdict={review.verdict} />
         {review.rating != null && <Stars value={review.rating} size={12} />}
         <span className="ml-auto text-[11px] text-ink-muted" title={fmtDateTime(review.createdAt)}>{fmtAgo(review.createdAt)}</span>
-        {canDelete && onDelete && <button type="button" onClick={onDelete} aria-label="Delete review"><Trash2 size={13} className="text-ink-muted hover:text-danger" /></button>}
+        {canDelete && onDelete && <button type="button" onClick={onDelete} aria-label="Delete review"><Trash2 size={13} className="text-ink-muted hover:text-danger-ink" /></button>}
       </div>
       <p className="mt-1.5 whitespace-pre-wrap break-words text-body-sm text-ink">{review.body}</p>
     </li>

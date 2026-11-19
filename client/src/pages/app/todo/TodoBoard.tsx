@@ -95,7 +95,7 @@ function Column({ id, disabled, children }: { id: string; disabled: boolean; chi
 function Card({ e, readOnly, actions, hidden, flash }: { e: WorkEntry; readOnly: boolean; actions: EntryActions; hidden: boolean; flash?: boolean }) {
   const { setNodeRef, listeners, attributes } = useDraggable({ id: e.id, disabled: readOnly })
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} data-entry-id={e.id} className={cn('touch-manipulation rounded-btn outline-none transition-shadow duration-700', !readOnly && 'cursor-grab active:cursor-grabbing', hidden && 'opacity-30', flash && 'ring-2 ring-yellow-400 ring-offset-2')}>
+    <div ref={setNodeRef} {...listeners} {...attributes} data-entry-id={e.id} className={cn('touch-manipulation rounded-btn outline-none transition-shadow duration-700', !readOnly && 'cursor-grab active:cursor-grabbing', hidden && 'opacity-30', flash && 'ring-2 ring-yellow-vivid ring-offset-2')}>
       <CardBody e={e} readOnly={readOnly} actions={actions} />
     </div>
   )

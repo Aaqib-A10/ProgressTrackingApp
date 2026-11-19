@@ -14,7 +14,7 @@ import { AppShell } from '../components/layout/AppShell'
 function FullScreenSpinner() {
   return (
     <div className="flex h-screen items-center justify-center bg-bg">
-      <Activity size={28} className="animate-pulse text-primary" />
+      <Activity size={28} className="animate-pulse text-primary-ink" />
     </div>
   )
 }

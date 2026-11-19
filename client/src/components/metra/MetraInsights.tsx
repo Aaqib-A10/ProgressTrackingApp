@@ -39,7 +39,7 @@ export function MetraInsights({ onAsk, focusId, onNavigate, compact }: { onAsk: 
       {brief && (
         <section aria-label="Your brief" className={cn('rounded-card border bg-card p-3.5 shadow-card', brief.id === focusId ? 'border-primary/40 ring-2 ring-primary/15' : 'border-line')}>
           <div className="flex items-start gap-2">
-            <Sun size={16} className="mt-0.5 shrink-0 text-warning" />
+            <Sun size={16} className="mt-0.5 shrink-0 text-warning-ink" />
             <p className="min-w-0 flex-1 text-body-md font-semibold text-ink">{brief.title || 'Your brief'}</p>
             <button type="button" disabled={busy === brief.id} onClick={() => void setState(brief.id, 'DISMISSED')} className="rounded p-0.5 text-ink-faint hover:bg-slate-100 hover:text-ink disabled:opacity-50" aria-label="Dismiss the brief" title="Dismiss"><X size={15} /></button>
           </div>
@@ -57,7 +57,7 @@ export function MetraInsights({ onAsk, focusId, onNavigate, compact }: { onAsk: 
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <span className="text-body-md font-medium text-ink">{p.company || s.title}</span>
                     {p.status && <span className="rounded-full bg-slate-100 px-1.5 text-[11px] font-medium text-ink-muted">{p.status}</span>}
-                    {p.due && <span className="ml-auto text-[12px] text-danger">Due {dueText(p.due)}</span>}
+                    {p.due && <span className="ml-auto text-[12px] text-danger-ink">Due {dueText(p.due)}</span>}
                   </div>
                   {p.said && <p className="mt-0.5 line-clamp-2 text-body-sm italic text-ink-muted">“{p.said}”</p>}
                   <div className="mt-1.5 flex flex-wrap gap-1.5">

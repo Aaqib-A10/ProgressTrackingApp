@@ -218,7 +218,7 @@ export function VoiceRecorder({ onSend, onError, onActive }: { onSend: (file: Fi
       onPointerCancel={() => { pointer.current = null; if (modeRef.current === 'hold') finish(false) }}
       onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !mode) { e.preventDefault(); void begin('locked') } }}
       onContextMenu={(e) => e.preventDefault()}
-      className={cn('relative touch-none select-none rounded-full p-1.5 transition-colors', mode === 'hold' ? 'z-20 bg-primary text-white shadow-overlay' : 'bg-primary text-white hover:bg-primary/90')}
+      className={cn('relative touch-none select-none rounded-full p-1.5 transition-colors', mode === 'hold' ? 'z-20 bg-primary text-primary-on shadow-overlay' : 'bg-primary text-primary-on hover:bg-primary/90')}
       style={mode === 'hold' ? { transform: `translate(${drag.x}px, ${drag.y}px) scale(1.35)` } : undefined}
       aria-label="Voice message: hold to record and let go to send, or click to record"
       title="Hold to record, let go to send. Or click to record."
@@ -236,7 +236,7 @@ export function VoiceRecorder({ onSend, onError, onActive }: { onSend: (file: Fi
       {/* The bar over the message box */}
       {mode && <div className="absolute inset-0 z-10 flex animate-fade-in items-center gap-2 rounded-btn bg-card px-2">
         {mode === 'locked' ? (
-          <button type="button" onClick={() => finish(false)} className="rounded-full p-2 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Delete the recording" title="Delete (Esc)"><Trash2 size={18} /></button>
+          <button type="button" onClick={() => finish(false)} className="rounded-full p-2 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label="Delete the recording" title="Delete (Esc)"><Trash2 size={18} /></button>
         ) : null}
         <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full bg-danger', !paused && 'animate-pulse')} />
         <span className="w-11 shrink-0 font-mono text-body-sm tabular-nums text-ink">{fmtClock(ms / 1000)}</span>
@@ -250,9 +250,9 @@ export function VoiceRecorder({ onSend, onError, onActive }: { onSend: (file: Fi
         ) : (
           <>
             <button type="button" onClick={togglePause} className="rounded-full p-2 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label={paused ? 'Carry on recording' : 'Pause'} title={paused ? 'Carry on recording' : 'Pause'}>
-              {paused ? <Mic size={18} className="text-danger" /> : <Pause size={18} />}
+              {paused ? <Mic size={18} className="text-danger-ink" /> : <Pause size={18} />}
             </button>
-            <button type="button" onClick={() => finish(true)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-card hover:bg-primary/90" aria-label="Send the voice message" title="Send (Enter)">
+            <button type="button" onClick={() => finish(true)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-on shadow-card hover:bg-primary/90" aria-label="Send the voice message" title="Send (Enter)">
               <Send size={17} />
             </button>
           </>

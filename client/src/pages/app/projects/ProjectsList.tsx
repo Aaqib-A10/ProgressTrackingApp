@@ -59,7 +59,7 @@ export default function ProjectsList() {
           {data && tab === 'active' ? (
             <p className="mt-1 text-body-md text-ink-muted">
               {data.projects.length} project{data.projects.length === 1 ? '' : 's'} · {totals.open} open task{totals.open === 1 ? '' : 's'} · <span className={totals.mine ? 'text-ink' : ''}>{totals.mine} assigned to you</span>
-              {totals.overdue > 0 && <> · <span className="text-danger">{totals.overdue} overdue</span></>}
+              {totals.overdue > 0 && <> · <span className="text-danger-ink">{totals.overdue} overdue</span></>}
             </p>
           ) : <p className="mt-1 text-body-md text-ink-muted">Boards for each project you're part of.</p>}
         </div>
@@ -145,7 +145,7 @@ function PinButton({ pinned, onPin }: { pinned: boolean; onPin: () => void }) {
   return (
     <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onPin() }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPin() } }}
       title={pinned ? 'Unpin' : 'Pin to the top and the sidebar'} aria-label={pinned ? 'Unpin' : 'Pin'} aria-pressed={pinned}
-      className={cn('rounded-md p-1 transition-colors', pinned ? 'text-warning hover:bg-warning/10' : 'text-ink-faint opacity-0 hover:bg-slate-100 hover:text-ink group-hover:opacity-100 focus-visible:opacity-100')}>
+      className={cn('rounded-md p-1 transition-colors', pinned ? 'text-warning-ink hover:bg-warning/10' : 'text-ink-faint opacity-0 hover:bg-slate-100 hover:text-ink group-hover:opacity-100 focus-visible:opacity-100')}>
       <Star size={15} className={pinned ? 'fill-warning' : ''} />
     </span>
   )
@@ -197,7 +197,7 @@ function ProjectCard({ p, pinned, onPin, onOpen, index }: { p: ProjectListItem; 
 }
 
 function Chip({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'primary' | 'danger' | 'warning' }) {
-  const cls = { neutral: 'bg-slate-100 text-ink-muted', primary: 'bg-primary/10 text-primary', danger: 'bg-danger/10 text-danger', warning: 'bg-warning/[0.12] text-warning' }[tone]
+  const cls = { neutral: 'bg-slate-100 text-ink-muted', primary: 'bg-primary/10 text-primary-ink', danger: 'bg-danger/10 text-danger-ink', warning: 'bg-warning/[0.12] text-warning-ink' }[tone]
   return <span className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-px font-medium tabular-nums', cls)}>{children}</span>
 }
 
@@ -216,7 +216,7 @@ function ProjectRow({ p, pinned, onPin, onOpen }: { p: ProjectListItem; pinned: 
         <Progress p={p} className="max-w-[160px]" />
         <span className="w-9 text-right text-[12px] tabular-nums text-ink-muted">{pct(p)}%</span>
       </div>
-      <span className="hidden text-[13px] tabular-nums text-ink md:block">{p.openCount}{p.overdueCount > 0 && <span className="ml-1.5 text-[11.5px] text-danger">{p.overdueCount} late</span>}</span>
+      <span className="hidden text-[13px] tabular-nums text-ink md:block">{p.openCount}{p.overdueCount > 0 && <span className="ml-1.5 text-[11.5px] text-danger-ink">{p.overdueCount} late</span>}</span>
       <span className={cn('hidden text-[13px] tabular-nums md:block', p.myOpenCount ? 'text-ink' : 'text-ink-faint')}>{p.myOpenCount}</span>
       <span className="hidden md:block"><AvatarStack people={p.members} max={3} size={20} /></span>
       <span className="hidden text-[12px] text-ink-muted md:block">{p.lastActivityAt ? fmtAgo(p.lastActivityAt) : 'No tasks yet'}</span>
@@ -310,7 +310,7 @@ function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCre
             {list.length === 0 && <p className="px-3 py-4 text-body-sm text-ink-muted">No people found.</p>}
           </div>
         </div>
-        {error && <p className="text-body-sm text-danger">{error}</p>}
+        {error && <p className="text-body-sm text-danger-ink">{error}</p>}
       </div>
     </Modal>
   )

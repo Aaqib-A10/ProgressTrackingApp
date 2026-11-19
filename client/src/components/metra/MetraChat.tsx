@@ -58,9 +58,9 @@ export const MetraChat = forwardRef<MetraChatHandle, MetraChatProps>(function Me
           <div className="flex h-full items-center justify-center text-ink-muted"><Loader2 size={20} className="animate-spin" /><span className="sr-only">Loading</span></div>
         ) : chat.loadError ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <AlertCircle size={20} className="text-danger" />
+            <AlertCircle size={20} className="text-danger-ink" />
             <p className="text-body-md text-ink-muted">{chat.loadError}</p>
-            <button type="button" onClick={() => chat.newChat()} className="text-body-sm font-semibold text-primary hover:underline">Start a new chat</button>
+            <button type="button" onClick={() => chat.newChat()} className="text-body-sm font-semibold text-primary-ink hover:underline">Start a new chat</button>
           </div>
         ) : empty ? (
           <div className={cn('mx-auto flex max-w-xl flex-col items-center gap-4 text-center', compact ? 'pt-2' : 'pt-6')}>
@@ -116,7 +116,7 @@ function UserBubble({ text, onEdit, disabled }: { text: string; onEdit: (t: stri
   }
   return (
     <div className="group flex flex-col items-end gap-1">
-      <p className="max-w-[85%] cursor-text select-text whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-body-md text-white selection:bg-white selection:text-primary">{text}</p>
+      <p className="max-w-[85%] cursor-text select-text whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-body-md text-primary-on selection:bg-white selection:text-primary-ink">{text}</p>
       <div className="flex gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
         <IconBtn label="Edit and ask again" onClick={() => onEdit(text)} disabled={disabled}><Pencil size={14} /></IconBtn>
         <IconBtn label={copied ? 'Copied' : 'Copy question'} pressed={copied} tone="ok" onClick={() => void copy()}>{copied ? <Check size={14} strokeWidth={2.6} /> : <Copy size={14} />}</IconBtn>
@@ -155,10 +155,10 @@ function Answer({ m, chat, onNavigate, selected, onSelect }: { m: ChatMessage; c
         {m.pending && m.content && <span aria-hidden className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-ink-faint align-middle" />}
         {m.error && (
           <div role="alert" className="mt-1 flex flex-wrap items-center gap-2 rounded-btn border border-danger/25 bg-danger/5 px-3 py-2 text-body-sm text-ink">
-            <AlertCircle size={15} className="shrink-0 text-danger" />
+            <AlertCircle size={15} className="shrink-0 text-danger-ink" />
             <span className="min-w-0 flex-1">{m.error}</span>
             {!chat.streaming && (m.question || m.error !== 'Stopped.') && (
-              <button type="button" onClick={() => chat.retry(m.key)} className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"><RotateCcw size={13} />Retry</button>
+              <button type="button" onClick={() => chat.retry(m.key)} className="inline-flex items-center gap-1 font-semibold text-primary-ink hover:underline"><RotateCcw size={13} />Retry</button>
             )}
           </div>
         )}
@@ -183,7 +183,7 @@ function Answer({ m, chat, onNavigate, selected, onSelect }: { m: ChatMessage; c
             onSubmit={(e) => { e.preventDefault(); if (!note.trim()) return; chat.setFeedback(m.key, 'DOWN', note.trim()); setWhy('sent') }}>
             <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} aria-label="What was wrong with this answer?" placeholder="What was wrong? (optional)"
               className="min-w-0 flex-1 rounded-btn border border-line bg-card px-2.5 py-1.5 text-body-sm text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
-            <button type="submit" disabled={!note.trim()} className="rounded-btn bg-primary px-2.5 py-1.5 text-body-sm font-semibold text-white disabled:opacity-40">Send</button>
+            <button type="submit" disabled={!note.trim()} className="rounded-btn bg-primary px-2.5 py-1.5 text-body-sm font-semibold text-primary-on disabled:opacity-40">Send</button>
             <button type="button" onClick={() => setWhy('closed')} className="rounded-btn px-1.5 py-1.5 text-body-sm text-ink-muted hover:text-ink">Skip</button>
           </form>
         )}
@@ -193,7 +193,7 @@ function Answer({ m, chat, onNavigate, selected, onSelect }: { m: ChatMessage; c
   )
 }
 
-const TONE = { up: 'bg-primary/15 text-primary hover:bg-primary/20', down: 'bg-danger/15 text-danger hover:bg-danger/20', ok: 'bg-success/15 text-success hover:bg-success/20' } as const
+const TONE = { up: 'bg-primary/15 text-primary-ink hover:bg-primary/20', down: 'bg-danger/15 text-danger-ink hover:bg-danger/20', ok: 'bg-success/15 text-success-ink hover:bg-success/20' } as const
 function IconBtn({ label, pressed, tone, onClick, disabled, children }: { label: string; pressed?: boolean; tone?: keyof typeof TONE; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
     <button type="button" disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick() }} aria-label={label} title={label} aria-pressed={pressed}
@@ -215,7 +215,7 @@ export function SourcesRow({ text, sources, onNavigate }: { text: string; source
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
       {(cited.length > 0 || all) && <span className="text-[11.5px] font-medium text-ink-faint">Sources</span>}
       {shown.map((s) => (
-        <CitationChip key={s.n} n={s.n} source={s} onOpen={onNavigate} label={<><span className="font-semibold tabular-nums text-primary">{s.n}</span><span className="max-w-[160px] truncate">{s.title}</span></>} />
+        <CitationChip key={s.n} n={s.n} source={s} onOpen={onNavigate} label={<><span className="font-semibold tabular-nums text-primary-ink">{s.n}</span><span className="max-w-[160px] truncate">{s.title}</span></>} />
       ))}
       {more > 0 && (
         <button type="button" aria-expanded={all} onClick={(e) => { e.stopPropagation(); setAll((x) => !x) }} className="rounded-full px-1.5 text-[12px] font-medium text-ink-faint hover:text-ink hover:underline">
@@ -236,14 +236,14 @@ function ActionCardView({ a, busy, canDecide, onDecide }: { a: MetraAction; busy
       <p className="mt-0.5 text-body-md text-ink">{a.summary}</p>
       {open ? (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          <button type="button" disabled={busy || !canDecide} onClick={() => onDecide('confirm')} className="inline-flex h-8 items-center gap-1.5 rounded-btn bg-primary px-3 text-body-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
+          <button type="button" disabled={busy || !canDecide} onClick={() => onDecide('confirm')} className="inline-flex h-8 items-center gap-1.5 rounded-btn bg-primary px-3 text-body-sm font-semibold text-primary-on hover:bg-primary-700 disabled:opacity-60">
             {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}Confirm
           </button>
           <button type="button" disabled={busy || !canDecide} onClick={() => onDecide('dismiss')} className="inline-flex h-8 items-center rounded-btn border border-line bg-card px-3 text-body-sm font-medium text-ink-muted hover:text-ink disabled:opacity-60">Dismiss</button>
-          {a.result && <span className="text-body-sm text-danger">{a.result}</span>}
+          {a.result && <span className="text-body-sm text-danger-ink">{a.result}</span>}
         </div>
       ) : (
-        <p className={cn('mt-2 text-body-sm', a.state === 'DONE' ? 'text-success' : a.state === 'FAILED' ? 'text-danger' : 'text-ink-muted')}>
+        <p className={cn('mt-2 text-body-sm', a.state === 'DONE' ? 'text-success-ink' : a.state === 'FAILED' ? 'text-danger-ink' : 'text-ink-muted')}>
           <span className="font-semibold">{STATE_TEXT[a.state]}</span>{a.result ? `: ${a.result}` : ''}
         </p>
       )}
@@ -302,7 +302,7 @@ const Composer = forwardRef<ComposerHandle, { disabled: boolean; streaming: bool
             <Square size={12} fill="currentColor" />
           </button>
         ) : (
-          <button type="submit" disabled={disabled || !text.trim()} aria-label="Send" title="Send (Enter)" className="mb-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white transition-opacity disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+          <button type="submit" disabled={disabled || !text.trim()} aria-label="Send" title="Send (Enter)" className="mb-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-primary-on transition-opacity disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <ArrowUp size={16} strokeWidth={2.4} />
           </button>
         )}
@@ -323,7 +323,7 @@ function QueuePill({ queue }: { queue: { until: number; total: number } }) {
   return (
     <div role="status" aria-live="polite" className="inline-flex max-w-full flex-col gap-1.5 rounded-card border border-primary/20 bg-primary/5 px-3 py-2">
       <span className="flex items-center gap-2 text-body-sm font-medium text-ink">
-        <Hourglass size={14} className="shrink-0 text-primary motion-safe:animate-pulse" />
+        <Hourglass size={14} className="shrink-0 text-primary-ink motion-safe:animate-pulse" />
         {left > 0 ? <>Metra is queued — answering in <span className="tabular-nums">{left}</span> s</> : 'Metra is queued — answering now'}
       </span>
       <span aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-primary/15">
@@ -356,7 +356,7 @@ function RecentChats({ onOpen, onShowAll }: { onOpen: (id: string) => void; onSh
     <section aria-label="Recent chats" className="w-full text-left">
       <div className="mb-1 flex items-center justify-between px-1">
         <p className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">Recent chats</p>
-        {onShowAll && list.length > 5 && <button type="button" onClick={onShowAll} className="text-[12px] font-medium text-primary hover:underline">See all</button>}
+        {onShowAll && list.length > 5 && <button type="button" onClick={onShowAll} className="text-[12px] font-medium text-primary-ink hover:underline">See all</button>}
       </div>
       <ul className="overflow-hidden rounded-card border border-line bg-card">
         {recent.map((c) => (

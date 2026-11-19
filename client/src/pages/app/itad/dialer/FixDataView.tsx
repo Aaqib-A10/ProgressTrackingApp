@@ -42,7 +42,7 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
       )}
 
       <Panel title={`Leads with no state · ${open.length}`}>
-        {open.length === 0 ? <p className="py-4 text-center text-body-md text-success">Nothing to fix. Every lead has a state.</p> : (
+        {open.length === 0 ? <p className="py-4 text-center text-body-md text-success-ink">Nothing to fix. Every lead has a state.</p> : (
           <div className="-mx-1 overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-body-sm">
               <thead className="text-[11px] uppercase text-ink-muted"><tr><th className="px-2 py-2">Lead</th><th className="px-2">Phone</th><th className="px-2">City</th><th className="px-2">Status</th>{showOwner && <th className="px-2">Rep</th>}<th className="px-2">Set the state</th><th className="px-2" /></tr></thead>
@@ -91,7 +91,7 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
         </Panel>
       )}
 
-      <Panel title={`Split states · verify zone · ${split.length}`} action={split.length > 0 ? <button type="button" onClick={() => setShowSplit((v) => !v)} className="text-body-sm font-semibold text-primary">{showSplit ? 'Hide' : 'Show'}</button> : undefined}>
+      <Panel title={`Split states · verify zone · ${split.length}`} action={split.length > 0 ? <button type="button" onClick={() => setShowSplit((v) => !v)} className="text-body-sm font-semibold text-primary-ink">{showSplit ? 'Hide' : 'Show'}</button> : undefined}>
         <p className="text-body-sm text-ink-muted">These states sit in two time zones (parts of Florida, Texas, Tennessee, Kentucky, Indiana, Michigan, the Dakotas, Nebraska, Kansas, Idaho, Oregon; Alaska and Hawaii). They are called in the zone most of the state uses. If the city says otherwise, pick the zone.</p>
         {showSplit && (
           <ul className="mt-3 divide-y divide-line">
@@ -117,7 +117,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'wa
   return (
     <div className="rounded-card border border-line bg-card p-4">
       <p className="text-body-sm text-ink-muted">{label}</p>
-      <p className={cn('text-[28px] font-bold leading-tight tabular-nums', tone === 'warning' ? 'text-warning' : tone === 'success' ? 'text-success' : 'text-ink')}>{value}</p>
+      <p className={cn('text-[28px] font-bold leading-tight tabular-nums', tone === 'warning' ? 'text-warning-ink' : tone === 'success' ? 'text-success-ink' : 'text-ink')}>{value}</p>
     </div>
   )
 }

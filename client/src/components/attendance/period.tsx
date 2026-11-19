@@ -58,7 +58,7 @@ export function PeriodPicker({ value, onChange, modes = ['DAY', 'WEEK', 'MONTH',
       <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist">
         {modes.map((m) => (
           <button key={m} type="button" role="tab" aria-selected={value.mode === m} onClick={() => onChange(periodFor(m, value.mode === 'RANGE' ? value.end : isCurrent ? today : value.start, value))}
-            className={cn('h-8 rounded-md px-3.5 text-body-sm font-semibold', value.mode === m ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>{label[m]}</button>
+            className={cn('h-8 rounded-md px-3.5 text-body-sm font-semibold', value.mode === m ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>{label[m]}</button>
         ))}
       </div>
       <div className="flex items-center gap-1">
@@ -77,7 +77,7 @@ export function PeriodPicker({ value, onChange, modes = ['DAY', 'WEEK', 'MONTH',
         )}
         <button type="button" onClick={() => onChange(shiftPeriod(value, 1))} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Next"><ChevronRight size={18} /></button>
       </div>
-      {!isCurrent && value.mode !== 'RANGE' && <button type="button" onClick={() => onChange(periodFor(value.mode, today))} className="h-8 rounded-btn px-2.5 text-body-sm font-semibold text-primary hover:bg-primary/5">Today</button>}
+      {!isCurrent && value.mode !== 'RANGE' && <button type="button" onClick={() => onChange(periodFor(value.mode, today))} className="h-8 rounded-btn px-2.5 text-body-sm font-semibold text-primary-ink hover:bg-primary/5">Today</button>}
     </div>
   )
 }
@@ -86,11 +86,11 @@ export function PeriodPicker({ value, onChange, modes = ['DAY', 'WEEK', 'MONTH',
 
 export const STATUS_STYLE: Record<HistoryLabel, { short: string; text: string; cell: string; dot: string }> = {
   PRESENT: { short: 'P', text: 'Present', cell: 'bg-success/5 border-success/25', dot: 'bg-success' },
-  ABSENT: { short: 'A', text: 'Absent', cell: 'bg-danger/10 border-danger/30 text-danger', dot: 'bg-danger' },
-  ON_LEAVE: { short: 'L', text: 'On leave', cell: 'bg-primary/10 border-primary/25 text-primary', dot: 'bg-primary' },
+  ABSENT: { short: 'A', text: 'Absent', cell: 'bg-danger/10 border-danger/30 text-danger-ink', dot: 'bg-danger' },
+  ON_LEAVE: { short: 'L', text: 'On leave', cell: 'bg-primary/10 border-primary/25 text-primary-ink', dot: 'bg-primary' },
   OFF: { short: 'Off', text: 'Off', cell: 'bg-slate-100 border-line text-ink-muted', dot: 'bg-slate-400' },
-  WFH: { short: 'WFH', text: 'Work from home', cell: 'bg-accent/10 border-accent/30 text-accent', dot: 'bg-accent' },
-  HOLIDAY: { short: 'H', text: 'Holiday', cell: 'bg-accent/10 border-accent/30 text-accent', dot: 'bg-accent' },
+  WFH: { short: 'WFH', text: 'Work from home', cell: 'bg-accent/10 border-accent/30 text-highlight-ink', dot: 'bg-accent' },
+  HOLIDAY: { short: 'H', text: 'Holiday', cell: 'bg-accent/10 border-accent/30 text-highlight-ink', dot: 'bg-accent' },
   WEEKLY_OFF: { short: '–', text: 'Weekly off', cell: 'bg-slate-50 border-line text-ink-muted', dot: 'bg-slate-300' },
   NOT_YET: { short: '…', text: 'Not checked in yet', cell: 'bg-card border-dashed border-line text-ink-muted', dot: 'bg-slate-300' },
 }

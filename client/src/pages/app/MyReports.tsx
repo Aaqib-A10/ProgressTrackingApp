@@ -57,7 +57,7 @@ export default function MyReports() {
       ) : data.columns.length === 0 ? (
         <Card>
           <div className="flex flex-col items-center py-10 text-center">
-            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary"><FileBarChart size={22} /></span>
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary-ink"><FileBarChart size={22} /></span>
             <p className="text-headline-md text-ink">No personal reports</p>
             <p className="mt-1 max-w-sm text-body-md text-ink-muted">Your role doesn’t have a daily entry form. Team dashboards show the data you manage.</p>
           </div>

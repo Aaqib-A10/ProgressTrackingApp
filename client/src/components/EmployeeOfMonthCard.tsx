@@ -27,9 +27,9 @@ export function EmployeeOfMonthCard() {
   return (
     <Card className="border-warning/30 bg-gradient-to-br from-warning/10 to-card">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-warning/20 text-warning"><Trophy size={20} /></span>
+        <span className="flex h-10 w-10 items-center justify-center rounded-btn bg-warning/20 text-warning-ink"><Trophy size={20} /></span>
         <div>
-          <p className="text-label-md uppercase tracking-wide text-warning">Top Achiever</p>
+          <p className="text-label-md uppercase tracking-wide text-warning-ink">Top Achiever</p>
           <p className="text-body-sm text-ink-muted">{monthLabel}{one ? ` · ${one.label} · ${one.basis}` : ''}</p>
         </div>
       </div>
@@ -48,7 +48,7 @@ export function EmployeeOfMonthCard() {
               {w.winner ? (
                 <div className="mt-1 flex items-center justify-between gap-3">
                   <span className="truncate text-headline-md text-ink">{w.winner.name}</span>
-                  <span className="shrink-0 text-headline-md font-bold tabular-nums text-warning">{w.winner.display}</span>
+                  <span className="shrink-0 text-headline-md font-bold tabular-nums text-warning-ink">{w.winner.display}</span>
                 </div>
               ) : (
                 <p className="mt-1 text-body-md text-ink-muted">{w.note ?? 'Nobody yet this month'}</p>

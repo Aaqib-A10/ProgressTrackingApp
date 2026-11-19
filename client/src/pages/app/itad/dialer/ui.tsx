@@ -54,9 +54,9 @@ export function RegionBadge({ lead, region, now }: { lead?: DialerLead; region?:
 export function StatusPill({ lead }: { lead: Pick<DialerLead, 'status' | 'stage'> & Partial<Pick<DialerLead, 'doNotCall' | 'wrongNumber'>> }) {
   return (
     <span className="inline-flex items-center gap-1">
-      <span className={cn('inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', lead.stage >= 4 ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted')}>{lead.status}</span>
-      {lead.doNotCall && lead.status !== 'DNC' && <span className="whitespace-nowrap rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-bold text-danger" title="Do not call (from the dialer)">DNC</span>}
-      {lead.wrongNumber && <span className="whitespace-nowrap rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-bold text-danger" title="Wrong number (from the dialer)">Wrong #</span>}
+      <span className={cn('inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', lead.stage >= 4 ? 'bg-success/10 text-success-ink' : 'bg-slate-100 text-ink-muted')}>{lead.status}</span>
+      {lead.doNotCall && lead.status !== 'DNC' && <span className="whitespace-nowrap rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-bold text-danger-ink" title="Do not call (from the dialer)">DNC</span>}
+      {lead.wrongNumber && <span className="whitespace-nowrap rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-bold text-danger-ink" title="Wrong number (from the dialer)">Wrong #</span>}
     </span>
   )
 }
@@ -112,7 +112,7 @@ export function Pager({ p, className }: { p: ReturnType<typeof usePaged<unknown>
       <div className="flex items-center gap-1">
         <button type="button" disabled={p.page === 1} onClick={() => p.setPage(p.page - 1)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 disabled:opacity-40" aria-label="Previous page"><ChevronLeft size={15} /></button>
         {nums.map((n, i) => n === '…' ? <span key={`e${i}`} className="px-1 text-ink-muted">…</span> : (
-          <button key={n} type="button" onClick={() => p.setPage(n)} className={cn('min-w-[30px] rounded-btn px-2 py-1 font-semibold tabular-nums', n === p.page ? 'bg-primary text-white' : 'text-ink hover:bg-slate-100')}>{n}</button>
+          <button key={n} type="button" onClick={() => p.setPage(n)} className={cn('min-w-[30px] rounded-btn px-2 py-1 font-semibold tabular-nums', n === p.page ? 'bg-primary text-primary-on' : 'text-ink hover:bg-slate-100')}>{n}</button>
         ))}
         <button type="button" disabled={p.page === p.pages} onClick={() => p.setPage(p.page + 1)} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 disabled:opacity-40" aria-label="Next page"><ChevronRight size={15} /></button>
         <select value={p.size} onChange={(e) => p.setSize(Number(e.target.value))} className="ml-2 h-8 rounded-btn border border-line bg-card px-1.5 text-body-sm text-ink" aria-label="Rows per page">
@@ -147,7 +147,7 @@ export function LeadActions({ lead, onDone, compact, onNote }: { lead: Pick<Dial
   const btn = cn('inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-btn border px-2.5 text-body-sm font-semibold transition-colors', compact && 'h-7 px-2')
   return (
     <div className={cn('flex items-center gap-1.5', compact ? 'flex-nowrap' : 'flex-wrap')} onClick={(e) => e.stopPropagation()}>
-      <button type="button" disabled={busy} onClick={callNow} className={cn(btn, 'border-primary bg-primary text-white hover:bg-primary/90')}><Phone size={13} />Call now</button>
+      <button type="button" disabled={busy} onClick={callNow} className={cn(btn, 'border-primary bg-primary text-primary-on hover:bg-primary/90')}><Phone size={13} />Call now</button>
       <button type="button" onClick={() => setOpen('CALL_LATER')} className={cn(btn, 'border-line bg-card text-ink hover:bg-slate-50')}><Clock3 size={13} />Call later</button>
       <button type="button" onClick={() => setOpen('SNOOZE')} className={cn(btn, 'border-line bg-card text-ink hover:bg-slate-50')}><BellOff size={13} />Snooze</button>
       <button type="button" onClick={() => (onNote ? onNote() : setOpen('NOTE'))} className={cn(btn, 'border-line bg-card text-ink hover:bg-slate-50')}><MessageSquarePlus size={13} />Log note</button>
@@ -179,7 +179,7 @@ export function ActionModal({ lead, kind, onClose, onDone }: { lead: Pick<Dialer
         {kind === 'SNOOZE' && (
           <div className="flex flex-wrap gap-1.5">
             {[1, 3, 7, 14, 30].map((d) => (
-              <button key={d} type="button" disabled={busy} onClick={() => save(new Date(now.getTime() + d * 86400000))} className="rounded-full border border-line px-3 py-1 text-body-sm font-medium text-ink hover:border-primary hover:text-primary">{d === 1 ? '1 day' : d === 7 ? '1 week' : d === 14 ? '2 weeks' : `${d} days`}</button>
+              <button key={d} type="button" disabled={busy} onClick={() => save(new Date(now.getTime() + d * 86400000))} className="rounded-full border border-line px-3 py-1 text-body-sm font-medium text-ink hover:border-primary hover:text-primary-ink">{d === 1 ? '1 day' : d === 7 ? '1 week' : d === 14 ? '2 weeks' : `${d} days`}</button>
             ))}
           </div>
         )}
@@ -225,7 +225,7 @@ export function NoteFields({ text, setText, next, setNext, pinned, setPinned, au
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={4000} autoFocus={autoFocus} placeholder="What happened, what was agreed…" className="w-full rounded-btn border border-line bg-card px-3 py-2 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
       <div className="flex flex-wrap items-center gap-1.5 text-body-sm">
         <span className="text-ink-muted">Next action</span>
-        {[1, 3, 7].map((d) => <button key={d} type="button" onClick={() => quick(d)} className="rounded-full border border-line px-2.5 py-0.5 text-ink hover:border-primary hover:text-primary">in {d} day{d > 1 ? 's' : ''}</button>)}
+        {[1, 3, 7].map((d) => <button key={d} type="button" onClick={() => quick(d)} className="rounded-full border border-line px-2.5 py-0.5 text-ink hover:border-primary hover:text-primary-ink">in {d} day{d > 1 ? 's' : ''}</button>)}
         <input type="datetime-local" value={next} onChange={(e) => setNext(e.target.value)} className="h-8 rounded-btn border border-line bg-card px-2 text-body-sm text-ink" aria-label="Next action date" />
         {next && <button type="button" onClick={() => setNext('')} className="text-ink-muted hover:text-ink">clear</button>}
       </div>
@@ -260,7 +260,7 @@ export function DownloadLeads({ title, leads, now, showOwner, label = 'Download'
       {open && (
         <div role="menu" className="absolute right-0 z-30 mt-1 w-60 overflow-hidden rounded-card border border-line bg-card py-1 shadow-overlay">
           <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase text-ink-muted">{leads.length.toLocaleString()} lead{leads.length === 1 ? '' : 's'}</p>
-          <button type="button" role="menuitem" className={item} onClick={() => pick('xlsx')}><FileSpreadsheet size={15} className="text-success" />Excel (.xlsx)</button>
+          <button type="button" role="menuitem" className={item} onClick={() => pick('xlsx')}><FileSpreadsheet size={15} className="text-success-ink" />Excel (.xlsx)</button>
           <button type="button" role="menuitem" className={item} onClick={() => pick('csv')}><FileText size={15} className="text-ink-muted" />CSV (.csv)</button>
         </div>
       )}
@@ -299,7 +299,7 @@ export function LeadTable({ leads, now, showOwner, onOpen, extra }: { leads: Dia
           {leads.map((l) => (
             <tr key={l.id} onClick={() => onOpen(l.id)} className="cursor-pointer hover:bg-slate-50" title={l.pinnedNote ? `Pinned note: ${l.pinnedNote}` : undefined}>
               <td className="px-2 py-2">
-                <p className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning" title={`Update Earthzone: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</p>
+                <p className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning-ink" title={`Update Earthzone: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</p>
                 {l.contactName && <p className="text-ink-muted">{l.contactName}</p>}
               </td>
               <td className="whitespace-nowrap px-2 tabular-nums text-ink">{l.phone ?? '—'}</td>
@@ -350,7 +350,7 @@ export function MultiFilter({ label, allLabel = 'All', value, onChange, options 
     <div ref={box} className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label={label}
         title={picked.length > 1 ? picked.map(name).join(', ') : undefined}
-        className={cn('inline-flex h-8 max-w-[260px] items-center gap-1.5 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', picked.length ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')}>
+        className={cn('inline-flex h-8 max-w-[260px] items-center gap-1.5 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', picked.length ? 'border-primary bg-primary/5 font-semibold text-primary-ink' : 'border-line bg-card text-ink')}>
         <span className="truncate">{label}: {text}</span>
         <ChevronDown size={14} className={cn('shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
@@ -371,7 +371,7 @@ export function MultiFilter({ label, allLabel = 'All', value, onChange, options 
               return (
                 <li key={o.value}>
                   <button type="button" role="option" aria-selected={on} onClick={() => toggle(o.value)} className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-body-sm text-ink hover:bg-slate-100">
-                    <span className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-white' : 'border-line bg-card')}>{on && <Check size={12} strokeWidth={3} />}</span>
+                    <span className={cn('flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-on' : 'border-line bg-card')}>{on && <Check size={12} strokeWidth={3} />}</span>
                     <span className="truncate">{o.label ?? o.value}</span>
                   </button>
                 </li>
@@ -380,10 +380,10 @@ export function MultiFilter({ label, allLabel = 'All', value, onChange, options 
           </ul>
           <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2">
             <div className="flex gap-3 text-body-sm">
-              {shown.length > 1 && <button type="button" onClick={() => onChange(joinMulti([...picked, ...shown.map((o) => o.value)]))} className="font-medium text-primary hover:underline">Pick all{q.trim() ? ' shown' : ''}</button>}
+              {shown.length > 1 && <button type="button" onClick={() => onChange(joinMulti([...picked, ...shown.map((o) => o.value)]))} className="font-medium text-primary-ink hover:underline">Pick all{q.trim() ? ' shown' : ''}</button>}
               {picked.length > 0 && <button type="button" onClick={() => onChange('')} className="inline-flex items-center gap-1 text-ink-muted hover:text-ink"><X size={13} />Clear</button>}
             </div>
-            <button type="button" onClick={() => setOpen(false)} className="rounded-btn bg-primary px-3 py-1 text-body-sm font-semibold text-white hover:bg-primary/90">Done</button>
+            <button type="button" onClick={() => setOpen(false)} className="rounded-btn bg-primary px-3 py-1 text-body-sm font-semibold text-primary-on hover:bg-primary/90">Done</button>
           </div>
         </div>
       )}

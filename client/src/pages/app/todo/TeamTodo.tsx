@@ -94,19 +94,19 @@ export function TeamTodo({ period, start, isSuperAdmin, onOpenPerson }: { period
         </div>
       </div>
 
-      {holiday && <p className="rounded-btn bg-primary/5 px-3 py-2 text-body-sm text-primary">{holiday.name} is a holiday.</p>}
+      {holiday && <p className="rounded-btn bg-primary/5 px-3 py-2 text-body-sm text-primary-ink">{holiday.name} is a holiday.</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {chip('ALL', 'Logged', logged.length, 'text-ink')}
-        {chip('MISSING', 'Not logged yet', missing.length, missing.length ? 'text-warning' : 'text-ink')}
-        {chip('HELP', 'Need help', help.length, help.length ? 'text-danger' : 'text-ink')}
+        {chip('MISSING', 'Not logged yet', missing.length, missing.length ? 'text-warning-ink' : 'text-ink')}
+        {chip('HELP', 'Need help', help.length, help.length ? 'text-danger-ink' : 'text-ink')}
         {chip('UNREVIEWED', 'Not reviewed', logged.length - logged.filter((m) => m.review).length, 'text-ink')}
       </div>
       <p className="-mt-2 text-[11px] text-ink-muted">{reviewed} reviewed. Green: good work. Red: needs work. Amber: seen. Grey: not reviewed yet. Private entries are never shown.</p>
 
       {help.length > 0 && filter !== 'MISSING' && (
         <Card className="border-danger/30">
-          <h3 className="mb-2 flex items-center gap-1.5 text-label-md uppercase text-danger"><LifeBuoy size={14} /> Needs your help</h3>
+          <h3 className="mb-2 flex items-center gap-1.5 text-label-md uppercase text-danger-ink"><LifeBuoy size={14} /> Needs your help</h3>
           <ul className="divide-y divide-line">
             {help.map(({ m, e }) => (
               <li key={e.id} className="flex items-start gap-3 py-2 text-body-sm">
@@ -153,12 +153,12 @@ function PersonCard({ m, period, busy, onOpen, onReview, onClear }: { m: TeamMem
         <span className={cn('ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold', st.chip)}>{st.label}</span>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5 text-[11px] font-semibold">
-        <span className="rounded-full bg-success/10 px-2 py-0.5 text-success">{m.done} done</span>
-        {m.inProgress > 0 && <span className="rounded-full bg-warning/10 px-2 py-0.5 text-warning">{m.inProgress} in progress</span>}
+        <span className="rounded-full bg-success/10 px-2 py-0.5 text-success-ink">{m.done} done</span>
+        {m.inProgress > 0 && <span className="rounded-full bg-warning/10 px-2 py-0.5 text-warning-ink">{m.inProgress} in progress</span>}
         {m.planned - m.inProgress > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-ink-muted">{m.planned - m.inProgress} to do</span>}
-        {m.blocked > 0 && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-danger">{m.blocked} need help</span>}
-        {m.hours > 0 && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">{m.hours} h</span>}
-        {m.quantity > 0 && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-accent">{m.quantity.toLocaleString()} items</span>}
+        {m.blocked > 0 && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-danger-ink">{m.blocked} need help</span>}
+        {m.hours > 0 && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-ink">{m.hours} h</span>}
+        {m.quantity > 0 && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-highlight-ink">{m.quantity.toLocaleString()} items</span>}
       </div>
       <ul className="mb-3 space-y-2">
         {(all ? rows : rows.slice(0, 6)).map((e) => (
@@ -173,7 +173,7 @@ function PersonCard({ m, period, busy, onOpen, onReview, onClear }: { m: TeamMem
           </li>
         ))}
       </ul>
-      {rows.length > 6 && <button type="button" onClick={() => setAll((a) => !a)} className="mb-3 text-body-sm font-semibold text-primary">{all ? 'Show less' : `Show all ${rows.length}`}</button>}
+      {rows.length > 6 && <button type="button" onClick={() => setAll((a) => !a)} className="mb-3 text-body-sm font-semibold text-primary-ink">{all ? 'Show less' : `Show all ${rows.length}`}</button>}
       <div className="border-t border-line pt-3">
         <ReviewBox key={m.review?.updatedAt ?? 'none'} review={m.review} busy={busy} onSave={onReview} onClear={onClear} />
       </div>

@@ -3,13 +3,15 @@ import { cn } from '../../lib/cn'
 
 export type BadgeTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'accent'
 
+// Text in the -ink colours: the status colour made dark (light pages) or light (dark pages) enough to read on its
+// own pale surface in every theme (src/theme/build.ts readablePass). The solid status colours (text-warning-ink) do not.
 const TONES: Record<BadgeTone, string> = {
   neutral: 'bg-slate-100 text-ink-muted ring-slate-200',
-  primary: 'bg-primary/[0.08] text-primary ring-primary/15',
-  success: 'bg-success/[0.08] text-success ring-success/20',
-  warning: 'bg-warning/[0.09] text-warning ring-warning/20',
-  danger: 'bg-danger/[0.08] text-danger ring-danger/20',
-  accent: 'bg-accent/[0.08] text-accent ring-accent/20',
+  primary: 'bg-primary-50 text-primary-ink ring-primary/15',
+  success: 'bg-success-muted text-success-ink ring-success/20',
+  warning: 'bg-warning-muted text-warning-ink ring-warning/25',
+  danger: 'bg-danger-muted text-danger-ink ring-danger/20',
+  accent: 'bg-highlight-muted text-highlight-ink ring-highlight/20',
 }
 
 export interface BadgeProps {

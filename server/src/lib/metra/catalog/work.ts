@@ -153,6 +153,48 @@ export const WORK: Entry[] = [
     table: dyn(['work-from-home request', 'work-from-home requests']),
   },
   {
+    key: 'attendance.fixes', label: 'Attendance fix requests', area: 'Attendance', app: '/app/attendance/me',
+    about: 'Requests to fix a day someone forgot to check in or out: the asker\'s own, and for a team lead their team\'s, with the day, the times asked for, the reason and whether it was approved.',
+    says: ['forgot to check in', 'forgot check in', 'missed check in', 'attendance fix', 'fix my attendance', 'attendance request', 'attendance correction request', 'pending attendance requests', 'approve attendance fix'],
+    who: everyone,
+    blocks: ['attendance'], apis: ['/api/attendance/fix-requests/mine', '/api/attendance/fix-requests/team'], models: ['AttendanceFixRequest'],
+    async load(ctx) {
+      const team = ctx.asker.role === 'SUPER_ADMIN' || ctx.asker.role === 'TEAM_LEAD'
+      const r = await get<{ requests: unknown[] }>(ctx, team ? '/api/attendance/fix-requests/team' : '/api/attendance/fix-requests/mine')
+      if (r.error !== undefined) return { error: r.error }
+      return { ...loose(r.body.requests, ['attendance fix request', 'attendance fix requests'], { people: ['name', 'user', 'decidedBy'], status: 'status', date: 'date' }), head: [team ? "The team's requests." : `${ctx.me.name}'s own requests.`] }
+    },
+    table: dyn(['attendance fix request', 'attendance fix requests']),
+  },
+  {
+    key: 'notes.mine', label: 'Notes', area: 'Notes', app: '/app/notes',
+    about: "The asker's own sticky notes and the ones shared with them (Notes): title, text or checklist, tags, pinned, archived, a reminder time, who owns it and who it is shared with. Only notes the asker owns or was given.",
+    says: ['my notes', 'notes', 'sticky notes', 'note', 'notes shared with me', 'shared notes', 'my reminders', 'note reminder', 'pinned notes', 'archived notes', 'notes tagged'],
+    who: everyone,
+    blocks: ['my-notes'], apis: ['/api/notes'], models: ['Note', 'NoteShare'],
+    async load(ctx) {
+      const r = await get<{ notes: Record<string, unknown>[] }>(ctx, '/api/notes')
+      if (r.error !== undefined) return { error: r.error }
+      const rows = r.body.notes.map((n) => {
+        const items = Array.isArray(n.items) ? (n.items as { text: string; done: boolean }[]) : null
+        const text = items ? items.map((i) => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('; ') : String(n.body ?? '')
+        return {
+          title: n.title || text.split('\n')[0].slice(0, 80),
+          text: text.length > 400 ? `${text.slice(0, 397)}...` : text,
+          tags: Array.isArray(n.tags) ? (n.tags as string[]).join(', ') : '',
+          where: n.archived ? 'archived' : n.pinned ? 'pinned' : 'notes',
+          reminder: n.remindAt ?? null,
+          owner: nameOf(n.owner),
+          sharedWith: Array.isArray(n.shares) ? (n.shares as { name: string }[]).map((s) => s.name).join(', ') : '',
+          access: n.access,
+          updated: n.updatedAt,
+        }
+      })
+      return { ...loose(rows, ['note', 'notes'], { people: ['owner'], status: 'where', date: 'updated' }), head: [`${ctx.me.name}'s notes and the ones shared with them.`] }
+    },
+    table: dyn(['note', 'notes']),
+  },
+  {
     key: 'chat.list', label: 'My chats', area: 'Chat', app: '/app/chat',
     about: "The asker's own chats: each group, project chat and direct message they are in, and how many unread messages it has. What was SAID in a chat is found with search_metriq.",
     says: ['my chats', 'chat list', 'which chats', 'unread chats', 'unread messages', 'which groups am i in', 'group chats'],

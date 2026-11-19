@@ -67,6 +67,7 @@ export const BLOCKS: Block[] = [
   { key: 'my-analytics', label: 'My Analytics', group: 'main', kinds: ['ITAD', 'LEAD_GEN'], description: 'Charts of their own daily log numbers.', app: ['/app/analytics'] },
   { key: 'my-tasks', label: 'My Tasks', group: 'main', kinds: [], description: 'Every project task given to them.', app: ['/app/tasks'] },
   { key: 'my-todo', label: 'My To-Do', group: 'main', kinds: [], description: 'Their plan and done list for each day, week, month and year.', app: ['/app/todo'] },
+  { key: 'my-notes', label: 'Notes', group: 'main', kinds: [], description: 'Sticky notes for the day: their own, and the ones shared with them.', app: ['/app/notes'] },
   { key: 'my-team', label: 'My Team', group: 'main', kinds: [], leadOnly: true, description: 'The people in the team, and inviting new ones.', app: ['/app/team/members', '/app/members'] },
   { key: 'monthly-reports', label: 'Monthly Reports', group: 'main', kinds: ['ITAD', 'LEAD_GEN'], leadOnly: true, description: "The team's month in one report.", app: ['/app/reports/monthly'] },
   { key: 'my-qa', label: 'My QA Scores', group: 'main', kinds: ['ITAD', 'CSR'], description: 'Their call quality scores.', app: ['/app/qa/my'] },

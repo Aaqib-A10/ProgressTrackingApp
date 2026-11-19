@@ -225,9 +225,9 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
         )}
         {open && (
           <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-line bg-bg px-4 pb-5 pt-2 md:hidden">
-            <Link to="/product" className="flex items-center justify-between px-2 pt-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Product<span className="normal-case tracking-normal text-primary">See all</span></Link>
+            <Link to="/product" className="flex items-center justify-between px-2 pt-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Product<span className="normal-case tracking-normal text-primary-ink">See all</span></Link>
             {FEATURES.map((f) => { const Icon = FEATURE_ICON[f.key]; return <Link key={f.key} to={`/product/${f.slug}`} className="flex items-center gap-3 rounded-btn px-2 py-2 text-[15px] font-medium text-ink"><Tile hue={f.hue} size={28}><Icon size={15} /></Tile>{f.name}</Link> })}
-            <Link to="/solutions" className="flex items-center justify-between px-2 pt-3 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Solutions<span className="normal-case tracking-normal text-primary">See all</span></Link>
+            <Link to="/solutions" className="flex items-center justify-between px-2 pt-3 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">Solutions<span className="normal-case tracking-normal text-primary-ink">See all</span></Link>
             {SOLUTIONS.map((t) => <Link key={t.key} to={`/solutions/${t.slug}`} className="flex items-center gap-3 rounded-btn px-2 py-2 text-[15px] font-medium text-ink"><img src={site(t.image)} alt="" className="h-7 w-7 rounded-[8px] object-cover" />{t.name}</Link>)}
             <div className="mt-2 border-t border-line pt-2">
               {LINKS.filter((l) => !l.menu).map((l) => <Link key={l.to} to={l.to} className="block rounded-btn px-2 py-2.5 text-[15px] font-medium text-ink">{l.label}</Link>)}
@@ -308,7 +308,7 @@ function FooterWord() {
 export const Container = ({ children, className }: { children: ReactNode; className?: string }) => <div className={cn('mx-auto max-w-6xl px-4 sm:px-6', className)}>{children}</div>
 
 export function Eyebrow({ children }: { children: ReactNode }) {
-  return <p className="inline-flex items-center gap-2.5 text-[13.5px] font-semibold text-primary"><span aria-hidden className="h-px w-6 bg-gradient-to-r from-transparent to-primary" />{children}</p>
+  return <p className="inline-flex items-center gap-2.5 text-[13.5px] font-semibold text-primary-ink"><span aria-hidden className="h-px w-6 bg-gradient-to-r from-transparent to-primary" />{children}</p>
 }
 
 export function SectionHead({ eyebrow, title, text, center }: { eyebrow?: string; title: ReactNode; text?: ReactNode; center?: boolean }) {

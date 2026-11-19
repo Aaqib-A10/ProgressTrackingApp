@@ -20,10 +20,10 @@ const today = () => new Date().toISOString().slice(0, 10)
 /** Overdue: softer colours that scale with how far past its rule a lead is, never the whole row in red. */
 const LEVEL: Record<number, string> = {
   0: 'bg-slate-100 text-ink-muted',
-  1: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
-  2: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200 dark:bg-orange-400/10 dark:text-orange-300 dark:ring-orange-400/30',
-  3: 'bg-rose-50 text-rose-600 ring-1 ring-rose-200 dark:bg-rose-400/10 dark:text-rose-300 dark:ring-rose-400/30',
-  4: 'bg-rose-100 text-rose-700 ring-1 ring-rose-300 dark:bg-rose-500/20 dark:text-rose-200 dark:ring-rose-400/40',
+  1: 'bg-yellow-subtle text-yellow-ink ring-1 ring-yellow-ring',
+  2: 'bg-orange-subtle text-orange-ink ring-1 ring-orange-ring',
+  3: 'bg-red-subtle text-red-ink ring-1 ring-red-ring',
+  4: 'bg-red-muted text-red-ink ring-1 ring-red-ring',
 }
 export function QuietPill({ row }: { row: FollowUpRow }) {
   const over = row.rule != null && row.ruleDue ? row.days - row.rule : null
@@ -45,7 +45,7 @@ export function LocalTime({ lead, now, open }: { lead: DialerLead; now: Date; op
   return (
     <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-muted">
       <span className={cn('h-1.5 w-1.5 rounded-full', open ? 'bg-success' : 'bg-slate-300')} />{t} {r}
-      {lead.verifyZone && !lead.zoneOverride && <span className="rounded bg-warning/15 px-1 text-[10px] font-bold text-warning" title="The state has two time zones: check the city or area code">verify zone</span>}
+      {lead.verifyZone && !lead.zoneOverride && <span className="rounded bg-warning/15 px-1 text-[10px] font-bold text-warning-ink" title="The state has two time zones: check the city or area code">verify zone</span>}
     </span>
   )
 }
@@ -61,7 +61,7 @@ export function CallNow({ lead, onCalled, compact }: { lead: DialerLead; onCalle
     onCalled()
   }
   return (
-    <button type="button" onClick={go} className={cn('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-btn bg-primary px-2.5 font-semibold text-white shadow-xs hover:bg-primary-700', compact ? 'h-7 text-[12px]' : 'h-8 text-body-sm')}>
+    <button type="button" onClick={go} className={cn('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-btn bg-primary px-2.5 font-semibold text-primary-on shadow-xs hover:bg-primary-700', compact ? 'h-7 text-[12px]' : 'h-8 text-body-sm')}>
       <Phone size={13} />Call now
     </button>
   )
@@ -79,7 +79,7 @@ export function OutcomeChips({ lead, onDone, onClose }: { lead: DialerLead; onDo
     <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
       {OUTCOMES.map((o) => (
         <button key={o.key} type="button" disabled={busy} onClick={() => log(o.key)} className={cn('h-7 rounded-full border px-2.5 text-[12px] font-semibold transition-colors disabled:opacity-50',
-          o.key === 'CONNECTED' ? 'border-success/40 text-success hover:bg-success/10' : o.key === 'WRONG_NUMBER' ? 'border-danger/30 text-danger hover:bg-danger/10' : 'border-line text-ink hover:border-primary hover:text-primary')}>{o.label}</button>
+          o.key === 'CONNECTED' ? 'border-success/40 text-success-ink hover:bg-success/10' : o.key === 'WRONG_NUMBER' ? 'border-danger/30 text-danger-ink hover:bg-danger/10' : 'border-line text-ink hover:border-primary hover:text-primary-ink')}>{o.label}</button>
       ))}
       {onClose && <button type="button" onClick={onClose} className="rounded-full p-1 text-ink-faint hover:text-ink" aria-label="Hide the outcomes"><X size={13} /></button>}
     </div>
@@ -138,7 +138,7 @@ export function AddTouchModal({ lead, onClose, onDone }: { lead: Pick<DialerLead
         <div>
           <span className="mb-1.5 block text-body-sm font-semibold text-ink">What happened (optional)</span>
           <div className="flex flex-wrap gap-1.5">
-            {OUTCOMES.map((o) => <button key={o.key} type="button" onClick={() => setOutcome(outcome === o.key ? '' : o.key)} className={cn('rounded-full border px-3 py-1 text-body-sm font-medium', outcome === o.key ? 'border-primary bg-primary text-white' : 'border-line text-ink hover:border-primary')}>{o.label}</button>)}
+            {OUTCOMES.map((o) => <button key={o.key} type="button" onClick={() => setOutcome(outcome === o.key ? '' : o.key)} className={cn('rounded-full border px-3 py-1 text-body-sm font-medium', outcome === o.key ? 'border-primary bg-primary text-primary-on' : 'border-line text-ink hover:border-primary')}>{o.label}</button>)}
           </div>
         </div>
         <p className="text-[12px] leading-relaxed text-ink-muted">A touch is one try at reaching the lead. Several calls between two imports count once, so import at the start of each shift. A call already in the next import is not counted twice.</p>
@@ -177,7 +177,7 @@ export function AddTaskModal({ leads, leadId, onClose, onDone }: { leads: Dialer
           {lead ? (
             <div className="flex items-center justify-between rounded-btn border border-line bg-slate-50 px-3 py-2 text-body-sm">
               <span className="min-w-0 truncate"><b className="text-ink">{lead.company}</b>{lead.contactName ? <span className="text-ink-muted"> · {lead.contactName}</span> : null}</span>
-              {!leadId && <button type="button" onClick={() => setPick('')} className="text-[12px] font-semibold text-primary">Change</button>}
+              {!leadId && <button type="button" onClick={() => setPick('')} className="text-[12px] font-semibold text-primary-ink">Change</button>}
             </div>
           ) : (
             <div>
@@ -193,7 +193,7 @@ export function AddTaskModal({ leads, leadId, onClose, onDone }: { leads: Dialer
         <div>
           <span className="mb-1 block text-body-sm font-semibold text-ink">Type</span>
           <div className="inline-flex rounded-btn border border-line p-0.5">
-            {TASK_KINDS.map((k) => <button key={k.key} type="button" onClick={() => setKind(k.key)} className={cn('rounded-md px-3 py-1 text-body-sm font-semibold', kind === k.key ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>{k.label}</button>)}
+            {TASK_KINDS.map((k) => <button key={k.key} type="button" onClick={() => setKind(k.key)} className={cn('rounded-md px-3 py-1 text-body-sm font-semibold', kind === k.key ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>{k.label}</button>)}
           </div>
         </div>
         <label className="block"><span className="mb-1 block text-body-sm font-semibold text-ink">Due (your time)</span><input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className={inputCls} /></label>
@@ -232,24 +232,24 @@ export function BulkBar({ ids, count, onClear, onDone }: { ids: string[]; count:
     } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not do that') }) } finally { setBusy(false) }
   }
   if (!count) return null
-  const btn = 'inline-flex h-8 items-center gap-1.5 rounded-btn border border-white/15 bg-white/10 px-3 text-body-sm font-semibold text-white hover:bg-white/20'
+  const btn = 'inline-flex h-8 items-center gap-1.5 rounded-btn border border-bg/15 bg-bg/10 px-3 text-body-sm font-semibold text-bg hover:bg-bg/20'
   const title = open === 'SNOOZE' ? 'Snooze until' : open === 'RESCHEDULE' ? 'Move their open tasks to' : open === 'ADD_TASK' ? 'Add a task to each' : 'Log a touch on each'
   return (
     <>
-      <div className="sticky bottom-3 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-card bg-ink px-3 py-2 text-white shadow-overlay dark:bg-slate-800">
+      <div className="sticky bottom-3 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-card bg-ink px-3 py-2 text-bg shadow-overlay">
         <span className="px-1 text-body-sm"><b className="tabular-nums">{count}</b> picked</span>
         <button type="button" className={btn} onClick={() => start('SNOOZE')}><BellOff size={14} />Snooze</button>
         <button type="button" className={btn} onClick={() => start('RESCHEDULE')}><CalendarClock size={14} />Reassign due date</button>
         <button type="button" className={btn} onClick={() => start('ADD_TASK')}><ListPlus size={14} />Add task</button>
         <button type="button" className={btn} onClick={() => start('LOG_TOUCH')}><Check size={14} />Log touch</button>
-        <button type="button" onClick={onClear} className="rounded-full p-1.5 text-white/70 hover:bg-white/10 hover:text-white" aria-label="Clear the picked rows"><X size={15} /></button>
+        <button type="button" onClick={onClear} className="rounded-full p-1.5 text-bg/70 hover:bg-bg/10 hover:text-bg" aria-label="Clear the picked rows"><X size={15} /></button>
       </div>
       {open && (
         <Modal open onClose={() => setOpen(null)} title={`${title} · ${count} lead${count === 1 ? '' : 's'}`} size="sm" footer={<><Button variant="secondary" onClick={() => setOpen(null)}>Cancel</Button><Button disabled={busy || !when} onClick={run}>Apply</Button></>}>
           <div className="space-y-3">
             {open === 'ADD_TASK' && (
               <div className="inline-flex rounded-btn border border-line p-0.5">
-                {TASK_KINDS.map((k) => <button key={k.key} type="button" onClick={() => setKind(k.key)} className={cn('rounded-md px-3 py-1 text-body-sm font-semibold', kind === k.key ? 'bg-primary text-white' : 'text-ink-muted')}>{k.label}</button>)}
+                {TASK_KINDS.map((k) => <button key={k.key} type="button" onClick={() => setKind(k.key)} className={cn('rounded-md px-3 py-1 text-body-sm font-semibold', kind === k.key ? 'bg-primary text-primary-on' : 'text-ink-muted')}>{k.label}</button>)}
               </div>
             )}
             {open === 'LOG_TOUCH'
@@ -257,7 +257,7 @@ export function BulkBar({ ids, count, onClear, onDone }: { ids: string[]; count:
               : <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className={inputCls} />}
             {open === 'LOG_TOUCH' && (
               <div className="flex flex-wrap gap-1.5">
-                {OUTCOMES.map((o) => <button key={o.key} type="button" onClick={() => setOutcome(outcome === o.key ? '' : o.key)} className={cn('rounded-full border px-3 py-1 text-body-sm font-medium', outcome === o.key ? 'border-primary bg-primary text-white' : 'border-line text-ink')}>{o.label}</button>)}
+                {OUTCOMES.map((o) => <button key={o.key} type="button" onClick={() => setOutcome(outcome === o.key ? '' : o.key)} className={cn('rounded-full border px-3 py-1 text-body-sm font-medium', outcome === o.key ? 'border-primary bg-primary text-primary-on' : 'border-line text-ink')}>{o.label}</button>)}
               </div>
             )}
             {open === 'RESCHEDULE' && <p className="text-[12px] text-ink-muted">Moves the open call backs and tasks you added on these leads. Automatic follow-ups move by themselves once you log a touch.</p>}

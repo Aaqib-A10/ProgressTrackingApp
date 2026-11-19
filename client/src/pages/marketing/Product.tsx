@@ -42,7 +42,7 @@ function Overview() {
                     <div className="p-6">
                       <div className="flex items-center gap-3"><HueTile hue={f.hue}><Icon size={20} /></HueTile><span className="text-[17px] font-semibold text-ink">{f.name}</span></div>
                       <p className="mt-3 text-[14.5px] leading-relaxed text-ink-muted">{f.menu}.</p>
-                      <span className="mt-3 inline-flex items-center gap-1 text-[14px] font-semibold text-primary">See how it works <IconArrow size={15} className="transition-transform group-hover:translate-x-0.5" /></span>
+                      <span className="mt-3 inline-flex items-center gap-1 text-[14px] font-semibold text-primary-ink">See how it works <IconArrow size={15} className="transition-transform group-hover:translate-x-0.5" /></span>
                     </div>
                     <div className="relative mt-auto overflow-hidden p-4 pt-0 sm:p-5 sm:pt-0">
                       <div className="relative overflow-hidden rounded-[14px] p-3 sm:p-4" style={{ background: `linear-gradient(135deg, rgb(${f.hue.a} / 0.2), rgb(${f.hue.b} / 0.2))` }}>
@@ -83,7 +83,7 @@ function Overview() {
               const Art = EXTRA_ART[x.key]
               return (
                 <Reveal key={x.key} delay={(i % 2) * 90} className="flex flex-col rounded-[18px] border border-line bg-card p-6">
-                  <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-[11px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><Icon size={21} /></span><h3 className="text-[17px] font-semibold text-ink">{x.title}</h3></div>
+                  <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-[11px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary-ink ring-1 ring-primary/20"><Icon size={21} /></span><h3 className="text-[17px] font-semibold text-ink">{x.title}</h3></div>
                   <p className="mt-3 text-[14.5px] leading-relaxed text-ink-muted">{x.text}</p>
                   <div className="mt-auto"><Art /></div>
                 </Reveal>
@@ -113,7 +113,7 @@ function FeaturePage({ slug }: { slug: string }) {
             <h1 className="mk-up mt-6 text-balance text-[40px] font-semibold leading-[1.02] tracking-[-0.045em] text-ink sm:text-[56px] lg:text-[58px]" style={{ animationDelay: '60ms' }}><AccentTitle text={f.title} accent={f.accent} hue={f.hue} /></h1>
             <p className="mk-up mt-6 max-w-xl text-pretty text-[17px] leading-relaxed text-ink-muted sm:text-[18px]" style={{ animationDelay: '160ms' }}>{f.lead}</p>
             <div className="mk-up mt-8 flex flex-wrap gap-3" style={{ animationDelay: '240ms' }}><PrimaryCta /><SecondaryCta to="/product">All of Metriq</SecondaryCta></div>
-            <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px] text-ink-muted">{[free ? 'Free while we launch' : '14 days free', 'No card needed'].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><IconCheck size={14} className="text-success" />{t}</span>)}</p>
+            <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px] text-ink-muted">{[free ? 'Free while we launch' : '14 days free', 'No card needed'].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><IconCheck size={14} className="text-success-ink" />{t}</span>)}</p>
           </div>
           <HueCanvas hue={f.hue} image={f.image} darkImage={f.darkImage} alt={`${f.name} in Metriq`} eager />
         </div>
@@ -171,7 +171,7 @@ function FeaturePage({ slug }: { slug: string }) {
                   <HueTile hue={o.hue} size={36}><OIcon size={18} /></HueTile>
                   <p className="mt-4 text-[15.5px] font-semibold text-ink">{o.name}</p>
                   <p className="mt-1 text-[13.5px] text-ink-muted">{o.menu}</p>
-                  <span className="mt-3 inline-flex items-center gap-1 text-[13.5px] font-semibold text-primary">Open <IconArrow size={14} className="transition-transform group-hover:translate-x-0.5" /></span>
+                  <span className="mt-3 inline-flex items-center gap-1 text-[13.5px] font-semibold text-primary-ink">Open <IconArrow size={14} className="transition-transform group-hover:translate-x-0.5" /></span>
                 </Link>
               )
             })}

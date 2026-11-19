@@ -17,11 +17,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // colour on a screen; secondary is a white surface with a hairline border and a tiny shadow.
 const VARIANTS: Record<Variant, string> = {
   primary:
-    'bg-primary text-white shadow-xs hover:bg-primary-700 active:bg-primary-700 focus-visible:ring-primary/40 [box-shadow:inset_0_1px_0_rgb(255_255_255/0.12),0_1px_1px_rgb(var(--shadow)/0.12)]',
+    'bg-primary text-primary-on shadow-xs hover:bg-primary-700 active:bg-primary-700 focus-visible:ring-primary/40 [box-shadow:inset_0_1px_0_rgb(255_255_255/0.12),0_1px_1px_rgb(var(--shadow)/0.12)]',
   secondary:
     'bg-card text-ink border border-line shadow-xs hover:border-line-strong hover:bg-slate-50 active:bg-slate-100 focus-visible:ring-primary/30',
   ghost: 'text-ink-muted hover:bg-slate-100 hover:text-ink active:bg-slate-200 focus-visible:ring-primary/30',
-  danger: 'bg-danger text-white shadow-xs hover:bg-danger/90 focus-visible:ring-danger/40',
+  danger: 'bg-danger text-danger-on shadow-xs hover:bg-danger/90 focus-visible:ring-danger/40',
 }
 
 const SIZES: Record<Size, string> = {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bell, BellOff, Camera, CheckCheck, LogOut, Plus, Search } from 'lucide-react'
+import { useAuth } from '../../lib/auth'
 import { chatApi, visiblePoll, type ChatUser, type ConversationListItem } from '../../lib/chatApi'
 import { errMsg } from '../../lib/projectsApi'
 import { ApiError } from '../../lib/api'
@@ -75,6 +76,14 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
     return [{ title: null, items: all.filter((c) => !isProject(c)) }]
   }, [all, tab, q, searching, activeId])
   const empty = groups.every((g) => g.items.length === 0)
+  // "Message yourself" (like WhatsApp): offered at the top of Chats until the chat exists, then it is a chat like any other.
+  const { user } = useAuth()
+  const { addToast } = useToast()
+  const hasSelf = all.some((c) => c.self)
+  const openSelf = async () => {
+    if (!user) return
+    try { const r = await chatApi.openDirect(user.id); await load(); onSelect(r.conversation.id) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not open your own chat') }) }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -95,7 +104,7 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
                 <button key={t.key} type="button" role="tab" aria-selected={on} onClick={() => setTab(t.key)}
                   className={cn('flex h-7 items-center justify-center gap-1 rounded-md text-[12.5px] font-semibold transition-colors', on ? 'bg-card text-ink shadow-xs' : 'text-ink-muted hover:text-ink')}>
                   {t.label}
-                  {n > 0 && <span className={cn('flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums', t.key === 'unread' || !on ? 'bg-primary text-white' : 'bg-primary/15 text-primary')} aria-label={`${n} with new messages`}>{n > 99 ? '99+' : n}</span>}
+                  {n > 0 && <span className={cn('flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums', t.key === 'unread' || !on ? 'bg-primary text-primary-on' : 'bg-primary/15 text-primary-ink')} aria-label={`${n} with new messages`}>{n > 99 ? '99+' : n}</span>}
                 </button>
               )
             })}
@@ -104,9 +113,18 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
       )}
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
         {!list && <div className="space-y-2 p-3">{Array.from({ length: 6 }, (_, i) => <div key={i} className="skeleton h-11 rounded-md" />)}</div>}
+        {list && !hasSelf && !searching && tab === 'chats' && user && (
+          <button type="button" onClick={() => void openSelf()} className="mb-1 flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-slate-200/40">
+            <PersonAvatar person={user} size={30} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-medium text-ink">{user.name} (You)</span>
+              <span className="block truncate text-[12.5px] text-ink-muted">Message yourself: notes, links, files</span>
+            </span>
+          </button>
+        )}
         {list && empty && (
           <div className="flex flex-col items-center px-4 py-8 text-center">
-            {tab === 'unread' && !searching && <CheckCheck size={22} className="mb-2 text-success" />}
+            {tab === 'unread' && !searching && <CheckCheck size={22} className="mb-2 text-success-ink" />}
             <p className="text-body-sm text-ink-muted">
               {searching ? 'No chats match.' : tab === 'unread' ? 'You are all caught up. New messages show up here.' : tab === 'projects' ? 'No project channels yet. A channel is made with each project.' : 'No conversations yet. Start one with the + button.'}
             </p>
@@ -115,7 +133,7 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
         {groups.map((g, gi) => g.items.length > 0 && (
           <div key={g.title ?? gi} className="mb-2">
             {g.title && <p className="px-2 pb-1 pt-2 text-[12px] font-medium text-ink-faint">{g.title}</p>}
-            {!g.title && tab !== 'unread' && counts[tab] > 0 && <p className="px-2 pb-1 pt-1.5 text-[11.5px] font-semibold text-primary">{counts[tab]} with new messages</p>}
+            {!g.title && tab !== 'unread' && counts[tab] > 0 && <p className="px-2 pb-1 pt-1.5 text-[11.5px] font-semibold text-primary-ink">{counts[tab]} with new messages</p>}
             <ul className="space-y-px">
               {g.items.map((c) => <Row key={c.id} c={c} active={activeId === c.id} onSelect={onSelect} showKind={tab === 'unread' && !searching} />)}
             </ul>
@@ -129,13 +147,14 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
 
 function Row({ c, active, onSelect, showKind }: { c: ConversationListItem; active: boolean; onSelect: (id: string) => void; showKind: boolean }) {
   const fresh = isNew(c)
+  const me = useAuth().user
   return (
     <li>
       <button type="button" onClick={() => onSelect(c.id)}
         className={cn('relative flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors',
           active ? 'bg-slate-200/70 dark:bg-slate-700/60' : fresh ? 'bg-primary/[0.07] hover:bg-primary/[0.12]' : 'hover:bg-slate-200/40')}>
         {fresh && !active && <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" aria-hidden />}
-        {c.type === 'DIRECT' && c.other ? <PersonAvatar person={c.other} size={30} presence={c.other.presence} /> : (
+        {c.self && me ? <PersonAvatar person={me} size={30} /> : c.type === 'DIRECT' && c.other ? <PersonAvatar person={c.other} size={30} presence={c.other.presence} /> : (
           <ChatPicture type={c.type} conversationId={c.id} projectKey={c.projectKey} color={c.color} size={30} />
         )}
         <span className="min-w-0 flex-1">
@@ -143,11 +162,11 @@ function Row({ c, active, onSelect, showKind }: { c: ConversationListItem; activ
             <span className={cn('truncate text-[13px]', c.unread > 0 ? 'font-semibold text-ink' : 'font-medium text-ink')}>{c.title}</span>
             {c.muted && <BellOff size={11} className="shrink-0 text-ink-muted" />}
             {showKind && <span className="shrink-0 rounded bg-slate-100 px-1 text-[10px] font-semibold text-ink-muted dark:bg-slate-800">{c.type === 'PROJECT' ? 'Project' : c.type === 'GROUP' ? 'Group' : 'Direct'}</span>}
-            {c.lastMessage && <span className={cn('ml-auto shrink-0 text-[11px] tabular-nums', fresh ? 'font-semibold text-primary' : 'text-ink-faint')}>{fmtAgo(c.lastMessage.createdAt)}</span>}
+            {c.lastMessage && <span className={cn('ml-auto shrink-0 text-[11px] tabular-nums', fresh ? 'font-semibold text-primary-ink' : 'text-ink-faint')}>{fmtAgo(c.lastMessage.createdAt)}</span>}
           </span>
           <span className="flex items-center gap-1">
             <span className={cn('truncate text-[12.5px]', c.unread > 0 ? 'font-medium text-ink' : 'text-ink-muted')}>{c.lastMessage ? `${c.lastMessage.mine ? 'You' : c.type === 'DIRECT' ? '' : c.lastMessage.userName.split(' ')[0]}${c.lastMessage.mine || c.type !== 'DIRECT' ? ': ' : ''}${c.lastMessage.body}` : 'No messages yet'}</span>
-            {c.unread > 0 && <span className={cn('ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums text-white', c.muted ? 'bg-slate-400' : 'bg-primary')}>{c.unread > 99 ? '99+' : c.unread}</span>}
+            {c.unread > 0 && <span className={cn('ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums', c.muted ? 'bg-slate-400 text-white' : 'bg-primary text-primary-on')}>{c.unread > 99 ? '99+' : c.unread}</span>}
           </span>
         </span>
       </button>
@@ -165,6 +184,12 @@ export function NewChatModal({ onClose, onOpened }: { onClose: () => void; onOpe
   useEffect(() => { chatApi.users().then((r) => setUsers(r.users)).catch(() => undefined) }, [])
   const list = users.filter((u) => !q || u.name.toLowerCase().includes(q.toLowerCase()) || (u.department ?? '').toLowerCase().includes(q.toLowerCase()))
   const isGroup = sel.length > 1
+  const me = useAuth().user
+  async function openSelf() {
+    if (!me) return
+    setBusy(true)
+    try { onOpened((await chatApi.openDirect(me.id)).conversation.id) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not open your own chat') }) } finally { setBusy(false) }
+  }
   async function go() {
     setBusy(true)
     const open = () => isGroup ? chatApi.createGroup(name.trim() || sel.map((id) => users.find((u) => u.id === id)?.name.split(' ')[0]).join(', '), sel) : chatApi.openDirect(sel[0])
@@ -188,6 +213,12 @@ export function NewChatModal({ onClose, onOpened }: { onClose: () => void; onOpe
       <div className="space-y-3">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className={fieldCls} autoFocus />
         {isGroup && <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name (optional)" className={fieldCls} maxLength={60} />}
+        {me && !q && (
+          <button type="button" disabled={busy} onClick={() => void openSelf()} className="flex w-full items-center gap-3 rounded-lg border border-line px-3 py-2 text-left hover:bg-slate-50 disabled:opacity-60">
+            <PersonAvatar person={me} size={28} />
+            <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">Message yourself</span><span className="block truncate text-body-sm text-ink-muted">Notes, links and files to keep. Only you see them.</span></span>
+          </button>
+        )}
         <p className="text-body-sm text-ink-muted">Pick one person for a direct message, or several for a group.</p>
         <ul className="max-h-72 divide-y divide-line overflow-y-auto rounded-lg border border-line">
           {list.map((u) => (
@@ -247,5 +278,5 @@ export function ConversationActions({ id, muted, isGroup, onChanged, onLeft, pic
   )
 }
 function MenuBtn({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
-  return <button type="button" onClick={onClick} className={cn('block w-full rounded-md px-2.5 py-1.5 text-left text-body-sm hover:bg-slate-100', danger ? 'text-danger' : 'text-ink')}>{children}</button>
+  return <button type="button" onClick={onClick} className={cn('block w-full rounded-md px-2.5 py-1.5 text-left text-body-sm hover:bg-slate-100', danger ? 'text-danger-ink' : 'text-ink')}>{children}</button>
 }

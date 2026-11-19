@@ -94,6 +94,7 @@ const MasterPlan = lazy(pageModule(() => import('../pages/app/marketing/MasterPl
 const MyAttendance = lazy(pageModule(() => import('../pages/app/attendance/MyAttendance')))
 const TeamAttendance = lazy(pageModule(() => import('../pages/app/attendance/TeamAttendance')))
 const MyTodo = lazy(pageModule(() => import('../pages/app/MyTodo')))
+const Notes = lazy(pageModule(() => import('../pages/app/Notes')))
 const MyTasks = lazy(pageModule(() => import('../pages/app/MyTasks')))
 const MeetingNotes = lazy(pageModule(() => import('../pages/app/ecommerce/MeetingNotes')))
 const AdminUsers = lazy(pageModule(() => import('../pages/app/admin/AdminUsers')))
@@ -176,6 +177,7 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <MyReports /> },
       { path: 'analytics', element: <MyPerformance /> },
       { path: 'todo', element: <MyTodo /> },
+      { path: 'notes', element: <Notes /> },
       { path: 'setup', element: <RequirePower power="company.settings"><Setup /></RequirePower> },
       { path: 'billing', element: <RequirePower power="company.settings"><Billing /></RequirePower> },
       { path: 'billing/test-checkout', element: <RequirePower power="company.settings"><TestCheckout /></RequirePower> },

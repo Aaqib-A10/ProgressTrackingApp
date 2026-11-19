@@ -19,6 +19,7 @@ import {
   type SocialPlatform,
   type TaskStatus,
 } from '../../../lib/marketingApi'
+import { dataTint } from '../../../theme/css'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const sel =
@@ -199,7 +200,7 @@ export default function SocialPlanner() {
                 <>
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-body-sm font-medium text-ink-muted">{Number(date.slice(-2))}</span>
-                    <button onClick={() => openNew(date)} className="text-ink-muted opacity-0 transition-opacity hover:text-primary group-hover:opacity-100" title="Schedule a post">
+                    <button onClick={() => openNew(date)} className="text-ink-muted opacity-0 transition-opacity hover:text-primary-ink group-hover:opacity-100" title="Schedule a post">
                       <Plus size={14} />
                     </button>
                   </div>
@@ -209,7 +210,7 @@ export default function SocialPlanner() {
                         key={p.id}
                         onClick={() => openEdit(p)}
                         className="flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium"
-                        style={{ backgroundColor: `${PLATFORM_COLOR[(p.platform ?? 'OTHER') as SocialPlatform]}1a`, color: PLATFORM_COLOR[(p.platform ?? 'OTHER') as SocialPlatform] }}
+                        style={dataTint(PLATFORM_COLOR[(p.platform ?? 'OTHER') as SocialPlatform])}
                         title={`${p.title} · ${platformLabel(p.platform)} · ${statusLabel(p.status)}`}
                       >
                         <span className="truncate">{p.title}</span>
@@ -238,7 +239,7 @@ export default function SocialPlanner() {
         footer={
           <>
             {editor?.post && (
-              <Button variant="ghost" onClick={remove} disabled={saving} leadingIcon={<Trash2 size={16} />} className="mr-auto text-danger">Delete</Button>
+              <Button variant="ghost" onClick={remove} disabled={saving} leadingIcon={<Trash2 size={16} />} className="mr-auto text-danger-ink">Delete</Button>
             )}
             <Button variant="secondary" onClick={() => setEditor(null)}>Cancel</Button>
             <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>

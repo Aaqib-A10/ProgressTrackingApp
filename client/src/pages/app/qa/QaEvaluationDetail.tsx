@@ -126,7 +126,7 @@ export default function QaEvaluationDetail() {
       {/* Agent acknowledgement / rebuttal */}
       {acknowledged ? (
         <Card>
-          <p className="flex items-center gap-2 text-body-md font-medium text-success"><CheckCircle2 size={18} /> Acknowledged by {data.agent.name}</p>
+          <p className="flex items-center gap-2 text-body-md font-medium text-success-ink"><CheckCircle2 size={18} /> Acknowledged by {data.agent.name}</p>
           {data.agentRebuttal && <p className="mt-2 text-body-md text-ink"><span className="font-semibold">Rebuttal:</span> {data.agentRebuttal}</p>}
         </Card>
       ) : isAgent ? (

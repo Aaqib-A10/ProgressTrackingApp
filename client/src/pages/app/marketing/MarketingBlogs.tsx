@@ -114,7 +114,7 @@ export default function MarketingBlogs() {
   }
 
   const columns: Column<BlogPost>[] = [
-    { wrap: true, key: 'title', header: 'Title', render: (b) => (b.url ? <a href={b.url} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">{b.title}</a> : <span className="font-medium text-ink">{b.title}</span>) },
+    { wrap: true, key: 'title', header: 'Title', render: (b) => (b.url ? <a href={b.url} target="_blank" rel="noreferrer" className="font-medium text-primary-ink hover:underline">{b.title}</a> : <span className="font-medium text-ink">{b.title}</span>) },
     { key: 'brand', header: 'Brand', render: (b) => b.brand.name },
     { key: 'author', header: 'Author', render: (b) => b.author?.name ?? '—' },
     { key: 'words', header: 'Words', align: 'right', render: (b) => (b.wordCount != null ? formatNumber(b.wordCount) : '—') },
@@ -138,7 +138,7 @@ export default function MarketingBlogs() {
       },
     },
     { key: 'published', header: 'Published', render: (b) => b.publishedAt ?? '—' },
-    { key: 'actions', header: '', align: 'right', render: (b) => <button onClick={() => remove(b)} className="text-ink-muted hover:text-danger" title="Delete"><Trash2 size={16} /></button> },
+    { key: 'actions', header: '', align: 'right', render: (b) => <button onClick={() => remove(b)} className="text-ink-muted hover:text-danger-ink" title="Delete"><Trash2 size={16} /></button> },
   ]
 
   if (loading) return <div className="p-2 text-body-md text-ink-muted">Loading…</div>

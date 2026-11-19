@@ -197,6 +197,9 @@ model User {
   /// Notification categories this person muted (no pop-up or phone push, not counted in the badge; still listed):
   /// tasks, imports, ai, system (lib/notifyCategories.ts; ITAD update 12 Nov, section 6).
   notifyMuted       String[]     @default([])
+  /// The colour theme this person picked (client/src/theme/themes: metriq, neutral, stone, matcha, chocolate, butter, gothic).
+  /// null: the company's theme.
+  uiTheme           String?
   // Permanently remote: exempt from the office-network IP check-in restriction.
   attendanceRemote  Boolean      @default(false)
   // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
@@ -278,62 +281,67 @@ model User {
   brandProfilesOwned    BrandProfile[]       @relation("BrandProfileOwner")
 
   // Projects + chat
-  pmProjectsOwned      PmProject[]          @relation("PmProjectOwner")
-  pmMemberships        PmProjectMember[]    @relation("PmMemberships")
-  pmTasksCreated       PmTask[]             @relation("PmTaskCreator")
-  pmAssignments        PmTaskAssignee[]     @relation("PmAssignments")
-  pmWatching           PmTaskWatcher[]      @relation("PmWatching")
-  pmComments           PmComment[]          @relation("PmCommentAuthor")
-  pmReviews            PmReview[]           @relation("PmReviewer")
-  chatCallsStarted     ChatCall[]           @relation("ChatCallsStarted")
+  pmProjectsOwned        PmProject[]            @relation("PmProjectOwner")
+  pmMemberships          PmProjectMember[]      @relation("PmMemberships")
+  pmTasksCreated         PmTask[]               @relation("PmTaskCreator")
+  pmAssignments          PmTaskAssignee[]       @relation("PmAssignments")
+  pmWatching             PmTaskWatcher[]        @relation("PmWatching")
+  pmComments             PmComment[]            @relation("PmCommentAuthor")
+  pmReviews              PmReview[]             @relation("PmReviewer")
+  chatCallsStarted       ChatCall[]             @relation("ChatCallsStarted")
   /// Profile picture last changed (file: uploads/avatars/user-<id>.jpg).
-  avatarAt             DateTime?
-  meetingsOrganized    Meeting[]            @relation("MeetingsOrganized")
-  meetingAttendance    MeetingAttendee[]    @relation("MeetingAttendance")
-  pmAttachments        PmAttachment[]       @relation("PmAttachmentUploader")
-  pmActivity           PmActivity[]         @relation("PmActivityActor")
-  pmExtRequested       PmExtensionRequest[] @relation("PmExtRequester")
-  pmExtDecided         PmExtensionRequest[] @relation("PmExtDecider")
-  pmNotifyPref         PmNotifyPref?        @relation("PmNotifyPref")
-  chatMemberships      ChatMember[]         @relation("ChatMemberships")
-  chatMessagesSent     ChatMessage[]        @relation("ChatMessagesSent")
-  pushSubscriptions    PushSubscription[]
-  pushDevices          PushDevice[]
-  savedDocs            SavedDoc[]           @relation("SavedDocOwner")
-  wfhRequests          WfhRequest[]         @relation("WfhRequester")
-  wfhDecisions         WfhRequest[]         @relation("WfhDecider")
-  dialerLeads          DialerLead[]         @relation("DialerLeadOwner")
-  dialerImports        DialerImport[]       @relation("DialerImporter")
-  dialerActions        DialerAction[]       @relation("DialerActor")
-  dialerNotes          DialerNote[]         @relation("DialerNoteAuthor")
-  dialerTouches        DialerTouch[]        @relation("DialerTouchBy")
-  leadBusinessRoles    LeadBusinessMember[] @relation("LeadBusinessPerson")
-  leadsAssigned        Lead[]               @relation("LeadAssignee")
-  leadsAssignedBy      Lead[]               @relation("LeadAssigner")
-  leadsCreated         Lead[]               @relation("LeadCreator")
-  leadEvents           LeadEvent[]          @relation("LeadEventBy")
-  leadBusinessesHeaded LeadBusiness[]       @relation("LeadBusinessHead")
-  leadCalls            LeadCall[]           @relation("LeadCaller")
-  leadUnmatchedCalls   LeadUnmatchedCall[]  @relation("LeadUnmatchedCaller")
-  leadComments         LeadComment[]        @relation("LeadCommentBy")
-  leadTasks            LeadTask[]           @relation("LeadTaskAssignee")
-  leadTasksDone        LeadTask[]           @relation("LeadTaskDoneBy")
-  leadDailyReports     LeadDailyReport[]    @relation("LeadReportBy")
-  dialerPrefs          DialerUserPrefs?     @relation("DialerPrefsOwner")
-  dialerCalls          DialerCall[]         @relation("DialerCallAgent")
-  workLogs             WorkLogEntry[]       @relation("WorkLogOwner")
-  workLogReviews       WorkLogReview[]      @relation("WorkLogReviewOwner")
-  workLogReviewsGiven  WorkLogReview[]      @relation("WorkLogReviewer")
-  blockedCheckIns      BlockedCheckIn[]
-  workLogNotes         WorkLogNote[]        @relation("WorkLogNoteAuthor")
-  claudeKeys           ClaudeKey[]
-  reportForms          ReportForm[]         @relation("ReportFormCreator")
-  reportEntries        ReportEntry[]        @relation("ReportEntries")
-  customBlocks         CustomBlock[]        @relation("CustomBlockCreator")
-  customRecords        CustomRecord[]       @relation("CustomRecordCreator")
+  avatarAt               DateTime?
+  meetingsOrganized      Meeting[]              @relation("MeetingsOrganized")
+  meetingAttendance      MeetingAttendee[]      @relation("MeetingAttendance")
+  pmAttachments          PmAttachment[]         @relation("PmAttachmentUploader")
+  pmActivity             PmActivity[]           @relation("PmActivityActor")
+  pmExtRequested         PmExtensionRequest[]   @relation("PmExtRequester")
+  pmExtDecided           PmExtensionRequest[]   @relation("PmExtDecider")
+  pmNotifyPref           PmNotifyPref?          @relation("PmNotifyPref")
+  chatMemberships        ChatMember[]           @relation("ChatMemberships")
+  chatMessagesSent       ChatMessage[]          @relation("ChatMessagesSent")
+  pushSubscriptions      PushSubscription[]
+  pushDevices            PushDevice[]
+  savedDocs              SavedDoc[]             @relation("SavedDocOwner")
+  wfhRequests            WfhRequest[]           @relation("WfhRequester")
+  wfhDecisions           WfhRequest[]           @relation("WfhDecider")
+  attendanceFixRequests  AttendanceFixRequest[] @relation("AttendanceFixRequester")
+  attendanceFixDecisions AttendanceFixRequest[] @relation("AttendanceFixDecider")
+  notesOwned             Note[]                 @relation("NoteOwner")
+  notesEdited            Note[]                 @relation("NoteEditor")
+  noteShares             NoteShare[]            @relation("NoteShareUser")
+  dialerLeads            DialerLead[]           @relation("DialerLeadOwner")
+  dialerImports          DialerImport[]         @relation("DialerImporter")
+  dialerActions          DialerAction[]         @relation("DialerActor")
+  dialerNotes            DialerNote[]           @relation("DialerNoteAuthor")
+  dialerTouches          DialerTouch[]          @relation("DialerTouchBy")
+  leadBusinessRoles      LeadBusinessMember[]   @relation("LeadBusinessPerson")
+  leadsAssigned          Lead[]                 @relation("LeadAssignee")
+  leadsAssignedBy        Lead[]                 @relation("LeadAssigner")
+  leadsCreated           Lead[]                 @relation("LeadCreator")
+  leadEvents             LeadEvent[]            @relation("LeadEventBy")
+  leadBusinessesHeaded   LeadBusiness[]         @relation("LeadBusinessHead")
+  leadCalls              LeadCall[]             @relation("LeadCaller")
+  leadUnmatchedCalls     LeadUnmatchedCall[]    @relation("LeadUnmatchedCaller")
+  leadComments           LeadComment[]          @relation("LeadCommentBy")
+  leadTasks              LeadTask[]             @relation("LeadTaskAssignee")
+  leadTasksDone          LeadTask[]             @relation("LeadTaskDoneBy")
+  leadDailyReports       LeadDailyReport[]      @relation("LeadReportBy")
+  dialerPrefs            DialerUserPrefs?       @relation("DialerPrefsOwner")
+  dialerCalls            DialerCall[]           @relation("DialerCallAgent")
+  workLogs               WorkLogEntry[]         @relation("WorkLogOwner")
+  workLogReviews         WorkLogReview[]        @relation("WorkLogReviewOwner")
+  workLogReviewsGiven    WorkLogReview[]        @relation("WorkLogReviewer")
+  blockedCheckIns        BlockedCheckIn[]
+  workLogNotes           WorkLogNote[]          @relation("WorkLogNoteAuthor")
+  claudeKeys             ClaudeKey[]
+  reportForms            ReportForm[]           @relation("ReportFormCreator")
+  reportEntries          ReportEntry[]          @relation("ReportEntries")
+  customBlocks           CustomBlock[]          @relation("CustomBlockCreator")
+  customRecords          CustomRecord[]         @relation("CustomRecordCreator")
   /// Department Studio, part B: how this person arranged their own dashboard
   /// ({ order: string[], hidden: string[] }); empty = as their department has it.
-  dashboardPrefs       Json?
+  dashboardPrefs         Json?
 
   @@index([companyId])
   @@index([departmentId])
@@ -1202,6 +1210,11 @@ enum NotificationType {
   LEAD_DECISION
   // Metra (the AI assistant): a daily brief or an insight
   AI_INSIGHT
+  NOTE_SHARED
+  NOTE_MENTION
+  NOTE_REMINDER
+  ATTENDANCE_FIX_REQUESTED
+  ATTENDANCE_FIX_DECIDED
 }
 
 enum BreakType {
@@ -2901,6 +2914,87 @@ enum WfhRequestStatus {
   CANCELLED
 }
 
+/// Someone forgot to check in (or out) on a working day and asks their Team Lead (or a Super Admin) to put the
+/// right times in. Approved -> the day gets those times, the same as a correction by the lead (audited).
+model AttendanceFixRequest {
+  id           String           @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId    String           @default("")
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation("AttendanceFixRequester", fields: [userId], references: [id], onDelete: Cascade)
+  /// The attendance day (the shift's day, yyyy-MM-dd).
+  date         DateTime         @db.Date
+  /// The times asked for, "HH:mm" in the shift's time zone (check-out optional).
+  checkIn      String
+  checkOut     String?
+  reason       String
+  status       WfhRequestStatus @default(PENDING)
+  decidedById  String?
+  decidedBy    User?            @relation("AttendanceFixDecider", fields: [decidedById], references: [id])
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime         @default(now())
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([companyId])
+}
+
+/// A sticky note (Notes, Nov 2026): the owner's own, shared with people who can read or edit it. Text or a
+/// checklist, a colour, tags, pinned or archived, and an optional reminder.
+model Note {
+  id         String    @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String    @default("")
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ownerId    String
+  owner      User      @relation("NoteOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  title      String    @default("")
+  body       String    @default("")
+  /// A checklist note: [{ id, text, done }]. Null for a text note.
+  items      Json?
+  /// One of the theme's note colours (lib/notes NOTE_COLORS).
+  color      String    @default("yellow")
+  /// Tags, lower case, without '#'.
+  tags       String[]
+  /// People mentioned with @ in the text (they can read it and were told).
+  mentions   String[]
+  pinned     Boolean   @default(false)
+  archived   Boolean   @default(false)
+  remindAt   DateTime?
+  /// When the reminder was sent (the reminder job claims a note by setting this).
+  remindedAt DateTime?
+  editedById String?
+  editedBy   User?     @relation("NoteEditor", fields: [editedById], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  shares NoteShare[]
+
+  @@index([ownerId, archived, updatedAt])
+  @@index([remindAt])
+  @@index([companyId])
+}
+
+/// A note shared with one person: read only, or allowed to edit.
+model NoteShare {
+  id        String   @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("NoteShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  canEdit   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([noteId, userId])
+  @@index([userId])
+  @@index([companyId])
+}
+
 /// An employee asks their Team Lead to work from home on some dates. Approved -> those working
 /// days are marked Work From Home (LeaveDay WFH), so check-in works from any network.
 model WfhRequest {
@@ -3623,6 +3717,10 @@ model Company {
   trialEndedMailAt   DateTime?
   /// The Help button for this company's people. Off for 99 Technologies until the owner turns it on.
   helpEnabled        Boolean       @default(false)
+  /// The colour theme of the company's app (null: Metriq's own), and its brand colour for buttons and links (#rrggbb;
+  /// null: the theme's own). Each person can still pick their own theme (User.uiTheme).
+  theme              String?
+  brandColor         String?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -3725,6 +3823,9 @@ model Company {
   pushDeviceRows           PushDevice[]
   savedDocRows             SavedDoc[]
   wfhRequestRows           WfhRequest[]
+  attendanceFixRequestRows AttendanceFixRequest[]
+  noteRows                 Note[]
+  noteShareRows            NoteShare[]
   dialerLeadRows           DialerLead[]
   dialerImportRows         DialerImport[]
   dialerStatusChangeRows   DialerStatusChange[]

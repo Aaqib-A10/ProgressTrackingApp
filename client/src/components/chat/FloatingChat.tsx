@@ -41,7 +41,7 @@ export function FloatingChat({ meId }: { meId: string }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={cn('fixed bottom-4 right-4 z-40 hidden h-12 w-12 md:flex items-center justify-center rounded-full bg-primary text-white shadow-overlay transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30', open && 'bg-primary-700')}
+        className={cn('fixed bottom-4 right-4 z-40 hidden h-12 w-12 md:flex items-center justify-center rounded-full bg-primary text-primary-on shadow-overlay transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30', open && 'bg-primary-700')}
         aria-label={total ? `Chat, ${total} unread` : 'Chat'}
         title="Chat"
       >

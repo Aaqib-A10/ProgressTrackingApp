@@ -93,7 +93,7 @@ function OwnerLogin() {
         </div>
         <div className="flex flex-1 items-center justify-center py-12">
           <div className="w-full max-w-[400px]">
-            <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-primary">Owner access</p>
+            <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-primary-ink">Owner access</p>
             <h1 className="mt-3 text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-ink">{ticket ? 'One more step' : 'Sign in to the owner console'}</h1>
             <p className="mt-3 text-[15px] leading-6 text-ink-muted">{ticket ? 'Enter the 6 digit code from your phone app.' : 'Only the Metriq owner signs in here. Company people use the normal sign in.'}</p>
             <form onSubmit={submit} className="mt-8 space-y-5" noValidate>
@@ -107,7 +107,7 @@ function OwnerLogin() {
                 <TextField label="Code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="!h-12 text-center !text-headline-md tracking-[0.4em]"
                   value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus />
               )}
-              {error && <p className="rounded-btn bg-danger/10 px-3 py-2.5 text-body-sm text-danger" role="alert">{error}</p>}
+              {error && <p className="rounded-btn bg-danger/10 px-3 py-2.5 text-body-sm text-danger-ink" role="alert">{error}</p>}
               <Button type="submit" size="lg" className="h-11 w-full text-[15px]" disabled={busy || (!ticket ? !email || !password : code.length !== 6)}>
                 {busy ? 'Checking…' : ticket ? 'Verify and sign in' : 'Sign in'}
               </Button>
@@ -200,7 +200,7 @@ function OwnerShell() {
     { path: 'settings', element: <SettingsPage /> },
     { path: '*', element: <Navigate to="/owner" replace /> },
   ])
-  if (!checked) return <div className="flex h-screen items-center justify-center bg-bg"><Activity size={26} className="animate-pulse text-primary" /></div>
+  if (!checked) return <div className="flex h-screen items-center justify-center bg-bg"><Activity size={26} className="animate-pulse text-primary-ink" /></div>
   if (!owner) return <Navigate to="/owner/login" replace />
 
   const signOut = async () => { await ownerApi.logout().catch(() => undefined); navigate('/owner/login', { replace: true }) }
@@ -231,7 +231,7 @@ function OwnerShell() {
           </nav>
           <div className="border-t border-line p-3">
             <div className="flex items-center gap-2.5 px-1">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[12px] font-semibold text-primary">{initials}</span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[12px] font-semibold text-primary-ink">{initials}</span>
               <div className="min-w-0"><p className="truncate text-[13px] font-medium text-ink">{owner.name}</p><p className="truncate text-[12px] text-ink-muted">Metriq owner</p></div>
             </div>
           </div>
@@ -244,7 +244,7 @@ function OwnerShell() {
           <span className="text-[13.5px] font-medium text-ink">{here?.label ?? 'Owner console'}</span>
           <div className="relative ml-auto">
             <button onClick={() => setMenuOpen((o) => !o)} className="flex items-center gap-2 rounded-btn p-1 pr-1.5 hover:bg-slate-100" aria-label="Owner menu">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11.5px] font-semibold text-primary">{initials}</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11.5px] font-semibold text-primary-ink">{initials}</span>
               <span className="hidden text-left sm:block"><span className="block text-[13px] font-medium leading-4 text-ink">{owner.name}</span><span className="block text-[11.5px] leading-4 text-ink-muted">Owner</span></span>
               <ChevronDown size={14} className="text-ink-muted" />
             </button>
@@ -288,7 +288,7 @@ const PanelHead = ({ title, action }: { title: ReactNode; action?: ReactNode }) 
   <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5"><h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>{action}</div>
 )
 const Empty = ({ children }: { children: ReactNode }) => <p className="px-5 py-12 text-center text-body-md text-ink-muted">{children}</p>
-const Loading = ({ error }: { error?: string }) => (error ? <p className="text-body-md text-ink-muted">{error}</p> : <div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>)
+const Loading = ({ error }: { error?: string }) => (error ? <p className="text-body-md text-ink-muted">{error}</p> : <div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary-ink" /></div>)
 
 // ------------------------------------------------------------------ home
 
@@ -305,14 +305,14 @@ function OwnerHomePage() {
         <StatCard to="/owner/companies" label="People" value={c.people} caption="Active accounts" icon={<Users size={16} />} />
         <StatCard to="/owner/companies" label="Checked in today" value={c.inToday} caption="Across all companies" icon={<UserCheck size={16} />} />
         <StatCard to="/owner/support" label="Open complaints" value={c.openTickets} caption={c.urgentTickets ? `${c.urgentTickets} high or urgent` : 'Nothing urgent'}
-          icon={<LifeBuoy size={16} />} valueClassName={cn('text-metric-lg', c.urgentTickets > 0 && 'text-warning')} />
+          icon={<LifeBuoy size={16} />} valueClassName={cn('text-metric-lg', c.urgentTickets > 0 && 'text-warning-ink')} />
         <StatCard to="/owner/errors?since=24h" label="Errors in 24 hours" value={c.errors24h} caption={c.errors24h ? 'Open to see each one' : 'All clear'} icon={<Bug size={16} />}
-          valueClassName={cn('text-metric-lg', c.errors24h > 0 && 'text-danger')} />
+          valueClassName={cn('text-metric-lg', c.errors24h > 0 && 'text-danger-ink')} />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <Panel className="xl:col-span-2">
-          <PanelHead title="Complaints waiting" action={<Link to="/owner/support" className="text-body-sm font-semibold text-primary hover:underline">See all</Link>} />
+          <PanelHead title="Complaints waiting" action={<Link to="/owner/support" className="text-body-sm font-semibold text-primary-ink hover:underline">See all</Link>} />
           {data.tickets.length === 0 ? <Empty>No open complaints. When a company sends one from its Help button, it shows here.</Empty> : (
             <ul className="divide-y divide-line">
               {data.tickets.map((t) => (
@@ -332,12 +332,12 @@ function OwnerHomePage() {
 
         <div className="space-y-6">
           <Panel>
-            <PanelHead title="Companies" action={<Link to="/owner/companies" className="text-body-sm font-semibold text-primary hover:underline">Open</Link>} />
+            <PanelHead title="Companies" action={<Link to="/owner/companies" className="text-body-sm font-semibold text-primary-ink hover:underline">Open</Link>} />
             {!companies.data ? <Empty>Loading…</Empty> : (
               <ul className="divide-y divide-line">
                 {companies.data.companies.map((co) => (
                   <li key={co.id}><Link to={`/owner/companies/${co.id}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-primary/10 text-body-sm font-semibold text-primary">{co.name.slice(0, 2).toUpperCase()}</span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-primary/10 text-body-sm font-semibold text-primary-ink">{co.name.slice(0, 2).toUpperCase()}</span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{co.name}</span><span className="block text-body-sm text-ink-muted">{co.kind === 'PERSONAL' ? 'Individual' : `${co.people} people`}{co.openTickets ? ` · ${co.openTickets} open` : ''}</span></span>
                     <Badge tone={COMPANY_TONE[co.status]}>{co.status === 'TRIAL' ? 'Trial' : co.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge>
                   </Link></li>
@@ -351,7 +351,7 @@ function OwnerHomePage() {
               <ul className="divide-y divide-line">
                 {data.signInAlerts.map((a, i) => (
                   <li key={i} className="flex items-center gap-3 px-5 py-3 text-body-sm">
-                    <AlertTriangle size={16} className={a.action === 'LOCKED' ? 'text-danger' : 'text-warning'} />
+                    <AlertTriangle size={16} className={a.action === 'LOCKED' ? 'text-danger-ink' : 'text-warning-ink'} />
                     <span className="min-w-0 flex-1 text-ink">{a.action === 'LOCKED' ? 'Locked after 5 wrong tries' : 'Wrong password or code'}{a.ip ? <span className="text-ink-muted"> · {a.ip}</span> : null}</span>
                     <span className="shrink-0 text-ink-muted">{fmt(a.at)}</span>
                   </li>
@@ -382,7 +382,7 @@ function CompaniesPage() {
           <tbody className="divide-y divide-line">
             {data.companies.map((c) => (
               <tr key={c.id} className="hover:bg-slate-50">
-                <td className="px-5 py-4"><Link to={`/owner/companies/${c.id}`} className="font-medium text-ink hover:text-primary">{c.name}</Link>{c.home && <span className="ml-2 text-[12px] text-ink-muted">company 1</span>}</td>
+                <td className="px-5 py-4"><Link to={`/owner/companies/${c.id}`} className="font-medium text-ink hover:text-primary-ink">{c.name}</Link>{c.home && <span className="ml-2 text-[12px] text-ink-muted">company 1</span>}</td>
                 <td className="px-3 py-4 text-ink-muted">{c.kind === 'PERSONAL' ? 'Individual' : 'Team'}</td>
                 <td className="px-3 py-4"><Badge tone={COMPANY_TONE[c.status]}>{c.status === 'TRIAL' ? 'Trial' : c.status === 'ACTIVE' ? 'Active' : 'Suspended'}</Badge></td>
                 <td className="px-3 py-4 capitalize text-ink-muted">{c.plan}</td>
@@ -564,7 +564,7 @@ function HelpSignIn({ company, people }: { company: OwnerCompany; people: { id: 
           </div>
           {!company.home && (
             <div className="rounded-btn border border-danger/30 bg-danger/5 p-3">
-              <p className="text-body-sm font-semibold text-danger">Remove {company.name}</p>
+              <p className="text-body-sm font-semibold text-danger-ink">Remove {company.name}</p>
               <p className="mt-0.5 text-body-sm text-ink-muted">Everything they have in Metriq, files too, is gone for good. Download it first. Type the company name to remove it.</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <input className={inputCls + ' !h-9 max-w-[240px]'} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={company.name} aria-label="Company name to confirm" />
@@ -731,7 +731,7 @@ function TicketPage() {
                 <li key={e.id}><p className="text-ink">{e.message}</p><p className="text-ink-muted">{e.route ?? e.source} · {e.count}× · {e.state === 'RESOLVED' ? 'fixed' : 'open'}</p></li>
               ))}</ul>
             )}
-            <a href="/app/admin/health" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-primary">System Health <ExternalLink size={12} /></a>
+            <a href="/app/admin/health" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-primary-ink">System Health <ExternalLink size={12} /></a>
           </Panel>
         </div>
       </div>
@@ -830,7 +830,7 @@ function SwitchesPage() {
               return (
                 <li key={c.id}>
                   <Link to={`/owner/switches/${c.id}`} className="flex items-center gap-3 px-5 py-4 hover:bg-slate-50">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Building2 size={16} /></span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink"><Building2 size={16} /></span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-body-md font-semibold text-ink">{c.name}{c.home && <span className="ml-2 text-[12px] font-normal text-ink-muted">company 1</span>}</p>
                       <p className="text-body-sm text-ink-muted">{c.kind === 'PERSONAL' ? 'Individual' : 'Team'} · <span className="capitalize">{c.plan}</span> plan</p>
@@ -911,7 +911,7 @@ function CompanySwitchesPage() {
   const c = company.data.company
   return (
     <>
-      <Title back="/owner/switches" sub={<>Switches for <span className="font-medium text-ink">{c.name}</span> only. Other companies are not changed. <Link to={`/owner/companies/${c.id}`} className="text-primary hover:underline">Company page</Link></>}>{c.name}</Title>
+      <Title back="/owner/switches" sub={<>Switches for <span className="font-medium text-ink">{c.name}</span> only. Other companies are not changed. <Link to={`/owner/companies/${c.id}`} className="text-primary-ink hover:underline">Company page</Link></>}>{c.name}</Title>
       <Panel>
         <ul className="divide-y divide-line">
           {data.flags.map((f) => (
@@ -923,7 +923,7 @@ function CompanySwitchesPage() {
                 </div>
                 <p className="mt-1 text-body-sm text-ink-muted">{f.description}</p>
                 <p className="mt-1.5 text-[12px] text-ink-faint">
-                  {f.own === null ? `Uses the default (${f.allCompanies ? 'on' : 'off'})` : <>Set for this company{f.updatedAt ? ` ${fmt(f.updatedAt)}` : ''}{f.updatedBy ? ` by ${f.updatedBy}` : ''} · <button type="button" disabled={busy === f.key} onClick={() => set(f, null)} className="font-medium text-primary hover:underline">Use the default ({f.allCompanies ? 'on' : 'off'})</button></>}
+                  {f.own === null ? `Uses the default (${f.allCompanies ? 'on' : 'off'})` : <>Set for this company{f.updatedAt ? ` ${fmt(f.updatedAt)}` : ''}{f.updatedBy ? ` by ${f.updatedBy}` : ''} · <button type="button" disabled={busy === f.key} onClick={() => set(f, null)} className="font-medium text-primary-ink hover:underline">Use the default ({f.allCompanies ? 'on' : 'off'})</button></>}
                 </p>
               </div>
               <Toggle checked={f.enabled} disabled={busy === f.key} onChange={(v) => set(f, v)} label={`${f.label} for ${c.name}`} />
@@ -966,7 +966,7 @@ function ErrorsPage() {
   const [query, setQuery] = useState('')
   useEffect(() => { const t = setTimeout(() => setQuery(q.trim()), 300); return () => clearTimeout(t) }, [q])
   const { data, error } = useLoad(() => ownerApi.errors({ state, since, q: query }), [state, since, query])
-  const chip = (on: boolean) => cn('rounded-full border px-3 py-1 text-body-sm font-medium transition-colors', on ? 'border-primary/30 bg-primary/10 text-primary' : 'border-line bg-card text-ink-muted hover:text-ink')
+  const chip = (on: boolean) => cn('rounded-full border px-3 py-1 text-body-sm font-medium transition-colors', on ? 'border-primary/30 bg-primary/10 text-primary-ink' : 'border-line bg-card text-ink-muted hover:text-ink')
   return (
     <>
       <Title sub="Everything that broke in Metriq, grouped: the same error 50 times is one row. Open one to see where it happened and copy it for Claude.">Errors</Title>
@@ -989,7 +989,7 @@ function ErrorsPage() {
                 {data.errors.map((e: OwnerErrorRow) => (
                   <tr key={e.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/owner/errors/${e.id}`)}>
                     <td className="max-w-[460px] px-5 py-3.5">
-                      <Link to={`/owner/errors/${e.id}`} onClick={(ev) => ev.stopPropagation()} className="line-clamp-2 font-medium text-ink hover:text-primary">{e.message}</Link>
+                      <Link to={`/owner/errors/${e.id}`} onClick={(ev) => ev.stopPropagation()} className="line-clamp-2 font-medium text-ink hover:text-primary-ink">{e.message}</Link>
                       <span className="mt-0.5 block text-body-sm text-ink-muted">{SOURCE_LABEL[e.source]}{e.status ? ` · status ${e.status}` : ''}{e.reopenedAt ? ' · came back' : ''}</span>
                     </td>
                     <td className="px-3 py-3.5"><code className="break-all rounded bg-slate-100 px-1.5 py-0.5 text-[12.5px] text-ink">{e.route ?? '—'}</code></td>
@@ -1124,7 +1124,7 @@ function SettingsPage() {
   const pay = data.payments
   const row = (icon: ReactNode, title: string, state: ReactNode, text: ReactNode) => (
     <li className="flex items-start gap-3 px-5 py-4">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">{icon}</span>
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink">{icon}</span>
       <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-body-md font-semibold text-ink">{title}</p>{state}</div><p className="mt-0.5 text-body-sm text-ink-muted">{text}</p></div>
     </li>
   )
@@ -1156,7 +1156,7 @@ function SettingsPage() {
               pay.provider && !pay.test ? 'Companies choose a plan and pay in Billing.' : pay.test ? 'Test payments (this computer only): "Pay (test)" goes through without a card, to try billing. The live server shows "Online payment coming soon" until Stripe or Paddle keys are added.' : <>Companies see "Online payment coming soon" in Billing, and a trial that ends does not stop anyone until payments are live. To go live, add the Stripe or Paddle keys to the server's .env (never in the code) and restart.</>)}
             {row(<KeyRound size={16} />, 'Google and Microsoft sign-in',
               data.signIn.open ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Coming soon</Badge>,
-              <>Keys on the server: Google {data.signIn.google ? 'yes' : 'no'}, Microsoft {data.signIn.microsoft ? 'yes' : 'no'}. The buttons show "coming soon" until you turn on "Sign in with Google and Microsoft" in <Link to="/owner/switches" className="font-semibold text-primary hover:underline">Switches</Link>.</>)}
+              <>Keys on the server: Google {data.signIn.google ? 'yes' : 'no'}, Microsoft {data.signIn.microsoft ? 'yes' : 'no'}. The buttons show "coming soon" until you turn on "Sign in with Google and Microsoft" in <Link to="/owner/switches" className="font-semibold text-primary-ink hover:underline">Switches</Link>.</>)}
             {row(<Receipt size={16} />, 'Invoices',
               <Badge tone={data.seller.fromConsole ? 'success' : 'warning'}>{data.seller.fromConsole ? 'Seller set' : 'Seller not set'}</Badge>,
               'Invoices are numbered and kept for every payment. Companies open and print them from Billing.')}

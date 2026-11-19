@@ -37,7 +37,7 @@ export default function LeadPage() {
   useEffect(() => { if (d && new URLSearchParams(window.location.search).get('qualify') === '1' && d.can.edit && d.can.cmr && d.lead.open && !d.lead.jesseInputNeeded) { setModal('qualify'); window.history.replaceState(null, '', window.location.pathname) } }, [d])
   const run = async (fn: () => Promise<unknown>, ok?: string) => { try { await fn(); if (ok) addToast({ type: 'success', message: ok }); await load() } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } }
 
-  if (err) return <div className="mx-auto max-w-xl py-16 text-center"><p className="text-body-md text-ink-muted">{err}</p><Link to="/app/leads" className="mt-3 inline-block text-primary">Back to leads</Link></div>
+  if (err) return <div className="mx-auto max-w-xl py-16 text-center"><p className="text-body-md text-ink-muted">{err}</p><Link to="/app/leads" className="mt-3 inline-block text-primary-ink">Back to leads</Link></div>
   if (!d) return <div className="h-64 animate-pulse rounded-card border border-line bg-card" />
   // Jesse's desk: a lead opens as the submission to review (form + chat), never the working page.
   if (d.can.headOnly) return <Navigate to={`/app/leads/inbox/${id}`} replace />
@@ -61,14 +61,14 @@ export default function LeadPage() {
                 <StatusPill status={l.status} pipeline={pipeline} label={l.statusLabel} />
                 {l.jesseInputNeeded && <Badge tone="warning" dot>Waiting on Jesse{l.waitingDays != null ? ` · ${l.waitingDays} business day${l.waitingDays === 1 ? '' : 's'}` : ''}</Badge>}
                 {l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Existing customer</Badge>}{l.belowMin && <Badge tone="accent">Below minimum</Badge>}
-                {l.value != null && l.value > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-0.5 text-body-sm font-bold tabular-nums text-success" title="Deal value"><Wallet size={13} />{money(l.value, d.currency)}</span>}
+                {l.value != null && l.value > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-0.5 text-body-sm font-bold tabular-nums text-success-ink" title="Deal value"><Wallet size={13} />{money(l.value, d.currency)}</span>}
               </div>
               <p className="mt-1 text-body-md text-ink-muted">
                 {l.organization && l.name ? <>{l.name}{l.contactRole ? `, ${l.contactRole}` : l.jobTitle ? `, ${l.jobTitle}` : ''} · </> : null}
                 {[l.industry, l.state, l.city].filter(Boolean).join(' · ')}{l.industry || l.state ? ' · ' : ''}<span className="inline-flex items-center gap-1" style={{ color: l.business.color }}><Building2 size={13} />{l.business.name}</span>
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm">
-                {l.phone && <a href={dialHref(l.phoneE164 ?? l.phone, meta?.dial) ?? '#'} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"><Phone size={14} />{l.phone}{l.ext ? ` x${l.ext}` : ''}</a>}
+                {l.phone && <a href={dialHref(l.phoneE164 ?? l.phone, meta?.dial) ?? '#'} className="inline-flex items-center gap-1.5 font-medium text-primary-ink hover:underline"><Phone size={14} />{l.phone}{l.ext ? ` x${l.ext}` : ''}</a>}
                 {l.phone && meta?.talkloopDial && can.edit && !l.prohibited && <Button size="sm" leadingIcon={<PhoneCall size={14} />} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')}>Call via TalkLoop</Button>}
                 {l.email && <a href={`mailto:${l.email}`} className="inline-flex items-center gap-1.5 text-ink hover:underline"><Mail size={14} />{l.email}</a>}
                 {l.website && <a href={/^https?:/.test(l.website) ? l.website : `https://${l.website}`} target="_blank" rel="noreferrer" className="text-ink-muted hover:underline">{l.website}</a>}
@@ -96,7 +96,7 @@ export default function LeadPage() {
           </div>
         </div>
         {(l.warnings.length > 0 || d.listHits.length > 0) && <div className="mt-4"><WarningList warnings={l.warnings} /></div>}
-        {l.late && <p className="mt-3 inline-flex items-center gap-1.5 rounded-btn bg-danger/10 px-3 py-1.5 text-body-sm text-danger"><Clock size={14} />{l.late === 'assign' ? 'Not given to anyone in time.' : 'Nobody has got in touch in time.'}</p>}
+        {l.late && <p className="mt-3 inline-flex items-center gap-1.5 rounded-btn bg-danger/10 px-3 py-1.5 text-body-sm text-danger-ink"><Clock size={14} />{l.late === 'assign' ? 'Not given to anyone in time.' : 'Nobody has got in touch in time.'}</p>}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
@@ -159,13 +159,13 @@ function JessePanel({ d, isHead, meId, onAction, onDecided }: { d: LeadDetail; i
     { k: 'outcome', label: 'Outcome logged', done: !!l.meetingOutcome },
   ]
   return (
-    <Card title={<>Jesse flow{head ? <span className="font-normal text-ink-muted"> · head: {head.name}</span> : <span className="font-normal text-warning"> · no head set (Lead Settings)</span>}</>} icon={<Flag size={15} />}
+    <Card title={<>Jesse flow{head ? <span className="font-normal text-ink-muted"> · head: {head.name}</span> : <span className="font-normal text-warning-ink"> · no head set (Lead Settings)</span>}</>} icon={<Flag size={15} />}
       action={<span className="text-body-sm text-ink-muted">Owner: <strong className="text-ink">{OWNER_LABEL[l.owner]}</strong></span>}>
       <ol className="flex flex-wrap gap-x-4 gap-y-1">{steps.map((s) => <li key={s.k}><Done ok={s.done}>{s.label}</Done></li>)}</ol>
       <div className="mt-4 space-y-3">
-        {stage === 'requested' && <p className="rounded-btn bg-primary/[0.06] px-3 py-2 text-body-sm text-ink">The SDR asked to qualify this lead. {can.approve ? <button type="button" className="font-semibold text-primary hover:underline" onClick={() => onAction('qualify')}>Approve and flag for Jesse</button> : 'Waiting for the team lead to approve.'}{l.jesseAsk && <span className="block text-ink-muted">For Jesse: {l.jesseAsk}</span>}</p>}
+        {stage === 'requested' && <p className="rounded-btn bg-primary/[0.06] px-3 py-2 text-body-sm text-ink">The SDR asked to qualify this lead. {can.approve ? <button type="button" className="font-semibold text-primary-ink hover:underline" onClick={() => onAction('qualify')}>Approve and flag for Jesse</button> : 'Waiting for the team lead to approve.'}{l.jesseAsk && <span className="block text-ink-muted">For Jesse: {l.jesseAsk}</span>}</p>}
         {(stage === 'waiting') && (
-          <div className="rounded-card border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-500/30 dark:bg-orange-500/10">
+          <div className="rounded-card border border-orange-ring bg-orange-subtle/60 p-3">
             <p className="text-body-sm font-semibold text-ink">What Jesse must decide</p>
             <p className="text-body-md text-ink">{l.jesseAsk}</p>
             {slots.length > 0 && <p className="mt-2 text-body-sm text-ink-muted">Slots offered: {slots.map((s) => inZone(s, 'America/Phoenix')).join(' · ')} (Phoenix)</p>}
@@ -186,13 +186,13 @@ function JessePanel({ d, isHead, meId, onAction, onDecided }: { d: LeadDetail; i
         )}
         {stage === 'invited' && l.meetingAt && (
           <div className="rounded-card border border-line p-3">
-            <p className="text-body-sm font-semibold text-ink">Meeting {new Date(l.meetingAt) > new Date() ? 'on' : 'was on'} {inZone(l.meetingAt, 'America/Phoenix')} (Phoenix){l.meetingLink && <> · <a href={l.meetingLink} target="_blank" rel="noreferrer" className="text-primary hover:underline">Teams link</a></>}</p>
+            <p className="text-body-sm font-semibold text-ink">Meeting {new Date(l.meetingAt) > new Date() ? 'on' : 'was on'} {inZone(l.meetingAt, 'America/Phoenix')} (Phoenix){l.meetingLink && <> · <a href={l.meetingLink} target="_blank" rel="noreferrer" className="text-primary-ink hover:underline">Teams link</a></>}</p>
             <p className="mt-1 text-body-sm text-ink-muted">Invite sent {fmtWhen(l.inviteSentAt)}. {l.reconfirmedAt ? `Reconfirmed ${fmtWhen(l.reconfirmedAt)}.` : 'The day before: reconfirm and write the 3-line brief.'}</p>
             {l.meetingBrief && <p className="mt-2 whitespace-pre-wrap rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink dark:bg-white/[0.03]">{l.meetingBrief}</p>}
             {can.edit && <div className="mt-2 flex gap-2">{!l.reconfirmedAt && <Button size="sm" variant="secondary" onClick={() => onAction('reconfirm')}>Reconfirm + brief</Button>}<Button size="sm" onClick={() => onAction('outcome')}>Log the outcome</Button><Button size="sm" variant="ghost" onClick={() => onAction('invite')}>Resend invite</Button></div>}
           </div>
         )}
-        {stage === 'done' && <p className="text-body-sm text-ink"><CheckCircle2 size={14} className="mr-1 inline text-success" />Outcome: <strong>{OUTCOME_LABEL[l.meetingOutcome as keyof typeof OUTCOME_LABEL] ?? l.meetingOutcome}</strong> ({fmtDate(l.meetingOutcomeAt)})</p>}
+        {stage === 'done' && <p className="text-body-sm text-ink"><CheckCircle2 size={14} className="mr-1 inline text-success-ink" />Outcome: <strong>{OUTCOME_LABEL[l.meetingOutcome as keyof typeof OUTCOME_LABEL] ?? l.meetingOutcome}</strong> ({fmtDate(l.meetingOutcomeAt)})</p>}
         {stage === 'working' && <p className="text-body-sm text-ink-muted">Fill the five facts on the calls, send the info email, follow up; then Qualify with one line on what Jesse must decide.</p>}
       </div>
     </Card>
@@ -207,7 +207,7 @@ export function FactValue({ fact, l, settings }: { fact: LeadFull['facts'][numbe
   return (
     <>
       {fact.key === 'material' && (l.material?.length ? <>{l.material.map((m) => MATERIAL_LABEL[m as keyof typeof MATERIAL_LABEL] ?? m).join(', ')}{l.materialForm?.length ? ` · ${l.materialForm.map((x) => x.toLowerCase()).join(', ')}` : ''} · handles alkaline: {YES_NO_LABEL[l.handlesAlkaline ?? 'UNKNOWN'].toLowerCase()}</> : fact.hint)}
-      {fact.key === 'volume' && (l.lbsPerShipment || l.lbsPerMonth ? <>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb per shipment` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()} lb per month` : ''}{l.belowMin && <span className="ml-1 text-purple-600">(below the {settings?.minLoadLbs.toLocaleString()} lb minimum)</span>}</> : fact.hint)}
+      {fact.key === 'volume' && (l.lbsPerShipment || l.lbsPerMonth ? <>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()} lb per shipment` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()} lb per month` : ''}{l.belowMin && <span className="ml-1 text-purple-ink">(below the {settings?.minLoadLbs.toLocaleString()} lb minimum)</span>}</> : fact.hint)}
       {fact.key === 'outlet' && (l.currentVendor ? <>{l.currentVendor} · pays {paysText(l.paysUnit, l.paysToday) ?? 'unknown'}{l.usesBatteryNetwork ? ' · The Battery Network' : ''}{l.vendorRelatedParty ? ' · related party' : ''}</> : fact.hint)}
       {fact.key === 'decisionMaker' && (l.decisionMakerName ? <>{l.decisionMakerName}{l.contactRole ? `, ${l.contactRole}` : ''} · will talk to Jesse: {YES_NO_LABEL[l.dmAgreed ?? 'UNKNOWN'].toLowerCase()}</> : fact.hint)}
       {fact.key === 'timing' && (l.pickupCity || l.nextShipmentDate ? <>{l.nextShipmentDate ? `next shipment ${fmtDate(l.nextShipmentDate)}` : 'no shipment date'} · {l.pickupCity ?? 'pickup city?'} · {FREIGHT_LABEL[(l.freight ?? 'UNKNOWN') as keyof typeof FREIGHT_LABEL].toLowerCase()}</> : fact.hint)}
@@ -230,7 +230,7 @@ export function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; sett
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           {l.facts.map((fact) => (
             <div key={fact.key} className={cn('rounded-card border p-3', fact.done ? 'border-success/30 bg-success/[0.04]' : 'border-line')}>
-              <dt className="flex items-center justify-between text-body-sm font-semibold text-ink"><span>{fact.label}</span>{fact.done ? <CheckCircle2 size={15} className="text-success" /> : <span className="text-[11px] font-normal text-ink-faint">missing</span>}</dt>
+              <dt className="flex items-center justify-between text-body-sm font-semibold text-ink"><span>{fact.label}</span>{fact.done ? <CheckCircle2 size={15} className="text-success-ink" /> : <span className="text-[11px] font-normal text-ink-faint">missing</span>}</dt>
               <dd className="mt-1 text-body-sm text-ink-muted"><FactValue fact={fact} l={l} settings={settings} /></dd>
             </div>
           ))}
@@ -238,8 +238,8 @@ export function FactsCard({ l, settings, canEdit, onSaved }: { l: LeadFull; sett
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2"><Label>1 · Material</Label>
-            <div className="flex flex-wrap gap-1.5">{MATERIALS.map((m) => <button key={m} type="button" onClick={() => toggle('material', m)} className={cn('h-8 rounded-full border px-3 text-body-sm', f.material?.includes(m) ? 'border-primary bg-primary/[0.08] text-primary' : 'border-line text-ink-muted')}>{MATERIAL_LABEL[m]}</button>)}</div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className="mr-1 text-body-sm text-ink-muted">Form:</span>{MATERIAL_FORMS.map((m) => <button key={m} type="button" onClick={() => toggle('materialForm', m)} className={cn('h-7 rounded-full border px-2.5 text-[12px]', f.materialForm?.includes(m) ? 'border-primary bg-primary/[0.08] text-primary' : 'border-line text-ink-muted')}>{m[0] + m.slice(1).toLowerCase()}</button>)}</div>
+            <div className="flex flex-wrap gap-1.5">{MATERIALS.map((m) => <button key={m} type="button" onClick={() => toggle('material', m)} className={cn('h-8 rounded-full border px-3 text-body-sm', f.material?.includes(m) ? 'border-primary bg-primary/[0.08] text-primary-ink' : 'border-line text-ink-muted')}>{MATERIAL_LABEL[m]}</button>)}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5"><span className="mr-1 text-body-sm text-ink-muted">Form:</span>{MATERIAL_FORMS.map((m) => <button key={m} type="button" onClick={() => toggle('materialForm', m)} className={cn('h-7 rounded-full border px-2.5 text-[12px]', f.materialForm?.includes(m) ? 'border-primary bg-primary/[0.08] text-primary-ink' : 'border-line text-ink-muted')}>{m[0] + m.slice(1).toLowerCase()}</button>)}</div>
           </div>
           <label><Label>Handles alkaline</Label>{yesNoSel(f.handlesAlkaline, (v) => setF({ ...f, handlesAlkaline: v }))}</label>
           <div />
@@ -284,7 +284,7 @@ function NextStepCard({ l, canEdit, onSaved }: { l: LeadFull; canEdit: boolean; 
           <label><Label>Owner</Label><Select value={owner} onChange={(e) => setOwner(e.target.value as Owner)} className="w-full">{[...new Set([...owners.keys, owner])].map((k) => <option key={k} value={k}>{owners.label[k]}</option>)}</Select></label>
         </div>
       ) : l.nextStep ? (
-        <div className="flex flex-wrap items-center gap-3"><span className="text-body-md font-medium text-ink">{l.nextStep}</span>{l.nextStepDate && <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-body-sm font-semibold', l.overdue ? 'bg-danger/10 text-danger' : 'bg-slate-100 text-ink dark:bg-white/10')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}{l.overdue ? ' · overdue' : ''}</span>}<span className="text-body-sm text-ink-muted">Owner: {owners.label[l.owner]}</span></div>
+        <div className="flex flex-wrap items-center gap-3"><span className="text-body-md font-medium text-ink">{l.nextStep}</span>{l.nextStepDate && <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-body-sm font-semibold', l.overdue ? 'bg-danger/10 text-danger-ink' : 'bg-slate-100 text-ink dark:bg-white/10')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}{l.overdue ? ' · overdue' : ''}</span>}<span className="text-body-sm text-ink-muted">Owner: {owners.label[l.owner]}</span></div>
       ) : <p className="text-body-sm text-ink-muted">{l.open ? 'No next step yet. Every open lead needs one: log a call or set it here.' : 'Closed.'}</p>}
     </Card>
   )
@@ -305,17 +305,17 @@ export function CallsCard({ l, canEdit, onLog, onChanged }: { l: LeadFull; canEd
             const locked = fromPhone && !!c.externalId && c.consentGiven === false && !c.recordingKept
             return (
               <li key={c.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-                <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', c.disposition === 'CONNECTED' ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>{c.direction === 'IN' ? <PhoneIncoming size={14} /> : <PhoneOutgoing size={14} />}</span>
+                <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', c.disposition === 'CONNECTED' ? 'bg-success/10 text-success-ink' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>{c.direction === 'IN' ? <PhoneIncoming size={14} /> : <PhoneOutgoing size={14} />}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"><span className="font-semibold text-ink">{DISPOSITION_LABEL[c.disposition]}</span>{c.durationSec > 0 && <span className="text-ink-muted">{fmtDur(c.durationSec)}</span>}<span className="text-ink-faint">{fmtWhen(c.at)} · {c.user?.name ?? 'TalkLoop'}{c.phone ? ` · ${c.phone}` : ''}</span>{fromPhone && <Badge tone="accent">TalkLoop</Badge>}{c.consentGiven === true && <Badge tone="success">Consent</Badge>}{c.consentGiven === false && <Badge tone="warning">No consent</Badge>}</div>
-                  {c.pending && <p className="mt-1 inline-flex items-center gap-1.5 text-body-sm font-medium text-primary"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />Calling through TalkLoop… the result and the recording arrive here within a few minutes.</p>}
-                  {c.summary ? <p className="mt-1 whitespace-pre-wrap text-body-sm text-ink">{c.summary}</p> : fromPhone && canEdit && !c.pending && !(c.aiSummary && !c.aiAppliedAt) && <p className="mt-1 text-body-sm text-ink-faint">No summary yet: {c.transcript ? <button type="button" className="font-semibold text-primary hover:underline" disabled={drafting === c.id} onClick={() => draftNow(c.id)}>{drafting === c.id ? 'drafting…' : 'draft it from the recording'}</button> : 'press Log call to add what was said and the facts'}.</p>}
+                  {c.pending && <p className="mt-1 inline-flex items-center gap-1.5 text-body-sm font-medium text-primary-ink"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />Calling through TalkLoop… the result and the recording arrive here within a few minutes.</p>}
+                  {c.summary ? <p className="mt-1 whitespace-pre-wrap text-body-sm text-ink">{c.summary}</p> : fromPhone && canEdit && !c.pending && !(c.aiSummary && !c.aiAppliedAt) && <p className="mt-1 text-body-sm text-ink-faint">No summary yet: {c.transcript ? <button type="button" className="font-semibold text-primary-ink hover:underline" disabled={drafting === c.id} onClick={() => draftNow(c.id)}>{drafting === c.id ? 'drafting…' : 'draft it from the recording'}</button> : 'press Log call to add what was said and the facts'}.</p>}
                   {canEdit && c.aiSummary && !c.aiAppliedAt && <DraftPanel call={c} lead={l} onDone={onChanged} onRedraft={() => draftNow(c.id)} busy={drafting === c.id} />}
                   {c.hasRecording && (c.recordingUrl ? <audio controls preload="none" src={c.recordingUrl} className="mt-2 h-8 w-full max-w-md" /> : <span className="mt-1 inline-flex items-center gap-1 text-body-sm text-ink-faint"><Play size={12} />Recording (only the SDR and managers can play it)</span>)}
-                  {locked && <p className="mt-1.5 flex flex-wrap items-center gap-2 text-body-sm text-amber-800 dark:text-amber-300"><span>Recording kept but locked: {l.state} needs both sides to agree.</span>{canEdit && <Button size="sm" variant="secondary" onClick={() => consent(c.id)}>Both sides agreed</Button>}</p>}
+                  {locked && <p className="mt-1.5 flex flex-wrap items-center gap-2 text-body-sm text-yellow-ink"><span>Recording kept but locked: {l.state} needs both sides to agree.</span>{canEdit && <Button size="sm" variant="secondary" onClick={() => consent(c.id)}>Both sides agreed</Button>}</p>}
                   {c.transcript && (
                     <div className="mt-1.5">
-                      <button type="button" onClick={() => setOpenTranscript(openTranscript === c.id ? null : c.id)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline"><FileText size={13} />{openTranscript === c.id ? 'Hide transcript' : 'Transcript'}</button>
+                      <button type="button" onClick={() => setOpenTranscript(openTranscript === c.id ? null : c.id)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink hover:underline"><FileText size={13} />{openTranscript === c.id ? 'Hide transcript' : 'Transcript'}</button>
                       {openTranscript === c.id && <p className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-btn bg-slate-50 p-3 text-body-sm text-ink dark:bg-white/[0.04]">{c.transcript}</p>}
                     </div>
                   )}
@@ -358,9 +358,9 @@ function DraftPanel({ call, lead, onDone, onRedraft, busy }: { call: LeadCall; l
     } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setSaving(false) }
   }
   return (
-    <div className="mt-2 rounded-card border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-3 dark:border-violet-500/30 dark:from-violet-500/10 dark:to-indigo-500/10">
+    <div className="mt-2 rounded-card border border-purple-ring bg-gradient-to-br from-purple-subtle to-blue-subtle p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink"><Sparkles size={14} className="text-violet-600" />Drafted from the recording — check it, then Use this</span>
+        <span className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink"><Sparkles size={14} className="text-purple-ink" />Drafted from the recording — check it, then Use this</span>
         <button type="button" onClick={onRedraft} disabled={busy} className="text-body-sm font-medium text-ink-muted hover:text-ink">{busy ? 'Drafting…' : 'Draft again'}</button>
       </div>
       <TextArea rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} className="mt-2" aria-label="Call summary" />
@@ -373,7 +373,7 @@ function DraftPanel({ call, lead, onDone, onRedraft, busy }: { call: LeadCall; l
             return (
               <li key={k}><label className="flex cursor-pointer items-start gap-2 rounded-btn px-1.5 py-1 text-body-sm hover:bg-white/60 dark:hover:bg-white/5">
                 <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-line" checked={picked.has(k)} onChange={(e) => setPicked((p) => { const n = new Set(p); if (e.target.checked) n.add(k); else n.delete(k); return n })} />
-                <span className="min-w-0"><span className="text-ink-muted">{DRAFT_LABEL[k] ?? k}: </span><span className="font-medium text-ink">{draftValue(k, v)}</span>{differs && <span className="block text-[11.5px] text-amber-700 dark:text-amber-300">now: {draftValue(k, cur)}</span>}</span>
+                <span className="min-w-0"><span className="text-ink-muted">{DRAFT_LABEL[k] ?? k}: </span><span className="font-medium text-ink">{draftValue(k, v)}</span>{differs && <span className="block text-[11.5px] text-yellow-ink">now: {draftValue(k, cur)}</span>}</span>
               </label></li>
             )
           })}
@@ -400,7 +400,7 @@ export function CommentsCard({ d, meId, onPosted }: { d: LeadDetail; meId: strin
           {l.comments.map((c) => (
             <li key={c.id} className={cn('flex gap-2.5', c.userId === meId && 'flex-row-reverse text-right')}>
               <Avatar name={c.user.name} />
-              <div className={cn('max-w-[85%] rounded-card px-3 py-2', c.userId === head?.id ? 'border border-orange-200 bg-orange-50/60 dark:border-orange-500/30 dark:bg-orange-500/10' : 'bg-slate-50 dark:bg-white/[0.04]')}>
+              <div className={cn('max-w-[85%] rounded-card px-3 py-2', c.userId === head?.id ? 'border border-orange-ring bg-orange-subtle/60' : 'bg-slate-50 dark:bg-white/[0.04]')}>
                 <div className="flex items-center gap-2 text-[11.5px] text-ink-muted"><span className="font-semibold text-ink">{c.user.name}{c.userId === head?.id ? ' (Jesse)' : ''}</span>{fmtWhen(c.createdAt)}{c.callId && <span>· on a call{c.atSec != null ? ` at ${fmtDur(c.atSec)}` : ''}</span>}</div>
                 <p className="mt-0.5 whitespace-pre-wrap text-left text-body-sm text-ink">{highlightMentions(c.body, c.mentions, members)}</p>
               </div>
@@ -425,8 +425,8 @@ export function TasksCard({ l, canEdit, onAdd, onChanged }: { l: LeadFull; canEd
         <ul className="space-y-2">
           {open.map((t) => { const late = new Date(t.dueAt).getTime() < now; return (
             <li key={t.id} className={cn('rounded-card border p-2.5', late ? 'border-danger/30 bg-danger/[0.04]' : 'border-line')}>
-              <div className="flex items-start justify-between gap-2"><span className="text-body-sm font-medium text-ink">{t.title}</span>{canEdit && <button type="button" className="shrink-0 text-body-sm font-semibold text-primary hover:underline" onClick={() => complete(t.id)}>Done</button>}</div>
-              <div className={cn('mt-0.5 text-[11.5px]', late ? 'text-danger' : 'text-ink-muted')}>{TASK_KIND_LABEL[t.kind] ?? t.kind} · {late ? 'overdue · ' : 'due '}{fmtWhen(t.dueAt)}{t.assignee ? ` · ${t.assignee.name}` : ''}</div>
+              <div className="flex items-start justify-between gap-2"><span className="text-body-sm font-medium text-ink">{t.title}</span>{canEdit && <button type="button" className="shrink-0 text-body-sm font-semibold text-primary-ink hover:underline" onClick={() => complete(t.id)}>Done</button>}</div>
+              <div className={cn('mt-0.5 text-[11.5px]', late ? 'text-danger-ink' : 'text-ink-muted')}>{TASK_KIND_LABEL[t.kind] ?? t.kind} · {late ? 'overdue · ' : 'due '}{fmtWhen(t.dueAt)}{t.assignee ? ` · ${t.assignee.name}` : ''}</div>
               {t.notes && <div className="mt-1 text-[11.5px] text-ink-muted">{t.notes}</div>}
             </li>) })}
         </ul>
@@ -447,8 +447,8 @@ export function ContactsCard({ l, cmr, canEdit, onChanged }: { l: LeadFull; cmr:
   const hasMain = !!(l.name || l.email || l.phone)
   const Line = ({ phone, mobile, email }: { phone: string | null; mobile?: string | null; email: string | null }) => (
     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px]">
-      {phone && <a href={dialHref(phone, meta?.dial) ?? '#'} className="inline-flex items-center gap-1 font-medium text-primary hover:underline"><Phone size={11} />{phone}</a>}
-      {mobile && <a href={dialHref(mobile, meta?.dial) ?? '#'} className="inline-flex items-center gap-1 text-primary hover:underline"><Phone size={11} />{mobile}</a>}
+      {phone && <a href={dialHref(phone, meta?.dial) ?? '#'} className="inline-flex items-center gap-1 font-medium text-primary-ink hover:underline"><Phone size={11} />{phone}</a>}
+      {mobile && <a href={dialHref(mobile, meta?.dial) ?? '#'} className="inline-flex items-center gap-1 text-primary-ink hover:underline"><Phone size={11} />{mobile}</a>}
       {email && <a href={`mailto:${email}`} className="inline-flex min-w-0 items-center gap-1 text-ink-muted hover:underline"><Mail size={11} className="shrink-0" /><span className="truncate">{email}</span></a>}
       {!phone && !mobile && !email && <span className="text-ink-faint">No phone or email yet</span>}
     </div>
@@ -473,9 +473,9 @@ export function ContactsCard({ l, cmr, canEdit, onChanged }: { l: LeadFull; cmr:
               </div>
               {canEdit && (
                 <span className="flex shrink-0 items-center gap-0.5">
-                  <button type="button" onClick={() => run(() => leadsApi.makePrimaryContact(c.id), `${c.name} is now the main contact`)} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title="Make main contact (the list and the Call button use this person)" aria-label={`Make ${c.name} the main contact`}><Star size={14} /></button>
+                  <button type="button" onClick={() => run(() => leadsApi.makePrimaryContact(c.id), `${c.name} is now the main contact`)} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary-ink" title="Make main contact (the list and the Call button use this person)" aria-label={`Make ${c.name} the main contact`}><Star size={14} /></button>
                   <button type="button" onClick={() => setEditing(c)} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-ink" title="Edit" aria-label={`Edit ${c.name}`}><Pencil size={14} /></button>
-                  <button type="button" onClick={() => { if (window.confirm(`Remove ${c.name} from this company?`)) void run(() => leadsApi.removeContact(c.id), 'Removed') }} className="rounded-btn p-1.5 text-ink-faint hover:bg-danger/10 hover:text-danger" title="Remove" aria-label={`Remove ${c.name}`}><Trash2 size={14} /></button>
+                  <button type="button" onClick={() => { if (window.confirm(`Remove ${c.name} from this company?`)) void run(() => leadsApi.removeContact(c.id), 'Removed') }} className="rounded-btn p-1.5 text-ink-faint hover:bg-danger/10 hover:text-danger-ink" title="Remove" aria-label={`Remove ${c.name}`}><Trash2 size={14} /></button>
                 </span>
               )}
             </div>
@@ -577,7 +577,7 @@ export function TimelineCard({ l, canNote, onNoted }: { l: LeadFull; canNote: bo
       <ul className="space-y-2.5">
         {rows.map((e) => <li key={e.id} className="flex gap-2 text-[12px]"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-line-strong" /><span className="min-w-0"><span className="block text-ink">{text(e)}</span><span className="text-ink-faint">{fmtWhen(e.createdAt)}{e.user ? ` · ${e.user.name}` : ''}</span></span></li>)}
       </ul>
-      {l.events.length > 12 && <button type="button" className="mt-3 text-body-sm text-primary hover:underline" onClick={() => setAll((v) => !v)}>{all ? 'Show less' : `Show all ${l.events.length}`}</button>}
+      {l.events.length > 12 && <button type="button" className="mt-3 text-body-sm text-primary-ink hover:underline" onClick={() => setAll((v) => !v)}>{all ? 'Show less' : `Show all ${l.events.length}`}</button>}
     </Card>
   )
 }
@@ -605,7 +605,7 @@ function LogCallModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => vo
   return (
     <Modal open onClose={onClose} title={`Log a call · ${leadTitle(l)}`} size="lg" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy} onClick={go}>Save call</Button></>}>
       <div className="space-y-4">
-        {twoParty && <p className="rounded-btn bg-primary/[0.06] px-3 py-2 text-body-sm text-ink"><ShieldCheck size={14} className="mr-1 inline text-primary" />{l.state} is a two-party consent state. Say: "This call may be recorded for quality purposes."</p>}
+        {twoParty && <p className="rounded-btn bg-primary/[0.06] px-3 py-2 text-body-sm text-ink"><ShieldCheck size={14} className="mr-1 inline text-primary-ink" />{l.state} is a two-party consent state. Say: "This call may be recorded for quality purposes."</p>}
         <div className="flex flex-wrap gap-1.5">{DISPOSITIONS.map((x) => <button key={x} type="button" onClick={() => setF({ ...f, disposition: x })} className={cn('h-8 rounded-full border px-3 text-body-sm font-medium', f.disposition === x ? 'border-ink bg-ink text-card' : 'border-line text-ink-muted hover:text-ink')}>{DISPOSITION_LABEL[x]}</button>)}</div>
         <div className="grid gap-3 sm:grid-cols-2">
           <TextField label="Length (minutes)" inputMode="decimal" value={f.minutes} onChange={(e) => setF({ ...f, minutes: e.target.value })} placeholder="e.g. 8" />
@@ -667,7 +667,7 @@ function QualifyModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => vo
     <Modal open onClose={onClose} title={approving ? 'Approve and flag for Jesse' : 'Qualify this lead'} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !!missing.length || ask.trim().length < 5} leadingIcon={<Flag size={14} />} onClick={go}>{approving ? 'Flag for Jesse' : can.manage ? 'Qualify and flag' : 'Ask the team lead'}</Button></>}>
       <div className="space-y-3">
         <ul className="grid gap-1 sm:grid-cols-2">{l.facts.map((f) => <li key={f.key}><Done ok={f.done}>{f.label}</Done></li>)}</ul>
-        {missing.length > 0 && <p className="rounded-btn bg-warning/10 px-3 py-2 text-body-sm text-amber-800">Fill the missing facts first: {missing.map((f) => f.label).join(', ')}.</p>}
+        {missing.length > 0 && <p className="rounded-btn bg-warning/10 px-3 py-2 text-body-sm text-warning-ink">Fill the missing facts first: {missing.map((f) => f.label).join(', ')}.</p>}
         <TextArea label="One line: what must Jesse decide?" rows={2} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Approve a meeting? 3,000 lb/month sorted alkaline, pays $0.10/lb today, wants a rate." />
         <p className="text-[11.5px] text-ink-muted">Status becomes Qualified, owner Jesse, flag on. {l.belowMin ? 'This lead is below the load minimum: say so in the line.' : ''}</p>
       </div>
@@ -718,7 +718,7 @@ function DecideModal({ l, onClose, onDone }: { l: LeadFull; onClose: () => void;
   return (
     <Modal open onClose={onClose} title={`Decide · ${leadTitle(l)}`} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || (action === 'MEETING' && !slot && !custom) || (action === 'DIRECTION' && text.trim().length < 3)} onClick={go}>Confirm</Button></>}>
       <div className="space-y-3">
-        <p className="rounded-btn bg-orange-50/60 px-3 py-2 text-body-sm text-ink dark:bg-orange-500/10"><strong>Asked:</strong> {l.jesseAsk}</p>
+        <p className="rounded-btn bg-orange-subtle/60 px-3 py-2 text-body-sm text-ink"><strong>Asked:</strong> {l.jesseAsk}</p>
         <div className="grid gap-2 sm:grid-cols-3">
           {([['MEETING', 'Approve meeting', 'Pick a slot; the SDR sends the invite today'], ['DIRECTION', 'Pricing / freight direction', 'Your answer goes to the SDR to relay'], ['CLOSE', 'Close out', 'With a reason; the flag clears']] as const).map(([k, t, h]) => (
             <button key={k} type="button" onClick={() => setAction(k)} className={cn('rounded-card border p-3 text-left', action === k ? 'border-primary bg-primary/[0.06]' : 'border-line hover:border-line-strong')}><span className="block text-body-sm font-semibold text-ink">{t}</span><span className="block text-[11.5px] text-ink-muted">{h}</span></button>
@@ -752,8 +752,8 @@ function SlotsModal({ l, onClose, onDone }: { l: LeadFull; onClose: () => void; 
     <Modal open onClose={onClose} title="Offer meeting slots" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={busy || !slots.some(Boolean)} onClick={go}>Save slots</Button></>}>
       <div className="space-y-3">
         <p className="text-body-sm text-ink-muted">Two or three times the prospect can do, in <strong>your local time</strong>; Metriq shows each in the prospect's zone ({l.zone.replace('America/', '').replace('_', ' ')}), Phoenix and Pacific.</p>
-        {slots.map((s, i) => <div key={i} className="flex items-center gap-2"><TextField type="datetime-local" value={s} onChange={(e) => setSlots(slots.map((x, j) => (j === i ? e.target.value : x)))} className="flex-1" />{s && <span className="text-[11.5px] text-ink-muted">{inZone(new Date(s).toISOString(), l.zone)}</span>}<button type="button" className="text-ink-faint hover:text-danger" onClick={() => setSlots(slots.filter((_, j) => j !== i))} aria-label="Remove"><X size={14} /></button></div>)}
-        {slots.length < 5 && <button type="button" className="text-body-sm text-primary hover:underline" onClick={() => setSlots([...slots, ''])}>+ another slot</button>}
+        {slots.map((s, i) => <div key={i} className="flex items-center gap-2"><TextField type="datetime-local" value={s} onChange={(e) => setSlots(slots.map((x, j) => (j === i ? e.target.value : x)))} className="flex-1" />{s && <span className="text-[11.5px] text-ink-muted">{inZone(new Date(s).toISOString(), l.zone)}</span>}<button type="button" className="text-ink-faint hover:text-danger-ink" onClick={() => setSlots(slots.filter((_, j) => j !== i))} aria-label="Remove"><X size={14} /></button></div>)}
+        {slots.length < 5 && <button type="button" className="text-body-sm text-primary-ink hover:underline" onClick={() => setSlots([...slots, ''])}>+ another slot</button>}
       </div>
     </Modal>
   )

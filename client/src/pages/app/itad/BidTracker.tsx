@@ -21,10 +21,10 @@ const STATUS_TONE: Record<BidStatus, BadgeTone> = { ACTIVE: 'primary', SUBMITTED
 
 // Colour the inline status select by state — Won green, Lost red, etc.
 const STATUS_SELECT_CLS: Record<BidStatus, string> = {
-  ACTIVE: 'border-primary/40 bg-primary/10 text-primary',
-  SUBMITTED: 'border-warning/40 bg-warning/10 text-warning',
-  WON: 'border-success/50 bg-success/10 text-success',
-  LOST: 'border-danger/50 bg-danger/10 text-danger',
+  ACTIVE: 'border-primary/40 bg-primary/10 text-primary-ink',
+  SUBMITTED: 'border-warning/40 bg-warning/10 text-warning-ink',
+  WON: 'border-success/50 bg-success/10 text-success-ink',
+  LOST: 'border-danger/50 bg-danger/10 text-danger-ink',
 }
 
 const inputCls =
@@ -165,9 +165,9 @@ export default function BidTracker() {
     { key: 'title', header: 'Bid Title', className: 'max-w-[300px]', render: (b) => (
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 font-medium text-ink">
-          {b.reminderSet && <Bell size={13} className="shrink-0 text-primary" />}
+          {b.reminderSet && <Bell size={13} className="shrink-0 text-primary-ink" />}
           {b.bidBond && (
-            <span className="shrink-0 text-accent" title={b.bidBondAmount != null ? `Bid bond: ${money(b.bidBondAmount)}` : 'Bid bond required'}>
+            <span className="shrink-0 text-highlight-ink" title={b.bidBondAmount != null ? `Bid bond: ${money(b.bidBondAmount)}` : 'Bid bond required'}>
               <ShieldCheck size={13} />
             </span>
           )}
@@ -191,14 +191,14 @@ export default function BidTracker() {
     { key: 'dueDate', header: 'Due Date', render: (b) => {
       const urgent = isUrgent(b)
       return (
-        <span className={'inline-flex items-center gap-1 whitespace-nowrap ' + (urgent ? 'font-semibold text-danger' : 'text-ink')}>
+        <span className={'inline-flex items-center gap-1 whitespace-nowrap ' + (urgent ? 'font-semibold text-danger-ink' : 'text-ink')}>
           {urgent && <TriangleAlert size={13} />}{fmtDue(b.dueDate)}
         </span>
       )
     } },
     { key: 'priceQuoted', header: 'Price Quoted', align: 'right', render: (b) => <span className="tabular-nums">{money(b.priceQuoted)}</span> },
     { key: 'awardedPrice', header: 'Awarded Price', align: 'right', render: (b) => {
-      const tone = b.awardedPrice == null ? 'text-ink-muted' : b.status === 'LOST' ? 'font-semibold text-danger' : 'font-semibold text-success'
+      const tone = b.awardedPrice == null ? 'text-ink-muted' : b.status === 'LOST' ? 'font-semibold text-danger-ink' : 'font-semibold text-success-ink'
       return <span className={'tabular-nums ' + tone}>{money(b.awardedPrice)}</span>
     } },
     { key: 'closedDate', header: 'Closed', render: (b) => (
@@ -216,10 +216,10 @@ export default function BidTracker() {
     ) },
     { key: 'actions', header: '', align: 'right', render: (b) => (
       <div className="flex items-center justify-end gap-0.5">
-        <button onClick={() => setEditFor(b)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-primary" aria-label="Edit">
+        <button onClick={() => setEditFor(b)} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-primary-ink" aria-label="Edit">
           <Pencil size={15} />
         </button>
-        <button onClick={() => remove(b)} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Delete">
+        <button onClick={() => remove(b)} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label="Delete">
           <Trash2 size={15} />
         </button>
       </div>
@@ -237,10 +237,10 @@ export default function BidTracker() {
       </div>
 
       <div className="inline-flex rounded-btn border border-line bg-card p-1" role="tablist">
-        <button role="tab" aria-selected={view === 'mine'} onClick={() => setView('mine')} className={'inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'mine' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>
+        <button role="tab" aria-selected={view === 'mine'} onClick={() => setView('mine')} className={'inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'mine' ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>
           <User size={15} /> {user?.role === 'MEMBER' ? 'My deals' : 'All deals'}
         </button>
-        <button role="tab" aria-selected={view === 'team'} onClick={() => setView('team')} className={'inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'team' ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>
+        <button role="tab" aria-selected={view === 'team'} onClick={() => setView('team')} className={'inline-flex items-center gap-1.5 rounded-btn px-3 py-1.5 text-body-sm font-semibold ' + (view === 'team' ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>
           <Users size={15} /> Team's active deals{teamDeals ? ` (${teamDeals.length})` : ''}
         </button>
       </div>
@@ -285,7 +285,7 @@ export default function BidTracker() {
               {filter && <Badge tone={STATUS_TONE[filter]}>{BID_STATUS_LABEL[filter]}</Badge>}
               <button
                 onClick={() => { setFilter(null); setTypeFilter(''); setAgentFilter(''); setFrom(''); setTo('') }}
-                className="font-semibold text-primary hover:underline"
+                className="font-semibold text-primary-ink hover:underline"
               >
                 Clear filters
               </button>
@@ -315,7 +315,7 @@ export default function BidTracker() {
 }
 
 function MetricCard({ label, count, sub, tone, active, onClick }: { label: string; count: number; sub?: string; tone: BadgeTone; active: boolean; onClick: () => void }) {
-  const accent = { primary: 'text-primary', warning: 'text-warning', success: 'text-success', danger: 'text-danger', neutral: 'text-ink', accent: 'text-accent' }[tone]
+  const accent = { primary: 'text-primary-ink', warning: 'text-warning-ink', success: 'text-success-ink', danger: 'text-danger-ink', neutral: 'text-ink', accent: 'text-highlight-ink' }[tone]
   const ring = { primary: 'ring-primary', warning: 'ring-warning', success: 'ring-success', danger: 'ring-danger', neutral: 'ring-ink', accent: 'ring-accent' }[tone]
   return (
     <button
@@ -444,7 +444,7 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
                   key={s}
                   type="button"
                   onClick={() => setSubmissionType(on ? null : s)}
-                  className={'rounded-btn border px-3 py-1.5 text-body-sm font-semibold transition-colors ' + (on ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink-muted hover:border-primary/40')}
+                  className={'rounded-btn border px-3 py-1.5 text-body-sm font-semibold transition-colors ' + (on ? 'border-primary bg-primary text-primary-on' : 'border-line bg-card text-ink-muted hover:border-primary/40')}
                 >
                   {SUBMISSION_LABEL[s]}
                 </button>
@@ -474,7 +474,7 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
         <div className="rounded-btn border border-line bg-bg px-3 py-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-body-sm text-ink">
-              <ShieldCheck size={16} className={bidBond ? 'text-accent' : 'text-ink-muted'} />
+              <ShieldCheck size={16} className={bidBond ? 'text-highlight-ink' : 'text-ink-muted'} />
               Bid bond required
             </div>
             <button type="button" role="switch" aria-checked={bidBond} onClick={() => setBidBond((v) => !v)}
@@ -493,7 +493,7 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-btn border border-line bg-bg px-3 py-2">
           <div className="flex items-center gap-2 text-body-sm text-ink">
-            {reminderSet ? <Bell size={16} className="text-primary" /> : <BellOff size={16} className="text-ink-muted" />}
+            {reminderSet ? <Bell size={16} className="text-primary-ink" /> : <BellOff size={16} className="text-ink-muted" />}
             Send a reminder before the due date
           </div>
           <button type="button" role="switch" aria-checked={reminderSet} onClick={() => setReminderSet((v) => !v)}
@@ -576,7 +576,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   return (
     <label className="block">
       <span className="mb-1 block text-body-sm font-medium text-ink">
-        {label}{required && <span className="text-danger"> *</span>}
+        {label}{required && <span className="text-danger-ink"> *</span>}
       </span>
       {children}
     </label>
@@ -588,7 +588,7 @@ function SimilarDealsWarning({ deals }: { deals: TeamDeal[] }) {
   if (!deals.length) return null
   return (
     <div className="rounded-btn border border-warning/40 bg-warning/10 p-3 text-body-sm text-ink" role="alert">
-      <p className="flex items-center gap-1.5 font-semibold text-warning"><TriangleAlert size={15} /> Someone may already be working on this</p>
+      <p className="flex items-center gap-1.5 font-semibold text-warning-ink"><TriangleAlert size={15} /> Someone may already be working on this</p>
       <ul className="mt-1.5 space-y-1">
         {deals.map((d) => (
           <li key={d.id}>

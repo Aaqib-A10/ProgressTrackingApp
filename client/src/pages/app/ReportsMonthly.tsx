@@ -90,7 +90,7 @@ export default function ReportsMonthly() {
           {isAdmin && (
             <div className="inline-flex gap-1.5">
               {(['ITAD', 'LEAD_GEN'] as Dept[]).map((d) => (
-                <button key={d} onClick={() => setDept(d)} className={'rounded-full px-3.5 py-1.5 text-body-md font-medium transition-colors ' + (dept === d ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{DEPT_LABEL[d]}</button>
+                <button key={d} onClick={() => setDept(d)} className={'rounded-full px-3.5 py-1.5 text-body-md font-medium transition-colors ' + (dept === d ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{DEPT_LABEL[d]}</button>
               ))}
             </div>
           )}
@@ -108,7 +108,7 @@ export default function ReportsMonthly() {
       {isAdmin && <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary"><Layers size={20} /></span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink"><Layers size={20} /></span>
             <div>
               <p className="text-body-md font-semibold text-ink">Management report — ITAD + Bid Tracker + Marketing</p>
               <p className="mt-0.5 text-body-sm text-ink-muted">One consolidated email that goes to management on the 1st of each month. Preview or send it now.</p>
@@ -152,7 +152,7 @@ function ItadView({ r }: { r: ItadReport }) {
       {r.topAgent && (
         <Card>
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 text-warning"><Trophy size={20} /></span>
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 text-warning-ink"><Trophy size={20} /></span>
             <div>
               <p className="text-label-md uppercase text-ink-muted">Top QA performer</p>
               <p className="text-headline-md text-ink">{r.topAgent.name} · <span className="tabular-nums">{r.topAgent.avg}%</span></p>
@@ -212,7 +212,7 @@ function LeadGenView({ r }: { r: LeadGenReport }) {
         {r.topAgent && (
           <Card>
             <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 text-warning"><Trophy size={20} /></span>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-warning/10 text-warning-ink"><Trophy size={20} /></span>
               <div>
                 <p className="text-label-md uppercase text-ink-muted">Top by leads</p>
                 <p className="text-headline-md text-ink">{r.topAgent.name} · <span className="tabular-nums">{r.topAgent.leads.toLocaleString()}</span></p>

@@ -93,6 +93,8 @@ export interface AttendanceDayRow {
 
 export interface AttendanceSummary {
   presentDays: number
+  /** Working days with no check-in (up to yesterday). */
+  absentDays?: number
   leaveDays: number
   weeklyOffDays: number
   holidayDays: number
@@ -290,3 +292,29 @@ export function wfhSpan(r: Pick<WfhRequest, 'startDate' | 'endDate' | 'days'>): 
   if (r.startDate === r.endDate) return f(r.startDate)
   return `${f(r.startDate)} to ${f(r.endDate)} · ${r.days.length} working ${r.days.length === 1 ? 'day' : 'days'}`
 }
+
+// ---------- Attendance fix requests (forgot to check in or out) ----------
+export interface FixRequest {
+  id: string
+  userId: string
+  name: string
+  /** The attendance day, yyyy-MM-dd. */
+  date: string
+  checkIn: string
+  checkOut: string | null
+  reason: string
+  status: WfhRequestStatus
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionNote: string | null
+  createdAt: string
+}
+
+export const askAttendanceFix = (input: { date: string; checkIn: string; checkOut?: string; reason: string }) =>
+  api.post<{ request: FixRequest }>('/attendance/fix-requests', input)
+export const myFixRequests = () => api.get<{ requests: FixRequest[] }>('/attendance/fix-requests/mine')
+export const cancelFixRequest = (id: string) => api.del<void>(`/attendance/fix-requests/${id}`)
+export const teamFixRequests = (status: 'PENDING' | 'ALL' = 'PENDING') =>
+  api.get<{ requests: FixRequest[] }>(`/attendance/fix-requests/team?status=${status}`)
+export const decideFixRequest = (id: string, approve: boolean, note?: string) =>
+  api.post<{ request: FixRequest }>(`/attendance/fix-requests/${id}/decision`, { approve, note })

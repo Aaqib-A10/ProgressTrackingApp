@@ -12,6 +12,7 @@ import { cn } from '../../../lib/cn'
 import { apiErrorText } from '../../../lib/api'
 import { BLOCK_COLORS, BLOCK_ICON, FIELD_TYPE_LABEL, customApi, iconOf, type CustomBlockInput, type CustomField, type FieldType } from '../../../lib/customApi'
 import { FieldInput, fieldCls } from '../custom/fields'
+import { dataTint } from '../../../theme/css'
 
 /**
  * Department Studio, part C: make a block of your own. Name it, pick an icon, list its fields
@@ -110,7 +111,7 @@ export default function BlockBuilder() {
         <Link to={backTo} className="inline-flex items-center gap-1 text-body-sm font-semibold text-ink-muted hover:text-ink"><ArrowLeft size={15} /> {back ? 'Studio' : 'Company Settings'}</Link>
         <h1 className="text-headline-md text-ink">{isNew ? 'New block' : `Change ${d.name || 'block'}`}</h1>
         <div className="ml-auto flex gap-2">
-          {!isNew && <Button variant="ghost" className="text-danger" leadingIcon={<Trash2 size={15} />} disabled={busy} onClick={remove}>Delete</Button>}
+          {!isNew && <Button variant="ghost" className="text-danger-ink" leadingIcon={<Trash2 size={15} />} disabled={busy} onClick={remove}>Delete</Button>}
           <Button disabled={busy || d.name.trim().length < 2 || d.fields.length === 0} onClick={save}>Save</Button>
         </div>
       </div>
@@ -130,7 +131,7 @@ export default function BlockBuilder() {
                 <span className="mb-1 block text-body-sm font-semibold text-ink">Icon and colour</span>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(BLOCK_ICON).map(([name, I]) => (
-                    <button key={name} type="button" onClick={() => set({ icon: name })} aria-label={name} aria-pressed={d.icon === name} className={cn('flex h-9 w-9 items-center justify-center rounded-btn border', d.icon === name ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}><I size={16} /></button>
+                    <button key={name} type="button" onClick={() => set({ icon: name })} aria-label={name} aria-pressed={d.icon === name} className={cn('flex h-9 w-9 items-center justify-center rounded-btn border', d.icon === name ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}><I size={16} /></button>
                   ))}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -175,7 +176,7 @@ export default function BlockBuilder() {
         </div>
 
         <aside className="lg:sticky lg:top-4 lg:self-start">
-          <Card title={<span className="inline-flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-md" style={{ background: `${d.color}1f`, color: d.color }}><Icon size={15} /></span>{d.name || 'Your block'}</span>} subtitle="What people see when they press Add">
+          <Card title={<span className="inline-flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-md" style={dataTint(d.color)}><Icon size={15} /></span>{d.name || 'Your block'}</span>} subtitle="What people see when they press Add">
             <div className="grid gap-3">
               {d.fields.length === 0 ? <p className="text-body-sm text-ink-muted">Add a field to see it here.</p> : d.fields.map((f) => <FieldInput key={f._id} f={{ ...f, label: f.label || 'Untitled', options: (f.options ?? []).filter(Boolean) }} value={null} onChange={() => undefined} people={[]} disabled />)}
             </div>
@@ -197,17 +198,17 @@ function FieldRow({ f, onChange, onRemove }: { f: DField; onChange: (p: Partial<
           {(Object.keys(FIELD_TYPE_LABEL) as FieldType[]).map((t) => <option key={t} value={t}>{FIELD_TYPE_LABEL[t]}</option>)}
         </select>
         <label className="flex items-center gap-1.5 text-body-sm text-ink-muted"><input type="checkbox" className="h-4 w-4 accent-primary" checked={!!f.required} onChange={(e) => onChange({ required: e.target.checked })} /> Needed</label>
-        <button type="button" onClick={onRemove} className="rounded p-1 text-ink-faint hover:bg-danger/10 hover:text-danger" aria-label={`Remove ${f.label || 'field'}`}><Trash2 size={15} /></button>
+        <button type="button" onClick={onRemove} className="rounded p-1 text-ink-faint hover:bg-danger/10 hover:text-danger-ink" aria-label={`Remove ${f.label || 'field'}`}><Trash2 size={15} /></button>
       </div>
       {f.type === 'select' && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-8">
           {(f.options ?? []).map((o, i) => (
             <span key={i} className="inline-flex items-center gap-1 rounded-full border border-line bg-slate-50 pl-2 pr-1 dark:bg-slate-800/50">
               <input value={o} maxLength={40} placeholder={`Choice ${i + 1}`} aria-label={`Choice ${i + 1}`} onChange={(e) => onChange({ options: (f.options ?? []).map((x, j) => (j === i ? e.target.value : x)) })} className="h-7 w-28 bg-transparent text-body-sm text-ink focus:outline-none" />
-              <button type="button" onClick={() => onChange({ options: (f.options ?? []).filter((_, j) => j !== i) })} className="rounded-full p-0.5 text-ink-faint hover:text-danger" aria-label="Remove choice"><X size={12} /></button>
+              <button type="button" onClick={() => onChange({ options: (f.options ?? []).filter((_, j) => j !== i) })} className="rounded-full p-0.5 text-ink-faint hover:text-danger-ink" aria-label="Remove choice"><X size={12} /></button>
             </span>
           ))}
-          <button type="button" onClick={() => onChange({ options: [...(f.options ?? []), ''] })} className="rounded-full px-2 py-1 text-body-sm font-semibold text-primary hover:bg-primary/5">+ Choice</button>
+          <button type="button" onClick={() => onChange({ options: [...(f.options ?? []), ''] })} className="rounded-full px-2 py-1 text-body-sm font-semibold text-primary-ink hover:bg-primary/5">+ Choice</button>
         </div>
       )}
     </li>

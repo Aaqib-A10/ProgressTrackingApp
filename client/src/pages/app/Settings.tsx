@@ -10,6 +10,9 @@ import { useAuth } from '../../lib/auth'
 import { api, ApiError } from '../../lib/api'
 import { ROLE_LABEL } from '../../lib/types'
 import { ThemeSwitch } from '../../components/ui/ThemeSwitch'
+import { ThemePicker } from '../../components/ui/ThemePicker'
+import { DARK_ONLY, themeById } from '../../theme/themes'
+import { applyAppearance, useTheme } from '../../lib/theme'
 import { Link } from 'react-router-dom'
 import { Plug } from 'lucide-react'
 
@@ -29,7 +32,9 @@ function loadNotifs(): Record<string, boolean> {
 }
 
 export default function Settings() {
-  const { user, updateProfile } = useAuth()
+  const { user, updateProfile, refresh } = useAuth()
+  const { themeId } = useTheme()
+  const [savingTheme, setSavingTheme] = useState(false)
   const { addToast } = useToast()
   const [name, setName] = useState(user?.name ?? '')
   const [savingName, setSavingName] = useState(false)
@@ -42,6 +47,24 @@ export default function Settings() {
   const [notifs, setNotifs] = useState<Record<string, boolean>>(loadNotifs)
 
   if (!user) return null
+
+  // Shown at once; saved on the account (every device); put back if the save fails.
+  async function saveTheme(id: string | null) {
+    if (!user || id === (user.uiTheme ?? null)) return
+    const look = { company: user.company?.theme, brand: user.company?.brandColor }
+    applyAppearance({ ...look, own: id })
+    setSavingTheme(true)
+    try {
+      await api.put('/auth/me/theme', { theme: id })
+      await refresh()
+      addToast({ type: 'success', message: id ? `Theme set to ${themeById(id).label}.` : "Using your company's theme." })
+    } catch {
+      applyAppearance({ ...look, own: user.uiTheme })
+      addToast({ type: 'error', message: 'Could not save your theme.' })
+    } finally {
+      setSavingTheme(false)
+    }
+  }
 
   async function saveName(e: FormEvent) {
     e.preventDefault()
@@ -109,16 +132,27 @@ export default function Settings() {
         </form>
       </Card>
 
-      {/* Security */}
-      <Card title="Appearance" subtitle="Light, dark, or follow your computer. Saved on this device.">
-        <ThemeSwitch withLabels />
+      <Card title="Appearance" subtitle="How Metriq looks for you. The colour theme follows your account to every device; light or dark is kept on this device.">
+        <div className="space-y-5">
+          <div>
+            <span className="mb-2 block text-body-sm font-semibold text-ink">Light or dark</span>
+            <ThemeSwitch withLabels />
+            {DARK_ONLY.has(themeId) && <p className="mt-2 text-body-sm text-ink-muted">{themeById(themeId).label} is dark only, so it shows dark whatever you pick here.</p>}
+          </div>
+          <div>
+            <span className="mb-2 block text-body-sm font-semibold text-ink">Colour theme</span>
+            <ThemePicker value={user.uiTheme ?? null} companyTheme={user.company?.theme ?? null} onPick={(id) => void saveTheme(id)} busy={savingTheme} />
+          </div>
+        </div>
       </Card>
+
+      {/* Security */}
 
       <Card title="Security" subtitle="Change your password">
         <form onSubmit={savePassword} className="space-y-4">
           <PasswordField label="Current password" value={curPw} onChange={(e) => setCurPw(e.target.value)} autoComplete="current-password" />
           <PasswordField label="New password" value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
-          {pwError && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{pwError}</p>}
+          {pwError && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{pwError}</p>}
           <Button type="submit" disabled={savingPw || !curPw || !newPw}>{savingPw ? 'Saving…' : 'Change password'}</Button>
         </form>
       </Card>

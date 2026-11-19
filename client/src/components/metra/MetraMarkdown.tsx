@@ -228,7 +228,7 @@ export function CitationChip({ n, source, onOpen, label }: { n: number; source: 
         className={cn(
           label
             ? 'inline-flex max-w-full items-center gap-1.5 rounded-full border border-line bg-card px-2 py-0.5 text-[12px] text-ink-muted hover:border-line-strong hover:text-ink'
-            : 'mx-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/10 px-1 align-[1px] text-[11px] font-semibold tabular-nums text-primary hover:bg-primary/20',
+            : 'mx-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary/10 px-1 align-[1px] text-[11px] font-semibold tabular-nums text-primary-ink hover:bg-primary/20',
           open && 'ring-2 ring-primary/30',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
         )}
@@ -282,7 +282,7 @@ function SourcePopover({ anchor, source, onClose, onOpen }: { anchor: React.RefO
       className="fixed z-[80] w-[min(300px,calc(100vw-1rem))] animate-fade-in rounded-card border border-line bg-card p-3 text-left shadow-overlay"
     >
       <div className="flex items-start gap-2">
-        <span className="mt-px inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1 text-[11px] font-semibold text-primary">{source.n}</span>
+        <span className="mt-px inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1 text-[11px] font-semibold text-primary-ink">{source.n}</span>
         <div className="min-w-0 flex-1">
           <p className="text-body-sm font-semibold text-ink">{source.title}</p>
           <p className="text-[12px] text-ink-muted">{[source.sourceLabel, when].filter(Boolean).join(' · ')}</p>
@@ -291,7 +291,7 @@ function SourcePopover({ anchor, source, onClose, onOpen }: { anchor: React.RefO
       </div>
       {source.snippet && <p className="mt-2 line-clamp-5 whitespace-pre-line text-body-sm text-ink-muted">{source.snippet}</p>}
       {source.link && (
-        <button type="button" onClick={() => { onClose(); openSourceLink(source.link, navigate, onOpen) }} className="mt-2.5 inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline">
+        <button type="button" onClick={() => { onClose(); openSourceLink(source.link, navigate, onOpen) }} className="mt-2.5 inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink hover:underline">
           Open <ExternalLink size={13} />
         </button>
       )}

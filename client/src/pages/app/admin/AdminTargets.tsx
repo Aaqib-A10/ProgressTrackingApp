@@ -108,7 +108,7 @@ export default function AdminTargets() {
       render: (t) => (
         <button
           onClick={() => remove(t)}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink"
           aria-label="Delete target"
           title="Delete target"
         >

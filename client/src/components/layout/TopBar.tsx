@@ -28,9 +28,9 @@ export interface TopBarProps {
 }
 
 const NOTIF_ICON: Record<AppNotification['type'], React.ReactNode> = {
-  reminder: <Clock size={16} className="text-warning" />,
-  alert: <AlertTriangle size={16} className="text-danger" />,
-  info: <Info size={16} className="text-primary" />,
+  reminder: <Clock size={16} className="text-warning-ink" />,
+  alert: <AlertTriangle size={16} className="text-danger-ink" />,
+  info: <Info size={16} className="text-primary-ink" />,
 }
 
 /** Notifications that drill into a page when clicked. */
@@ -185,7 +185,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
         <p className="text-body-sm text-ink-muted">{n.body}</p>
         {(n.leadStatus || isMuted) && (
           <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-muted">
-            {n.leadStatus && <span className="rounded-full bg-primary/10 px-1.5 font-semibold text-primary">{n.leadStatus}</span>}
+            {n.leadStatus && <span className="rounded-full bg-primary/10 px-1.5 font-semibold text-primary-ink">{n.leadStatus}</span>}
             {isMuted && <span className="inline-flex items-center gap-1"><BellOff size={11} /> muted</span>}
           </p>
         )}
@@ -252,7 +252,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
           title="Chat"
         >
           <MessagesSquare size={18} />
-          {chatUnread.total > 0 && <span className="absolute right-0.5 top-0.5 min-w-[16px] rounded-full bg-primary px-1 text-center text-[10px] font-bold leading-4 text-white ring-2 ring-card">{chatUnread.total > 99 ? '99+' : chatUnread.total}</span>}
+          {chatUnread.total > 0 && <span className="absolute right-0.5 top-0.5 min-w-[16px] rounded-full bg-primary px-1 text-center text-[10px] font-bold leading-4 text-primary-on ring-2 ring-card">{chatUnread.total > 99 ? '99+' : chatUnread.total}</span>}
         </button>
 
         {/* Notifications */}
@@ -272,14 +272,14 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                   <span className="text-body-md font-semibold text-ink">Notifications</span>
                   <div className="flex items-center gap-2">
                     {tabItems.some((n) => n.persistent) && (
-                      <button onClick={markTabRead} className="text-body-sm font-medium text-primary hover:underline">
+                      <button onClick={markTabRead} className="text-body-sm font-medium text-primary-ink hover:underline">
                         Mark all read
                       </button>
                     )}
                     {bellTab !== 'all' && (
                       <button
                         onClick={() => toggleMute(bellTab)}
-                        className={'rounded-btn p-1 hover:bg-slate-100 ' + (tabMuted ? 'text-primary' : 'text-ink-muted hover:text-ink')}
+                        className={'rounded-btn p-1 hover:bg-slate-100 ' + (tabMuted ? 'text-primary-ink' : 'text-ink-muted hover:text-ink')}
                         title={tabMuted ? 'Muted: no pop-ups, not in the badge. Click to unmute.' : 'Mute this tab: no pop-ups, not in the badge'}
                         aria-label={tabMuted ? 'Unmute' : 'Mute'}
                         aria-pressed={tabMuted}
@@ -296,14 +296,14 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                   onClick={() => { setNotifOpen(false); setPrefsOpen(true) }}
                   className="flex w-full items-center gap-3 border-b border-line bg-primary/5 px-4 py-2.5 text-left hover:bg-primary/10"
                 >
-                  <BellRing size={16} className="shrink-0 text-primary" />
+                  <BellRing size={16} className="shrink-0 text-primary-ink" />
                   <span className="text-body-sm text-ink"><b>Turn on pop-up alerts</b> so you don't miss tasks and messages</span>
                 </button>
               )}
               {tabMuted && <p className="flex items-center gap-1.5 border-b border-line px-4 py-2 text-body-sm text-ink-muted"><BellOff size={13} /> Muted: no pop-ups and not in the badge.</p>}
               {tabItems.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-                  <CheckCircle2 size={22} className="text-success" />
+                  <CheckCircle2 size={22} className="text-success-ink" />
                   <p className="text-body-sm text-ink-muted">You're all caught up.</p>
                 </div>
               ) : (
@@ -334,7 +334,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
                 </button>
                 <button
                   onClick={() => { setNotifOpen(false); navigate('/app/notifications') }}
-                  className="flex-1 border-l border-line px-3 py-2.5 text-center text-body-sm font-semibold text-primary hover:bg-slate-50"
+                  className="flex-1 border-l border-line px-3 py-2.5 text-center text-body-sm font-semibold text-primary-ink hover:bg-slate-50"
                 >
                   View all
                 </button>
@@ -431,7 +431,7 @@ function DepartmentSwitcher({ user }: { user: CurrentUser }) {
         className="flex items-center gap-2 rounded-btn border border-line px-2.5 py-1.5 text-body-sm font-medium text-ink hover:bg-slate-100 disabled:opacity-60"
         title="Switch department"
       >
-        <Building2 size={16} className="text-primary" />
+        <Building2 size={16} className="text-primary-ink" />
         <span className="hidden max-w-[120px] truncate sm:inline">{deptLabel(active.department, active.departmentName)}</span>
         <ChevronDown size={14} className={'text-ink-muted transition-transform ' + (open ? 'rotate-180' : '')} />
       </button>
@@ -451,7 +451,7 @@ function DepartmentSwitcher({ user }: { user: CurrentUser }) {
                       <span className="block truncate text-body-md font-medium text-ink">{deptLabel(m.department, m.departmentName)}</span>
                       <span className="block text-body-sm text-ink-muted">{ROLE_LABEL[m.role]}{m.subDepartment ? ` · ${m.subDepartment}` : ''}</span>
                     </span>
-                    {isActive && <Check size={16} className="shrink-0 text-primary" />}
+                    {isActive && <Check size={16} className="shrink-0 text-primary-ink" />}
                   </button>
                 </li>
               )
@@ -470,7 +470,7 @@ function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; lab
       onClick={onClick}
       className={
         'flex w-full items-center gap-2.5 rounded-btn px-3 py-2 text-body-md font-medium transition-colors ' +
-        (danger ? 'text-danger hover:bg-danger/10' : 'text-ink hover:bg-slate-100')
+        (danger ? 'text-danger-ink hover:bg-danger/10' : 'text-ink hover:bg-slate-100')
       }
     >
       {icon}

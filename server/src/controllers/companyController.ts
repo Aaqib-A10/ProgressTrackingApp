@@ -13,6 +13,7 @@ import { usageOf } from '../lib/plans'
 import { cleanLayout, readLayout } from '../lib/blocks'
 import { cleanDashboard, readDashboard } from '../lib/cards'
 import { isOn } from '../lib/flags'
+import { BRAND_COLOR, isThemeId } from '../lib/themes'
 
 /**
  * Company settings (Phase 1, step 4), for the Super Admin or anyone with the Company settings
@@ -58,7 +59,7 @@ async function settingsUser(req: AuthedRequest) {
 /** GET /api/company — the company (everyone sees its name; the settings page needs canEdit). */
 export async function getCompany(req: AuthedRequest, res: Response): Promise<void> {
   const u = await me(req)
-  const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, supportAccessUntil: true } })
+  const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, supportAccessUntil: true, theme: true, brandColor: true } })
   res.json({
     company: { ...c, home: c.id === HOME_COMPANY_ID, supportAccessUntil: c.supportAccessUntil && c.supportAccessUntil > new Date() ? c.supportAccessUntil : null },
     usage: u.powers.includes('company.settings') ? await usageOf(c.id) : null,
@@ -71,15 +72,18 @@ export async function getCompany(req: AuthedRequest, res: Response): Promise<voi
 const companySchema = z.object({
   name: z.string().trim().min(2, 'Give the company a name').max(80).optional(),
   timeZone: z.string().trim().refine((z) => IANAZone.isValidZone(z), 'Pick a time zone from the list').optional(),
+  // The company's colour theme (null: Metriq's own) and brand colour for buttons and links (null: the theme's own).
+  theme: z.string().refine(isThemeId, 'Pick a theme from the list').nullable().optional(),
+  brandColor: z.string().regex(BRAND_COLOR, 'A colour like #4F46E5').nullable().optional(),
 })
 
-/** PATCH /api/company { name?, timeZone? } */
+/** PATCH /api/company { name?, timeZone?, theme?, brandColor? } */
 export async function updateCompany(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const u = await settingsUser(req)
     const body = companySchema.parse(req.body)
     if (body.timeZone && u.companyId === HOME_COMPANY_ID && process.env.APP_TIMEZONE && body.timeZone !== process.env.APP_TIMEZONE) throw new Refused(409, "99 Technologies' time zone is set on the server.")
-    const c = await prisma.company.update({ where: { id: u.companyId }, data: body, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true } })
+    const c = await prisma.company.update({ where: { id: u.companyId }, data: { ...body, ...(body.brandColor ? { brandColor: body.brandColor.toLowerCase() } : {}) }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, theme: true, brandColor: true } })
     forgetTimeZone(c.id)
     res.json({ company: { ...c, home: c.id === HOME_COMPANY_ID } })
   } catch (e) { send(res, e) }

@@ -69,7 +69,7 @@ export function PeoplePicker({ people, value, onChange, disabled, placeholder = 
                   <button type="button" onClick={() => onChange(on ? value.filter((x) => x !== p.id) : [...value, p.id])} className="flex w-full items-center gap-2 rounded-btn px-2 py-1.5 text-left text-body-md hover:bg-slate-50">
                     <PersonAvatar person={p} size={22} />
                     <span className="flex-1 truncate">{p.name}</span>
-                    {on && <Check size={15} className="text-primary" />}
+                    {on && <Check size={15} className="text-primary-ink" />}
                   </button>
                 </li>
               )
@@ -113,7 +113,7 @@ export function LabelPicker({ labels, value, onChange, onCreate, disabled, popov
                   <button type="button" onClick={() => onChange(on ? value.filter((x) => x !== l.id) : [...value, l.id])} className="flex w-full items-center gap-2 rounded-btn px-2 py-1.5 text-left hover:bg-slate-50">
                     <LabelChip label={l} />
                     <span className="flex-1" />
-                    {on && <Check size={15} className="text-primary" />}
+                    {on && <Check size={15} className="text-primary-ink" />}
                   </button>
                 </li>
               )
@@ -123,7 +123,7 @@ export function LabelPicker({ labels, value, onChange, onCreate, disabled, popov
             <button
               type="button"
               onClick={async () => { const l = await onCreate(q.trim()); if (l) { onChange([...value, l.id]); setQ('') } }}
-              className="flex w-full items-center gap-1.5 border-t border-line px-3 py-2 text-left text-body-sm font-medium text-primary hover:bg-slate-50"
+              className="flex w-full items-center gap-1.5 border-t border-line px-3 py-2 text-left text-body-sm font-medium text-primary-ink hover:bg-slate-50"
             >
               <Plus size={14} /> Create label "{q.trim()}"
             </button>

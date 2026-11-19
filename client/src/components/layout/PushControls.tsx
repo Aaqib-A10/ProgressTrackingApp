@@ -59,7 +59,7 @@ export function PushSetting() {
   return (
     <div className="rounded-btn border border-line p-3">
       <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Smartphone size={17} /></span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink"><Smartphone size={17} /></span>
         <div className="min-w-0 flex-1">
           <p className="text-body-md font-semibold text-ink">When Metriq is closed</p>
           <p className="text-body-sm text-ink-muted">{st ? HELP[st] : 'Checking…'}</p>
@@ -67,10 +67,10 @@ export function PushSetting() {
         {busy ? <Loader2 size={18} className="animate-spin text-ink-muted" /> : st === 'on' ? (
           <button type="button" onClick={() => void turn(false)} className="shrink-0 rounded-btn border border-line px-3 py-1.5 text-body-sm font-semibold text-ink hover:bg-slate-50">Turn off</button>
         ) : st === 'off' ? (
-          <button type="button" onClick={() => void turn(true)} className="shrink-0 rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-white hover:bg-primary/90">Turn on</button>
+          <button type="button" onClick={() => void turn(true)} className="shrink-0 rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-primary-on hover:bg-primary/90">Turn on</button>
         ) : null}
       </div>
-      {st === 'on' && !busy && <button type="button" onClick={() => void test()} className="mt-2 text-body-sm font-semibold text-primary hover:underline">Send me a test notification</button>}
+      {st === 'on' && !busy && <button type="button" onClick={() => void test()} className="mt-2 text-body-sm font-semibold text-primary-ink hover:underline">Send me a test notification</button>}
     </div>
   )
 }
@@ -95,7 +95,7 @@ export function PushBanner() {
   }
   return (
     <div className="mb-4 flex animate-fade-in flex-wrap items-center gap-3 rounded-card border border-primary/20 bg-primary/5 px-4 py-2.5">
-      <BellRing size={18} className="shrink-0 text-primary" />
+      <BellRing size={18} className="shrink-0 text-primary-ink" />
       <p className="min-w-0 flex-1 text-body-sm text-ink">
         {st === 'ios-install'
           ? <>To get calls and messages on this iPhone like WhatsApp: tap <b>Share</b>, then <b>Add to Home Screen</b>, and open Metriq from there.</>
@@ -114,7 +114,7 @@ export function PushBanner() {
               else if (r === 'denied') addToast({ type: 'error', message: HELP.denied })
             } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not turn on notifications') }) } finally { setBusy(false) }
           }}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-primary-on hover:bg-primary/90 disabled:opacity-60"
         >
           {busy && <Loader2 size={14} className="animate-spin" />} Turn on
         </button>

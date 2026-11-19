@@ -17,8 +17,17 @@ export const CHART = {
   get ink() { return themeColor('ink') },
 }
 
-/** Rotating series colors for multi-series charts (stacked bars, donuts). */
-export const SERIES_COLORS = ['#5E6AD2', '#14A39A', '#E0930F', '#D9558C', '#3B9FE0', '#8B6FD6']
+/**
+ * Rotating series colors for multi-series charts (stacked bars, donuts): the theme's chart colours (--c-chart-1..6),
+ * read when a chart draws, so they follow the theme and dark mode. Indexed like an array: SERIES_COLORS[i % length].
+ */
+const SERIES_COUNT = 6
+export const SERIES_COLORS: readonly string[] = new Proxy(Array.from({ length: SERIES_COUNT }, () => ''), {
+  get(target, key, receiver) {
+    if (typeof key === 'string' && /^\d+$/.test(key)) return themeColor(`c-chart-${(Number(key) % SERIES_COUNT) + 1}`)
+    return Reflect.get(target, key, receiver)
+  },
+})
 
 /** Recharts tooltip look: a small raised card in the theme colours. */
 export const tooltipStyle = () => ({

@@ -20,6 +20,7 @@ import { DashboardCard, SPAN } from '../../../components/dashboard/DashboardCard
 import { startPreview } from '../../../lib/preview'
 import { apiErrorText } from '../../../lib/api'
 import type { Department } from '../../../lib/types'
+import { dataTint } from '../../../theme/css'
 
 /**
  * Department Studio (Phase 2): the Super Admin shapes a department for its members and for its
@@ -220,7 +221,7 @@ export default function DepartmentStudio() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="tablist" aria-label="View as">
             {(['member', 'lead'] as Role[]).map((m) => (
-              <button key={m} type="button" role="tab" aria-selected={role === m} onClick={() => setRole(m)} className={cn('h-8 rounded-md px-3 text-body-sm font-semibold', role === m ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')}>View as {ROLE_LABEL[m]}</button>
+              <button key={m} type="button" role="tab" aria-selected={role === m} onClick={() => setRole(m)} className={cn('h-8 rounded-md px-3 text-body-sm font-semibold', role === m ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')}>View as {ROLE_LABEL[m]}</button>
             ))}
           </div>
           <Button variant="secondary" size="sm" leadingIcon={<Eye size={15} />} onClick={preview}>Preview in the app</Button>
@@ -231,7 +232,7 @@ export default function DepartmentStudio() {
 
       <div className="flex flex-wrap items-center gap-2 border-b border-line" role="tablist" aria-label="What to shape">
         {([['menu', 'Menu', MenuIcon], ['dashboard', 'Dashboard', LayoutDashboard]] as const).map(([k, label, Icon]) => (
-          <button key={k} type="button" role="tab" aria-selected={area === k} onClick={() => setArea(k)} className={cn('-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-body-md font-semibold', area === k ? 'border-primary text-primary' : 'border-transparent text-ink-muted hover:text-ink')}>
+          <button key={k} type="button" role="tab" aria-selected={area === k} onClick={() => setArea(k)} className={cn('-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-body-md font-semibold', area === k ? 'border-primary text-primary-ink' : 'border-transparent text-ink-muted hover:text-ink')}>
             <Icon size={16} /> {label}
           </button>
         ))}
@@ -334,14 +335,14 @@ function LibItem({ id, icon, label, text, locked, inside, picked, onPick, onAdd 
   return (
     <div ref={setNodeRef} {...listeners} {...attributes} onClick={onPick} data-block={id.replace(/^lib(card)?:/, '')}
       className={cn('group flex items-start gap-2.5 rounded-btn border p-2.5 text-left transition-colors', locked ? 'cursor-default border-dashed border-line bg-slate-50/60 opacity-70' : inside ? 'border-success/40 bg-success/5' : 'cursor-grab border-line bg-card hover:border-primary/40', picked && 'ring-2 ring-primary/30', isDragging && 'opacity-40')}>
-      {icon && <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md', locked ? 'bg-slate-100 text-ink-faint' : 'bg-primary/10 text-primary')}>{icon}</span>}
+      {icon && <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md', locked ? 'bg-slate-100 text-ink-faint' : 'bg-primary/10 text-primary-ink')}>{icon}</span>}
       <span className="min-w-0 flex-1">
         <span className="block text-body-sm font-semibold text-ink">{label}</span>
         <span className="block text-[12px] leading-snug text-ink-muted">{text}</span>
       </span>
-      {inside ? <span className="mt-0.5 inline-flex items-center gap-0.5 rounded-full bg-success/10 px-1.5 text-[11px] font-semibold text-success"><Check size={11} />In</span>
+      {inside ? <span className="mt-0.5 inline-flex items-center gap-0.5 rounded-full bg-success/10 px-1.5 text-[11px] font-semibold text-success-ink"><Check size={11} />In</span>
         : locked ? <Lock size={13} className="mt-1 shrink-0 text-ink-faint" />
-          : <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onAdd() }} className="rounded-md p-1 text-primary hover:bg-primary/10" aria-label={`Add ${label}`}><Plus size={15} /></button>}
+          : <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onAdd() }} className="rounded-md p-1 text-primary-ink hover:bg-primary/10" aria-label={`Add ${label}`}><Plus size={15} /></button>}
     </div>
   )
 }
@@ -351,7 +352,7 @@ function CustomGroup({ custom, inside, onAdd, deptId }: { custom: Custom[]; insi
     <div>
       <div className="mb-1.5 flex items-center justify-between">
         <p className="text-label-md uppercase text-ink-muted">Your own blocks</p>
-        <Link to={`/app/admin/company/blocks/new?back=${deptId}`} className="inline-flex items-center gap-1 rounded-btn bg-primary px-2.5 py-1 text-body-sm font-semibold text-white hover:bg-primary-700"><Plus size={14} /> New block</Link>
+        <Link to={`/app/admin/company/blocks/new?back=${deptId}`} className="inline-flex items-center gap-1 rounded-btn bg-primary px-2.5 py-1 text-body-sm font-semibold text-primary-on hover:bg-primary-700"><Plus size={14} /> New block</Link>
       </div>
       {custom.length === 0 ? (
         <p className="rounded-btn border border-dashed border-line px-3 py-4 text-center text-body-sm text-ink-muted">Make a screen of your own: a form, a table, a board or a calendar with the fields you choose.</p>
@@ -399,7 +400,7 @@ function MenuPreview({ role, groups, custom, picked, onPick, onRemove, onMoveGro
             <div key={g.group}>
               {meta.title && (
                 <div className="group/h mb-1 flex items-center gap-2 px-1">
-                  {GIcon && <span className="flex h-5 w-5 items-center justify-center rounded" style={{ background: `${meta.color}1f`, color: meta.color }}><GIcon size={12} /></span>}
+                  {GIcon && <span className="flex h-5 w-5 items-center justify-center rounded" style={meta.color ? dataTint(meta.color) : undefined}><GIcon size={12} /></span>}
                   <span className="text-[12.5px] font-semibold text-ink">{meta.title}</span>
                   <span className="ml-auto flex opacity-60 group-hover/h:opacity-100">
                     <button type="button" disabled={gi === 0} onClick={() => onMoveGroup(gi, -1)} className="rounded p-0.5 text-ink-muted hover:bg-slate-200 disabled:opacity-30" aria-label={`Move ${meta.title} up`}><ArrowUp size={13} /></button>
@@ -413,7 +414,7 @@ function MenuPreview({ role, groups, custom, picked, onPick, onRemove, onMoveGro
             </div>
           )
         })}
-        {adding && <p className="rounded-btn border border-dashed border-primary/50 px-3 py-3 text-center text-body-sm font-semibold text-primary">Drop here to add it</p>}
+        {adding && <p className="rounded-btn border border-dashed border-primary/50 px-3 py-3 text-center text-body-sm font-semibold text-primary-ink">Drop here to add it</p>}
         <div className="border-t border-line pt-2"><p className="flex items-center gap-1.5 px-1 text-[12px] text-ink-muted"><ShieldCheck size={13} /> Admin and Quality Assurance screens follow each person's role.</p></div>
       </div>
     </section>
@@ -432,7 +433,7 @@ function MenuItem({ k, custom, picked, onPick, onRemove }: { k: string; custom: 
       <button type="button" {...attributes} {...listeners} className="cursor-grab rounded p-0.5 text-ink-faint hover:text-ink active:cursor-grabbing" aria-label={`Move ${item.label}`}><GripVertical size={14} /></button>
       <button type="button" onClick={onPick} className="flex min-w-0 flex-1 items-center gap-2 text-left"><Icon size={15} className="shrink-0 text-ink-muted" /><span className="truncate text-[13px] font-medium text-ink">{item.label}</span></button>
       {fixed ? <Lock size={12} className="mr-1 text-ink-faint" aria-label="Always there" /> : (
-        <button type="button" onClick={onRemove} className="rounded p-0.5 text-ink-faint opacity-60 hover:bg-danger/10 hover:text-danger group-hover:opacity-100" aria-label={`Take ${item.label} out`}><X size={14} /></button>
+        <button type="button" onClick={onRemove} className="rounded p-0.5 text-ink-faint opacity-60 hover:bg-danger/10 hover:text-danger-ink group-hover:opacity-100" aria-label={`Take ${item.label} out`}><X size={14} /></button>
       )}
     </li>
   )
@@ -444,7 +445,7 @@ function BlockDetails({ b, layout, why, onToggle }: { b: Block; layout: Departme
   return (
     <div>
       <div className="flex items-center gap-2">
-        {Icon && <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary"><Icon size={16} /></span>}
+        {Icon && <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary-ink"><Icon size={16} /></span>}
         <div className="min-w-0"><p className="text-body-md font-semibold text-ink">{b.label}</p>{item && item.label !== b.label && <p className="text-[12px] text-ink-muted">Shows in the menu as “{item.label}”</p>}</div>
       </div>
       <p className="mt-2 text-body-sm text-ink-muted">{b.description}</p>
@@ -483,7 +484,7 @@ function Canvas({ role, cards, user, onRemove, onSize, dragging }: { role: Role;
         </div>
       </SortableContext>
       {cards.length === 0 && <p className="py-12 text-center text-body-md text-ink-muted">No cards yet. Drag some in from the left.</p>}
-      {adding && <p className="mt-4 rounded-btn border border-dashed border-primary/50 px-3 py-4 text-center text-body-sm font-semibold text-primary">Drop here to add it</p>}
+      {adding && <p className="mt-4 rounded-btn border border-dashed border-primary/50 px-3 py-4 text-center text-body-sm font-semibold text-primary-ink">Drop here to add it</p>}
     </section>
   )
 }
@@ -498,10 +499,10 @@ function CanvasCard({ card, user, onRemove, onSize }: { card: DashCard; user: No
         <span className="min-w-0 flex-1 truncate text-body-sm font-semibold text-ink">{label}</span>
         <span className="inline-flex rounded border border-line bg-card p-px" role="group" aria-label="Width">
           {([1, 2, 3] as CardSize[]).map((s) => (
-            <button key={s} type="button" onClick={() => onSize(s)} className={cn('h-6 rounded-sm px-1.5 text-[11px] font-semibold', card.size === s ? 'bg-primary text-white' : 'text-ink-muted hover:text-ink')} aria-pressed={card.size === s} title={s === 1 ? 'A third' : s === 2 ? 'Two thirds' : 'The whole row'}>{s === 1 ? '⅓' : s === 2 ? '⅔' : 'Full'}</button>
+            <button key={s} type="button" onClick={() => onSize(s)} className={cn('h-6 rounded-sm px-1.5 text-[11px] font-semibold', card.size === s ? 'bg-primary text-primary-on' : 'text-ink-muted hover:text-ink')} aria-pressed={card.size === s} title={s === 1 ? 'A third' : s === 2 ? 'Two thirds' : 'The whole row'}>{s === 1 ? '⅓' : s === 2 ? '⅔' : 'Full'}</button>
           ))}
         </span>
-        <button type="button" onClick={onRemove} className="rounded p-0.5 text-ink-faint hover:bg-danger/10 hover:text-danger" aria-label={`Take ${label} off`}><X size={14} /></button>
+        <button type="button" onClick={onRemove} className="rounded p-0.5 text-ink-faint hover:bg-danger/10 hover:text-danger-ink" aria-label={`Take ${label} off`}><X size={14} /></button>
       </div>
       <div className="pointer-events-none relative max-h-[280px] select-none overflow-hidden p-2" aria-hidden>
         <DashboardCard card={card} user={user} />

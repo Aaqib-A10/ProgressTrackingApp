@@ -10,6 +10,7 @@ import { useToast } from '../../../components/ui/Toast'
 import { useAuth } from '../../../lib/auth'
 import type { RangeKey } from '../../../components/layout/RangeSelector'
 import { getQaTeamDashboard, type QaTeamDashboard, type QaDashAgent } from '../../../lib/qaApi'
+import { role } from '../../../theme/css'
 
 type Dept = 'ITAD' | 'CSR'
 const RANGES: { key: RangeKey; label: string }[] = [
@@ -25,10 +26,11 @@ function scoreColor(s: number): string {
   return CHART.danger
 }
 function heatBg(s: number): string {
-  if (s >= 82) return 'rgba(34,197,94,.16)'
-  if (s >= 64) return 'rgba(79,70,229,.12)'
-  if (s >= 50) return 'rgba(245,158,11,.16)'
-  return 'rgba(239,68,68,.16)'
+  // Score bands as theme tints: excellent, good, pass, fail.
+  if (s >= 82) return role('success', 0.16)
+  if (s >= 64) return role('accent', 0.12)
+  if (s >= 50) return role('warning', 0.16)
+  return role('error', 0.16)
 }
 const FLAG: Record<QaDashAgent['flag'], { tone: BadgeTone; text: string }> = {
   good: { tone: 'success', text: 'On track' },
@@ -74,7 +76,7 @@ export default function QaTeam() {
           {canPick && (
             <div className="inline-flex gap-1.5">
               {(['ITAD', 'CSR'] as Dept[]).map((d) => (
-                <button key={d} onClick={() => setDept(d)} className={'rounded-full px-3.5 py-1.5 text-body-md font-medium transition-colors ' + (dept === d ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{d}</button>
+                <button key={d} onClick={() => setDept(d)} className={'rounded-full px-3.5 py-1.5 text-body-md font-medium transition-colors ' + (dept === d ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>{d}</button>
               ))}
             </div>
           )}
@@ -137,7 +139,7 @@ export default function QaTeam() {
                 })}
               </div>
               <p className="mt-3 border-t border-line pt-2 text-center text-body-sm text-ink-muted">
-                Overall <span className="font-semibold text-success">{t.passRate}% pass</span> · {data.passFail.pass + data.passFail.fail} calls
+                Overall <span className="font-semibold text-success-ink">{t.passRate}% pass</span> · {data.passFail.pass + data.passFail.fail} calls
               </p>
             </Card>
 
@@ -162,7 +164,7 @@ export default function QaTeam() {
           {selected && (
             <Card>
               <div className="flex flex-wrap items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-body-md font-semibold text-primary">{selected.initials}</span>
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-body-md font-semibold text-primary-ink">{selected.initials}</span>
                 <div>
                   <p className="text-headline-md text-ink">{selected.name}</p>
                   <p className="text-body-sm text-ink-muted">Overall {selected.avg}% · {selected.evals} eval{selected.evals === 1 ? '' : 's'} · {selected.passCalls} pass / {selected.failCalls} fail</p>
@@ -183,7 +185,7 @@ export default function QaTeam() {
               </div>
               {(() => {
                 const weak = data.categoryNames.reduce((a, b) => ((selected.cats[a] ?? 100) <= (selected.cats[b] ?? 100) ? a : b))
-                return <p className="mt-3 rounded-lg border-l-[3px] border-warning bg-warning/10 px-3 py-2 text-body-sm text-warning">Coaching priority: <b>{weak}</b> is lowest at {selected.cats[weak] ?? 0}% — focus here first.</p>
+                return <p className="mt-3 rounded-lg border-l-[3px] border-warning bg-warning/10 px-3 py-2 text-body-sm text-warning-ink">Coaching priority: <b>{weak}</b> is lowest at {selected.cats[weak] ?? 0}% — focus here first.</p>
               })()}
             </Card>
           )}
@@ -207,7 +209,7 @@ export default function QaTeam() {
                     <tbody className="divide-y divide-line">
                       {data.agents.map((a, i) => (
                         <tr key={a.id} onClick={() => setOpenAgent(openAgent === a.id ? null : a.id)} className={'cursor-pointer ' + (openAgent === a.id ? 'bg-primary/5' : 'hover:bg-slate-50')}>
-                          <td className="px-4 py-2.5"><span className={'flex h-5 w-5 items-center justify-center rounded-full text-label-md font-bold ' + (i < 3 ? 'bg-primary/15 text-primary' : 'bg-slate-100 text-ink-muted')}>{i + 1}</span></td>
+                          <td className="px-4 py-2.5"><span className={'flex h-5 w-5 items-center justify-center rounded-full text-label-md font-bold ' + (i < 3 ? 'bg-primary/15 text-primary-ink' : 'bg-slate-100 text-ink-muted')}>{i + 1}</span></td>
                           <td className="px-2 py-2.5">
                             <div className="flex items-center gap-2">
                               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-label-md font-semibold text-ink-muted">{a.initials}</span>
@@ -216,7 +218,7 @@ export default function QaTeam() {
                           </td>
                           <td className="px-2 py-2.5 text-right font-bold tabular-nums" style={{ color: scoreColor(a.avg) }}>{a.avg}%</td>
                           <td className="px-2 py-2.5"><div className="h-1.5 w-[70px] overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${a.avg}%`, background: scoreColor(a.avg) }} /></div></td>
-                          <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-success">{a.passCalls}</td>
+                          <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-success-ink">{a.passCalls}</td>
                           <td className="px-2 py-2.5 text-right font-semibold tabular-nums" style={{ color: a.failCalls > 0 ? CHART.danger : CHART.axis }}>{a.failCalls}</td>
                           <td className="px-4 py-2.5 text-right"><Badge tone={FLAG[a.flag].tone}>{FLAG[a.flag].text}</Badge></td>
                         </tr>
@@ -295,7 +297,7 @@ export default function QaTeam() {
                         <td className="px-4 py-2.5 font-medium text-ink">{c.name}</td>
                         <td className="px-2 py-2.5 text-right font-bold tabular-nums" style={{ color: scoreColor(c.avg) }}>{c.avg}%</td>
                         <td className="px-2 py-2.5 text-right">
-                          <span className="rounded px-1.5 py-0.5 text-label-md font-bold tabular-nums" style={{ background: c.gap >= 0 ? 'rgba(34,197,94,.14)' : 'rgba(239,68,68,.14)', color: c.gap >= 0 ? CHART.success : CHART.danger }}>{c.gap >= 0 ? `+${c.gap}` : c.gap}%</span>
+                          <span className="rounded px-1.5 py-0.5 text-label-md font-bold tabular-nums" style={{ background: c.gap >= 0 ? role('success', 0.14) : role('error', 0.14), color: c.gap >= 0 ? role('text-success-ink') : role('text-error-ink') }}>{c.gap >= 0 ? `+${c.gap}` : c.gap}%</span>
                         </td>
                         <td className="px-4 py-2.5 text-ink-muted">{c.weakest ? `${c.weakest.name} (${c.weakest.score}%)` : '—'}</td>
                       </tr>

@@ -45,9 +45,9 @@ export function InstallBanner() {
   }
   return (
     <div className="mb-4 flex animate-fade-in items-center gap-3 rounded-card border border-primary/20 bg-primary/5 px-3.5 py-2.5 md:hidden">
-      <Smartphone size={18} className="shrink-0 text-primary" />
+      <Smartphone size={18} className="shrink-0 text-primary-ink" />
       <p className="min-w-0 flex-1 text-body-sm text-ink"><b>Put Metriq on your phone.</b> One tap adds the icon; it opens full screen like an app.</p>
-      <button type="button" onClick={install} className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-white hover:bg-primary/90"><Download size={14} /> Add</button>
+      <button type="button" onClick={install} className="inline-flex shrink-0 items-center gap-1.5 rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-primary-on hover:bg-primary/90"><Download size={14} /> Add</button>
       <button type="button" onClick={later} className="shrink-0 rounded-btn p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Not now"><X size={16} /></button>
     </div>
   )

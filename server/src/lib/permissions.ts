@@ -23,6 +23,7 @@ export const AREAS = [
   { key: 'projects', label: 'Projects and boards', api: ['/api/projects'], app: ['/app/projects'] },
   { key: 'tasks', label: 'My tasks', api: ['/api/tasks'], app: ['/app/tasks'] },
   { key: 'todos', label: 'To-do list', api: ['/api/todos'], app: ['/app/todo'] },
+  { key: 'notes', label: 'Notes', api: ['/api/notes'], app: ['/app/notes'] },
   { key: 'chat', label: 'Chat, calls and meetings', api: ['/api/chat', '/api/meetings'], app: ['/app/chat', '/app/calendar', '/app/meetings'] },
   { key: 'feedback', label: 'Feedback', api: ['/api/feedback'], app: ['/app/feedback'] },
   { key: 'itad', label: 'ITAD (daily log, bids, documents)', api: ['/api/itad', '/api/docs'], app: ['/app/itad'] },

@@ -90,11 +90,11 @@ export default function DealBoard() {
       {/* What the pipeline is worth */}
       <div className="flex flex-wrap items-stretch gap-3">
         <div className="flex min-w-[200px] flex-1 items-center gap-3 rounded-card border border-line bg-card px-4 py-3 shadow-xs">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Wallet size={19} /></span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink"><Wallet size={19} /></span>
           <div><div className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-muted">Open pipeline</div><div className="text-[20px] font-bold tabular-nums leading-tight text-ink">{d ? (hasValues ? money(d.totals.open.value, currency) : d.totals.open.count) : '—'}<span className="ml-2 text-body-sm font-medium text-ink-muted">{d ? `${d.totals.open.count} deal${d.totals.open.count === 1 ? '' : 's'}` : ''}</span></div></div>
         </div>
         <div className="flex min-w-[200px] flex-1 items-center gap-3 rounded-card border border-line bg-card px-4 py-3 shadow-xs">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/10 text-success"><Trophy size={19} /></span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/10 text-success-ink"><Trophy size={19} /></span>
           <div><div className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-muted">Won · last {d?.closedDays ?? 60} days</div><div className="text-[20px] font-bold tabular-nums leading-tight text-ink">{d ? (hasValues ? money(d.totals.won.value, currency) : d.totals.won.count) : '—'}<span className="ml-2 text-body-sm font-medium text-ink-muted">{d ? `${d.totals.won.count} deal${d.totals.won.count === 1 ? '' : 's'}` : ''}</span></div></div>
         </div>
         <div className="relative min-w-[220px] flex-[2] self-center">
@@ -102,7 +102,7 @@ export default function DealBoard() {
           <TextField value={q} onChange={(e) => onSearch(e.target.value)} placeholder="Search company, contact, phone, email…" className="pl-8" aria-label="Search the board" />
         </div>
       </div>
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
       {!d && !err && <div className="h-64 animate-pulse rounded-card border border-line bg-card" />}
 
       {d && (
@@ -127,7 +127,7 @@ export default function DealBoard() {
           </DragOverlay>
         </DndContext>
       )}
-      {d && <p className="text-[11.5px] text-ink-faint">Closed stages show deals closed in the last {d.closedDays} days. Each stage shows its newest 60 cards; the <Link to={`/app/leads?business=${business.id}&status=all`} className="text-primary hover:underline">leads list</Link> has everything.</p>}
+      {d && <p className="text-[11.5px] text-ink-faint">Closed stages show deals closed in the last {d.closedDays} days. Each stage shows its newest 60 cards; the <Link to={`/app/leads?business=${business.id}&status=all`} className="text-primary-ink hover:underline">leads list</Link> has everything.</p>}
 
       {adding && <AddLeadModal business={business} onClose={() => setAdding(false)} onAdded={(id) => { setAdding(false); nav(`/app/leads/${id}`) }} />}
       {closing && <CloseDialog lead={closing.lead} to={closing.to} cmr={cmr} canManage={canManage} onClose={() => setClosing(null)} onDone={() => { setClosing(null); load() }} />}
@@ -172,7 +172,7 @@ function Card({ l, currency, cmr, onOpen }: { l: LeadRow; currency: string; cmr:
   const drag = useDraggable({ id: l.id, data: { lead: l } })
   return (
     <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes} role="button" tabIndex={0} onClick={() => onOpen(l)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(l) }}
-      className={cn('block w-full cursor-pointer rounded-btn border bg-card p-3 text-left shadow-xs transition-shadow hover:border-line-strong hover:shadow-sm', l.jesseInputNeeded ? 'border-orange-200' : 'border-line', drag.isDragging && 'opacity-30 shadow-none')}>
+      className={cn('block w-full cursor-pointer rounded-btn border bg-card p-3 text-left shadow-xs transition-shadow hover:border-line-strong hover:shadow-sm', l.jesseInputNeeded ? 'border-orange-ring' : 'border-line', drag.isDragging && 'opacity-30 shadow-none')}>
       <CardBody l={l} currency={currency} cmr={cmr} />
     </div>
   )
@@ -183,17 +183,17 @@ function CardBody({ l, currency, cmr }: { l: LeadRow; currency: string; cmr: boo
     <>
       <div className="flex items-start justify-between gap-2">
         <p className="line-clamp-2 text-body-md font-semibold leading-snug text-ink">{leadTitle(l)}</p>
-        {l.value != null && l.value > 0 && <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[12px] font-bold tabular-nums text-success">{money(l.value, currency, true)}</span>}
+        {l.value != null && l.value > 0 && <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[12px] font-bold tabular-nums text-success-ink">{money(l.value, currency, true)}</span>}
       </div>
       <p className="mt-0.5 truncate text-[11.5px] text-ink-muted">{[l.organization ? l.name : null, l.phone].filter(Boolean).join(' · ') || l.email || 'No contact yet'}</p>
       {(l.nextStep || l.nextStepDate) && (
-        <p className={cn('mt-1.5 flex items-center gap-1 text-[11.5px]', l.overdue ? 'font-semibold text-danger' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} className="shrink-0" />}<span className="truncate">{l.nextStep ?? 'Next step'}</span>{l.nextStepDate && <span className="shrink-0">· {fmtDate(l.nextStepDate)}</span>}</p>
+        <p className={cn('mt-1.5 flex items-center gap-1 text-[11.5px]', l.overdue ? 'font-semibold text-danger-ink' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} className="shrink-0" />}<span className="truncate">{l.nextStep ?? 'Next step'}</span>{l.nextStepDate && <span className="shrink-0">· {fmtDate(l.nextStepDate)}</span>}</p>
       )}
       <div className="mt-2 flex items-center gap-2">
-        {l.assignee ? <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary" title={l.assignee.name}>{initials(l.assignee.name)}</span> : <span className="text-[11px] font-medium text-warning">Unassigned</span>}
+        {l.assignee ? <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary-ink" title={l.assignee.name}>{initials(l.assignee.name)}</span> : <span className="text-[11px] font-medium text-warning-ink">Unassigned</span>}
         <span className="inline-flex items-center gap-1 text-[11px] tabular-nums text-ink-faint"><Phone size={11} />{l.callsCount}</span>
         {l.openTasks > 0 && <Badge tone="primary" className="whitespace-nowrap">{l.openTasks} task{l.openTasks === 1 ? '' : 's'}</Badge>}
-        {l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={12} className="text-orange-500" /></span>}
+        {l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={12} className="text-orange-vivid" /></span>}
         {l.prohibited && <Badge tone="danger">Prohibited</Badge>}
         {cmr && <span className="ml-auto"><FactsMeter facts={l.facts} size="sm" /></span>}
       </div>

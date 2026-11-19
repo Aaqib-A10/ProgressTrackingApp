@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { TextField } from '../../../components/ui/Input'
 import { RadialGauge } from '../../../components/charts/RadialGauge'
+import { CHART } from '../../../components/charts/chartTheme'
 import { DataTable, type Column } from '../../../components/DataTable'
 import { useToast } from '../../../components/ui/Toast'
 import {
@@ -145,7 +146,7 @@ export default function MasterPlan() {
       render: (i) =>
         i.documentLink ? (
           i.documentLink.startsWith('http') ? (
-            <a href={i.documentLink} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+            <a href={i.documentLink} target="_blank" rel="noreferrer" className="text-primary-ink hover:underline">
               Link
             </a>
           ) : (
@@ -164,7 +165,7 @@ export default function MasterPlan() {
             header: '',
             align: 'right' as const,
             render: (i: PlanItem) => (
-              <button onClick={() => remove(i)} className="text-ink-muted hover:text-danger" title="Delete">
+              <button onClick={() => remove(i)} className="text-ink-muted hover:text-danger-ink" title="Delete">
                 <Trash2 size={16} />
               </button>
             ),
@@ -188,7 +189,7 @@ export default function MasterPlan() {
 
       <Card>
         <div className="flex items-center gap-6">
-          <RadialGauge value={progress.total ? progress.pct / 100 : 0} label="Complete" color="#22C55E" />
+          <RadialGauge value={progress.total ? progress.pct / 100 : 0} label="Complete" color={CHART.success} />
           <div>
             <p className="text-headline-md font-semibold text-ink">
               {progress.done} / {progress.total} tasks done

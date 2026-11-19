@@ -122,7 +122,7 @@ export default function Leads() {
             <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
             <TextField value={q} onChange={(e) => onSearch(e.target.value)} placeholder="Search company, contact, phone, email, website, vendor…" className="pl-8" aria-label="Search" />
           </div>
-          <button type="button" onClick={() => setPhoneFilters((v) => !v)} className={cn('inline-flex h-9 items-center gap-1.5 rounded-btn border px-3 text-body-sm font-medium md:hidden', phoneFilters || activeFilters.length || status !== 'open' ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted')} aria-expanded={phoneFilters}><SlidersHorizontal size={15} />Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}</button>
+          <button type="button" onClick={() => setPhoneFilters((v) => !v)} className={cn('inline-flex h-9 items-center gap-1.5 rounded-btn border px-3 text-body-sm font-medium md:hidden', phoneFilters || activeFilters.length || status !== 'open' ? 'border-primary bg-primary/[0.06] text-primary-ink' : 'border-line text-ink-muted')} aria-expanded={phoneFilters}><SlidersHorizontal size={15} />Filters{activeFilters.length ? ` (${activeFilters.length})` : ''}</button>
           <div className={cn('contents', !phoneFilters && 'max-md:hidden')}>
           <Select value={status} onChange={(e) => setParam({ status: e.target.value })} aria-label="Status">
             <option value="open">Open statuses</option>
@@ -150,7 +150,7 @@ export default function Leads() {
           <Select value={params.get('active') ?? ''} onChange={(e) => setParam({ active: e.target.value || null, status: e.target.value ? 'all' : 'open' })} aria-label="Active">
             <option value="">Active + closed</option><option value="1">Active only</option><option value="0">Closed only</option>
           </Select>
-          <button type="button" onClick={() => setMoreFilters((v) => !v)} className={cn('h-9 rounded-btn border px-3 text-body-sm font-medium', moreFilters || activeFilters.length ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted hover:text-ink')}>More{activeFilters.length ? ` (${activeFilters.length})` : ''}</button>
+          <button type="button" onClick={() => setMoreFilters((v) => !v)} className={cn('h-9 rounded-btn border px-3 text-body-sm font-medium', moreFilters || activeFilters.length ? 'border-primary bg-primary/[0.06] text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>More{activeFilters.length ? ` (${activeFilters.length})` : ''}</button>
           </div>
           <div className="relative ml-auto max-md:hidden">
             <Button size="sm" variant="secondary" leadingIcon={<Columns3 size={15} />} onClick={() => setColsOpen((v) => !v)}>Columns ({cols.length})</Button>
@@ -232,12 +232,12 @@ export default function Leads() {
 function Quick({ label, value, active, onClick, tone }: { label: string; value: number; active: boolean; onClick: () => void; tone?: 'warning' | 'danger' | 'accent' }) {
   return (
     <button type="button" onClick={onClick} className={cn('inline-flex h-8 items-center gap-2 rounded-full border px-3 text-body-sm font-medium transition-colors', active ? 'border-ink bg-ink text-card' : 'border-line bg-card text-ink-muted hover:border-line-strong hover:text-ink')}>
-      {label}<span className={cn('rounded-full px-1.5 text-[11px] font-bold tabular-nums', active ? 'bg-card/20' : tone === 'danger' && value ? 'bg-danger/10 text-danger' : tone === 'warning' && value ? 'bg-warning/15 text-amber-700' : tone === 'accent' && value ? 'bg-accent/15 text-accent' : 'bg-slate-100 text-ink dark:bg-white/10')}>{value}</span>
+      {label}<span className={cn('rounded-full px-1.5 text-[11px] font-bold tabular-nums', active ? 'bg-card/20' : tone === 'danger' && value ? 'bg-danger/10 text-danger-ink' : tone === 'warning' && value ? 'bg-warning/15 text-warning-ink' : tone === 'accent' && value ? 'bg-accent/15 text-highlight-ink' : 'bg-slate-100 text-ink dark:bg-white/10')}>{value}</span>
     </button>
   )
 }
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} className={cn('h-8 rounded-full border px-3 text-body-sm font-medium', on ? 'border-primary bg-primary/[0.08] text-primary' : 'border-line text-ink-muted hover:text-ink')}>{children}</button>
+  return <button type="button" onClick={onClick} className={cn('h-8 rounded-full border px-3 text-body-sm font-medium', on ? 'border-primary bg-primary/[0.08] text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{children}</button>
 }
 
 function ColumnsMenu({ cmr, cols, onChange, onClose }: { cmr: boolean; cols: string[]; onChange: (c: string[]) => void; onClose: () => void }) {
@@ -246,7 +246,7 @@ function ColumnsMenu({ cmr, cols, onChange, onClose }: { cmr: boolean; cols: str
   const list = COLUMNS.filter((c) => cmr || !c.cmr)
   return (
     <div ref={ref} className="absolute right-0 top-10 z-20 w-64 rounded-card border border-line bg-card p-2 shadow-lg">
-      <div className="flex items-center justify-between px-2 py-1 text-[11.5px] font-semibold uppercase tracking-wide text-ink-muted"><span>Columns</span><button type="button" className="text-primary normal-case tracking-normal" onClick={() => onChange(COLUMNS.filter((c) => c.default && (cmr || !c.cmr)).map((c) => c.key))}>Reset</button></div>
+      <div className="flex items-center justify-between px-2 py-1 text-[11.5px] font-semibold uppercase tracking-wide text-ink-muted"><span>Columns</span><button type="button" className="text-primary-ink normal-case tracking-normal" onClick={() => onChange(COLUMNS.filter((c) => c.default && (cmr || !c.cmr)).map((c) => c.key))}>Reset</button></div>
       <ul className="max-h-80 overflow-auto">
         {list.map((c) => (
           <li key={c.key}><label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-body-sm hover:bg-slate-50 dark:hover:bg-white/5"><input type="checkbox" checked={cols.includes(c.key)} onChange={(e) => onChange(e.target.checked ? [...COLUMNS.filter((x) => cols.includes(x.key) || x.key === c.key).map((x) => x.key)] : cols.filter((k) => k !== c.key))} />{c.label}</label></li>
@@ -271,7 +271,7 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
         <div className="flex min-w-[170px] max-w-[250px] items-center gap-2.5">
           <Avatar name={l.organization || l.name || '?'} />
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 truncate font-semibold text-ink">{l.organization || l.name || <span className="text-ink-faint">No name</span>}{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="text-orange-500" /></span>}</div>
+            <div className="flex items-center gap-1.5 truncate font-semibold text-ink">{l.organization || l.name || <span className="text-ink-faint">No name</span>}{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="text-orange-vivid" /></span>}</div>
             <div className="truncate text-[11.5px] text-ink-muted">{[l.organization ? l.name : null, l.phone, !l.phone ? l.email : null].filter(Boolean).join(' · ') || l.email || <span className="text-ink-faint">No contact yet</span>}</div>
           </div>
         </div>)
@@ -291,10 +291,10 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
       case 'nextStep': return (
         <div className="min-w-[130px] max-w-[210px]">
           <span className="block truncate" title={l.nextStep ?? ''}>{l.nextStep ?? <span className="text-ink-faint">No next step</span>}</span>
-          <span className={cn('mt-0.5 flex items-center gap-1.5 text-[11.5px]', l.overdue ? 'font-semibold text-danger' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} />}{l.nextStepDate ? fmtDate(l.nextStepDate) : l.nextStep ? 'no date' : ''}{l.openTasks ? <Badge tone="primary">{l.openTasks} task{l.openTasks === 1 ? '' : 's'}</Badge> : null}</span>
+          <span className={cn('mt-0.5 flex items-center gap-1.5 text-[11.5px]', l.overdue ? 'font-semibold text-danger-ink' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} />}{l.nextStepDate ? fmtDate(l.nextStepDate) : l.nextStep ? 'no date' : ''}{l.openTasks ? <Badge tone="primary">{l.openTasks} task{l.openTasks === 1 ? '' : 's'}</Badge> : null}</span>
         </div>)
-      case 'nextStepDate': return l.nextStepDate ? <span className={cn('inline-flex items-center gap-1 whitespace-nowrap', l.overdue && 'font-semibold text-danger')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}</span> : '—'
-      case 'volume': return l.lbsPerShipment || l.lbsPerMonth ? <span className={cn('tabular-nums', l.belowMin && 'text-purple-600')}>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()}/load` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()}/mo` : ''}</span> : '—'
+      case 'nextStepDate': return l.nextStepDate ? <span className={cn('inline-flex items-center gap-1 whitespace-nowrap', l.overdue && 'font-semibold text-danger-ink')}>{l.overdue && <AlertTriangle size={12} />}{fmtDate(l.nextStepDate)}</span> : '—'
+      case 'volume': return l.lbsPerShipment || l.lbsPerMonth ? <span className={cn('tabular-nums', l.belowMin && 'text-purple-ink')}>{l.lbsPerShipment ? `${l.lbsPerShipment.toLocaleString()}/load` : ''}{l.lbsPerShipment && l.lbsPerMonth ? ' · ' : ''}{l.lbsPerMonth ? `${l.lbsPerMonth.toLocaleString()}/mo` : ''}</span> : '—'
       case 'vendor': return l.currentVendor ?? '—'
       case 'pays': return l.paysUnit === 'NONE' ? 'Nothing' : paysText(l.paysUnit, l.paysToday) ?? '—'
       case 'calls': return <span className="inline-flex items-center gap-1 tabular-nums"><Phone size={12} className="text-ink-faint" />{l.callsCount}</span>
@@ -308,15 +308,15 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
     }
   }
   return (
-    <tr onClick={onOpen} className={cn('cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03]', l.jesseInputNeeded && 'bg-orange-50/40 dark:bg-orange-500/5', picked && 'bg-primary/[0.05]')}>
+    <tr onClick={onOpen} className={cn('cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03]', l.jesseInputNeeded && 'bg-orange-subtle/40', picked && 'bg-primary/[0.05]')}>
       {canManage && <td className="py-2.5 pl-3 align-middle" onClick={stop}><input type="checkbox" checked={picked} onChange={(e) => onPick(e.target.checked)} aria-label={`Pick ${leadTitle(l)}`} /></td>}
       {cols.map((k) => <td key={k} className="px-2.5 py-2.5 align-middle text-ink">{cell(k)}</td>)}
       <td className="px-2 py-2.5 text-right">
         <span className="inline-flex gap-0.5" onClick={stop}>
           {l.phone && (viaTalkLoop && !l.prohibited
-            ? <button type="button" disabled={busy} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')} className="rounded-btn p-1.5 text-primary hover:bg-primary/10" title={`Call ${l.phone} via TalkLoop`} aria-label="Call via TalkLoop"><Phone size={15} /></button>
-            : <a href={dialHref(l.phoneE164 ?? l.phone, dial) ?? '#'} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title={`Call ${l.phone}`} aria-label="Call"><Phone size={15} /></a>)}
-          <button type="button" onClick={onOpen} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary" title="Open" aria-label={`Open ${leadTitle(l)}`}><ChevronRight size={16} /></button>
+            ? <button type="button" disabled={busy} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')} className="rounded-btn p-1.5 text-primary-ink hover:bg-primary/10" title={`Call ${l.phone} via TalkLoop`} aria-label="Call via TalkLoop"><Phone size={15} /></button>
+            : <a href={dialHref(l.phoneE164 ?? l.phone, dial) ?? '#'} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary-ink" title={`Call ${l.phone}`} aria-label="Call"><Phone size={15} /></a>)}
+          <button type="button" onClick={onOpen} className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-primary-ink" title="Open" aria-label={`Open ${leadTitle(l)}`}><ChevronRight size={16} /></button>
         </span>
       </td>
     </tr>
@@ -331,28 +331,28 @@ function LeadCard({ l, business, canManage, picked, onPick, onOpen, onChanged, t
   const run = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast({ type: 'success', message: ok }); onChanged() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
   return (
-    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen() }} className={cn('rounded-card border border-line bg-card p-3 shadow-xs active:bg-slate-50 dark:active:bg-white/[0.03]', l.jesseInputNeeded && 'border-orange-200 bg-orange-50/40 dark:bg-orange-500/5', picked && 'border-primary/50 bg-primary/[0.05]')}>
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen() }} className={cn('rounded-card border border-line bg-card p-3 shadow-xs active:bg-slate-50 dark:active:bg-white/[0.03]', l.jesseInputNeeded && 'border-orange-ring bg-orange-subtle/40', picked && 'border-primary/50 bg-primary/[0.05]')}>
       <div className="flex items-start gap-2.5">
         {canManage && <input type="checkbox" checked={picked} onClick={stop} onChange={(e) => onPick(e.target.checked)} className="mt-2.5 h-4 w-4 shrink-0 rounded border-line" aria-label={`Pick ${leadTitle(l)}`} />}
         <Avatar name={l.organization || l.name || '?'} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 font-semibold text-ink"><span className="truncate">{l.organization || l.name || <span className="text-ink-faint">No name</span>}</span>{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="shrink-0 text-orange-500" /></span>}</div>
+          <div className="flex items-center gap-1.5 font-semibold text-ink"><span className="truncate">{l.organization || l.name || <span className="text-ink-faint">No name</span>}</span>{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="shrink-0 text-orange-vivid" /></span>}</div>
           <div className="truncate text-[11.5px] text-ink-muted">{[l.organization ? l.name : null, l.phone, !l.phone ? l.email : null].filter(Boolean).join(' · ') || l.email || <span className="text-ink-faint">No contact yet</span>}</div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-muted">
             {st ? <span className="font-semibold" style={{ color: st.color }}>{st.label}</span> : <StatusPill status={l.status} label={l.statusLabel} />}
             {l.industry && <span>· {l.industry}</span>}
             {l.state && <span>· {l.state}</span>}
-            {l.assignee ? <span>· {shortName(l.assignee.name)}</span> : canManage ? <span className="text-warning">· Unassigned</span> : null}
+            {l.assignee ? <span>· {shortName(l.assignee.name)}</span> : canManage ? <span className="text-warning-ink">· Unassigned</span> : null}
             <span className="inline-flex items-center gap-1 tabular-nums">· <Phone size={11} className="text-ink-faint" />{l.callsCount}</span>
           </div>
           {(l.nextStep || l.nextStepDate || l.openTasks) ? (
-            <div className={cn('mt-1 flex items-center gap-1.5 text-[11.5px]', l.overdue ? 'font-semibold text-danger' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} />}<span className="truncate">{l.nextStep ?? 'Next step'}</span>{l.nextStepDate && <span className="shrink-0">· {fmtDate(l.nextStepDate)}</span>}{l.openTasks ? <Badge tone="primary" className="whitespace-nowrap">{l.openTasks} task{l.openTasks === 1 ? "" : "s"}</Badge> : null}</div>
+            <div className={cn('mt-1 flex items-center gap-1.5 text-[11.5px]', l.overdue ? 'font-semibold text-danger-ink' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} />}<span className="truncate">{l.nextStep ?? 'Next step'}</span>{l.nextStepDate && <span className="shrink-0">· {fmtDate(l.nextStepDate)}</span>}{l.openTasks ? <Badge tone="primary" className="whitespace-nowrap">{l.openTasks} task{l.openTasks === 1 ? "" : "s"}</Badge> : null}</div>
           ) : null}
         </div>
         <span className="flex shrink-0 flex-col items-end gap-1" onClick={stop}>
           {l.phone && (viaTalkLoop && !l.prohibited
-            ? <button type="button" disabled={busy} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')} className="rounded-full bg-primary/10 p-2.5 text-primary" title={`Call ${l.phone} via TalkLoop`} aria-label="Call via TalkLoop"><Phone size={17} /></button>
-            : <a href={dialHref(l.phoneE164 ?? l.phone, dial) ?? '#'} className="rounded-full bg-primary/10 p-2.5 text-primary" title={`Call ${l.phone}`} aria-label="Call"><Phone size={17} /></a>)}
+            ? <button type="button" disabled={busy} onClick={() => run(() => leadsApi.dial(l.id), 'Ringing your extension… pick up and TalkLoop dials the number.')} className="rounded-full bg-primary/10 p-2.5 text-primary-ink" title={`Call ${l.phone} via TalkLoop`} aria-label="Call via TalkLoop"><Phone size={17} /></button>
+            : <a href={dialHref(l.phoneE164 ?? l.phone, dial) ?? '#'} className="rounded-full bg-primary/10 p-2.5 text-primary-ink" title={`Call ${l.phone}`} aria-label="Call"><Phone size={17} /></a>)}
           {l.jesseInputNeeded ? null : <FactsMeter facts={l.facts} size="sm" />}
         </span>
       </div>

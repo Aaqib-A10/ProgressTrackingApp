@@ -15,6 +15,7 @@ import { GuestLinkBox } from '../../../components/calls/GuestLink'
 import { MeetingFormModal } from '../../../components/meetings/MeetingFormModal'
 import { ResponseChip } from './CalendarPage'
 import { cn } from '../../../lib/cn'
+import { role } from '../../../theme/css'
 
 const API = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -38,7 +39,7 @@ export default function MeetingPage() {
   useEffect(() => { setData(null); load() }, [load])
   useEffect(() => { const t = window.setInterval(load, 15_000); return () => window.clearInterval(t) }, [load])
 
-  if (missing) return <div className="py-20 text-center text-body-md text-ink-muted">This meeting does not exist or was removed. <Link to="/app/calendar" className="font-semibold text-primary">Open your calendar</Link></div>
+  if (missing) return <div className="py-20 text-center text-body-md text-ink-muted">This meeting does not exist or was removed. <Link to="/app/calendar" className="font-semibold text-primary-ink">Open your calendar</Link></div>
   if (!data) return <div className="h-80 animate-pulse rounded-card bg-slate-100" />
   const m = data.meeting
   const now = Date.now()
@@ -71,18 +72,18 @@ export default function MeetingPage() {
     <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <button type="button" onClick={() => navigate('/app/calendar')} className="inline-flex items-center gap-1 text-body-sm font-semibold text-ink-muted hover:text-ink"><ArrowLeft size={15} /> Calendar</button>
 
-      {m.cancelled && <div className="rounded-card bg-danger/10 px-4 py-3 text-body-md font-semibold text-danger">This meeting was cancelled.</div>}
+      {m.cancelled && <div className="rounded-card bg-danger/10 px-4 py-3 text-body-md font-semibold text-danger-ink">This meeting was cancelled.</div>}
 
       <div className="rounded-card border border-line bg-card p-5 shadow-card">
         <div className="flex flex-wrap items-start gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-card text-white" style={{ backgroundColor: m.project?.color ?? '#4F46E5' }}><Video size={22} /></span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-card text-white" style={{ backgroundColor: m.project?.color ?? role('accent') }}><Video size={22} /></span>
           <div className="min-w-0 flex-1">
             <h1 className="text-headline-md text-ink">{m.title}</h1>
             <p className="mt-0.5 text-body-md text-ink">{fmtRange(m.startsAt, m.endsAt)}</p>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-ink-muted">
               <span>Organizer: <b className="text-ink">{m.organizer.name}</b></span>
               {m.seriesId && <span className="inline-flex items-center gap-1"><Repeat size={13} /> Repeats {m.repeat === 'weekly' ? 'weekly' : m.repeat === 'weekdays' ? 'every weekday' : 'daily'}</span>}
-              {m.project && <Link to={`/app/projects/${m.project.key}`} className="inline-flex items-center gap-1 font-semibold text-primary"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: m.project.color }} />{m.project.name}</Link>}
+              {m.project && <Link to={`/app/projects/${m.project.key}`} className="inline-flex items-center gap-1 font-semibold text-primary-ink"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: m.project.color }} />{m.project.name}</Link>}
               <span className="inline-flex items-center gap-1"><Users size={13} /> {m.attendees.length + 1} invited · {going + 1} going</span>
             </p>
           </div>
@@ -99,7 +100,7 @@ export default function MeetingPage() {
             {m.isOrganizer && !m.cancelled && (
               <>
                 <Button variant="secondary" onClick={() => setEditing(true)} leadingIcon={<Pencil size={15} />}>Edit</Button>
-                <Button variant="secondary" onClick={() => setCancelling(true)} leadingIcon={<CircleSlash size={15} />} className="text-danger">Cancel meeting</Button>
+                <Button variant="secondary" onClick={() => setCancelling(true)} leadingIcon={<CircleSlash size={15} />} className="text-danger-ink">Cancel meeting</Button>
               </>
             )}
           </div>
@@ -126,7 +127,7 @@ export default function MeetingPage() {
 
           {data.isAttendee && (
             <section className="rounded-card border border-line bg-card p-5">
-              <h2 className="mb-1 flex items-center gap-1.5 text-body-lg font-semibold text-ink"><Sparkles size={17} className="text-primary" /> Notes and recordings</h2>
+              <h2 className="mb-1 flex items-center gap-1.5 text-body-lg font-semibold text-ink"><Sparkles size={17} className="text-primary-ink" /> Notes and recordings</h2>
               <p className="mb-3 text-body-sm text-ink-muted">{m.autoNotes ? 'AI notes start by themselves when this meeting starts.' : 'Turn on AI notes in the call (sparkle button) to get a summary, decisions and action items here.'}</p>
               {data.calls.length === 0 ? <p className="text-body-md text-ink-muted">Nothing yet. They show up here after the meeting.</p> : (
                 <ul className="space-y-3">
@@ -136,7 +137,7 @@ export default function MeetingPage() {
                         <span className="text-body-md font-semibold text-ink">{fmtDay(new Date(c.startedAt))}, {fmtTime(new Date(c.startedAt))}</span>
                         <span className="text-body-sm text-ink-muted">{c.durationSec != null ? `${Math.max(1, Math.round(c.durationSec / 60))} min · ` : 'In progress · '}{c.joinedCount} joined</span>
                         {c.notes && (
-                          <button type="button" onClick={() => setNotesFor(c.id)} className="ml-auto inline-flex items-center gap-1.5 rounded-btn bg-primary/10 px-2.5 py-1 text-body-sm font-semibold text-primary hover:bg-primary/15">
+                          <button type="button" onClick={() => setNotesFor(c.id)} className="ml-auto inline-flex items-center gap-1.5 rounded-btn bg-primary/10 px-2.5 py-1 text-body-sm font-semibold text-primary-ink hover:bg-primary/15">
                             <Sparkles size={14} /> {c.notes === 'ready' ? 'Open notes' : c.notes === 'pending' ? 'Notes being written…' : 'Open transcript'}
                           </button>
                         )}
@@ -159,7 +160,7 @@ export default function MeetingPage() {
               <h2 className="mb-2 text-body-lg font-semibold text-ink">All dates in this series</h2>
               <div className="flex flex-wrap gap-1.5">
                 {data.series.map((s) => (
-                  <Link key={s.id} to={`/app/meetings/${s.id}`} className={cn('rounded-full border px-2.5 py-1 text-body-sm', s.id === m.id ? 'border-primary bg-primary/10 font-semibold text-primary' : 'border-line text-ink-muted hover:bg-slate-50')}>{fmtDay(new Date(s.startsAt))}</Link>
+                  <Link key={s.id} to={`/app/meetings/${s.id}`} className={cn('rounded-full border px-2.5 py-1 text-body-sm', s.id === m.id ? 'border-primary bg-primary/10 font-semibold text-primary-ink' : 'border-line text-ink-muted hover:bg-slate-50')}>{fmtDay(new Date(s.startsAt))}</Link>
                 ))}
               </div>
             </section>
@@ -170,7 +171,7 @@ export default function MeetingPage() {
           <section className="rounded-card border border-line bg-card p-4">
             <h2 className="mb-2 text-body-lg font-semibold text-ink">People</h2>
             <ul className="space-y-2">
-              <li className="flex items-center gap-2 text-body-md"><PersonAvatar person={m.organizer} size={30} presence={m.organizer.presence} /><span className="flex-1 truncate font-medium text-ink">{m.organizer.name}{m.organizer.id === user?.id ? ' (you)' : ''}</span><span className="text-[12px] font-semibold text-primary">Organizer</span></li>
+              <li className="flex items-center gap-2 text-body-md"><PersonAvatar person={m.organizer} size={30} presence={m.organizer.presence} /><span className="flex-1 truncate font-medium text-ink">{m.organizer.name}{m.organizer.id === user?.id ? ' (you)' : ''}</span><span className="text-[12px] font-semibold text-primary-ink">Organizer</span></li>
               {m.attendees.map((a) => (
                 <li key={a.id} className="flex items-center gap-2 text-body-md">
                   <PersonAvatar person={a} size={30} presence={a.presence} />
@@ -205,9 +206,9 @@ function Rsvp({ meeting, onRespond }: { meeting: Meeting; onRespond: (r: 'ACCEPT
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
       <span className="mr-1 text-body-sm font-semibold text-ink">Are you going?</span>
-      {btn('ACCEPTED', 'Yes', <Check size={14} />, 'border-success bg-success/10 text-success')}
-      {btn('TENTATIVE', 'Maybe', <HelpCircle size={14} />, 'border-warning bg-warning/10 text-amber-700')}
-      {btn('DECLINED', 'No', <X size={14} />, 'border-danger bg-danger/10 text-danger')}
+      {btn('ACCEPTED', 'Yes', <Check size={14} />, 'border-success bg-success/10 text-success-ink')}
+      {btn('TENTATIVE', 'Maybe', <HelpCircle size={14} />, 'border-warning bg-warning/10 text-warning-ink')}
+      {btn('DECLINED', 'No', <X size={14} />, 'border-danger bg-danger/10 text-danger-ink')}
       {meeting.seriesId && <label className="ml-2 inline-flex items-center gap-1.5 text-body-sm text-ink-muted"><input type="checkbox" checked={series} onChange={(e) => setSeries(e.target.checked)} /> Answer for all the rest of the series</label>}
     </div>
   )

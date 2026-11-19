@@ -35,9 +35,9 @@ const every = (ms: number | null) => (ms === null ? 'Monthly' : ms < 3600_000 ? 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 
 const SOURCE_META: Record<ErrorSource, { label: string; icon: React.ReactNode; cls: string }> = {
-  SERVER: { label: 'Server', icon: <Server size={13} />, cls: 'text-danger bg-danger/10' },
-  BROWSER: { label: 'Browser', icon: <Monitor size={13} />, cls: 'text-primary bg-primary/10' },
-  JOB: { label: 'Job', icon: <Clock size={13} />, cls: 'text-warning bg-warning/[0.12]' },
+  SERVER: { label: 'Server', icon: <Server size={13} />, cls: 'text-danger-ink bg-danger/10' },
+  BROWSER: { label: 'Browser', icon: <Monitor size={13} />, cls: 'text-primary-ink bg-primary/10' },
+  JOB: { label: 'Job', icon: <Clock size={13} />, cls: 'text-warning-ink bg-warning/[0.12]' },
   SLOW: { label: 'Slow', icon: <Timer size={13} />, cls: 'text-ink-muted bg-slate-100' },
 }
 
@@ -48,9 +48,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 const CATEGORY_ORDER = ['website', 'database', 'server', 'services', 'jobs', 'data', 'api-read', 'api-write']
 
 function ResultIcon({ r, size = 15 }: { r: CheckResult; size?: number }) {
-  if (r === 'PASS') return <CheckCircle2 size={size} className="shrink-0 text-success" aria-label="Passed" />
-  if (r === 'WARN') return <AlertTriangle size={size} className="shrink-0 text-warning" aria-label="Warning" />
-  if (r === 'FAIL') return <XCircle size={size} className="shrink-0 text-danger" aria-label="Failed" />
+  if (r === 'PASS') return <CheckCircle2 size={size} className="shrink-0 text-success-ink" aria-label="Passed" />
+  if (r === 'WARN') return <AlertTriangle size={size} className="shrink-0 text-warning-ink" aria-label="Warning" />
+  if (r === 'FAIL') return <XCircle size={size} className="shrink-0 text-danger-ink" aria-label="Failed" />
   return <CircleSlash size={size} className="shrink-0 text-ink-faint" aria-label="Skipped" />
 }
 
@@ -110,9 +110,9 @@ export default function SystemHealth() {
   const jobsKnown = s?.jobs.filter((j) => j.state !== 'waiting').length ?? 0
 
   const tabs: { value: Tab; label: React.ReactNode }[] = [
-    { value: 'errors', label: <><Bug size={13} /> Errors{s && s.errors.open > 0 && <span className="rounded bg-danger/10 px-1 text-[11px] font-semibold text-danger">{s.errors.open}</span>}</> },
+    { value: 'errors', label: <><Bug size={13} /> Errors{s && s.errors.open > 0 && <span className="rounded bg-danger/10 px-1 text-[11px] font-semibold text-danger-ink">{s.errors.open}</span>}</> },
     { value: 'checks', label: <><ShieldCheck size={13} /> Self checks</> },
-    { value: 'server', label: <><Server size={13} /> Jobs and server{jobsBad > 0 && <span className="rounded bg-danger/10 px-1 text-[11px] font-semibold text-danger">{jobsBad}</span>}</> },
+    { value: 'server', label: <><Server size={13} /> Jobs and server{jobsBad > 0 && <span className="rounded bg-danger/10 px-1 text-[11px] font-semibold text-danger-ink">{jobsBad}</span>}</> },
     ...(s?.canManageDevelopers ? [{ value: 'developers' as Tab, label: <><Users size={13} /> Developers</> }] : []),
   ]
 
@@ -176,8 +176,8 @@ function StatusBanner({ s, onOpenRun }: { s: HealthSummary | null; onOpenRun: (i
       </div>
       {r && (r.newProblems > 0 || r.fixed > 0) && (
         <div className="flex gap-1.5 text-[12px] font-medium">
-          {r.newProblems > 0 && <span className="rounded-md bg-danger/10 px-2 py-1 text-danger">{r.newProblems} new</span>}
-          {r.fixed > 0 && <span className="rounded-md bg-success/10 px-2 py-1 text-success">{r.fixed} fixed</span>}
+          {r.newProblems > 0 && <span className="rounded-md bg-danger/10 px-2 py-1 text-danger-ink">{r.newProblems} new</span>}
+          {r.fixed > 0 && <span className="rounded-md bg-success/10 px-2 py-1 text-success-ink">{r.fixed} fixed</span>}
         </div>
       )}
       {r && <button type="button" onClick={() => onOpenRun(r.id)} className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-body-sm font-medium text-ink-muted hover:bg-card/70 hover:text-ink">See report <ChevronRight size={14} /></button>}
@@ -240,7 +240,7 @@ function ErrorsTab({ params, set, onChanged }: { params: URLSearchParams; set: (
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
                       <span className={cn('truncate text-body-md font-medium', g.state === 'OPEN' ? 'text-ink' : 'text-ink-muted')}>{g.message}</span>
-                      {g.reopenedAt && g.state === 'OPEN' && <span className="shrink-0 rounded bg-danger/10 px-1.5 text-[11px] font-semibold text-danger">came back</span>}
+                      {g.reopenedAt && g.state === 'OPEN' && <span className="shrink-0 rounded bg-danger/10 px-1.5 text-[11px] font-semibold text-danger-ink">came back</span>}
                       {g.state !== 'OPEN' && <span className="shrink-0 rounded bg-slate-100 px-1.5 text-[11px] font-medium text-ink-muted">{g.state.toLowerCase()}</span>}
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-ink-faint">
@@ -446,12 +446,12 @@ function ChecksTab({ runId, lastRunId, running, onPick }: { runId: string | null
             {runs.map((r) => (
               <li key={r.id}>
                 <button type="button" onClick={() => onPick(r.id)} className={cn('flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors', selected === r.id ? 'bg-slate-100' : 'hover:bg-slate-50')}>
-                  {r.state === 'RUNNING' ? <Loader2 size={14} className="shrink-0 animate-spin text-primary" /> : <ResultIcon r={r.state === 'PASSED' ? 'PASS' : r.state === 'WARN' ? 'WARN' : 'FAIL'} size={14} />}
+                  {r.state === 'RUNNING' ? <Loader2 size={14} className="shrink-0 animate-spin text-primary-ink" /> : <ResultIcon r={r.state === 'PASSED' ? 'PASS' : r.state === 'WARN' ? 'WARN' : 'FAIL'} size={14} />}
                   <span className="min-w-0 flex-1">
                     <span className="block text-body-sm font-medium text-ink">{fmtDateTime(r.startedAt)}</span>
                     <span className="block text-[12px] text-ink-faint">{r.state === 'RUNNING' ? 'Running…' : `${r.failed} failed · ${r.warned} warn`}{r.trigger !== 'schedule' ? ` · ${r.trigger === 'claude' ? 'by Claude' : 'manual'}` : ''}</span>
                   </span>
-                  {r.newProblems > 0 && <span className="rounded bg-danger/10 px-1 text-[11px] font-semibold text-danger">+{r.newProblems}</span>}
+                  {r.newProblems > 0 && <span className="rounded bg-danger/10 px-1 text-[11px] font-semibold text-danger-ink">+{r.newProblems}</span>}
                 </button>
               </li>
             ))}
@@ -493,9 +493,9 @@ function RunDetail({ id, onFinished }: { id: string; onFinished: () => void }) {
         <div className="min-w-0 flex-1">
           <p className="text-body-md font-semibold text-ink">{fmtDateTime(r.startedAt)} <span className="font-normal text-ink-muted">· took {Math.round((r.durationMs ?? 0) / 1000)}s · {r.trigger === 'schedule' ? 'hourly' : r.trigger === 'claude' ? 'started by Claude' : 'started by hand'}</span></p>
           <p className="mt-0.5 flex flex-wrap gap-x-3 text-body-sm">
-            <span className="text-success">{r.passed} passed</span><span className="text-danger">{r.failed} failed</span><span className="text-warning">{r.warned} warnings</span><span className="text-ink-faint">{r.skipped} skipped</span>
-            {r.newProblems > 0 && <span className="font-medium text-danger">{r.newProblems} new since last run</span>}
-            {r.fixed > 0 && <span className="font-medium text-success">{r.fixed} fixed</span>}
+            <span className="text-success-ink">{r.passed} passed</span><span className="text-danger-ink">{r.failed} failed</span><span className="text-warning-ink">{r.warned} warnings</span><span className="text-ink-faint">{r.skipped} skipped</span>
+            {r.newProblems > 0 && <span className="font-medium text-danger-ink">{r.newProblems} new since last run</span>}
+            {r.fixed > 0 && <span className="font-medium text-success-ink">{r.fixed} fixed</span>}
           </p>
         </div>
         <Segmented size="sm" value={view} onChange={setView} options={[{ value: 'problems', label: `Problems (${problems.length})` }, { value: 'all', label: `Everything (${data.checks.length})` }]} />
@@ -524,10 +524,10 @@ function RunDetail({ id, onFinished }: { id: string; onFinished: () => void }) {
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span className={cn('break-all text-body-sm text-ink', g.category.startsWith('api') && 'font-mono text-[12.5px]')}>{c.name}</span>
-                          {c.isNew && <span className="rounded bg-danger/10 px-1 text-[10.5px] font-semibold text-danger">NEW</span>}
-                          {c.fixed && <span className="rounded bg-success/10 px-1 text-[10.5px] font-semibold text-success">FIXED</span>}
+                          {c.isNew && <span className="rounded bg-danger/10 px-1 text-[10.5px] font-semibold text-danger-ink">NEW</span>}
+                          {c.fixed && <span className="rounded bg-success/10 px-1 text-[10.5px] font-semibold text-success-ink">FIXED</span>}
                         </span>
-                        {c.detail && <span className={cn('block break-words text-[12.5px]', c.result === 'FAIL' ? 'text-danger' : 'text-ink-muted')}>{c.detail}</span>}
+                        {c.detail && <span className={cn('block break-words text-[12.5px]', c.result === 'FAIL' ? 'text-danger-ink' : 'text-ink-muted')}>{c.detail}</span>}
                       </span>
                       {c.ms != null && <span className="shrink-0 text-[12px] tabular-nums text-ink-faint">{c.ms} ms</span>}
                     </li>
@@ -546,7 +546,7 @@ function RunDetail({ id, onFinished }: { id: string; onFinished: () => void }) {
 // ------------------------------------------------------------------------------------------ Jobs and server
 
 function ServerTab({ s }: { s: HealthSummary }) {
-  const jobState = { ok: 'text-success bg-success/10', failing: 'text-danger bg-danger/10', stopped: 'text-danger bg-danger/10', waiting: 'text-ink-muted bg-slate-100' } as const
+  const jobState = { ok: 'text-success-ink bg-success/10', failing: 'text-danger-ink bg-danger/10', stopped: 'text-danger-ink bg-danger/10', waiting: 'text-ink-muted bg-slate-100' } as const
   const jobLabel = { ok: 'OK', failing: 'Failing', stopped: 'Stopped', waiting: 'Not run yet' } as const
   const row = (label: string, value: React.ReactNode, r?: CheckResult) => (
     <div className="flex items-center justify-between gap-3 py-2">
@@ -563,7 +563,7 @@ function ServerTab({ s }: { s: HealthSummary }) {
               <span className="min-w-0 flex-1">
                 <span className="block text-body-md text-ink">{j.label}</span>
                 <span className="block text-[12px] text-ink-faint">{every(j.everyMs)}{j.lastRunAt ? ` · last ran ${fmtAgo(j.lastRunAt)}` : ''}{j.runs ? ` · ${j.runs.toLocaleString()} runs, ${j.failures} failed` : ''}</span>
-                {j.lastError && <span className="mt-0.5 block break-words text-[12.5px] text-danger">{j.lastError}</span>}
+                {j.lastError && <span className="mt-0.5 block break-words text-[12.5px] text-danger-ink">{j.lastError}</span>}
               </span>
               <span className={cn('rounded-md px-2 py-0.5 text-[12px] font-medium', jobState[j.state])}>{jobLabel[j.state]}</span>
             </li>

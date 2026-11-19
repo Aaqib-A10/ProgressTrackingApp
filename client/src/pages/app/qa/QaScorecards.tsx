@@ -115,7 +115,7 @@ export default function QaScorecards() {
           <Card key={ci}>
             <div className="mb-3 flex items-center gap-2">
               <TextField className="flex-1" placeholder="Section name (e.g. Greeting)" value={c.name} onChange={(e) => setCat(ci, { name: e.target.value })} />
-              <button onClick={() => setEditor((e) => e ? { ...e, categories: e.categories.filter((_, i) => i !== ci) } : e)} className="rounded-btn p-2 text-ink-muted hover:bg-danger/10 hover:text-danger" title="Remove section"><Trash2 size={16} /></button>
+              <button onClick={() => setEditor((e) => e ? { ...e, categories: e.categories.filter((_, i) => i !== ci) } : e)} className="rounded-btn p-2 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Remove section"><Trash2 size={16} /></button>
             </div>
             <div className="space-y-2">
               {c.questions.map((q, qi) => (
@@ -127,7 +127,7 @@ export default function QaScorecards() {
                   </select>
                   <label className="flex items-center gap-1 text-body-sm text-ink-muted"><input type="checkbox" checked={q.criticalFail} onChange={(e) => setQ(ci, qi, { criticalFail: e.target.checked })} /> Critical</label>
                   <label className="flex items-center gap-1 text-body-sm text-ink-muted"><input type="checkbox" checked={q.allowNA} onChange={(e) => setQ(ci, qi, { allowNA: e.target.checked })} /> N/A</label>
-                  <button onClick={() => setCat(ci, { questions: c.questions.filter((_, j) => j !== qi) })} className="rounded p-1 text-ink-muted hover:text-danger" title="Remove question"><Trash2 size={14} /></button>
+                  <button onClick={() => setCat(ci, { questions: c.questions.filter((_, j) => j !== qi) })} className="rounded p-1 text-ink-muted hover:text-danger-ink" title="Remove question"><Trash2 size={14} /></button>
                 </div>
               ))}
               <Button variant="ghost" size="sm" leadingIcon={<Plus size={14} />} onClick={() => setCat(ci, { questions: [...c.questions, blankQ()] })}>Add question</Button>
@@ -155,7 +155,7 @@ export default function QaScorecards() {
 
       <Card flush>
         {loading ? <div className="p-5 text-body-md text-ink-muted">Loading…</div> : cards.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-12 text-center"><ClipboardList size={26} className="text-primary" /><p className="text-body-md text-ink-muted">No scorecards yet — create your first.</p></div>
+          <div className="flex flex-col items-center gap-2 py-12 text-center"><ClipboardList size={26} className="text-primary-ink" /><p className="text-body-md text-ink-muted">No scorecards yet — create your first.</p></div>
         ) : (
           <ul className="divide-y divide-line">
             {cards.map((c) => (
@@ -165,7 +165,7 @@ export default function QaScorecards() {
                   <p className="truncate text-body-sm text-ink-muted">{c.departmentType ?? 'Any dept'} · {c.categoryCount} sections · {c.evaluationCount} evaluations · acceptable ≥ {c.passThreshold}%</p>
                 </div>
                 <Button variant="secondary" size="sm" onClick={() => openEdit(c.id)}>Edit</Button>
-                <button onClick={() => archive(c.id)} className="rounded-btn p-2 text-ink-muted hover:bg-danger/10 hover:text-danger" title="Archive"><Trash2 size={16} /></button>
+                <button onClick={() => archive(c.id)} className="rounded-btn p-2 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Archive"><Trash2 size={16} /></button>
               </li>
             ))}
           </ul>

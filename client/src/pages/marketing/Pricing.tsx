@@ -46,7 +46,7 @@ export default function Pricing() {
                       <td className="px-5 py-3.5 text-ink">{r.label}</td>
                       {r.values.map((v, i) => (
                         <td key={i} className="px-5 py-3.5">
-                          {v === true ? <Check size={18} className="text-success" aria-label="Included" /> : v === false ? <Minus size={18} className="text-ink-faint" aria-label="Not included" /> : <span className="text-ink">{v}</span>}
+                          {v === true ? <Check size={18} className="text-success-ink" aria-label="Included" /> : v === false ? <Minus size={18} className="text-ink-faint" aria-label="Not included" /> : <span className="text-ink">{v}</span>}
                         </td>
                       ))}
                     </tr>
@@ -66,7 +66,7 @@ export default function Pricing() {
               <details key={f.q} open={i === 0} className="group rounded-[16px] border border-line bg-card transition-shadow open:shadow-[0_18px_40px_-28px_rgb(var(--shadow)/0.5)]">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-[15.5px] font-semibold text-ink [&::-webkit-details-marker]:hidden">
                   {f.q}
-                  <span aria-hidden className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-ink-muted transition-colors group-open:border-primary/40 group-open:text-primary">
+                  <span aria-hidden className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-ink-muted transition-colors group-open:border-primary/40 group-open:text-primary-ink">
                     <span className="absolute h-[1.5px] w-3 rounded bg-current" /><span className="absolute h-3 w-[1.5px] rounded bg-current transition-transform duration-300 group-open:rotate-90 group-open:scale-0" />
                   </span>
                 </summary>

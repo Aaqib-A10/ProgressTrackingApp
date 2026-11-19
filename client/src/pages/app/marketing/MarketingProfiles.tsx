@@ -487,7 +487,7 @@ export default function MarketingProfiles() {
             <option value="">— none —</option>
             {businessSuites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <button type="button" onClick={() => setSuiteManagerOpen(true)} className="mt-1 text-body-sm text-primary hover:underline">Manage Business Suites</button>
+          <button type="button" onClick={() => setSuiteManagerOpen(true)} className="mt-1 text-body-sm text-primary-ink hover:underline">Manage Business Suites</button>
         </div>
       )}
       <div>
@@ -505,7 +505,7 @@ export default function MarketingProfiles() {
       return (
         <button
           onClick={(e) => { e.stopPropagation(); openProfileCreate(brand.id, platform) }}
-          className="mx-auto flex h-6 w-6 items-center justify-center rounded-full text-ink-muted/40 transition-colors hover:bg-primary/10 hover:text-primary"
+          className="mx-auto flex h-6 w-6 items-center justify-center rounded-full text-ink-muted/40 transition-colors hover:bg-primary/10 hover:text-primary-ink"
           title={`Add ${label} for ${brand.name}`}
         >
           <Plus size={13} />
@@ -532,7 +532,7 @@ export default function MarketingProfiles() {
       header: 'Brand',
       render: (b) => (
         <div>
-          <button onClick={() => selectBrand(b.id)} className="flex items-center gap-2 text-left font-medium text-ink hover:text-primary">
+          <button onClick={() => selectBrand(b.id)} className="flex items-center gap-2 text-left font-medium text-ink hover:text-primary-ink">
             <span>{b.name}</span>
             {b.crmConnected && <Badge tone="success" className="px-1.5 py-0 text-[10px]">CRM</Badge>}
           </button>
@@ -563,7 +563,7 @@ export default function MarketingProfiles() {
       header: 'URL',
       render: (p) =>
         p.url ? (
-          <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+          <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-ink hover:underline">
             Link <ExternalLink size={13} />
           </a>
         ) : '—',
@@ -585,8 +585,8 @@ export default function MarketingProfiles() {
       align: 'right',
       render: (p) => (
         <div className="flex items-center justify-end gap-3">
-          <button onClick={() => openProfileEdit(p)} className="text-ink-muted hover:text-primary" title="Edit"><Pencil size={16} /></button>
-          <button onClick={() => removeProfile(p)} className="text-ink-muted hover:text-danger" title="Delete"><Trash2 size={16} /></button>
+          <button onClick={() => openProfileEdit(p)} className="text-ink-muted hover:text-primary-ink" title="Edit"><Pencil size={16} /></button>
+          <button onClick={() => removeProfile(p)} className="text-ink-muted hover:text-danger-ink" title="Delete"><Trash2 size={16} /></button>
         </div>
       ),
     },
@@ -600,7 +600,7 @@ export default function MarketingProfiles() {
       header: 'URL',
       render: (t) =>
         t.url ? (
-          <a href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">Link <ExternalLink size={13} /></a>
+          <a href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-ink hover:underline">Link <ExternalLink size={13} /></a>
         ) : '—',
     },
     {
@@ -622,8 +622,8 @@ export default function MarketingProfiles() {
       align: 'right',
       render: (t) => (
         <div className="flex items-center justify-end gap-3">
-          <button onClick={() => openStEdit(t)} className="text-ink-muted hover:text-primary" title="Edit"><Pencil size={16} /></button>
-          <button onClick={() => removeSt(t)} className="text-ink-muted hover:text-danger" title="Delete"><Trash2 size={16} /></button>
+          <button onClick={() => openStEdit(t)} className="text-ink-muted hover:text-primary-ink" title="Edit"><Pencil size={16} /></button>
+          <button onClick={() => removeSt(t)} className="text-ink-muted hover:text-danger-ink" title="Delete"><Trash2 size={16} /></button>
         </div>
       ),
     },
@@ -638,7 +638,7 @@ export default function MarketingProfiles() {
           <h1 className="text-headline-lg text-ink">Profiles &amp; Platforms</h1>
           <p className="mt-0.5 text-body-md text-ink-muted">
             Every brand suite, the channels we run for each, service tier, and CRM status. Click a dot to edit, a
-            <span className="mx-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 align-middle text-primary"><Plus size={11} /></span>
+            <span className="mx-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 align-middle text-primary-ink"><Plus size={11} /></span>
             to add a channel, or a brand name to open its full list.
           </p>
         </div>
@@ -726,7 +726,7 @@ export default function MarketingProfiles() {
         footer={
           selectedBrand ? (
             <>
-              <button onClick={() => removeBrand(selectedBrand)} className="mr-auto rounded-btn px-2.5 py-2 text-body-sm font-medium text-ink-muted hover:bg-danger/10 hover:text-danger" title="Archive suite">
+              <button onClick={() => removeBrand(selectedBrand)} className="mr-auto rounded-btn px-2.5 py-2 text-body-sm font-medium text-ink-muted hover:bg-danger/10 hover:text-danger-ink" title="Archive suite">
                 <span className="inline-flex items-center gap-1.5"><Trash2 size={15} /> Archive</span>
               </button>
               <Button variant="secondary" leadingIcon={<Pencil size={14} />} onClick={() => openBrandEdit(selectedBrand)}>Edit suite</Button>
@@ -746,7 +746,7 @@ export default function MarketingProfiles() {
               <span className="text-ink-muted">· Owner: {selectedBrand.ownerName ?? '—'}</span>
               <span className="text-ink-muted">· {selectedBrand.activeProfiles}/{selectedBrand.profileCount} active profiles</span>
               {selectedBrand.website && (
-                <a href={selectedBrand.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                <a href={selectedBrand.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-ink hover:underline">
                   Website <ExternalLink size={12} />
                 </a>
               )}
@@ -863,14 +863,14 @@ export default function MarketingProfiles() {
                 columns={[
                   { key: 'name', header: 'Suite', render: (s: BusinessSuite) => <span className="font-medium text-ink">{s.name}</span> },
                   { key: 'bm', header: 'BM ID', render: (s: BusinessSuite) => s.businessManagerId ?? '—' },
-                  { wrap: true, key: 'url', header: 'URL', render: (s: BusinessSuite) => s.url ? <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">Link <ExternalLink size={13} /></a> : '—' },
+                  { wrap: true, key: 'url', header: 'URL', render: (s: BusinessSuite) => s.url ? <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary-ink hover:underline">Link <ExternalLink size={13} /></a> : '—' },
                   { key: 'count', header: 'Profiles', align: 'right', render: (s: BusinessSuite) => formatNumber(s.profileCount) },
                   {
                     key: 'actions', header: '', align: 'right',
                     render: (s: BusinessSuite) => (
                       <div className="flex items-center justify-end gap-3">
-                        <button onClick={() => editSuite(s)} className="text-ink-muted hover:text-primary" title="Edit"><Pencil size={16} /></button>
-                        <button onClick={() => removeSuite(s)} className="text-ink-muted hover:text-danger" title="Delete"><Trash2 size={16} /></button>
+                        <button onClick={() => editSuite(s)} className="text-ink-muted hover:text-primary-ink" title="Edit"><Pencil size={16} /></button>
+                        <button onClick={() => removeSuite(s)} className="text-ink-muted hover:text-danger-ink" title="Delete"><Trash2 size={16} /></button>
                       </div>
                     ),
                   },
@@ -945,7 +945,7 @@ function BrandCard({ brand, profiles, onOpen }: { brand: Brand; profiles: BrandP
           <GripVertical size={16} />
         </button>
         <div className="min-w-0 flex-1">
-          <button onClick={() => onOpen(brand.id)} className="block max-w-full truncate text-left font-medium text-ink hover:text-primary">{brand.name}</button>
+          <button onClick={() => onOpen(brand.id)} className="block max-w-full truncate text-left font-medium text-ink hover:text-primary-ink">{brand.name}</button>
           <div className="mt-1 flex items-center gap-2 text-body-sm text-ink-muted">
             <span className="tabular-nums">{brand.activeProfiles}/{brand.profileCount} active</span>
             {brand.crmConnected && <Badge tone="success" className="px-1.5 py-0 text-[10px]">CRM</Badge>}

@@ -15,7 +15,7 @@ import { errMsg, inputCls } from './MyDailyReport'
 
 /** The team's daily reports (Phase 1, step 5): the day, the trend, and the month. */
 
-const TONE_TEXT: Record<Tone, string> = { success: 'text-success', warning: 'text-warning', danger: 'text-danger', neutral: 'text-ink' }
+const TONE_TEXT: Record<Tone, string> = { success: 'text-success-ink', warning: 'text-warning-ink', danger: 'text-danger-ink', neutral: 'text-ink' }
 const STATUS: Record<TeamDay['rows'][number]['status'], { label: string; tone: BadgeTone }> = {
   SENT: { label: 'Sent', tone: 'success' }, MISSING: { label: 'Not sent', tone: 'warning' }, ON_LEAVE: { label: 'On leave', tone: 'neutral' }, HOLIDAY: { label: 'Holiday', tone: 'neutral' },
 }
@@ -134,7 +134,7 @@ function TrendView({ form }: { form: ReportForm }) {
   const rows = useMemo(() => data?.days.map((d) => ({ label: new Date(`${d.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), sent: d.sent, ...d.totals })) ?? [], [data])
   return (
     <>
-      <div className="flex gap-1.5">{[7, 30, 90].map((n) => <button key={n} type="button" onClick={() => setDays(n)} className={cn('rounded-btn border px-3 py-1.5 text-body-sm', days === n ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted')}>{n} days</button>)}</div>
+      <div className="flex gap-1.5">{[7, 30, 90].map((n) => <button key={n} type="button" onClick={() => setDays(n)} className={cn('rounded-btn border px-3 py-1.5 text-body-sm', days === n ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted')}>{n} days</button>)}</div>
       {!data ? <Card><p className="text-body-md text-ink-muted">Loading…</p></Card> : (
         <>
           <Card title="Reports sent a day" subtitle={`${data.people} people fill this form in`}>

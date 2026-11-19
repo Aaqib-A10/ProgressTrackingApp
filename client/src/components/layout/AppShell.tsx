@@ -18,6 +18,8 @@ import { InstallBanner } from '../../mobile/InstallBanner'
 import { PullIndicator, usePullToRefresh } from '../../mobile/PullToRefresh'
 import { setNativeNavigator, takeWaitingPlace } from '../../mobile/native'
 import { QuickLogWidget } from '../itad/QuickLogWidget'
+import { DockTab } from './DockTab'
+import { useDock } from '../../lib/dock'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -58,6 +60,9 @@ export function AppShell({ user, children }: AppShellProps) {
     try { return localStorage.getItem('pt-sidebar-collapsed') === '1' } catch { return false }
   })
   const location = useLocation()
+  // Room under the page for the corner buttons (Quick Log, Ask Metra), so the last rows can scroll clear of them.
+  const dock = useDock(location.pathname)
+  const dockRoom = dock.any && !dock.tucked && dock.place === 'page'
   // Inside the Metriq phone app: a tapped notification or an outside link opens its place here.
   const goTo = useNavigate()
   useEffect(() => { setNativeNavigator((to) => goTo(to)); return () => setNativeNavigator(null) }, [goTo])
@@ -143,9 +148,9 @@ export function AppShell({ user, children }: AppShellProps) {
             <AccountBanners user={user} />
             <TopBar user={user} range={range} custom={custom} onRangeChange={setRange} onApplyCustom={setCustom} onMenu={toggleSidebar} />
             {/* Phones: room at the bottom for the tab bar (and the home indicator under it). */}
-            <main ref={mainRef} className="relative flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:px-8 sm:py-7 md:pb-7">
+            <main ref={mainRef} className={cn('relative flex-1 overflow-y-auto overscroll-contain p-4 sm:px-8 sm:pt-7', dockRoom ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom))] sm:pb-36' : 'pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:pb-7')}>
               <PullIndicator pull={ptr.pull} busy={ptr.busy} />
-              <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary" /></div>}>
+              <Suspense fallback={<div className="flex h-64 items-center justify-center"><Activity size={26} className="animate-pulse text-primary-ink" /></div>}>
                 {/* The chat fills the whole page area; its banners wait for the next screen. */}
                 {!location.pathname.startsWith('/app/chat') && <><InstallBanner /><PushBanner /></>}
                 <Fragment key={refreshKey}>{children ?? <Outlet />}</Fragment>
@@ -155,6 +160,7 @@ export function AppShell({ user, children }: AppShellProps) {
         </div>
         <BottomTabs user={user} onMore={() => setNavOpen(true)} />
         <QuickLogWidget user={user} />
+        <DockTab />
         <CommandPalette />
         <MetraLauncher key={user.id} firstName={user.name?.split(' ')[0]} />
         <SilentUpdater />
@@ -169,7 +175,7 @@ function PreviewBanner() {
   const navigate = useNavigate()
   if (!p) return null
   return (
-    <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-primary px-4 py-1.5 text-center text-body-sm font-medium text-white">
+    <div role="status" className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-primary px-4 py-1.5 text-center text-body-sm font-medium text-primary-on">
       <span>Previewing <b>{p.departmentName}</b> as a {p.role === 'TEAM_LEAD' ? 'Team Lead' : 'Member'}: this is the menu they get.</span>
       <button type="button" onClick={() => { const id = p.departmentId; endPreview(); navigate(`/app/admin/company/departments/${id}`) }} className="rounded-btn bg-white/15 px-2.5 py-0.5 font-semibold hover:bg-white/25">Back to the studio</button>
       <button type="button" onClick={() => endPreview()} className="rounded-btn bg-white/15 px-2.5 py-0.5 font-semibold hover:bg-white/25">End preview</button>
@@ -202,15 +208,15 @@ function AccountBanners({ user }: { user: CurrentUser }) {
       {user.emailCheckPending && (
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-primary/10 px-4 py-1.5 text-center text-body-sm text-ink">
           <span>Confirm your email: we sent a link to <b>{user.email}</b>.</span>
-          <button type="button" disabled={sent} className="font-semibold text-primary hover:underline disabled:no-underline disabled:opacity-60" onClick={async () => { try { await api.post('/auth/verify-email/resend'); setSent(true) } catch { /* try again later */ } }}>{sent ? 'Sent' : 'Send again'}</button>
+          <button type="button" disabled={sent} className="font-semibold text-primary-ink hover:underline disabled:no-underline disabled:opacity-60" onClick={async () => { try { await api.post('/auth/verify-email/resend'); setSent(true) } catch { /* try again later */ } }}>{sent ? 'Sent' : 'Send again'}</button>
         </div>
       )}
       {days !== null && admin && (
-        <div className={cn('flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-1.5 text-center text-body-sm', days <= 0 ? 'bg-danger/10 text-danger' : days <= 3 ? 'bg-warning/15 text-ink' : 'bg-slate-100 text-ink-muted')}>
+        <div className={cn('flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-1.5 text-center text-body-sm', days <= 0 ? 'bg-danger/10 text-danger-ink' : days <= 3 ? 'bg-warning/15 text-ink' : 'bg-slate-100 text-ink-muted')}>
           <span>{days <= 0
             ? (user.company?.paymentsOpen === false ? 'Your free trial has ended. Online payment is coming soon; until then everything keeps working.' : 'Your free trial has ended. You can still look at everything; choose a plan to keep going.')
             : `Free trial: ${days} day${days === 1 ? '' : 's'} left.`}</span>
-          <Link to="/app/billing" className="font-semibold text-primary hover:underline">{days <= 0 && user.company?.paymentsOpen !== false ? 'Choose a plan' : 'See plans'}</Link>
+          <Link to="/app/billing" className="font-semibold text-primary-ink hover:underline">{days <= 0 && user.company?.paymentsOpen !== false ? 'Choose a plan' : 'See plans'}</Link>
         </div>
       )}
     </>

@@ -135,7 +135,7 @@ function ItemRow({ item, canManage, onPatch, onOpen }: { item: InventoryItem; ca
   return (
     <tr className="hover:bg-slate-50">
       <td className="px-4 py-2.5">
-        <button onClick={onOpen} className="text-left font-medium text-ink hover:text-primary hover:underline">{item.name}</button>
+        <button onClick={onOpen} className="text-left font-medium text-ink hover:text-primary-ink hover:underline">{item.name}</button>
         {item.sku && <div className="text-body-sm text-ink-muted">SKU {item.sku}</div>}
       </td>
       <td className="px-3 py-2.5"><Badge tone="neutral">{item.category}</Badge></td>
@@ -144,7 +144,7 @@ function ItemRow({ item, canManage, onPatch, onOpen }: { item: InventoryItem; ca
           <button
             onClick={() => save({ active: !item.active })}
             title={item.active ? 'Click to deactivate' : 'Click to activate'}
-            className={'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label-md font-semibold transition-colors ' + (item.active ? 'bg-success/10 text-success hover:bg-success/20' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>
+            className={'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label-md font-semibold transition-colors ' + (item.active ? 'bg-success/10 text-success-ink hover:bg-success/20' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}>
             {item.active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
             {item.active ? 'Active' : 'Inactive'}
           </button>
@@ -233,7 +233,7 @@ function NewPriceBox({ current, onSave }: { current: number | null; onSave: (v: 
         className="h-8 w-24 rounded-btn border border-line bg-card px-2 text-body-sm tabular-nums text-ink placeholder:text-ink-muted/60 focus:border-primary focus:outline-none"
       />
       {dirty && (
-        <button type="button" onClick={commit} title="Set price (Enter)" className="text-primary hover:text-primary/80">
+        <button type="button" onClick={commit} title="Set price (Enter)" className="text-primary-ink hover:text-primary-ink/80">
           <Check size={16} />
         </button>
       )}
@@ -384,7 +384,7 @@ function ItemDetailModal({ id, canManage, onClose, onChanged }: {
                 const meta = MOVE[t]
                 return (
                   <button type="button" key={t} onClick={() => setTab(t)}
-                    className={'flex items-center justify-center gap-2 rounded-btn border px-3 py-2 text-body-md font-medium transition-colors ' + (tab === t ? 'border-primary bg-primary/5 text-primary' : 'border-line text-ink-muted hover:bg-slate-50')}>
+                    className={'flex items-center justify-center gap-2 rounded-btn border px-3 py-2 text-body-md font-medium transition-colors ' + (tab === t ? 'border-primary bg-primary/5 text-primary-ink' : 'border-line text-ink-muted hover:bg-slate-50')}>
                     <meta.icon size={16} />{meta.label}
                   </button>
                 )

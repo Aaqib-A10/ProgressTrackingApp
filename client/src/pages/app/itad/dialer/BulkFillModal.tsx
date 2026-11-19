@@ -91,7 +91,7 @@ export function BulkFillModal({ leads, onClose, onDone }: { leads: DialerLead[];
           </ol>
           <Button variant="secondary" leadingIcon={<Download size={15} />} onClick={template}>Download template</Button>
           <div onClick={() => fileRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); pick(e.dataTransfer.files[0]) }} className="flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed border-line px-6 py-10 text-center hover:border-primary/50">
-            <FileSpreadsheet size={28} className="text-primary" />
+            <FileSpreadsheet size={28} className="text-primary-ink" />
             <p className="font-semibold text-ink">Drop your filled sheet here or click to choose</p>
             <p className="text-body-sm text-ink-muted">CSV or Excel. Your own sheet works too if it has a CRM lead ID, email, or company and phone column.</p>
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }} />
@@ -112,13 +112,13 @@ export function BulkFillModal({ leads, onClose, onDone }: { leads: DialerLead[];
               </label>
             ))}
           </div>
-          {!hasKey && <p className="rounded-btn bg-danger/5 px-3 py-2 text-danger">Pick the CRM lead ID, email, or company and phone column, so each row can be matched to a lead.</p>}
+          {!hasKey && <p className="rounded-btn bg-danger/5 px-3 py-2 text-danger-ink">Pick the CRM lead ID, email, or company and phone column, so each row can be matched to a lead.</p>}
           {hasKey && !hasData && <p className="rounded-btn bg-warning/5 px-3 py-2 text-ink">Pick at least one column to fill (second phone, second email, LinkedIn…).</p>}
         </div>
       ) : (
         <div className="space-y-4 text-body-sm">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {([['Matched', preview.matched, ''], ['Will be updated', preview.willUpdate, ''], ['Not matched', preview.unmatchedCount, preview.unmatchedCount ? 'text-warning' : ''], ['Clash with a saved value', preview.conflictCount, preview.conflictCount ? 'text-danger' : '']] as const).map(([k, v, tone]) => (
+            {([['Matched', preview.matched, ''], ['Will be updated', preview.willUpdate, ''], ['Not matched', preview.unmatchedCount, preview.unmatchedCount ? 'text-warning-ink' : ''], ['Clash with a saved value', preview.conflictCount, preview.conflictCount ? 'text-danger-ink' : '']] as const).map(([k, v, tone]) => (
               <div key={k} className="rounded-btn border border-line px-3 py-2"><p className="text-[11px] font-semibold uppercase text-ink-muted">{k}</p><p className={cn('text-headline-md tabular-nums text-ink', tone)}>{v.toLocaleString()}</p></div>
             ))}
           </div>

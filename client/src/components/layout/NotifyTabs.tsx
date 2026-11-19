@@ -26,13 +26,13 @@ export function NotifyTabs<K extends string>({ tabs, value, onChange, className 
             onClick={() => onChange(t.key)}
             className={cn(
               'inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-body-sm font-semibold transition-colors',
-              on ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink-muted hover:bg-primary/5 hover:text-ink',
+              on ? 'border-primary bg-primary text-primary-on' : 'border-line bg-card text-ink-muted hover:bg-primary/5 hover:text-ink',
             )}
           >
             {t.muted && <BellOff size={12} aria-label="Muted" />}
             {t.label}
             {!!t.count && (
-              <span className={cn('min-w-[18px] rounded-full px-1 text-center text-[10.5px] leading-[18px] tabular-nums', on ? 'bg-white/20 text-white' : t.muted ? 'bg-line text-ink-muted' : 'bg-primary/10 text-primary')}>
+              <span className={cn('min-w-[18px] rounded-full px-1 text-center text-[10.5px] leading-[18px] tabular-nums', on ? 'bg-primary-on/20 text-primary-on' : t.muted ? 'bg-line text-ink-muted' : 'bg-primary/10 text-primary-ink')}>
                 {t.count > 99 ? '99+' : t.count}
               </span>
             )}

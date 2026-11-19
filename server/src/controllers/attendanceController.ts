@@ -771,17 +771,16 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
   const holidayByDate = new Map(holidays.map((h) => [dateStringFromDb(h.date), h.name]))
 
   // Union of dates that have any record, plus the member's weekly off days across
-  // the range — so a full week shows (we still don't fabricate absent working days).
+  // the range — so a full week shows.
   const dates = new Set<string>([...dayByDate.keys(), ...leaveByDate.keys(), ...holidayByDate.keys()])
   for (const ds of eachDateStr(range.startDate, range.endDate)) if (!isWorkingDate(ds, shift)) dates.add(ds)
   // Today always shows, even before check-in ("Not checked in yet"), so the page is never blank.
   if (todayStr >= range.startDate && todayStr <= range.endDate) dates.add(todayStr)
-  // all=1 (My Attendance history, calendar): every day of the period up to today, so a missed
-  // working day shows as Absent. Not before the person joined or before attendance started.
-  if (req.query.all === '1') {
-    const from = await attendanceFloor(target.createdAt, shift)
-    for (const ds of eachDateStr(range.startDate, range.endDate)) if (ds >= from && ds <= todayStr) dates.add(ds)
-  }
+  // Every day of the period up to today, so a working day nobody checked in on shows as Absent (and can be
+  // fixed, or the person can ask for it to be: attendance requests). Not before the person joined or before
+  // attendance started. (all=1, sent by the calendar, is the same now.)
+  const from = await attendanceFloor(target.createdAt, shift)
+  for (const ds of eachDateStr(range.startDate, range.endDate)) if (ds >= from && ds <= todayStr) dates.add(ds)
   const rows = [...dates]
     .sort((a, b) => (a < b ? 1 : -1))
     .map((d) =>
@@ -810,6 +809,7 @@ export async function history(req: AuthedRequest, res: Response): Promise<void> 
     rows,
     summary: {
       presentDays: worked.length,
+      absentDays: rows.filter((r) => r.label === 'ABSENT').length,
       leaveDays: rows.filter((r) => r.label === 'ON_LEAVE' || r.label === 'OFF').length,
       weeklyOffDays: rows.filter((r) => r.label === 'WEEKLY_OFF').length,
       holidayDays: rows.filter((r) => r.label === 'HOLIDAY').length,
@@ -1380,7 +1380,7 @@ const correctionSchema = z.object({ checkIn: timeOrNull, checkOut: timeOrNull, o
  * post-midnight portion (before the middle of the off-duty gap) belongs to the NEXT calendar
  * day, so it is rolled forward — e.g. a 04:00 check-out on a 19:00–04:00 shift.
  */
-function instantFrom(dateStr: string, hhmmStr: string, baseShift: Shift): Date {
+export function instantFrom(dateStr: string, hhmmStr: string, baseShift: Shift): Date {
   const shift = baseShift.dayTimes ? shiftForDate(baseShift, dateStr) : baseShift
   const zone = shift.timeZone || companyTz()
   let dt = DateTime.fromISO(`${dateStr}T${hhmmStr}`, { zone })
@@ -1415,31 +1415,45 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     res.status(400).json({ error: 'Invalid time — use HH:mm' })
     return
   }
+  const r = await applyDayCorrection(me.id, userId, target.departmentId, date, parsed.data)
+  if ('error' in r) {
+    res.status(400).json({ error: r.error })
+    return
+  }
+  res.json({ day: r.day })
+}
+
+/**
+ * Put check-in / check-out / overtime times (and a note) on one person's attendance day, as a correction by
+ * `actorId` (audited). Used by a lead's correction (above) and by an approved attendance fix request
+ * (attendanceFixController). Times are "HH:mm" in the shift's time zone; "" or null clears; undefined keeps.
+ */
+export async function applyDayCorrection(
+  actorId: string,
+  userId: string,
+  departmentId: string | null,
+  date: string,
+  input: { checkIn?: string | null; checkOut?: string | null; overtime?: string | null; note?: string | null },
+): Promise<{ error: string } | { day: { date: string; checkIn: string | null; checkOut: string | null; overtime: string | null; note: string | null } }> {
   const dateValue = dbDateFromString(date)
-  const shift = await resolveShift(userId, target.departmentId)
+  const shift = await resolveShift(userId, departmentId)
   const existing = await prisma.attendanceDay.findUnique({
     where: { userId_date: { userId, date: dateValue } },
     include: { breaks: true },
   })
 
   const data: { checkInAt?: Date | null; checkOutAt?: Date | null; overtimeAt?: Date | null; note?: string | null } = {}
-  if (parsed.data.checkIn !== undefined) data.checkInAt = parsed.data.checkIn ? instantFrom(date, parsed.data.checkIn, shift) : null
-  if (parsed.data.checkOut !== undefined) data.checkOutAt = parsed.data.checkOut ? instantFrom(date, parsed.data.checkOut, shift) : null
+  if (input.checkIn !== undefined) data.checkInAt = input.checkIn ? instantFrom(date, input.checkIn, shift) : null
+  if (input.checkOut !== undefined) data.checkOutAt = input.checkOut ? instantFrom(date, input.checkOut, shift) : null
   // When overtime started ("" clears it: no overtime that day).
-  if (parsed.data.overtime !== undefined) data.overtimeAt = parsed.data.overtime ? instantFrom(date, parsed.data.overtime, shift) : null
-  if (parsed.data.note !== undefined) data.note = parsed.data.note?.trim() || null
+  if (input.overtime !== undefined) data.overtimeAt = input.overtime ? instantFrom(date, input.overtime, shift) : null
+  if (input.note !== undefined) data.note = input.note?.trim() || null
 
   const finalIn = data.checkInAt !== undefined ? data.checkInAt : existing?.checkInAt ?? null
   const finalOut = data.checkOutAt !== undefined ? data.checkOutAt : existing?.checkOutAt ?? null
-  if (finalIn && finalOut && finalOut <= finalIn) {
-    res.status(400).json({ error: 'Check-out must be after check-in.' })
-    return
-  }
+  if (finalIn && finalOut && finalOut <= finalIn) return { error: 'Check-out must be after check-in.' }
   const finalOt = data.overtimeAt !== undefined ? data.overtimeAt : existing?.overtimeAt ?? null
-  if (finalOt && ((finalIn && finalOt <= finalIn) || (finalOut && finalOt >= finalOut))) {
-    res.status(400).json({ error: 'Overtime must start after check-in and before check-out.' })
-    return
-  }
+  if (finalOt && ((finalIn && finalOt <= finalIn) || (finalOut && finalOt >= finalOut))) return { error: 'Overtime must start after check-in and before check-out.' }
 
   const day = await prisma.attendanceDay.upsert({
     where: { userId_date: { userId, date: dateValue } },
@@ -1448,12 +1462,12 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
   })
   // A break still running when the day is closed ends at the check-out (like the automatic check-out).
   if (finalOut && existing) {
-    await prisma.breakEntry.updateMany({ where: { dayId: day.id, endAt: null, startAt: { lt: finalOut } }, data: { endAt: finalOut, editedById: me.id, editedAt: new Date() } })
+    await prisma.breakEntry.updateMany({ where: { dayId: day.id, endAt: null, startAt: { lt: finalOut } }, data: { endAt: finalOut, editedById: actorId, editedAt: new Date() } })
   }
 
   await prisma.auditLog.create({
     data: {
-      userId: me.id,
+      userId: actorId,
       entityType: 'AttendanceDay',
       entityId: day.id,
       action: existing ? 'UPDATE' : 'CREATE',
@@ -1462,7 +1476,7 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
     },
   })
 
-  res.json({
+  return {
     day: {
       date,
       checkIn: day.checkInAt ? hhmm(day.checkInAt, shift) : null,
@@ -1470,7 +1484,7 @@ export async function correctDay(req: AuthedRequest, res: Response): Promise<voi
       overtime: day.overtimeAt ? hhmm(day.overtimeAt, shift) : null,
       note: day.note ?? null,
     },
-  })
+  }
 }
 
 /** Guard: caller is TL/Admin and the target is in their scope. Returns the target or null (after responding). */

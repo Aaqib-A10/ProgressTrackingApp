@@ -56,6 +56,7 @@ import { inHomeCompany, type Department } from '../../lib/types'
 import { CUSTOM_BLOCK, blockByKey, blocksOfPath, type BlockGroup } from '../../lib/blocks'
 import { iconOf } from '../../lib/customApi'
 import { MetraNavIcon } from '../metra/MetraMark'
+import { role } from '../../theme/css'
 
 export interface NavItem {
   label: string
@@ -115,6 +116,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'My Analytics', to: '/app/analytics', icon: LineChart, hideFor: HIDE_FROM_SA },
       { label: 'My Tasks', to: '/app/tasks', icon: ListChecks },
       { label: 'My To-Do', to: '/app/todo', icon: ListTodo },
+      { label: 'Notes', to: '/app/notes', icon: StickyNote, flag: 'notes' },
       { label: 'My Team', to: '/app/team/members', icon: Users, hideFor: HIDE_FROM_SA },
       { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart },
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, hideFor: HIDE_FROM_SA },
@@ -126,7 +128,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Projects',
     icon: FolderKanban,
-    color: '#6366F1',
+    color: role('accent'),
     items: [
       { label: 'Projects', to: '/app/projects', icon: KanbanSquare },
       { label: 'Chat', to: '/app/chat', icon: MessagesSquare },
@@ -139,7 +141,7 @@ export const NAV_GROUPS: NavGroup[] = [
     // Phase 1, step 5: a company's own daily form (company-wise switch "daily-report").
     title: 'Daily Report',
     icon: ClipboardList,
-    color: '#14B8A6',
+    color: role('teal-vivid'),
     items: [
       { label: 'My Daily Report', to: '/app/daily-report', icon: ClipboardPen, flag: 'daily-report' },
       { label: 'Team Reports', to: '/app/daily-report/team', icon: BarChart3, flag: 'daily-report' },
@@ -149,7 +151,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Attendance',
     icon: Clock,
-    color: '#0EA5E9',
+    color: role('blue-vivid'),
     items: [
       { label: 'My Attendance', to: '/app/attendance/me', icon: Clock },
       { label: 'Team Attendance', to: '/app/attendance/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
@@ -158,7 +160,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Quality Assurance',
     icon: ClipboardCheck,
-    color: '#22C55E',
+    color: role('green-vivid'),
     items: [
       { label: 'Evaluate', to: '/app/qa/evaluate', icon: ClipboardCheck },
       { label: 'Scorecards', to: '/app/qa/scorecards', icon: ClipboardList },
@@ -169,7 +171,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'ITAD',
     icon: Phone,
-    color: '#4F46E5',
+    color: role('accent'),
     items: [
       { label: 'Daily Log', to: '/app/itad/log', icon: Phone, hideFor: HIDE_FROM_SA },
       { label: 'Lead Dialer', to: '/app/itad/dialer', icon: PhoneCall },
@@ -182,7 +184,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Lead Generation',
     icon: TargetIcon,
-    color: '#14B8A6',
+    color: role('teal-vivid'),
     items: [
       { label: 'Daily Log', to: '/app/leadgen/log', icon: Phone, hideFor: HIDE_FROM_SA },
       { label: 'Team View', to: '/app/leadgen/team', icon: Users, badge: { text: 'TL', tone: 'accent' } },
@@ -193,7 +195,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Ecommerce',
     icon: ShoppingCart,
-    color: '#F59E0B',
+    color: role('yellow-vivid'),
     items: [
       { label: 'Daily Log', to: '/app/ecommerce/log', icon: ShoppingCart, hideFor: HIDE_FROM_SA },
       { label: 'Task Board', to: '/app/ecommerce/board', icon: KanbanSquare, hideFor: HIDE_FROM_SA },
@@ -206,7 +208,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Inventory',
     icon: Boxes,
-    color: '#0891B2',
+    color: role('teal-vivid'),
     items: [
       { label: 'Inventory', to: '/app/inventory', icon: Boxes },
       { label: 'Requests', to: '/app/inventory/requests', icon: ListChecks },
@@ -216,7 +218,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Marketing',
     icon: Megaphone,
-    color: '#8B5CF6',
+    color: role('purple-vivid'),
     items: [
       { label: 'Team', to: '/app/marketing/team', icon: Users },
       { label: 'Analytics', to: '/app/marketing/analytics', icon: LineChart },
@@ -265,7 +267,7 @@ export const NAV_GROUPS: NavGroup[] = [
     // Lead Management (company-wise switch "lead-management"): only people who work leads see it.
     title: 'Leads',
     icon: Inbox,
-    color: '#0EA5E9',
+    color: role('blue-vivid'),
     items: [
       { label: 'Lead Dashboard', to: '/app/leads/dashboard', icon: LayoutDashboard, flag: 'lead-management', leadsOnly: true },
       { label: 'Leads', to: '/app/leads', icon: Inbox, flag: 'lead-management', leadsOnly: true },
@@ -286,7 +288,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Admin',
     icon: Shield,
-    color: '#EF4444',
+    color: role('red-vivid'),
     items: [
       { label: 'Financial Reports', to: '/app/admin/financials', icon: DollarSign, financeOnly: true },
       { label: 'Activity Log', to: '/app/admin/activity', icon: History },
@@ -430,7 +432,7 @@ export function navGroupOf(group: BlockGroup): Pick<NavGroup, 'title' | 'icon' |
 }
 
 /** The heading of the blocks a company made itself. */
-export const CUSTOM_GROUP: Pick<NavGroup, 'title' | 'icon' | 'color'> = { title: 'Our tools', icon: LayoutGrid, color: '#64748B' }
+export const CUSTOM_GROUP: Pick<NavGroup, 'title' | 'icon' | 'color'> = { title: 'Our tools', icon: LayoutGrid, color: role('neutral-500') }
 
 /** A menu made of the department's blocks, in the order the Super Admin put them, plus the role-based groups. */
 export function blockNav(u: NavUser, blocks: string[]): NavGroup[] {

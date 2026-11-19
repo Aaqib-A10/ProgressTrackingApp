@@ -136,13 +136,13 @@ export default function QaEvaluationEdit() {
                 <button
                   type="button"
                   onClick={() => setRecording(null)}
-                  className="inline-flex items-center gap-1 text-body-sm font-medium text-ink-muted hover:text-danger"
+                  className="inline-flex items-center gap-1 text-body-sm font-medium text-ink-muted hover:text-danger-ink"
                 >
                   <X size={14} /> Remove
                 </button>
               </div>
               <audio key={recording.id} controls preload="none" className="w-full" src={recordingUrl(recording.id)} />
-              <label className="inline-flex cursor-pointer items-center gap-2 text-body-sm font-medium text-primary hover:underline">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-body-sm font-medium text-primary-ink hover:underline">
                 <Upload size={14} /> {uploading ? 'Uploading…' : 'Replace audio'}
                 <input type="file" accept="audio/*" className="hidden" onChange={onUpload} disabled={uploading} />
               </label>
@@ -163,7 +163,7 @@ export default function QaEvaluationEdit() {
               <div key={q.id}>
                 <p className="mb-1.5 text-body-md text-ink">
                   {q.text}
-                  {q.criticalFail && <span className="ml-2 inline-flex items-center gap-1 text-body-sm font-semibold text-danger"><AlertTriangle size={12} /> critical</span>}
+                  {q.criticalFail && <span className="ml-2 inline-flex items-center gap-1 text-body-sm font-semibold text-danger-ink"><AlertTriangle size={12} /> critical</span>}
                 </p>
                 <ScoreInput question={q} value={answers[q.id]} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} />
               </div>
@@ -180,7 +180,7 @@ export default function QaEvaluationEdit() {
       {live && (
         <div className="sticky bottom-4 flex items-center justify-between rounded-card border border-line bg-card p-4 shadow-overlay">
           <div className="flex items-center gap-3">
-            <ClipboardCheck size={20} className="text-primary" />
+            <ClipboardCheck size={20} className="text-primary-ink" />
             <div>
               <p className="text-label-md uppercase text-ink-muted">Total · {live.totalEarned} / {live.totalMax} pts</p>
               <p className="text-headline-lg font-bold tabular-nums text-ink">{formatPercent(live.totalScore / 100)}</p>

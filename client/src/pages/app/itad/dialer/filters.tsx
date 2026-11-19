@@ -99,14 +99,14 @@ export function FilterBar({ page, defs, prefs, search, onClearAll, after }: { pa
     <div className="flex flex-wrap items-center gap-2">
       {search}
       <div ref={box} className="relative">
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={cn('inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-body-sm font-semibold', active.length ? 'border-primary bg-primary/5 text-primary' : 'border-line bg-card text-ink hover:bg-slate-50')}>
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={cn('inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-body-sm font-semibold', active.length ? 'border-primary bg-primary/5 text-primary-ink' : 'border-line bg-card text-ink hover:bg-slate-50')}>
           <SlidersHorizontal size={14} />Filters{active.length ? ` (${active.length})` : ''}
         </button>
         {open && (
           <div className="absolute left-0 top-9 z-30 w-[min(92vw,640px)] rounded-card border border-line bg-card p-3 shadow-overlay">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-body-sm text-ink-muted">Every filter on this page. <Pin size={11} className="inline" /> keeps one in the bar; the rest stay here.</p>
-              {!isDefault && <button type="button" onClick={() => setPins(null)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"><RotateCcw size={12} />Reset to default</button>}
+              {!isDefault && <button type="button" onClick={() => setPins(null)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-ink hover:underline"><RotateCcw size={12} />Reset to default</button>}
             </div>
             <div className="max-h-[60vh] space-y-3 overflow-auto pr-1">
               {groups.map((g) => (
@@ -117,7 +117,7 @@ export function FilterBar({ page, defs, prefs, search, onClearAll, after }: { pa
                       const on = pins.includes(d.key)
                       return (
                         <li key={d.key} className={cn('flex flex-wrap items-center gap-2 rounded-btn px-2 py-1', d.active && 'bg-primary/[0.04]')}>
-                          <button type="button" onClick={() => toggle(d.key)} aria-pressed={on} aria-label={`${on ? 'Unpin' : 'Pin'} ${d.label}`} title={on ? 'In the bar' : 'Pin to the bar'} className={cn('rounded p-1', on ? 'text-primary' : 'text-ink-faint hover:text-ink')}>{on ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}</button>
+                          <button type="button" onClick={() => toggle(d.key)} aria-pressed={on} aria-label={`${on ? 'Unpin' : 'Pin'} ${d.label}`} title={on ? 'In the bar' : 'Pin to the bar'} className={cn('rounded p-1', on ? 'text-primary-ink' : 'text-ink-faint hover:text-ink')}>{on ? <Pin size={14} className="fill-current" /> : <PinOff size={14} />}</button>
                           <span className="w-28 shrink-0 text-body-sm text-ink">{d.label}</span>
                           <span className="min-w-0 flex-1">{d.control}</span>
                           {d.active && <button type="button" onClick={d.clear} className="text-[12px] text-ink-muted hover:text-ink">clear</button>}
@@ -136,7 +136,7 @@ export function FilterBar({ page, defs, prefs, search, onClearAll, after }: { pa
       <div className="hidden flex-wrap items-center gap-2 sm:flex">{pinned.map((d) => <span key={d.key}>{d.control}</span>)}</div>
       {/* An active filter that is not pinned still shows, so nothing hidden changes the list quietly. */}
       {chips.map((d) => (
-        <span key={d.key} className="inline-flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 pl-3 pr-1 text-body-sm text-primary">
+        <span key={d.key} className="inline-flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 pl-3 pr-1 text-body-sm text-primary-ink">
           <span className="max-w-[220px] truncate"><span className="font-semibold">{d.label}</span>{d.summary ? `: ${d.summary}` : ''}</span>
           <button type="button" onClick={d.clear} className="rounded-full p-1 hover:bg-primary/10" aria-label={`Remove ${d.label} filter`}><X size={12} /></button>
         </span>

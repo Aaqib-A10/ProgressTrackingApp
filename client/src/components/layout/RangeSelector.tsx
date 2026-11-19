@@ -93,7 +93,7 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
               onClick={() => { onChange(opt.value); setMobileOpen(false) }}
               className={cn(
                 'flex w-full items-center rounded-btn px-3 py-2 text-left text-body-md font-medium transition-colors',
-                opt.value === value ? 'bg-primary/10 text-primary' : 'text-ink hover:bg-slate-100',
+                opt.value === value ? 'bg-primary/10 text-primary-ink' : 'text-ink hover:bg-slate-100',
               )}
             >
               {opt.label}
@@ -104,7 +104,7 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
             onClick={() => { setMobileOpen(false); setOpen(true) }}
             className={cn(
               'flex w-full items-center gap-2 rounded-btn px-3 py-2 text-left text-body-md font-medium transition-colors',
-              customActive ? 'bg-primary/10 text-primary' : 'text-ink hover:bg-slate-100',
+              customActive ? 'bg-primary/10 text-primary-ink' : 'text-ink hover:bg-slate-100',
             )}
           >
             <CalendarDays size={14} /> Custom range…
@@ -123,7 +123,7 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
               onClick={() => onChange(opt.value)}
               className={cn(
                 'rounded-full px-3 py-1.5 text-body-sm font-semibold transition-colors',
-                active ? 'bg-primary/10 text-primary' : 'text-ink-muted hover:text-ink',
+                active ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:text-ink',
               )}
             >
               {opt.label}
@@ -136,7 +136,7 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
           onClick={() => setOpen((o) => !o)}
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-body-sm font-semibold transition-colors',
-            customActive ? 'bg-primary/10 text-primary' : 'text-ink-muted hover:text-ink',
+            customActive ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:text-ink',
           )}
         >
           <CalendarDays size={14} />
@@ -156,10 +156,10 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
               <span className="mb-1 block text-body-sm text-ink-muted">End</span>
               <input type="date" value={end} min={start} max={today} onChange={(e) => setEnd(e.target.value)} className="h-9 w-full rounded-btn border border-line bg-card px-2 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
             </label>
-            {error && <p className="text-body-sm text-danger">{error}</p>}
+            {error && <p className="text-body-sm text-danger-ink">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={() => setOpen(false)} className="rounded-btn px-3 py-1.5 text-body-sm font-semibold text-ink-muted hover:bg-slate-100">Cancel</button>
-              <button type="button" onClick={apply} className="rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-white hover:bg-primary-700">Apply</button>
+              <button type="button" onClick={apply} className="rounded-btn bg-primary px-3 py-1.5 text-body-sm font-semibold text-primary-on hover:bg-primary-700">Apply</button>
             </div>
           </div>
         </div>

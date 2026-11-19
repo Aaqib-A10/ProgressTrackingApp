@@ -37,7 +37,7 @@ export default function ResetPassword() {
       <p className="mt-1 text-body-md text-ink-muted">Enter and confirm your new password below.</p>
 
       {!token ? (
-        <p className="mt-6 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">
+        <p className="mt-6 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">
           Missing reset token. Please use the link from your email.
         </p>
       ) : (
@@ -47,14 +47,14 @@ export default function ResetPassword() {
             <PasswordStrength value={password} />
           </div>
           <PasswordField label="Confirm password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
-          {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{error}</p>}
+          {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{error}</p>}
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? 'Saving…' : 'Reset password'}
           </Button>
         </form>
       )}
 
-      <Link to="/login" className="mt-6 block text-center text-body-sm font-semibold text-primary hover:underline">
+      <Link to="/login" className="mt-6 block text-center text-body-sm font-semibold text-primary-ink hover:underline">
         Back to log in
       </Link>
     </AuthLayout>

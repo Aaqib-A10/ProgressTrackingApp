@@ -36,19 +36,19 @@ export function GuestLinkBox({ conversationId, className }: { conversationId: st
 
   return (
     <div className={cn('rounded-btn border border-line p-2.5', className)}>
-      <p className="flex items-center gap-1.5 text-body-sm font-semibold text-ink"><Globe size={14} className="text-primary" /> People outside Metriq</p>
+      <p className="flex items-center gap-1.5 text-body-sm font-semibold text-ink"><Globe size={14} className="text-primary-ink" /> People outside Metriq</p>
       <p className="mt-0.5 text-[12px] leading-snug text-ink-muted">Send a guest link. They type their name, and someone in the call lets them in. They only see the call.</p>
       {url === undefined ? <Loader2 size={14} className="mt-2 animate-spin text-ink-muted" /> : url ? (
         <>
           <div className="mt-2 flex items-center gap-1.5">
             <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-btn border border-line bg-slate-50 px-2 py-1 font-mono text-[11px] text-ink" aria-label="Guest link" />
-            <button type="button" onClick={() => void copy(url)} className="inline-flex shrink-0 items-center gap-1 rounded-btn bg-primary px-2.5 py-1 text-[12px] font-semibold text-white hover:bg-primary/90">
+            <button type="button" onClick={() => void copy(url)} className="inline-flex shrink-0 items-center gap-1 rounded-btn bg-primary px-2.5 py-1 text-[12px] font-semibold text-primary-on hover:bg-primary/90">
               {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
           <div className="mt-1.5 flex gap-3 text-[12px]">
             <button type="button" disabled={busy} onClick={() => void make(true)} className="inline-flex items-center gap-1 text-ink-muted hover:text-ink"><RefreshCw size={12} /> New link</button>
-            <button type="button" disabled={busy} onClick={() => void off()} className="text-ink-muted hover:text-danger">Turn off</button>
+            <button type="button" disabled={busy} onClick={() => void off()} className="text-ink-muted hover:text-danger-ink">Turn off</button>
           </div>
         </>
       ) : (
@@ -73,10 +73,10 @@ export function LobbyRequests({ callId, lobby, dark }: { callId: string; lobby: 
     <div className="space-y-1.5">
       {lobby.map((g) => (
         <div key={g.id} className={cn('flex animate-scale-in flex-wrap items-center gap-2 rounded-btn px-3 py-2 text-body-sm shadow-overlay', dark ? 'bg-white text-ink' : 'border border-line bg-card')}>
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"><Globe size={15} /></span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-muted text-yellow-ink"><Globe size={15} /></span>
           <span className="min-w-0 flex-1"><b className="font-semibold">{g.name}</b> wants to join as a guest</span>
-          <button type="button" disabled={busy === g.id} onClick={() => void answer(g.id, false)} className="inline-flex shrink-0 items-center gap-1 rounded-btn border border-line px-2 py-1 text-[12px] font-semibold text-ink-muted hover:bg-slate-50 hover:text-danger"><UserX size={13} /> Not now</button>
-          <button type="button" disabled={busy === g.id} onClick={() => void answer(g.id, true)} className="inline-flex shrink-0 items-center gap-1 rounded-btn bg-success px-2.5 py-1 text-[12px] font-semibold text-white hover:bg-success/90">{busy === g.id ? <Loader2 size={13} className="animate-spin" /> : <UserCheck size={13} />} Let in</button>
+          <button type="button" disabled={busy === g.id} onClick={() => void answer(g.id, false)} className="inline-flex shrink-0 items-center gap-1 rounded-btn border border-line px-2 py-1 text-[12px] font-semibold text-ink-muted hover:bg-slate-50 hover:text-danger-ink"><UserX size={13} /> Not now</button>
+          <button type="button" disabled={busy === g.id} onClick={() => void answer(g.id, true)} className="inline-flex shrink-0 items-center gap-1 rounded-btn bg-success px-2.5 py-1 text-[12px] font-semibold text-success-on hover:bg-success/90">{busy === g.id ? <Loader2 size={13} className="animate-spin" /> : <UserCheck size={13} />} Let in</button>
         </div>
       ))}
     </div>

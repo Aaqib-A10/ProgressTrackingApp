@@ -76,7 +76,7 @@ export default function Billing() {
             <div className="ml-auto">
               {current.cancelAtPeriodEnd
                 ? <Button size="sm" disabled={!!busy} onClick={() => act(billingApi.resume, 'Your plan carries on.')}>Keep my plan</Button>
-                : <Button size="sm" variant="ghost" className="text-danger" disabled={!!busy} onClick={() => act(billingApi.cancel, 'Cancelled. It runs to the end of what is paid.')}>Cancel plan</Button>}
+                : <Button size="sm" variant="ghost" className="text-danger-ink" disabled={!!busy} onClick={() => act(billingApi.cancel, 'Cancelled. It runs to the end of what is paid.')}>Cancel plan</Button>}
             </div>
           </div>
         </Card>
@@ -102,16 +102,16 @@ export default function Billing() {
                     <div>
                       <p className="text-headline-md text-ink">{p.label}</p>
                       <p className="mt-1"><span className="text-metric-lg tabular-nums text-ink">${price}</span><span className="text-body-sm text-ink-muted"> / {interval === 'year' ? 'year' : 'month'}</span></p>
-                      {interval === 'year' && <p className="text-body-sm text-success">${p.priceMonthly * 12 - p.priceYearly} less than monthly</p>}
+                      {interval === 'year' && <p className="text-body-sm text-success-ink">${p.priceMonthly * 12 - p.priceYearly} less than monthly</p>}
                     </div>
                     {p.key === 'business' && !isCurrent && <Badge tone="accent"><Sparkles size={12} className="mr-1 inline" />Everything</Badge>}
                     {isCurrent && <Badge tone="primary">Your plan</Badge>}
                   </div>
                   <ul className="mt-4 space-y-1.5 text-body-md text-ink">
-                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />{p.people === null ? 'Any number of people' : p.people === 1 ? 'Just you' : `Up to ${p.people} people`}</li>
-                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />{p.storageGb} GB of files</li>
-                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />{p.aiHours} hours of AI meeting notes a month</li>
-                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success" />Daily reports, attendance, projects, chat and calls</li>
+                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success-ink" />{p.people === null ? 'Any number of people' : p.people === 1 ? 'Just you' : `Up to ${p.people} people`}</li>
+                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success-ink" />{p.storageGb} GB of files</li>
+                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success-ink" />{p.aiHours} hours of AI meeting notes a month</li>
+                    <li className="flex gap-2"><Check size={16} className="mt-0.5 shrink-0 text-success-ink" />Daily reports, attendance, projects, chat and calls</li>
                     {p.partsLeftOut.length > 0 && <li className="text-body-sm text-ink-muted">Not included: {p.partsLeftOut.map((k) => PART_LABEL[k] ?? k).join(', ')}</li>}
                   </ul>
                   <Button className="mt-5 w-full" variant={isCurrent || !data.provider ? 'secondary' : 'primary'} disabled={isCurrent || !!busy || !data.provider} onClick={() => choose(p.key)}>
@@ -123,7 +123,7 @@ export default function Billing() {
           </div>
           {!data.provider && (
             <div className="flex flex-wrap items-center gap-3 rounded-card border border-primary/20 bg-primary/5 px-4 py-3 text-body-md text-ink">
-              <Sparkles size={18} className="shrink-0 text-primary" />
+              <Sparkles size={18} className="shrink-0 text-primary-ink" />
               <span className="flex-1"><b>Metriq is free while we launch.</b> Everything is on and there is nothing to pay. We will write to you before online payment opens, so you have time to choose a plan.</span>
             </div>
           )}
@@ -142,7 +142,7 @@ export default function Billing() {
                   <span className="min-w-[120px] text-body-sm text-ink-muted">{fmtDate(i.createdAt)}</span>
                   <span className="min-w-[90px] tabular-nums text-body-md text-ink">{money(i.amountCents, i.currency)}</span>
                   <Badge tone={STATUS_TONE[i.status]}>{i.status === 'PAID' ? 'Paid' : i.status === 'FAILED' ? 'Failed' : i.status === 'OPEN' ? 'Due' : 'Void'}</Badge>
-                  <Link to={`/app/billing/invoices/${i.id}`} className="ml-auto text-body-sm font-semibold text-primary hover:underline">View</Link>
+                  <Link to={`/app/billing/invoices/${i.id}`} className="ml-auto text-body-sm font-semibold text-primary-ink hover:underline">View</Link>
                 </li>
               ))}
             </ul>
@@ -165,9 +165,9 @@ function StateBanner({ data, onPortal }: { data: BillingOverview; onPortal: () =
   if ((s === 'trial' || s === 'trial_ended') && soon) return box('border-primary/20 bg-primary/5 text-ink', 'Free while we launch, with everything on. Nothing to pay until online payment opens.')
   if (s === 'trial') return box('border-primary/20 bg-primary/5 text-ink', soon ? `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on.` : `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on. Choose a plan any time; nothing stops when you do.`)
   if (s === 'trial_ended' && soon) return box('border-primary/20 bg-primary/5 text-ink', 'Your free trial has ended. Online payment is coming soon; until then everything keeps working as it is.')
-  if (s === 'trial_ended') return box('border-danger/30 bg-danger/5 text-danger', 'Your free trial has ended. Everything is still there and can be looked at; choose a plan to keep adding to it.')
+  if (s === 'trial_ended') return box('border-danger/30 bg-danger/5 text-danger-ink', 'Your free trial has ended. Everything is still there and can be looked at; choose a plan to keep adding to it.')
   if (s === 'past_due') return box('border-warning/40 bg-warning/10 text-ink', 'Your last payment did not go through. Please update your card within 7 days; after that Metriq becomes read-only until it is paid.', data.subscription?.hasPortal ? <Button size="sm" onClick={onPortal}>Update card</Button> : undefined)
-  if (s === 'locked') return box('border-danger/30 bg-danger/5 text-danger', 'Your payment has not gone through for 7 days, so Metriq is read-only. Pay to open it again; nothing has been lost.', data.subscription?.hasPortal ? <Button size="sm" onClick={onPortal}>Update card</Button> : undefined)
-  if (s === 'ended') return box('border-danger/30 bg-danger/5 text-danger', 'Your plan has ended. Everything is still there and can be looked at; choose a plan to keep going.')
+  if (s === 'locked') return box('border-danger/30 bg-danger/5 text-danger-ink', 'Your payment has not gone through for 7 days, so Metriq is read-only. Pay to open it again; nothing has been lost.', data.subscription?.hasPortal ? <Button size="sm" onClick={onPortal}>Update card</Button> : undefined)
+  if (s === 'ended') return box('border-danger/30 bg-danger/5 text-danger-ink', 'Your plan has ended. Everything is still there and can be looked at; choose a plan to keep going.')
   return null
 }

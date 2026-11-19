@@ -57,7 +57,7 @@ export default function Signup() {
         headline="One platform for every team's progress."
       >
         <div className="flex flex-col items-center text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/10 text-success">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/10 text-success-ink">
             <MailCheck size={28} />
           </span>
           <h1 className="mt-4 text-headline-lg text-ink">Request submitted</h1>
@@ -115,7 +115,7 @@ export default function Signup() {
           </select>
         </div>
 
-        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{error}</p>}
+        {error && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{error}</p>}
 
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting ? 'Submitting request…' : 'Request Team Lead access'}
@@ -128,7 +128,7 @@ export default function Signup() {
 
       <p className="mt-4 text-center text-body-sm text-ink-muted">
         Already have an account?{' '}
-        <Link to="/login" className="font-semibold text-primary hover:underline">Log in</Link>
+        <Link to="/login" className="font-semibold text-primary-ink hover:underline">Log in</Link>
       </p>
     </AuthLayout>
   )

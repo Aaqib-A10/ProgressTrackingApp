@@ -37,7 +37,7 @@ export function WhoSeesWhat({ compact, plain }: { compact?: boolean; plain?: boo
     <div className={cn('grid gap-2', compact ? 'sm:grid-cols-2' : plain ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
       {(plain ? WHO_SEES_PLAIN : WHO_SEES).map((r) => (
         <div key={r.who} className="rounded-card border border-line bg-card p-3.5">
-          <span className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink"><span className="text-primary">{r.icon}</span>{r.who}</span>
+          <span className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink"><span className="text-primary-ink">{r.icon}</span>{r.who}</span>
           <p className="mt-1 text-[12px] leading-5 text-ink-muted">{r.what}</p>
         </div>
       ))}
@@ -48,7 +48,7 @@ export function WhoSeesWhat({ compact, plain }: { compact?: boolean; plain?: boo
 function Step({ n, done, title, children, action }: { n: number; done: boolean; title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <li className={cn('flex gap-4 rounded-card border p-4', done ? 'border-success/30 bg-success/[0.04]' : 'border-line bg-card')}>
-      <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-body-sm font-bold', done ? 'bg-success text-white' : 'bg-primary/10 text-primary')}>{done ? <Check size={16} /> : n}</span>
+      <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-body-sm font-bold', done ? 'bg-success text-success-on' : 'bg-primary/10 text-primary-ink')}>{done ? <Check size={16} /> : n}</span>
       <div className="min-w-0 flex-1">
         <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
         <div className="mt-1 text-body-sm leading-6 text-ink-muted">{children}</div>
@@ -72,7 +72,7 @@ export function SetupSteps({ cmrOn, onCreate, plain }: { cmrOn: boolean; onCreat
           Name it (e.g. "Sales") and pick its stages: the standard ones, or the <strong className="font-medium text-ink">sales pipeline</strong> with Proposal and Negotiation. You can rename, add or reorder stages any time.
         </Step>
         <Step n={2} done={false} title="Put your people on it">
-          Tick <strong className="font-medium text-ink">Manager</strong> for whoever gives the leads out and <strong className="font-medium text-ink">Rep</strong> for each person who works them. Anyone not in Metriq yet is invited under <Link to="/app/admin/users" className="text-primary hover:underline">Admin → Users</Link> first.
+          Tick <strong className="font-medium text-ink">Manager</strong> for whoever gives the leads out and <strong className="font-medium text-ink">Rep</strong> for each person who works them. Anyone not in Metriq yet is invited under <Link to="/app/admin/users" className="text-primary-ink hover:underline">Admin → Users</Link> first.
         </Step>
         <Step n={3} done={false} title="Bring your leads in">
           On the Leads page press <strong className="font-medium text-ink">Import</strong> for a CSV or Excel list, or <strong className="font-medium text-ink">Add lead</strong> for one. Later, the website form and the inbox in these settings bring new leads in by themselves.
@@ -94,11 +94,11 @@ export function SetupSteps({ cmrOn, onCreate, plain }: { cmrOn: boolean; onCreat
         <p className="mt-1 max-w-3xl text-body-md text-ink-muted">A <strong className="font-semibold text-ink">business</strong> is one brand or team that receives leads (for example "CMR"). Each business has its own pipeline, people and settings. Make the business first, then put its people on it, then bring the leads in.</p>
       </section>
       <ol className="space-y-3">
-        <Step n={1} done={cmrOn} title="Switch on the CMR flow for this company" action={<Link to="/owner/switches" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline">Open Switches <ArrowRight size={14} /></Link>}>
+        <Step n={1} done={cmrOn} title="Switch on the CMR flow for this company" action={<Link to="/owner/switches" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink hover:underline">Open Switches <ArrowRight size={14} /></Link>}>
           In the Metriq owner console, Switches → your company → turn on <strong className="font-medium text-ink">CMR flow</strong>. Without it a business can only use the usual pipeline (New → Contacted → Qualified → Won / Lost).{cmrOn && ' Done: the CMR flow is on.'}
         </Step>
         <Step n={2} done={false} title="Add the business and its people" action={<Button size="sm" onClick={onCreate}>Add business</Button>}>
-          Name it (e.g. "CMR"), pick the <strong className="font-medium text-ink">CMR flow</strong>, set <strong className="font-medium text-ink">Jesse as head</strong>, your <strong className="font-medium text-ink">team lead as Manager</strong> and <strong className="font-medium text-ink">Matthew and Mark as Reps</strong>. Anyone not in Metriq yet is invited under <Link to="/app/admin/users" className="text-primary hover:underline">Admin → Users</Link> first; their Metriq role (Member, Team Lead) does not matter here, this screen decides what they see in Leads.
+          Name it (e.g. "CMR"), pick the <strong className="font-medium text-ink">CMR flow</strong>, set <strong className="font-medium text-ink">Jesse as head</strong>, your <strong className="font-medium text-ink">team lead as Manager</strong> and <strong className="font-medium text-ink">Matthew and Mark as Reps</strong>. Anyone not in Metriq yet is invited under <Link to="/app/admin/users" className="text-primary-ink hover:underline">Admin → Users</Link> first; their Metriq role (Member, Team Lead) does not matter here, this screen decides what they see in Leads.
         </Step>
         <Step n={3} done={false} title="Import the CMR_Lead_Tracker sheet">
           Download the sheet's <em>Leads</em> tab as CSV (Google Sheets: File → Download → CSV), then on the Leads page press <strong className="font-medium text-ink">Import</strong>. One lead per company, every row becomes a call under it; the SDR column assigns the lead, "Jesse Input Needed = Yes" flags it for Jesse, Next Step + date become an Agent Task.
@@ -132,17 +132,17 @@ export function SetupChecklist({ biz, cmrOn, plain }: { biz: BusinessRow; cmrOn:
   return (
     <section className="rounded-card border border-primary/30 bg-primary/[0.04] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="inline-flex items-center gap-2 text-[15px] font-semibold text-ink"><Flag size={16} className="text-primary" />{biz.name}: {left.length} step{left.length === 1 ? '' : 's'} left before the team can work</h2>
+        <h2 className="inline-flex items-center gap-2 text-[15px] font-semibold text-ink"><Flag size={16} className="text-primary-ink" />{biz.name}: {left.length} step{left.length === 1 ? '' : 's'} left before the team can work</h2>
         <span className="text-body-sm text-ink-muted">{items.length - left.length} of {items.length} done</span>
       </div>
       <ul className="mt-3 grid gap-2 md:grid-cols-2">
         {items.map((i) => (
           <li key={i.key} className={cn('flex items-start gap-2.5 rounded-btn px-3 py-2', i.done ? 'text-ink-muted' : 'bg-card text-ink shadow-xs')}>
-            {i.done ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-success" /> : <Circle size={17} className="mt-0.5 shrink-0 text-ink-faint" />}
+            {i.done ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-success-ink" /> : <Circle size={17} className="mt-0.5 shrink-0 text-ink-faint" />}
             <span className="min-w-0">
               <span className={cn('block text-body-sm', i.done ? 'line-through' : 'font-semibold')}>{i.text}</span>
               {!i.done && i.hint && <span className="block text-[12px] text-ink-muted">{i.hint}</span>}
-              {!i.done && i.to && <Link to={i.to} className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline">{i.toText} <ArrowRight size={12} /></Link>}
+              {!i.done && i.to && <Link to={i.to} className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-primary-ink hover:underline">{i.toText} <ArrowRight size={12} /></Link>}
             </span>
           </li>
         ))}
@@ -229,7 +229,7 @@ export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated, plain 
                 <tbody className="divide-y divide-line">
                   {shown.map((p) => (
                     <tr key={p.id} className={cn((managerIds.includes(p.id) || repIds.includes(p.id)) && 'bg-primary/[0.04]')}>
-                      <td className="px-3 py-1.5"><span className="block truncate font-medium text-ink">{p.name}{p.id === headId ? <span className="ml-1.5 rounded-full bg-accent/15 px-1.5 text-[10px] font-semibold text-accent">head</span> : null}</span><span className="block truncate text-[11.5px] text-ink-muted">{[p.department, p.role.replace(/_/g, ' ').toLowerCase()].filter(Boolean).join(' · ')}</span></td>
+                      <td className="px-3 py-1.5"><span className="block truncate font-medium text-ink">{p.name}{p.id === headId ? <span className="ml-1.5 rounded-full bg-accent/15 px-1.5 text-[10px] font-semibold text-highlight-ink">head</span> : null}</span><span className="block truncate text-[11.5px] text-ink-muted">{[p.department, p.role.replace(/_/g, ' ').toLowerCase()].filter(Boolean).join(' · ')}</span></td>
                       <td className="px-2 py-1.5 text-center"><input type="checkbox" aria-label={`${p.name} as Manager`} checked={managerIds.includes(p.id)} onChange={() => toggle(managerIds, setManagerIds, repIds, setRepIds, p.id)} /></td>
                       <td className="px-2 py-1.5 text-center"><input type="checkbox" aria-label={`${p.name} as Rep`} checked={repIds.includes(p.id)} onChange={() => toggle(repIds, setRepIds, managerIds, setManagerIds, p.id)} /></td>
                     </tr>
@@ -240,7 +240,7 @@ export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated, plain 
           </div>
           <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-ink-muted"><Users size={12} />{managerIds.length} manager{managerIds.length === 1 ? '' : 's'}, {repIds.length} rep{repIds.length === 1 ? '' : 's'}{cmr && headId ? `, head ${people.find((p) => p.id === headId)?.name ?? ''}` : ''}</p>
         </div>
-        <p className="flex items-start gap-2 rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted dark:bg-white/[0.03]"><Upload size={15} className="mt-0.5 shrink-0 text-primary" /><span>Next: on the Leads page press <strong className="font-medium text-ink">Import</strong> and pick {plain ? 'a CSV or Excel list' : 'the CSV of the sheet'}. Later, the <Globe size={12} className="inline" /> website form and <ToggleRight size={12} className="inline" /> inbox below bring new leads in by themselves.</span></p>
+        <p className="flex items-start gap-2 rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted dark:bg-white/[0.03]"><Upload size={15} className="mt-0.5 shrink-0 text-primary-ink" /><span>Next: on the Leads page press <strong className="font-medium text-ink">Import</strong> and pick {plain ? 'a CSV or Excel list' : 'the CSV of the sheet'}. Later, the <Globe size={12} className="inline" /> website form and <ToggleRight size={12} className="inline" /> inbox below bring new leads in by themselves.</span></p>
       </div>
     </Modal>
   )

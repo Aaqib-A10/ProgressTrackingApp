@@ -73,7 +73,7 @@ export default function Setup() {
       <ol className="flex flex-wrap gap-2">
         {steps.map((st, i) => (
           <li key={st.key}>
-            <button type="button" onClick={() => setStep(i)} className={cn('inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-body-sm font-medium', i === step ? 'border-primary bg-primary/10 text-primary' : i < step ? 'border-success/40 text-success' : 'border-line text-ink-muted')}>
+            <button type="button" onClick={() => setStep(i)} className={cn('inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-body-sm font-medium', i === step ? 'border-primary bg-primary/10 text-primary-ink' : i < step ? 'border-success/40 text-success-ink' : 'border-line text-ink-muted')}>
               {i < step ? <Check size={14} /> : <st.icon size={14} />}{st.label}
             </button>
           </li>
@@ -139,7 +139,7 @@ function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatu
         {[...new Set([...SUGGESTED, ...picked.map((p) => p.name)])].map((n) => {
           const on = has(n)
           return (
-            <button key={n} type="button" onClick={() => flip(n)} aria-pressed={on} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm', on ? 'border-primary bg-primary/10 text-primary' : 'border-line text-ink-muted hover:text-ink')}>
+            <button key={n} type="button" onClick={() => flip(n)} aria-pressed={on} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-body-sm', on ? 'border-primary bg-primary/10 text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>
               {on && <Check size={13} />}{n}
             </button>
           )
@@ -227,18 +227,18 @@ function PeopleStep({ s, onNext }: { s: SetupStatus; onNext: () => void }) {
     <Card title="Invite your people" subtitle="One per line: an email, or name, email, department, role. Or upload a CSV with those columns.">
       {s.emailCheckPending && (
         <div className="mb-4 rounded-btn border border-warning/30 bg-warning/10 px-3 py-2 text-body-sm text-ink">
-          Confirm your email first: we sent you a link. <button type="button" className="font-semibold text-primary hover:underline" onClick={async () => { try { await api.post('/auth/verify-email/resend'); addToast({ type: 'success', message: 'Sent again.' }) } catch { /* shown by the toast system */ } }}>Send it again</button>
-          <button type="button" className="ml-2 font-semibold text-primary hover:underline" onClick={() => refresh?.()}>I have confirmed</button>
+          Confirm your email first: we sent you a link. <button type="button" className="font-semibold text-primary-ink hover:underline" onClick={async () => { try { await api.post('/auth/verify-email/resend'); addToast({ type: 'success', message: 'Sent again.' }) } catch { /* shown by the toast system */ } }}>Send it again</button>
+          <button type="button" className="ml-2 font-semibold text-primary-ink hover:underline" onClick={() => refresh?.()}>I have confirmed</button>
         </div>
       )}
       <textarea className={inputCls + ' !h-36 py-2 font-mono text-body-sm'} value={text} onChange={(e) => setText(e.target.value)} placeholder={'amy@company.com\nLee Park, lee@company.com, Sales, Team Lead'} />
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <label className="inline-flex cursor-pointer items-center gap-2 text-body-sm font-medium text-primary hover:underline"><Upload size={14} />Upload a CSV<input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={(e) => void readCsv(e.target.files?.[0])} /></label>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-body-sm font-medium text-primary-ink hover:underline"><Upload size={14} />Upload a CSV<input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={(e) => void readCsv(e.target.files?.[0])} /></label>
         <span className="text-body-sm text-ink-muted">{people.length ? `${people.length} ${people.length === 1 ? 'person' : 'people'} found` : 'No emails yet'}</span>
       </div>
       {people.length > 0 && (
         <ul className="mt-3 max-h-48 divide-y divide-line overflow-y-auto rounded-btn border border-line">
-          {people.map((p) => <li key={p.email} className="flex flex-wrap gap-x-3 px-3 py-1.5 text-body-sm"><span className="font-medium text-ink">{p.name || p.email}</span><span className="text-ink-muted">{p.email}</span>{p.department && <span className="text-ink-muted">· {p.department}</span>}{p.role === 'TEAM_LEAD' && <span className="text-primary">· Team Lead</span>}</li>)}
+          {people.map((p) => <li key={p.email} className="flex flex-wrap gap-x-3 px-3 py-1.5 text-body-sm"><span className="font-medium text-ink">{p.name || p.email}</span><span className="text-ink-muted">{p.email}</span>{p.department && <span className="text-ink-muted">· {p.department}</span>}{p.role === 'TEAM_LEAD' && <span className="text-primary-ink">· Team Lead</span>}</li>)}
         </ul>
       )}
       {sent && sent.skipped.length > 0 && <p className="mt-3 flex items-center gap-1.5 text-body-sm text-ink-muted"><X size={14} />Already on Metriq, not invited: {sent.skipped.join(', ')}</p>}

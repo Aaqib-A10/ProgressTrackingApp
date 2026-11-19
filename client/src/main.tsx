@@ -4,10 +4,12 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './routes/router'
 import { ToastProvider } from './components/ui/Toast'
 import { AuthProvider } from './lib/auth'
+// The colours of every theme first (src/theme, built by `npm run theme:build`), then the app's own styles.
+import './theme/theme.css'
 import './index.css'
 import { registerWorker } from './lib/push'
 import { startNative } from './mobile/native'
-import { initTheme } from './lib/theme'
+import { initTheme, setOnWebsite, WEBSITE } from './lib/theme'
 import { installErrorReporter } from './lib/errorReporter'
 import { onPreloadError } from './lib/staleChunks'
 
@@ -15,8 +17,8 @@ initTheme()
 installErrorReporter()
 
 // The app (not the public website) gets a bigger type scale and bigger buttons on phones: index.css, html.pt-app.
-const WEBSITE = /^\/(?:$|pricing|security|product|solutions|terms|privacy|cookies|dpa)(?:\/|$)/
-const markApp = (path: string) => document.documentElement.classList.toggle('pt-app', !WEBSITE.test(path))
+// The colour theme is the app's too: the website always shows Metriq's own colours (lib/theme).
+const markApp = (path: string) => { document.documentElement.classList.toggle('pt-app', !WEBSITE.test(path)); setOnWebsite(WEBSITE.test(path)) }
 markApp(window.location.pathname)
 router.subscribe((state) => markApp(state.location.pathname))
 

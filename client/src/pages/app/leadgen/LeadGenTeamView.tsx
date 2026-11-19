@@ -151,7 +151,7 @@ export default function LeadGenTeamView() {
                   ))}
                 </ul>
               ) : (
-                <p className="py-10 text-center text-body-sm text-ink-muted">No industry breakdown yet — <a href="/app/leadgen/breakdown" className="text-primary hover:underline">add this month's figures</a>.</p>
+                <p className="py-10 text-center text-body-sm text-ink-muted">No industry breakdown yet — <a href="/app/leadgen/breakdown" className="text-primary-ink hover:underline">add this month's figures</a>.</p>
               )}
             </Card>
             <Card title="Lead Pipeline" subtitle="Researched → Handed to Sales">
@@ -186,7 +186,7 @@ export default function LeadGenTeamView() {
                   }}
                   renderRowBanner={(r) =>
                     r.onLeaveToday ? (
-                      <div className="flex items-center gap-2 rounded-btn bg-warning/10 px-3 py-1.5 text-body-sm font-medium text-warning">
+                      <div className="flex items-center gap-2 rounded-btn bg-warning/10 px-3 py-1.5 text-body-sm font-medium text-warning-ink">
                         <Badge tone="warning">On Leave</Badge>
                         {r.name} is On Leave / Off today — excluded from averages.
                       </div>
@@ -200,7 +200,7 @@ export default function LeadGenTeamView() {
                 <ul className="space-y-3">
                   {data.topAgents.map((a, i) => (
                     <li key={a.id} className="flex items-center gap-3">
-                      <span className={'flex h-7 w-7 items-center justify-center rounded-full text-body-sm font-semibold ' + (i === 0 ? 'bg-warning/15 text-warning' : 'bg-slate-100 text-ink-muted')}>
+                      <span className={'flex h-7 w-7 items-center justify-center rounded-full text-body-sm font-semibold ' + (i === 0 ? 'bg-warning/15 text-warning-ink' : 'bg-slate-100 text-ink-muted')}>
                         {i === 0 ? <Trophy size={14} /> : i + 1}
                       </span>
                       <span className="flex-1 truncate text-body-md text-ink">{a.name}</span>

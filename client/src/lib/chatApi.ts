@@ -8,6 +8,8 @@ export interface ConversationListItem {
   id: string
   type: ConversationType
   title: string
+  /** "Message yourself": a direct chat with only me in it. */
+  self?: boolean
   projectKey: string | null
   color: string | null
   archived: boolean
@@ -24,6 +26,7 @@ export interface ConversationDetail {
   id: string
   type: ConversationType
   title: string
+  self?: boolean
   name: string | null
   project: { key: string; name: string; color: string } | null
   canManage: boolean

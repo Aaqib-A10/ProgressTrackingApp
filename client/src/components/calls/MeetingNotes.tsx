@@ -18,7 +18,7 @@ function fmtClock(sec: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
 }
 
-const SPEAKER_COLORS = ['text-primary', 'text-teal-600', 'text-amber-600', 'text-rose-600', 'text-violet-600', 'text-sky-600', 'text-emerald-700', 'text-fuchsia-600']
+const SPEAKER_COLORS = ['text-primary-ink', 'text-teal-ink', 'text-yellow-ink', 'text-red-ink', 'text-purple-ink', 'text-blue-ink', 'text-green-ink', 'text-pink-ink']
 
 /** Plain-text version for "Copy notes" (paste into email, docs, a task). */
 function notesAsText(d: CallNotesResponse): string {
@@ -55,7 +55,7 @@ export function NotesContent({ callId }: { callId: string }) {
     return () => window.clearTimeout(t)
   }, [d, load])
 
-  if (err) return <p className="py-8 text-center text-body-md text-danger">{err}</p>
+  if (err) return <p className="py-8 text-center text-body-md text-danger-ink">{err}</p>
   if (!d) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-ink-muted" /></div>
   const n = d.notes
   const speakers = [...new Set(d.transcript.map((l) => l.userId))]
@@ -82,12 +82,12 @@ export function NotesContent({ callId }: { callId: string }) {
       </div>
 
       {(d.status === 'pending' || d.status === 'recording') && (
-        <div className="flex items-center gap-2 rounded-btn bg-primary/5 px-3 py-2 text-body-sm text-primary">
+        <div className="flex items-center gap-2 rounded-btn bg-primary/5 px-3 py-2 text-body-sm text-primary-ink">
           <Loader2 size={15} className="animate-spin" /> {d.status === 'recording' ? 'The note taker is still listening. Notes are written when it stops or the call ends.' : d.piecesLeft > 0 ? `Turning the last ${d.piecesLeft} piece${d.piecesLeft === 1 ? '' : 's'} of speech into text, then writing the notes…` : 'Writing the notes…'}
         </div>
       )}
       {d.status === 'no-ai' && <div className="rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">The AI summary is not switched on for PulseTrack yet, so here is the full transcript. (Admin: add GROQ_API_KEY on the server.)</div>}
-      {d.status === 'failed' && <div className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">The summary could not be written{d.error ? `: ${d.error}` : ''}.</div>}
+      {d.status === 'failed' && <div className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">The summary could not be written{d.error ? `: ${d.error}` : ''}.</div>}
       {d.status === 'empty' && <div className="rounded-btn bg-slate-50 px-3 py-2 text-body-sm text-ink-muted">The note taker did not hear anyone speak.</div>}
       {(d.status === 'failed' || d.status === 'no-ai') && d.transcript.length > 0 && (
         <button type="button" disabled={retrying} onClick={async () => { setRetrying(true); try { await callsApi.retryNotes(callId); await load() } catch (e) { addToast({ type: 'error', message: errMsg(e) }) } finally { setRetrying(false) } }} className="inline-flex items-center gap-1.5 rounded-btn border border-line px-3 py-1.5 text-body-sm font-semibold text-ink hover:bg-slate-50 disabled:opacity-50">
@@ -100,7 +100,7 @@ export function NotesContent({ callId }: { callId: string }) {
           <span>Notes in</span>
           <div className="inline-flex overflow-hidden rounded-btn border border-line">
             {(['roman', 'en', 'ur'] as const).map((l) => (
-              <button key={l} type="button" disabled={retrying || (n.language ?? 'en') === l} onClick={() => void rewrite(l)} className={cn('px-2.5 py-1 font-semibold', (n.language ?? 'en') === l ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50 disabled:opacity-50')}>
+              <button key={l} type="button" disabled={retrying || (n.language ?? 'en') === l} onClick={() => void rewrite(l)} className={cn('px-2.5 py-1 font-semibold', (n.language ?? 'en') === l ? 'bg-primary text-primary-on' : 'text-ink hover:bg-slate-50 disabled:opacity-50')}>
                 {l === 'roman' ? 'Roman Urdu' : l === 'en' ? 'English' : 'اردو'}
               </button>
             ))}
@@ -112,15 +112,15 @@ export function NotesContent({ callId }: { callId: string }) {
       {n && (
         <>
           <section>
-            <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink"><Sparkles size={15} className="text-primary" /> Summary</h3>
+            <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink"><Sparkles size={15} className="text-primary-ink" /> Summary</h3>
             <p dir={rtl ? 'rtl' : 'auto'} className={cn('whitespace-pre-wrap text-body-md text-ink', rtl ? 'leading-loose' : 'leading-relaxed')}>{n.summary}</p>
           </section>
           {n.keyPoints.length > 0 && <Bullets title="Key points" items={n.keyPoints} rtl={rtl} />}
-          {n.decisions.length > 0 && <Bullets title="Decisions" items={n.decisions} rtl={rtl} icon={<CheckCircle2 size={15} className="text-success" />} />}
+          {n.decisions.length > 0 && <Bullets title="Decisions" items={n.decisions} rtl={rtl} icon={<CheckCircle2 size={15} className="text-success-ink" />} />}
           {n.actionItems.length > 0 && (
             <section>
               <h3 className="mb-1.5 flex items-center gap-1.5 text-body-md font-semibold text-ink">
-                <ListChecks size={15} className="text-warning" /> Action items
+                <ListChecks size={15} className="text-warning-ink" /> Action items
                 {n.actionItems.filter((a) => !a.taskCode).length > 1 && (
                   <button type="button" onClick={() => setMakeAll(true)} className="ml-auto inline-flex items-center gap-1 rounded-btn border border-line px-2 py-0.5 text-[12px] font-semibold text-ink hover:bg-slate-50"><Plus size={12} /> Make all tasks</button>
                 )}
@@ -136,7 +136,7 @@ export function NotesContent({ callId }: { callId: string }) {
                         <td dir="auto" className="whitespace-nowrap px-3 py-1.5 text-ink-muted">{a.due ?? ''}</td>
                         <td className="whitespace-nowrap px-3 py-1.5 text-right">
                           {a.taskCode
-                            ? <Link to={`/app/projects/${encodeURIComponent(a.taskCode.replace(/-\d+$/, ''))}?task=${encodeURIComponent(a.taskCode)}`} className="font-mono text-[12px] font-semibold text-primary hover:underline">{a.taskCode}</Link>
+                            ? <Link to={`/app/projects/${encodeURIComponent(a.taskCode.replace(/-\d+$/, ''))}?task=${encodeURIComponent(a.taskCode)}`} className="font-mono text-[12px] font-semibold text-primary-ink hover:underline">{a.taskCode}</Link>
                             : <button type="button" onClick={() => setMakeTask(i)} className="inline-flex items-center gap-1 rounded-btn border border-line px-2 py-0.5 text-[12px] font-semibold text-ink hover:bg-slate-50"><Plus size={12} /> Task</button>}
                         </td>
                       </tr>
@@ -175,7 +175,7 @@ export function NotesContent({ callId }: { callId: string }) {
             {showTranscript && d.transcript.some((l) => (l.textEn && l.textEn !== l.text) || (l.textRoman && l.textRoman !== l.text)) && (
               <div className="ml-auto inline-flex overflow-hidden rounded-btn border border-line text-body-sm">
                 {([['roman', 'Roman Urdu'], ['en', 'English'], ['said', 'اردو']] as const).map(([v, label]) => (
-                  <button key={v} type="button" onClick={() => setView(v)} className={cn('px-2.5 py-1 font-semibold', view === v ? 'bg-primary text-white' : 'text-ink hover:bg-slate-50')}>{label}</button>
+                  <button key={v} type="button" onClick={() => setView(v)} className={cn('px-2.5 py-1 font-semibold', view === v ? 'bg-primary text-primary-on' : 'text-ink hover:bg-slate-50')}>{label}</button>
                 ))}
               </div>
             )}

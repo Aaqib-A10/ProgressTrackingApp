@@ -75,7 +75,7 @@ export function CompletedView({ tasks, columns, onOpen }: { tasks: TaskCard[]; c
             {g.rows.map((r) => (
               <li key={r.t.id}>
                 <button type="button" onClick={() => onOpen(r.t.code)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50">
-                  <CheckCircle2 size={16} className="shrink-0 text-success" />
+                  <CheckCircle2 size={16} className="shrink-0 text-success-ink" />
                   <span className="w-16 shrink-0 font-mono text-[11px] font-semibold text-ink-muted">{r.t.code}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-body-md font-medium text-ink">{r.t.title}</span>
@@ -88,7 +88,7 @@ export function CompletedView({ tasks, columns, onOpen }: { tasks: TaskCard[]; c
                     {r.t.counts.comments > 0 && <span className="inline-flex items-center gap-1"><MessageSquare size={12} />{r.t.counts.comments}</span>}
                     {r.t.counts.attachments > 0 && <span className="inline-flex items-center gap-1"><Paperclip size={12} />{r.t.counts.attachments}</span>}
                   </span>
-                  {late(r) && <span className="hidden rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-semibold text-warning sm:inline">Late</span>}
+                  {late(r) && <span className="hidden rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-semibold text-warning-ink sm:inline">Late</span>}
                   <span className="hidden w-40 shrink-0 text-right text-body-sm text-ink-muted sm:inline-flex sm:items-center sm:justify-end sm:gap-1" title="Finished">
                     <Clock size={12} />{fmtDateTime(r.at.toISOString())}
                   </span>

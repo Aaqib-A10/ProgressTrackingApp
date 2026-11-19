@@ -17,11 +17,11 @@ const STARTING_SOURCES = ['WhatsApp', 'Email', 'Call', 'Teams', 'Meeting', 'In p
 
 export function sourceStyle(source: string | null): { cls: string; Icon: typeof StickyNote } {
   const s = (source ?? '').toLowerCase()
-  if (s === 'whatsapp') return { cls: 'bg-[#25D366]/15 text-[#0E7A53]', Icon: MessageCircle }
-  if (s === 'email') return { cls: 'bg-primary/10 text-primary', Icon: Mail }
-  if (s === 'call') return { cls: 'bg-warning/15 text-[#B45309]', Icon: Phone }
-  if (s === 'teams' || s === 'meeting' || s === 'in person') return { cls: 'bg-violet-100 text-violet-700', Icon: Users }
-  return { cls: 'bg-sky-100 text-sky-700', Icon: StickyNote }
+  if (s === 'whatsapp') return { cls: 'bg-green-muted text-green-ink', Icon: MessageCircle }
+  if (s === 'email') return { cls: 'bg-primary/10 text-primary-ink', Icon: Mail }
+  if (s === 'call') return { cls: 'bg-warning/15 text-warning-ink', Icon: Phone }
+  if (s === 'teams' || s === 'meeting' || s === 'in person') return { cls: 'bg-purple-muted text-purple-ink', Icon: Users }
+  return { cls: 'bg-blue-muted text-blue-ink', Icon: StickyNote }
 }
 
 export function SourceChip({ source }: { source: string | null }) {
@@ -38,7 +38,7 @@ export function NoteList({ notes, onOpen, max = 2 }: { notes: WorkNote[]; onOpen
     <div className="mt-1.5 space-y-1">
       {notes.slice(0, max).map((n) => (
         <button key={n.id} type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onOpen?.() }} disabled={!onOpen}
-          className="block w-full rounded-btn border border-sky-200 bg-sky-50/70 px-2 py-1.5 text-left hover:border-sky-300 disabled:cursor-default">
+          className="block w-full rounded-btn border border-blue-ring bg-blue-subtle/70 px-2 py-1.5 text-left hover:border-blue-ring disabled:cursor-default">
           <span className="flex flex-wrap items-center gap-1.5">
             <SourceChip source={n.source} />
             {n.sender && <span className="text-[11px] font-semibold text-ink">from {n.sender}</span>}
@@ -48,7 +48,7 @@ export function NoteList({ notes, onOpen, max = 2 }: { notes: WorkNote[]; onOpen
         </button>
       ))}
       {notes.length > max && (
-        <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onOpen?.() }} className="text-[12px] font-semibold text-sky-700">+{notes.length - max} more note{notes.length - max === 1 ? '' : 's'}</button>
+        <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onOpen?.() }} className="text-[12px] font-semibold text-blue-ink">+{notes.length - max} more note{notes.length - max === 1 ? '' : 's'}</button>
       )}
     </div>
   )
@@ -103,7 +103,7 @@ export function NotesModal({ entry, readOnly, onClose, onChanged }: { entry: Wor
         ) : (
           <ul className="space-y-2">
             {entry.notes.map((n) => (
-              <li key={n.id} className={cn('rounded-btn border px-3 py-2', editing?.id === n.id ? 'border-primary bg-primary/5' : 'border-sky-200 bg-sky-50/60')}>
+              <li key={n.id} className={cn('rounded-btn border px-3 py-2', editing?.id === n.id ? 'border-primary bg-primary/5' : 'border-blue-ring bg-blue-subtle/60')}>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <SourceChip source={n.source} />
                   {n.sender && <span className="text-[12px] font-semibold text-ink">from {n.sender}</span>}
@@ -112,13 +112,13 @@ export function NotesModal({ entry, readOnly, onClose, onChanged }: { entry: Wor
                     <span className="ml-auto flex items-center gap-0.5">
                       {confirmDel === n.id ? (
                         <>
-                          <button type="button" disabled={busy} onClick={() => remove(n)} className="rounded px-2 py-0.5 text-[12px] font-semibold text-danger hover:bg-danger/10">Delete</button>
+                          <button type="button" disabled={busy} onClick={() => remove(n)} className="rounded px-2 py-0.5 text-[12px] font-semibold text-danger-ink hover:bg-danger/10">Delete</button>
                           <button type="button" onClick={() => setConfirmDel(null)} className="rounded px-2 py-0.5 text-[12px] text-ink-muted hover:bg-slate-100">Keep</button>
                         </>
                       ) : (
                         <>
                           <button type="button" onClick={() => edit(n)} className="rounded p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Edit note"><Pencil size={14} /></button>
-                          <button type="button" onClick={() => setConfirmDel(n.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Delete note"><Trash2 size={14} /></button>
+                          <button type="button" onClick={() => setConfirmDel(n.id)} className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label="Delete note"><Trash2 size={14} /></button>
                         </>
                       )}
                     </span>
@@ -146,7 +146,7 @@ export function NotesModal({ entry, readOnly, onClose, onChanged }: { entry: Wor
                     </button>
                   )
                 })}
-                <button type="button" onClick={() => { setOwn(true); setSource('') }} className={cn('inline-flex h-8 items-center gap-1 rounded-full border px-3 font-semibold', own ? 'border-sky-300 bg-sky-100 text-sky-700' : 'border-dashed border-line text-ink-muted hover:bg-slate-50')}><Plus size={13} />Your own</button>
+                <button type="button" onClick={() => { setOwn(true); setSource('') }} className={cn('inline-flex h-8 items-center gap-1 rounded-full border px-3 font-semibold', own ? 'border-blue-ring bg-blue-muted text-blue-ink' : 'border-dashed border-line text-ink-muted hover:bg-slate-50')}><Plus size={13} />Your own</button>
               </div>
               {own && <input autoFocus value={source} onChange={(e) => setSource(e.target.value)} maxLength={40} placeholder="e.g. Amazon messages, Slack, Client portal" className={cn(field, 'mt-2')} />}
             </div>

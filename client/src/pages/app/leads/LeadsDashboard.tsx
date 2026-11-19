@@ -7,6 +7,8 @@ import { flagOn } from '../../../lib/flags'
 import { cn } from '../../../lib/cn'
 import { leadsApi, money, type Dashboard } from '../../../lib/leadsApi'
 import { BusinessPicker, DATE_RANGES, PageHeader, useBusiness, useLeadsMeta } from './shared'
+import type { Hue } from '../../../theme/roles'
+import { role } from '../../../theme/css'
 
 /**
  * Lead Dashboard. One screen, no scrolling on a laptop: four big colour cards for what matters
@@ -49,40 +51,40 @@ export default function LeadsDashboard() {
         </div>
       </PageHeader>
 
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
 
       {c && d && (
         <>
           {/* The four that matter */}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Hero label="Leads" value={c.total} sub={`${c.newThisWeek} new this week`} icon={<Inbox size={20} />} from="#4F46E5" to="#7C3AED" onClick={() => go({ status: 'all' })} />
-            <Hero label="Calls" value={c.calls} sub={`${c.connected ?? 0} connected${c.kept ? ` · ${c.kept} to numbers with no lead yet` : ''}`} icon={<PhoneCall size={20} />} from="#059669" to="#14B8A6" onClick={() => nav(`/app/leads/calls${q({})}`)} />
-            <Hero label="Overdue next steps" value={c.overdue} sub={c.overdue ? 'Next step date has passed' : 'Nothing overdue'} icon={<AlertTriangle size={20} />} from={c.overdue ? '#DC2626' : '#64748B'} to={c.overdue ? '#F97316' : '#94A3B8'} onClick={() => go({ overdue: '1' })} />
+            <Hero label="Leads" value={c.total} sub={`${c.newThisWeek} new this week`} icon={<Inbox size={20} />} tone="accent" onClick={() => go({ status: 'all' })} />
+            <Hero label="Calls" value={c.calls} sub={`${c.connected ?? 0} connected${c.kept ? ` · ${c.kept} to numbers with no lead yet` : ''}`} icon={<PhoneCall size={20} />} tone="green" onClick={() => nav(`/app/leads/calls${q({})}`)} />
+            <Hero label="Overdue next steps" value={c.overdue} sub={c.overdue ? 'Next step date has passed' : 'Nothing overdue'} icon={<AlertTriangle size={20} />} tone={c.overdue ? 'red' : 'neutral'} onClick={() => go({ overdue: '1' })} />
             {cmr
-              ? <Hero label="Waiting on Jesse" value={c.waiting} sub={c.waiting ? 'Flagged, no decision yet' : 'Nothing flagged'} icon={<Flag size={20} />} from="#EA580C" to="#F59E0B" onClick={() => go({ flag: '1' })} />
-              : <Hero label="Unassigned" value={c.unassigned} sub={c.unassigned ? 'Open, nobody yet' : 'Everyone has an owner'} icon={<UserPlus size={20} />} from="#EA580C" to="#F59E0B" onClick={() => go({ assignee: 'none' })} />}
+              ? <Hero label="Waiting on Jesse" value={c.waiting} sub={c.waiting ? 'Flagged, no decision yet' : 'Nothing flagged'} icon={<Flag size={20} />} tone="orange" onClick={() => go({ flag: '1' })} />
+              : <Hero label="Unassigned" value={c.unassigned} sub={c.unassigned ? 'Open, nobody yet' : 'Everyone has an owner'} icon={<UserPlus size={20} />} tone="orange" onClick={() => go({ assignee: 'none' })} />}
           </div>
 
           {/* Needs attention */}
           <div className="pt-chips flex flex-wrap gap-2">
-            <Mini label="New this week" value={c.newThisWeek} color="#0EA5E9" onClick={() => go({ status: 'all', sort: 'newest' })} />
-            <Mini label={'Updated in 48\u00a0h'} value={c.recentlyUpdated} color="#14B8A6" onClick={() => go({ status: 'all', sort: 'activity' })} />
-            <Mini label="Never called" value={c.noStatus} color="#94A3B8" onClick={() => go({ status: 'NEW' })} />
-            {canManage && <Mini label="Unassigned" value={c.unassigned} color="#F59E0B" onClick={() => go({ assignee: 'none' })} />}
-            {canManage && <Mini label="Assigned" value={c.assigned} color="#8B5CF6" icon={<Users size={12} />} onClick={() => go({ status: 'all' })} />}
-            {cmr && <Mini label="Below minimum" value={c.belowMin} color="#A855F7" onClick={() => go({ belowMin: '1' })} />}
-            {c.late > 0 && <Mini label="Late (SLA)" value={c.late} color="#DC2626" onClick={() => go({ late: '1' })} />}
-            <Mini label={cmr ? 'Prohibited / customer' : 'Do not call'} value={c.prohibited} color="#64748B" onClick={() => go({ prohibited: '1', status: 'all' })} />
-            {(c.kept ?? 0) > 0 && <Mini label="Calls with no lead yet" value={c.kept ?? 0} color="#F59E0B" icon={<PhoneMissed size={12} />} onClick={() => nav(`/app/leads/calls${q({ view: 'unmatched' })}`)} />}
+            <Mini label="New this week" value={c.newThisWeek} tone="blue" onClick={() => go({ status: 'all', sort: 'newest' })} />
+            <Mini label={'Updated in 48\u00a0h'} value={c.recentlyUpdated} tone="teal" onClick={() => go({ status: 'all', sort: 'activity' })} />
+            <Mini label="Never called" value={c.noStatus} tone="neutral" onClick={() => go({ status: 'NEW' })} />
+            {canManage && <Mini label="Unassigned" value={c.unassigned} tone="yellow" onClick={() => go({ assignee: 'none' })} />}
+            {canManage && <Mini label="Assigned" value={c.assigned} tone="purple" icon={<Users size={12} />} onClick={() => go({ status: 'all' })} />}
+            {cmr && <Mini label="Below minimum" value={c.belowMin} tone="pink" onClick={() => go({ belowMin: '1' })} />}
+            {c.late > 0 && <Mini label="Late (SLA)" value={c.late} tone="red" onClick={() => go({ late: '1' })} />}
+            <Mini label={cmr ? 'Prohibited / customer' : 'Do not call'} value={c.prohibited} tone="neutral" onClick={() => go({ prohibited: '1', status: 'all' })} />
+            {(c.kept ?? 0) > 0 && <Mini label="Calls with no lead yet" value={c.kept ?? 0} tone="yellow" icon={<PhoneMissed size={12} />} onClick={() => nav(`/app/leads/calls${q({ view: 'unmatched' })}`)} />}
           </div>
 
           <div className="grid gap-3 lg:grid-cols-3">
             {/* Pipeline */}
             <section className="rounded-card border border-line bg-card p-5 shadow-xs lg:col-span-2">
-              <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold text-ink">Pipeline</h2><span className="text-right text-body-sm text-ink-faint">{all ? 'Across businesses' : business?.name} · {Object.values(d.byStatus).reduce((a, b) => a + b, 0)} leads{!all && d.openValue && flagOn('deal-board') ? <> · <Link to="/app/leads/board" className="font-semibold text-ink hover:text-primary" title="Open the deal board">{money(d.openValue, d.currency ?? 'USD')} open</Link></> : null}</span></div>
+              <div className="flex items-center justify-between"><h2 className="text-[15px] font-semibold text-ink">Pipeline</h2><span className="text-right text-body-sm text-ink-faint">{all ? 'Across businesses' : business?.name} · {Object.values(d.byStatus).reduce((a, b) => a + b, 0)} leads{!all && d.openValue && flagOn('deal-board') ? <> · <Link to="/app/leads/board" className="font-semibold text-ink hover:text-primary-ink" title="Open the deal board">{money(d.openValue, d.currency ?? 'USD')} open</Link></> : null}</span></div>
               <PipelineBar d={d} pipeline={pipeline} />
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {(pipeline.length ? pipeline : Object.keys(d.byStatus).map((k) => ({ key: k, label: k, color: '#64748B', open: true }))).map((st) => {
+                {(pipeline.length ? pipeline : Object.keys(d.byStatus).map((k) => ({ key: k, label: k, color: role('neutral-500'), open: true }))).map((st) => {
                   const n = d.byStatus[st.key] ?? 0
                   return (
                     <button key={st.key} type="button" onClick={() => go({ status: st.key })} className={cn('group flex items-center justify-between gap-2 rounded-btn border px-3 py-2 text-left transition-colors hover:border-line-strong', n ? 'border-line bg-card' : 'border-dashed border-line bg-transparent')} style={n ? { borderLeftWidth: 4, borderLeftColor: st.color } : { borderLeftWidth: 4, borderLeftColor: `${st.color}55` }}>
@@ -98,7 +100,7 @@ export default function LeadsDashboard() {
             <section className="flex flex-col gap-3">
               <Link to={`/app/leads/tasks${q(d.tasks.overdue ? { tab: 'overdue' } : {})}`} className="group rounded-card border border-line bg-card p-5 shadow-xs transition-colors hover:border-primary/40">
                 <div className="flex items-start justify-between">
-                  <span className="flex items-center gap-2 text-[15px] font-semibold text-ink"><span className="rounded-lg bg-primary/10 p-1.5 text-primary"><CalendarClock size={16} /></span>Scheduled tasks</span>
+                  <span className="flex items-center gap-2 text-[15px] font-semibold text-ink"><span className="rounded-lg bg-primary/10 p-1.5 text-primary-ink"><CalendarClock size={16} /></span>Scheduled tasks</span>
                   <ArrowRight size={16} className="text-ink-faint transition-transform group-hover:translate-x-0.5" />
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -109,22 +111,22 @@ export default function LeadsDashboard() {
                 <p className="mt-3 text-body-sm text-ink-muted">{d.tasks.overdue ? 'Start with the overdue ones: each has a Call button.' : d.tasks.today ? 'Work today’s list top to bottom.' : 'Nothing due. Call the never-called leads.'}</p>
               </Link>
               {cmr && isHead && (
-                <Link to={`/app/leads/queue${q({})}`} className="group rounded-card border border-line bg-gradient-to-br from-orange-50 to-amber-50 p-5 shadow-xs transition-colors hover:border-orange-300 dark:from-orange-500/10 dark:to-amber-500/5">
+                <Link to={`/app/leads/queue${q({})}`} className="group rounded-card border border-line bg-gradient-to-br from-orange-subtle to-yellow-subtle p-5 shadow-xs transition-colors hover:border-orange-ring">
                   <div className="flex items-start justify-between">
-                    <span className="flex items-center gap-2 text-[15px] font-semibold text-ink"><span className="rounded-lg bg-orange-500/15 p-1.5 text-orange-600"><Flag size={16} /></span>Waiting on you</span>
+                    <span className="flex items-center gap-2 text-[15px] font-semibold text-ink"><span className="rounded-lg bg-orange-vivid/15 p-1.5 text-orange-ink"><Flag size={16} /></span>Waiting on you</span>
                     <ArrowRight size={16} className="text-ink-faint transition-transform group-hover:translate-x-0.5" />
                   </div>
-                  <div className="mt-3 flex items-end gap-3"><span className="text-[36px] font-bold tabular-nums leading-none text-orange-600">{c.waiting}</span><span className="pb-1 text-body-sm text-ink-muted">lead{c.waiting === 1 ? '' : 's'} flagged by the SDRs, oldest first in the queue</span></div>
+                  <div className="mt-3 flex items-end gap-3"><span className="text-[36px] font-bold tabular-nums leading-none text-orange-ink">{c.waiting}</span><span className="pb-1 text-body-sm text-ink-muted">lead{c.waiting === 1 ? '' : 's'} flagged by the SDRs, oldest first in the queue</span></div>
                   <p className="mt-3 text-body-sm text-ink-muted">{c.waiting ? 'Each one shows the five facts, the last call and the recording. Decide: meeting, direction or close.' : 'Nothing to decide right now.'}</p>
                 </Link>
               )}
               {cmr && !isHead && (
-                <div className="rounded-card border border-line bg-gradient-to-br from-orange-50 to-amber-50 p-5 shadow-xs dark:from-orange-500/10 dark:to-amber-500/5">
-                  <span className="flex items-center gap-2 text-[15px] font-semibold text-ink"><span className="rounded-lg bg-orange-500/15 p-1.5 text-orange-600"><Sparkles size={16} /></span>The Jesse flow</span>
+                <div className="rounded-card border border-line bg-gradient-to-br from-orange-subtle to-yellow-subtle p-5 shadow-xs">
+                  <span className="flex items-center gap-2 text-[15px] font-semibold text-ink"><span className="rounded-lg bg-orange-vivid/15 p-1.5 text-orange-ink"><Sparkles size={16} /></span>The Jesse flow</span>
                   <ol className="mt-3 space-y-1.5 text-body-sm text-ink">
                     <li><b>1.</b> Call, log it, fill the <b>five facts</b>.</li>
                     <li><b>2.</b> <b>Send info</b> (the profile email), follow up in 2 days.</li>
-                    <li><b>3.</b> Press <b>Qualify</b> on the lead with one line on what Jesse must decide → it lands in the <Link to="/app/leads/queue" className="font-semibold text-primary hover:underline">Jesse Queue</Link>.</li>
+                    <li><b>3.</b> Press <b>Qualify</b> on the lead with one line on what Jesse must decide → it lands in the <Link to="/app/leads/queue" className="font-semibold text-primary-ink hover:underline">Jesse Queue</Link>.</li>
                     <li><b>4.</b> Jesse answers within a business day: meeting, direction or close.</li>
                   </ol>
                 </div>
@@ -139,28 +141,45 @@ export default function LeadsDashboard() {
 
 function hourWord(): string { const h = new Date().getHours(); return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening' }
 
+/**
+ * The colours of a big card, from the theme: a gradient between two solid colours, and the text colour that reads on
+ * the first (white on the indigo and red, dark on the lighter green, orange and yellow, in any theme and in dark mode).
+ */
+const HERO = {
+  accent: ['accent', 'purple-vivid', 'on-accent'],
+  green: ['green-vivid', 'teal-vivid', 'on-green'],
+  red: ['red-vivid', 'orange-vivid', 'on-red'],
+  orange: ['orange-vivid', 'yellow-vivid', 'on-orange'],
+  neutral: ['neutral-500', 'neutral-400', 'background-body'],
+} as const
+
 /** A big colour card: gradient, icon, the number, one line under it. */
-function Hero({ label, value, sub, icon, from, to, onClick }: { label: string; value: number; sub: string; icon: ReactNode; from: string; to: string; onClick: () => void }) {
+function Hero({ label, value, sub, icon, tone, onClick }: { label: string; value: number; sub: string; icon: ReactNode; tone: keyof typeof HERO; onClick: () => void }) {
+  const [from, to, ink] = HERO[tone].map(role)
   return (
-    <button type="button" onClick={onClick} className="group relative overflow-hidden rounded-card p-5 text-left text-white shadow-md transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
+    <button type="button" onClick={onClick} className="group relative overflow-hidden rounded-card p-5 text-left shadow-md transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-current" style={{ color: ink, background: `linear-gradient(135deg, ${from}, ${to})` }}>
       <span className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/10" />
       <span className="pointer-events-none absolute -bottom-10 right-8 h-24 w-24 rounded-full bg-white/10" />
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold uppercase tracking-wide text-white/85">{label}</span>
+        <span className="text-[13px] font-semibold uppercase tracking-wide opacity-[.85]">{label}</span>
         <span className="rounded-lg bg-white/20 p-1.5">{icon}</span>
       </div>
       <div className="mt-3 text-[36px] font-bold tabular-nums leading-none">{value.toLocaleString()}</div>
-      <div className="mt-2 flex items-center justify-between text-[12.5px] text-white/85"><span className="truncate">{sub}</span><ArrowRight size={14} className="shrink-0 opacity-70 transition-transform group-hover:translate-x-0.5" /></div>
+      <div className="mt-2 flex items-center justify-between text-[12.5px] opacity-[.85]"><span className="truncate">{sub}</span><ArrowRight size={14} className="shrink-0 opacity-70 transition-transform group-hover:translate-x-0.5" /></div>
     </button>
   )
 }
 
 /** A small count pill for the "needs attention" row. */
-function Mini({ label, value, color, icon, onClick }: { label: string; value: number; color: string; icon?: ReactNode; onClick: () => void }) {
+function Mini({ label, value, tone, icon, onClick }: { label: string; value: number; tone: Hue | 'neutral'; icon?: ReactNode; onClick: () => void }) {
+  // The theme's colours for this hue: a solid dot, and a tinted count that reads in light and dark.
+  const dot = role(tone === 'neutral' ? 'neutral-400' : `${tone}-vivid`)
+  const tint = tone === 'neutral' ? 'rgb(var(--c-neutral-400) / 0.15)' : `rgb(var(--c-${tone}-vivid) / 0.12)`
+  const ink = role(tone === 'neutral' ? 'text-secondary' : `text-${tone}`)
   return (
     <button type="button" onClick={onClick} className={cn('inline-flex h-9 items-center gap-2 rounded-full border bg-card pl-3 pr-1.5 text-body-sm font-medium transition-colors hover:border-line-strong', value ? 'border-line text-ink' : 'border-line text-ink-faint')}>
-      <span className="h-2 w-2 rounded-full" style={{ background: color }} />{icon}{label}
-      <span className="rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums" style={value ? { background: `${color}1f`, color } : { background: 'transparent' }}>{value}</span>
+      <span className="h-2 w-2 rounded-full" style={{ background: dot }} />{icon}{label}
+      <span className="rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums" style={value ? { background: tint, color: ink } : { background: 'transparent' }}>{value}</span>
     </button>
   )
 }
@@ -168,7 +187,7 @@ function Mini({ label, value, color, icon, onClick }: { label: string; value: nu
 function Stat({ n, label, tone }: { n: number; label: string; tone: 'primary' | 'danger' | 'ink' | 'muted' }) {
   return (
     <div className={cn('rounded-btn px-2 py-2', tone === 'danger' ? 'bg-danger/10' : tone === 'primary' ? 'bg-primary/10' : 'bg-slate-50 dark:bg-white/[0.04]')}>
-      <div className={cn('text-[22px] font-bold tabular-nums leading-none', tone === 'danger' ? 'text-danger' : tone === 'primary' ? 'text-primary' : tone === 'muted' ? 'text-ink-faint' : 'text-ink')}>{n}</div>
+      <div className={cn('text-[22px] font-bold tabular-nums leading-none', tone === 'danger' ? 'text-danger-ink' : tone === 'primary' ? 'text-primary-ink' : tone === 'muted' ? 'text-ink-faint' : 'text-ink')}>{n}</div>
       <div className="mt-1 text-[11px] text-ink-muted">{label}</div>
     </div>
   )

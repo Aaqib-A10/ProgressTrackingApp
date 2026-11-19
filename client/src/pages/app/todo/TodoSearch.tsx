@@ -11,7 +11,7 @@ import { parse, periodLabel, todayIso, type WorkPeriod, type WorkSearch, type Wo
  */
 
 const PERIOD_LABEL: Record<WorkPeriod, string> = { DAY: 'Day', WEEK: 'Week', MONTH: 'Month', YEAR: 'Year' }
-const PERIOD_TONE: Record<WorkPeriod, string> = { DAY: 'bg-slate-100 text-ink-muted', WEEK: 'bg-primary/10 text-primary', MONTH: 'bg-accent/10 text-accent', YEAR: 'bg-warning/10 text-warning' }
+const PERIOD_TONE: Record<WorkPeriod, string> = { DAY: 'bg-slate-100 text-ink-muted', WEEK: 'bg-primary/10 text-primary-ink', MONTH: 'bg-accent/10 text-highlight-ink', YEAR: 'bg-warning/10 text-warning-ink' }
 const STATUS_LABEL: Record<WorkStatus, string> = { PLANNED: 'To do', IN_PROGRESS: 'In progress', DONE: 'Done' }
 const STATUS_DOT: Record<WorkStatus, string> = { PLANNED: 'bg-slate-300', IN_PROGRESS: 'bg-warning', DONE: 'bg-success' }
 
@@ -20,7 +20,7 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 export function Highlight({ text, terms }: { text: string; terms: string[] }) {
   if (!terms.length) return <>{text}</>
   const re = new RegExp(`(${terms.map(escape).sort((a, b) => b.length - a.length).join('|')})`, 'gi')
-  return <>{text.split(re).map((p, i) => (i % 2 ? <mark key={i} className="rounded-[3px] bg-yellow-200/80 px-0.5 text-ink dark:bg-yellow-400/30">{p}</mark> : p))}</>
+  return <>{text.split(re).map((p, i) => (i % 2 ? <mark key={i} className="rounded-[3px] bg-yellow-ring/80 px-0.5 text-ink">{p}</mark> : p))}</>
 }
 const has = (text: string | null | undefined, terms: string[]) => !!text && terms.some((t) => text.toLowerCase().includes(t.toLowerCase()))
 
@@ -111,8 +111,8 @@ export function TodoSearch({ data, busy, team, onOpen, onOpenDay }: {
     URL.revokeObjectURL(a.href)
   }
 
-  const chip = (on: boolean) => cn('inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-body-sm font-semibold transition-colors', on ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink-muted hover:text-ink')
-  const count = (n: number, on: boolean) => <span className={cn('text-[11px] font-bold', on ? 'text-white/80' : 'text-ink-faint')}>{n}</span>
+  const chip = (on: boolean) => cn('inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-body-sm font-semibold transition-colors', on ? 'border-primary bg-primary text-primary-on' : 'border-line bg-card text-ink-muted hover:text-ink')
+  const count = (n: number, on: boolean) => <span className={cn('text-[11px] font-bold', on ? 'text-primary-on/80' : 'text-ink-faint')}>{n}</span>
 
   if (!data) return <Card><p className="py-10 text-center text-body-md text-ink-muted">Searching…</p></Card>
 
@@ -182,7 +182,7 @@ export function TodoSearch({ data, busy, team, onOpen, onOpenDay }: {
             <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide', PERIOD_TONE[g.period])}>{PERIOD_LABEL[g.period]}</span>
             <span className="text-body-md font-semibold text-ink">{periodLabel(g.period, g.start)}</span>
             <span className="text-body-sm text-ink-muted">· {when(g.start)}</span>
-            <button type="button" onClick={() => onOpen(g.rows[0])} className="ml-auto inline-flex items-center gap-1 text-body-sm font-semibold text-primary hover:underline">
+            <button type="button" onClick={() => onOpen(g.rows[0])} className="ml-auto inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink hover:underline">
               Open this {g.period === 'DAY' ? 'day' : PERIOD_LABEL[g.period].toLowerCase()} <ArrowRight size={14} />
             </button>
           </header>
@@ -197,7 +197,7 @@ export function TodoSearch({ data, busy, team, onOpen, onOpenDay }: {
                       <span className={cn('line-clamp-3 whitespace-pre-wrap break-words text-body-md', e.status === 'DONE' ? 'text-ink-muted' : 'font-medium text-ink')}><Highlight text={e.title} terms={terms} /></span>
                       {e.details && has(e.details, terms) && <span className="mt-0.5 block text-body-sm text-ink-muted"><Highlight text={around(e.details, terms)} terms={terms} /></span>}
                       {notes.slice(0, 2).map((n) => (
-                        <span key={n.id} className="mt-1 flex items-start gap-1.5 rounded-btn bg-sky-50 px-2 py-1 text-body-sm text-sky-900 dark:bg-sky-500/10 dark:text-sky-200">
+                        <span key={n.id} className="mt-1 flex items-start gap-1.5 rounded-btn bg-blue-subtle px-2 py-1 text-body-sm text-blue-ink">
                           <StickyNote size={13} className="mt-0.5 shrink-0" />
                           <span className="min-w-0">
                             {(n.source || n.sender) && <span className="font-semibold"><Highlight text={[n.source, n.sender && `from ${n.sender}`].filter(Boolean).join(' ')} terms={terms} />: </span>}
@@ -206,13 +206,13 @@ export function TodoSearch({ data, busy, team, onOpen, onOpenDay }: {
                         </span>
                       ))}
                       <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                        <span className={cn('rounded-full px-2 py-0.5 font-semibold', e.status === 'DONE' ? 'bg-success/10 text-success' : e.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-ink-muted')}>{STATUS_LABEL[e.status]}</span>
+                        <span className={cn('rounded-full px-2 py-0.5 font-semibold', e.status === 'DONE' ? 'bg-success/10 text-success-ink' : e.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning-ink' : 'bg-slate-100 text-ink-muted')}>{STATUS_LABEL[e.status]}</span>
                         {team && <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-ink">{e.userName}</span>}
-                        {e.tag && <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary"><Hash size={10} /><Highlight text={e.tag} terms={terms} /></span>}
-                        {e.quantity != null && <span className="rounded-full bg-accent/10 px-2 py-0.5 font-semibold text-accent">{e.quantity.toLocaleString()} items</span>}
+                        {e.tag && <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary-ink"><Hash size={10} /><Highlight text={e.tag} terms={terms} /></span>}
+                        {e.quantity != null && <span className="rounded-full bg-accent/10 px-2 py-0.5 font-semibold text-highlight-ink">{e.quantity.toLocaleString()} items</span>}
                         {e.hours != null && <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-ink-muted">{e.hours} h</span>}
                         {e.private && <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-ink-muted"><Lock size={10} />private</span>}
-                        {e.notes.length > 0 && notes.length === 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 font-semibold text-sky-700"><StickyNote size={10} />{e.notes.length} note{e.notes.length === 1 ? '' : 's'}</span>}
+                        {e.notes.length > 0 && notes.length === 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-muted px-2 py-0.5 font-semibold text-blue-ink"><StickyNote size={10} />{e.notes.length} note{e.notes.length === 1 ? '' : 's'}</span>}
                       </span>
                     </span>
                     <ArrowRight size={16} className="mt-1 shrink-0 text-ink-faint" />

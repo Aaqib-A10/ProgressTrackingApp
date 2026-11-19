@@ -69,7 +69,7 @@ export function PredictiveDialer() {
         <div className="space-y-3 text-body-sm">
           {it ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold', it.enabled ? 'bg-success/10 text-success' : 'bg-slate-100 text-ink-muted')}>{it.enabled ? <><CheckCircle2 size={13} /> On</> : 'Off'}</span>
+              <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold', it.enabled ? 'bg-success/10 text-success-ink' : 'bg-slate-100 text-ink-muted')}>{it.enabled ? <><CheckCircle2 size={13} /> On</> : 'Off'}</span>
               <span className="text-ink">{it.name}</span>
               <code className="font-mono text-[11px] text-ink-muted">{it.prefix}…</code>
               <span className="text-ink-muted">· {it.lastReceivedAt ? `last call received ${when(it.lastReceivedAt)}` : 'no call received yet'}</span>
@@ -123,10 +123,10 @@ export function PredictiveDialer() {
                     <option value="">Pick an outcome</option>
                     {d.outcomes.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                   </select>
-                  <button type="button" onClick={() => setCodes(codes.filter((_, j) => j !== i))} className="rounded p-1 text-ink-muted hover:bg-slate-100 hover:text-danger" aria-label="Remove"><Trash2 size={14} /></button>
+                  <button type="button" onClick={() => setCodes(codes.filter((_, j) => j !== i))} className="rounded p-1 text-ink-muted hover:bg-slate-100 hover:text-danger-ink" aria-label="Remove"><Trash2 size={14} /></button>
                 </div>
               ))}
-              <button type="button" onClick={() => setCodes([...codes, ['', '']])} className="inline-flex items-center gap-1 font-semibold text-primary"><Plus size={14} /> Add a code</button>
+              <button type="button" onClick={() => setCodes([...codes, ['', '']])} className="inline-flex items-center gap-1 font-semibold text-primary-ink"><Plus size={14} /> Add a code</button>
             </div>
           </Panel>
 
@@ -140,10 +140,10 @@ export function PredictiveDialer() {
                     <option value="">Pick the person</option>
                     {d.agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
-                  <button type="button" onClick={() => setAgents(agents.filter((_, j) => j !== i))} className="rounded p-1 text-ink-muted hover:bg-slate-100 hover:text-danger" aria-label="Remove"><Trash2 size={14} /></button>
+                  <button type="button" onClick={() => setAgents(agents.filter((_, j) => j !== i))} className="rounded p-1 text-ink-muted hover:bg-slate-100 hover:text-danger-ink" aria-label="Remove"><Trash2 size={14} /></button>
                 </div>
               ))}
-              <button type="button" onClick={() => setAgents([...agents, ['', '']])} className="inline-flex items-center gap-1 font-semibold text-primary"><Plus size={14} /> Add an agent</button>
+              <button type="button" onClick={() => setAgents([...agents, ['', '']])} className="inline-flex items-center gap-1 font-semibold text-primary-ink"><Plus size={14} /> Add an agent</button>
             </div>
           </Panel>
 
@@ -171,7 +171,7 @@ export function PredictiveDialer() {
                   <p><span className="text-ink-muted">Lead:</span> <b className="text-ink">{test.lead ? `${test.lead.company} (${test.lead.owner}, ${test.lead.status}) by ${test.lead.matchedBy?.replace('_', ' ')}` : 'none found'}</b></p>
                   <p><span className="text-ink-muted">Outcome:</span> <b className="text-ink">{test.outcomeLabel ?? 'not mapped'}</b>{test.read.disposition ? ` from "${test.read.disposition}"` : ''}</p>
                   <p><span className="text-ink-muted">Agent:</span> <b className="text-ink">{test.agent ?? test.read.agent ?? 'none'}</b>{test.read.durationSec != null ? ` · ${dur(test.read.durationSec)}` : ''}{test.read.notes ? ` · notes: ${test.read.notes}` : ''}</p>
-                  {test.problems.map((p) => <p key={p} className="text-warning">{p}</p>)}
+                  {test.problems.map((p) => <p key={p} className="text-warning-ink">{p}</p>)}
                 </div>
               )}
             </div>
@@ -197,9 +197,9 @@ export function PredictiveDialer() {
                     <tr key={c.id}>
                       <td className="whitespace-nowrap px-2 py-1.5 text-ink-muted">{when(c.calledAt)}</td>
                       <td className="whitespace-nowrap px-2 tabular-nums text-ink">{c.phone ?? '—'}</td>
-                      <td className="px-2 text-ink">{c.disposition}{c.outcomeLabel ? <span className="text-ink-muted"> → {c.outcomeLabel}</span> : <span className="text-warning"> (not mapped)</span>}{c.durationSec != null && <span className="text-ink-muted"> · {dur(c.durationSec)}</span>}</td>
-                      <td className="px-2 text-ink">{c.agent ?? (c.agentRaw ? <span className="text-warning">{c.agentRaw} (not linked)</span> : '—')}</td>
-                      <td className="px-2 text-ink">{c.lead ? `${c.lead.company} · ${c.lead.owner}` : <span className="text-warning">not matched</span>}</td>
+                      <td className="px-2 text-ink">{c.disposition}{c.outcomeLabel ? <span className="text-ink-muted"> → {c.outcomeLabel}</span> : <span className="text-warning-ink"> (not mapped)</span>}{c.durationSec != null && <span className="text-ink-muted"> · {dur(c.durationSec)}</span>}</td>
+                      <td className="px-2 text-ink">{c.agent ?? (c.agentRaw ? <span className="text-warning-ink">{c.agentRaw} (not linked)</span> : '—')}</td>
+                      <td className="px-2 text-ink">{c.lead ? `${c.lead.company} · ${c.lead.owner}` : <span className="text-warning-ink">not matched</span>}</td>
                       <td className="px-2 text-ink-muted">{c.effect ?? '—'}</td>
                     </tr>
                   ))}

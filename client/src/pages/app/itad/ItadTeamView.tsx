@@ -186,7 +186,7 @@ export default function ItadTeamView() {
                   }}
                   renderRowBanner={(r) =>
                     r.onLeaveToday ? (
-                      <div className="flex items-center gap-2 rounded-btn bg-warning/10 px-3 py-1.5 text-body-sm font-medium text-warning">
+                      <div className="flex items-center gap-2 rounded-btn bg-warning/10 px-3 py-1.5 text-body-sm font-medium text-warning-ink">
                         <Badge tone="warning">On Leave</Badge>
                         {r.name} is On Leave / Off today — excluded from averages.
                       </div>
@@ -202,7 +202,7 @@ export default function ItadTeamView() {
                 <ul className="space-y-3">
                   {data.topAgents.map((a, i) => (
                     <li key={a.id} className="flex items-center gap-3">
-                      <span className={'flex h-7 w-7 items-center justify-center rounded-full text-body-sm font-semibold ' + (i === 0 ? 'bg-warning/15 text-warning' : 'bg-slate-100 text-ink-muted')}>
+                      <span className={'flex h-7 w-7 items-center justify-center rounded-full text-body-sm font-semibold ' + (i === 0 ? 'bg-warning/15 text-warning-ink' : 'bg-slate-100 text-ink-muted')}>
                         {i === 0 ? <Trophy size={14} /> : i + 1}
                       </span>
                       <span className="flex-1 truncate text-body-md text-ink">{a.name}</span>

@@ -60,7 +60,7 @@ export default function LeadReport() {
                 <div className="text-body-sm font-medium text-ink">{x.label}</div>
                 <input type="number" min={0} value={f[x.key] ?? 0} onChange={(e) => setF({ ...f, [x.key]: Math.max(0, Number(e.target.value) || 0) })} className="mt-1 w-full bg-transparent text-[26px] font-bold tabular-nums text-ink focus:outline-none" aria-label={x.label} />
                 <div className="text-[11px] text-ink-faint">{x.hint}</div>
-                <div className={cn('mt-1 text-[11.5px]', (f[x.key] ?? 0) !== mine.counted[x.key] ? 'font-semibold text-warning' : 'text-ink-muted')}>Metriq counted {mine.counted[x.key]}</div>
+                <div className={cn('mt-1 text-[11.5px]', (f[x.key] ?? 0) !== mine.counted[x.key] ? 'font-semibold text-warning-ink' : 'text-ink-muted')}>Metriq counted {mine.counted[x.key]}</div>
               </div>
             ))}
           </div>
@@ -80,7 +80,7 @@ export default function LeadReport() {
             <table className="w-full text-left text-body-sm">
               <thead className="bg-slate-50 text-[11.5px] uppercase tracking-wide text-ink-muted dark:bg-white/[0.03]"><tr><th className="px-3 py-2 font-semibold">SDR</th>{FIELDS.map((x) => <th key={x.key} className="px-3 py-2 text-right font-semibold">{x.label}</th>)}<th className="px-3 py-2 font-semibold">Submitted</th></tr></thead>
               <tbody className="divide-y divide-line">
-                {team.rows.map((r) => <tr key={r.sdr.id}><td className="px-3 py-2 font-medium text-ink">{r.sdr.name}</td>{FIELDS.map((x) => { const v = r.report ? r.report[x.key] : r.counted[x.key]; const diff = r.report && r.report[x.key] !== r.counted[x.key]; return <td key={x.key} className="px-3 py-2 text-right tabular-nums text-ink">{v}{diff && <span className="ml-1 text-[11px] text-warning" title={`Metriq counted ${r.counted[x.key]}`}>({r.counted[x.key]})</span>}</td> })}<td className="px-3 py-2">{r.report ? <Badge tone="success">{fmtWhen(r.report.submittedAt)}</Badge> : <Badge tone="warning">Not yet</Badge>}</td></tr>)}
+                {team.rows.map((r) => <tr key={r.sdr.id}><td className="px-3 py-2 font-medium text-ink">{r.sdr.name}</td>{FIELDS.map((x) => { const v = r.report ? r.report[x.key] : r.counted[x.key]; const diff = r.report && r.report[x.key] !== r.counted[x.key]; return <td key={x.key} className="px-3 py-2 text-right tabular-nums text-ink">{v}{diff && <span className="ml-1 text-[11px] text-warning-ink" title={`Metriq counted ${r.counted[x.key]}`}>({r.counted[x.key]})</span>}</td> })}<td className="px-3 py-2">{r.report ? <Badge tone="success">{fmtWhen(r.report.submittedAt)}</Badge> : <Badge tone="warning">Not yet</Badge>}</td></tr>)}
                 {!team.rows.length && <tr><td colSpan={7} className="px-3 py-6 text-center text-ink-muted">No reps in this business yet.</td></tr>}
               </tbody>
             </table>
@@ -100,7 +100,7 @@ export default function LeadReport() {
 function Review({ title, rows, empty, tone }: { title: string; rows: { id: string; text: string; sub: string }[]; empty: string; tone?: 'danger' }) {
   return (
     <section className="rounded-card border border-line bg-card shadow-xs">
-      <header className="flex items-center justify-between border-b border-line px-4 py-2.5 text-[14px] font-semibold text-ink">{title}<span className={cn('rounded-full px-2 text-[11px]', rows.length && tone === 'danger' ? 'bg-danger/10 text-danger' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>{rows.length}</span></header>
+      <header className="flex items-center justify-between border-b border-line px-4 py-2.5 text-[14px] font-semibold text-ink">{title}<span className={cn('rounded-full px-2 text-[11px]', rows.length && tone === 'danger' ? 'bg-danger/10 text-danger-ink' : 'bg-slate-100 text-ink-muted dark:bg-white/10')}>{rows.length}</span></header>
       {rows.length ? <ul className="divide-y divide-line">{rows.slice(0, 20).map((r, i) => <li key={`${r.id}-${i}`} className="px-4 py-2 text-body-sm"><Link to={`/app/leads/${r.id}`} className="font-medium text-ink hover:underline">{r.text}</Link><div className="text-[11.5px] text-ink-muted">{r.sub}</div></li>)}</ul> : <p className="px-4 py-4 text-body-sm text-ink-muted">{empty}</p>}
     </section>
   )

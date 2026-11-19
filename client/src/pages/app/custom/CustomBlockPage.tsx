@@ -10,6 +10,7 @@ import { apiErrorText } from '../../../lib/api'
 import { customApi, iconOf, type CustomBlock, type CustomField, type CustomRecord } from '../../../lib/customApi'
 import { FieldInput, FieldValue, valueText } from './fields'
 import { fmtAgo } from '../../../components/projects/pmUi'
+import { dataTint } from '../../../theme/css'
 
 /**
  * A block the company made itself (Department Studio, part C): its records as a table, a board
@@ -79,7 +80,7 @@ export default function CustomBlockPage() {
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-card" style={{ background: `${block.color}1f`, color: block.color }}><Icon size={22} /></span>
+        <span className="flex h-11 w-11 items-center justify-center rounded-card" style={dataTint(block.color)}><Icon size={22} /></span>
         <div className="min-w-0">
           <h1 className="text-headline-lg text-ink">{block.name}</h1>
           <p className="text-body-md text-ink-muted">{block.description || (lead ? "Your department's records." : block.settings.membersSee === 'own' ? 'Your own records.' : "Your department's records.")}</p>
@@ -232,7 +233,7 @@ function Calendar({ block, field, records, onOpen }: { block: CustomBlock; field
             <div key={d} className={cn('min-h-[92px] rounded-btn border p-1.5', d === today ? 'border-primary/50 bg-primary/5' : 'border-line')}>
               <span className="text-body-sm font-semibold text-ink">{i + 1}</span>
               <div className="mt-1 space-y-1">
-                {here.slice(0, 3).map((r) => <button key={r.id} type="button" onClick={() => onOpen(r)} className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11.5px] font-medium" style={{ background: `${block.color}1a`, color: block.color }}>{titleOf(block, r)}</button>)}
+                {here.slice(0, 3).map((r) => <button key={r.id} type="button" onClick={() => onOpen(r)} className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11.5px] font-medium" style={dataTint(block.color)}>{titleOf(block, r)}</button>)}
                 {here.length > 3 && <span className="block text-[11px] text-ink-muted">+{here.length - 3} more</span>}
               </div>
             </div>
@@ -264,7 +265,7 @@ function RecordModal({ block, people, record, onClose, onSaved }: { block: Custo
   return (
     <Modal open onClose={onClose} title={record ? (readOnly ? titleOf(block, record) : `Change ${block.name.toLowerCase()}`) : `Add to ${block.name}`}
       footer={readOnly ? <Button variant="secondary" onClick={onClose}>Close</Button> : <>
-        {record && <Button variant="ghost" className="mr-auto text-danger" leadingIcon={<Trash2 size={15} />} disabled={busy} onClick={remove}>Delete</Button>}
+        {record && <Button variant="ghost" className="mr-auto text-danger-ink" leadingIcon={<Trash2 size={15} />} disabled={busy} onClick={remove}>Delete</Button>}
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button disabled={busy} onClick={save}>{record ? 'Save' : 'Add'}</Button>
       </>}>

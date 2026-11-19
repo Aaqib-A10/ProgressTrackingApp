@@ -134,7 +134,7 @@ function PhoneBoard({ columns, tasks, canMove, onOpen, onMoveTask, onQuickAdd, o
         ) : onQuickAdd && (
           <form className="flex gap-2" onSubmit={async (e) => { e.preventDefault(); if (!title.trim()) return; setBusy(true); try { await onQuickAdd(col.id, title.trim()); setTitle('') } finally { setBusy(false) } }}>
             <input value={title} disabled={busy} onChange={(e) => setTitle(e.target.value)} placeholder={`New task in ${col.name}`} className="h-11 min-w-0 flex-1 rounded-btn border border-line bg-card px-3 text-ink" aria-label="New task title" />
-            <button type="submit" disabled={busy || !title.trim()} className="inline-flex h-11 items-center gap-1 rounded-btn bg-primary px-4 font-semibold text-white disabled:opacity-50"><Plus size={16} /> Add</button>
+            <button type="submit" disabled={busy || !title.trim()} className="inline-flex h-11 items-center gap-1 rounded-btn bg-primary px-4 font-semibold text-primary-on disabled:opacity-50"><Plus size={16} /> Add</button>
           </form>
         )}
       </section>
@@ -325,7 +325,7 @@ function Column({ column, ids: allIds, byId, canMove, canDragColumn, onOpen, onQ
         )}
         <StatusIcon name={column.name} category={column.category} color={column.color} />
         <h2 className="truncate text-[13px] font-medium text-ink">{column.name}</h2>
-        <span className={cn('text-[12px] tabular-nums', over ? 'font-semibold text-danger' : 'text-ink-faint')} title={column.wipLimit != null ? `Work in progress limit ${column.wipLimit}` : undefined}>
+        <span className={cn('text-[12px] tabular-nums', over ? 'font-semibold text-danger-ink' : 'text-ink-faint')} title={column.wipLimit != null ? `Work in progress limit ${column.wipLimit}` : undefined}>
           {allIds.length}{column.wipLimit != null ? `/${column.wipLimit}` : ''}
         </span>
         <span className="flex-1" />
@@ -450,7 +450,7 @@ export function CardBody({ task, lifted }: { task: TaskCard; lifted?: boolean })
           {task.lastReviewVerdict && <span title={`${c.reviews} review${c.reviews === 1 ? '' : 's'}, latest: ${VERDICT_META[task.lastReviewVerdict].label}`}><VerdictBadge verdict={task.lastReviewVerdict} short /></span>}
           {c.comments > 0 && <span className="inline-flex items-center gap-1"><MessageSquare size={12} />{c.comments}</span>}
           {c.attachments > 0 && <span className="inline-flex items-center gap-1"><Paperclip size={12} />{c.attachments}</span>}
-          {c.checklistTotal > 0 && <span className={cn('inline-flex items-center gap-1', c.checklistDone === c.checklistTotal && 'text-success')}><CheckSquare size={12} />{c.checklistDone}/{c.checklistTotal}</span>}
+          {c.checklistTotal > 0 && <span className={cn('inline-flex items-center gap-1', c.checklistDone === c.checklistTotal && 'text-success-ink')}><CheckSquare size={12} />{c.checklistDone}/{c.checklistTotal}</span>}
         </div>
       )}
       <p className="mt-1.5 truncate text-[11px] text-ink-faint" title={`Assigned by ${task.createdBy.name} to ${task.assignees.map((a) => a.name).join(', ') || 'nobody yet'}`}>

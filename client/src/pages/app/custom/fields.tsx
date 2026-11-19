@@ -1,6 +1,8 @@
 import { ExternalLink } from 'lucide-react'
 import { cn } from '../../../lib/cn'
 import type { CustomField } from '../../../lib/customApi'
+import { dataTint } from '../../../theme/css'
+import { role } from '../../../theme/css'
 
 /** Inputs and display for the fields of a block of the company's own (Department Studio, part C). */
 
@@ -8,7 +10,7 @@ export const fieldCls = 'h-10 w-full rounded-btn border border-line bg-card px-3
 
 export function FieldInput({ f, value, onChange, people, disabled }: { f: CustomField; value: unknown; onChange: (v: unknown) => void; people: { id: string; name: string }[]; disabled?: boolean }) {
   const id = `f-${f.key}`
-  const label = <span className="mb-1 block text-body-sm font-semibold text-ink">{f.label}{f.required && <span className="text-danger"> *</span>}</span>
+  const label = <span className="mb-1 block text-body-sm font-semibold text-ink">{f.label}{f.required && <span className="text-danger-ink"> *</span>}</span>
   const str = value == null ? '' : String(value)
   switch (f.type) {
     case 'longtext':
@@ -42,8 +44,8 @@ export function valueText(f: CustomField, v: unknown, people: { id: string; name
 /** A value for the table and the board. */
 export function FieldValue({ f, v, people, color }: { f: CustomField; v: unknown; people: { id: string; name: string }[]; color?: string }) {
   if (v == null || v === '') return <span className="text-ink-faint">—</span>
-  if (f.type === 'select') return <span className="inline-flex rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: `${color ?? '#6366F1'}1a`, color: color ?? '#6366F1' }}>{String(v)}</span>
-  if (f.type === 'url') return <a href={String(v)} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()} className="inline-flex max-w-[220px] items-center gap-1 truncate text-primary underline">{String(v).replace(/^https?:\/\//, '')}<ExternalLink size={11} className="shrink-0" /></a>
+  if (f.type === 'select') return <span className="inline-flex rounded-full px-2 py-0.5 text-[12px] font-semibold" style={dataTint(color ?? role('accent'))}>{String(v)}</span>
+  if (f.type === 'url') return <a href={String(v)} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()} className="inline-flex max-w-[220px] items-center gap-1 truncate text-primary-ink underline">{String(v).replace(/^https?:\/\//, '')}<ExternalLink size={11} className="shrink-0" /></a>
   if (f.type === 'longtext') return <span className="line-clamp-2 whitespace-pre-wrap break-words">{String(v)}</span>
   if (f.type === 'number') return <span className="tabular-nums">{Number(v).toLocaleString()}</span>
   return <span>{valueText(f, v, people)}</span>

@@ -132,7 +132,7 @@ function RowEditor({
               onChange={(e) => onUpdate(r._id, { count: Number(e.target.value) })}
               className="h-9 w-24 rounded-btn border border-line bg-bg px-3 text-right text-body-sm tabular-nums text-ink focus:border-primary focus:outline-none"
             />
-            <button onClick={() => onRemove(r._id)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Remove row">
+            <button onClick={() => onRemove(r._id)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label="Remove row">
               <Trash2 size={16} />
             </button>
           </div>

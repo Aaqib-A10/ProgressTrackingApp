@@ -19,7 +19,7 @@ type Col = { key: string; label: string; cell: (l: DialerLead, now: Date) => Rea
 const fmtDay = (iso: string | null) => (iso ? shortDate(iso) : '—')
 
 export const LEAD_COLUMNS: Col[] = [
-  { key: 'company', label: 'Company', cell: (l) => <span className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning" title={`Update Earthzone: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</span> },
+  { key: 'company', label: 'Company', cell: (l) => <span className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning-ink" title={`Update Earthzone: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</span> },
   { key: 'contact', label: 'Contact', cell: (l) => l.contactName ?? '—' },
   { key: 'phone', label: 'Phone', cell: (l) => <span className="whitespace-nowrap tabular-nums">{l.phone ?? '—'}</span> },
   { key: 'title', label: 'Title', cell: (l) => l.jobTitle ?? '—' },
@@ -75,7 +75,7 @@ function SortRow({ id, label, onRemove }: { id: string; label: string; onRemove:
     <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn('flex items-center gap-2 rounded-btn border border-line bg-card px-2 py-1.5 text-body-sm', isDragging && 'z-10 shadow-overlay')}>
       <button type="button" {...attributes} {...listeners} className="cursor-grab text-ink-faint active:cursor-grabbing" aria-label={`Move ${label}`}><GripVertical size={15} /></button>
       <span className="flex-1 font-medium text-ink">{label}</span>
-      <button type="button" onClick={onRemove} className="rounded p-0.5 text-ink-faint hover:text-danger" aria-label={`Hide ${label}`}><X size={14} /></button>
+      <button type="button" onClick={onRemove} className="rounded p-0.5 text-ink-faint hover:text-danger-ink" aria-label={`Hide ${label}`}><X size={14} /></button>
     </li>
   )
 }
@@ -98,7 +98,7 @@ export function ColumnPicker({ columns, onClose, onSave, options = LEAD_COLUMNS,
       {off.length > 0 && (
         <>
           <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase text-ink-muted">Add a column</p>
-          <div className="flex flex-wrap gap-1.5">{off.map((c) => <button key={c.key} type="button" onClick={() => setList((l) => [...l, c.key])} className="rounded-full border border-dashed border-line px-2.5 py-1 text-body-sm text-ink hover:border-primary hover:text-primary">+ {c.label}</button>)}</div>
+          <div className="flex flex-wrap gap-1.5">{off.map((c) => <button key={c.key} type="button" onClick={() => setList((l) => [...l, c.key])} className="rounded-full border border-dashed border-line px-2.5 py-1 text-body-sm text-ink hover:border-primary hover:text-primary-ink">+ {c.label}</button>)}</div>
         </>
       )}
     </Modal>

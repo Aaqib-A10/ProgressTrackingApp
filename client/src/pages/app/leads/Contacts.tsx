@@ -49,7 +49,7 @@ export default function Contacts() {
         </div>
         {d && <span className="text-body-sm text-ink-faint">{d.total} {d.total === 1 ? 'person' : 'people'}</span>}
       </div>
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
 
       {/* Phones: one card per person. */}
       <div className="space-y-2 md:hidden">
@@ -64,7 +64,7 @@ export default function Contacts() {
             </div>
             <span className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
               {r.email && <a href={`mailto:${r.email}`} className="rounded-full bg-slate-100 p-2.5 text-ink-muted dark:bg-white/10" aria-label={`Email ${r.name}`}><Mail size={16} /></a>}
-              {(r.phone || r.mobile) && <a href={dialHref(r.phone ?? r.mobile, meta?.dial) ?? '#'} className="rounded-full bg-primary/10 p-2.5 text-primary" aria-label={`Call ${r.name}`}><Phone size={16} /></a>}
+              {(r.phone || r.mobile) && <a href={dialHref(r.phone ?? r.mobile, meta?.dial) ?? '#'} className="rounded-full bg-primary/10 p-2.5 text-primary-ink" aria-label={`Call ${r.name}`}><Phone size={16} /></a>}
             </span>
           </div>
         ))}
@@ -86,7 +86,7 @@ export default function Contacts() {
                     </div>
                   </td>
                   <td className="min-w-[190px] px-3 py-2.5 text-ink">{r.company ?? '—'}<div className="text-[11.5px] text-ink-muted">{[r.industry, r.state].filter(Boolean).join(' · ')}</div></td>
-                  <td className="whitespace-nowrap px-3 py-2.5" onClick={(e) => e.stopPropagation()}>{r.phone || r.mobile ? <a href={dialHref(r.phone ?? r.mobile, meta?.dial) ?? '#'} className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"><Phone size={13} />{r.phone ?? r.mobile}</a> : <span className="text-ink-faint">—</span>}{r.phone && r.mobile && <div className="text-[11.5px] text-ink-muted">{r.mobile}</div>}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5" onClick={(e) => e.stopPropagation()}>{r.phone || r.mobile ? <a href={dialHref(r.phone ?? r.mobile, meta?.dial) ?? '#'} className="inline-flex items-center gap-1.5 font-medium text-primary-ink hover:underline"><Phone size={13} />{r.phone ?? r.mobile}</a> : <span className="text-ink-faint">—</span>}{r.phone && r.mobile && <div className="text-[11.5px] text-ink-muted">{r.mobile}</div>}</td>
                   <td className="max-w-[220px] px-3 py-2.5" onClick={(e) => e.stopPropagation()}>{r.email ? <a href={`mailto:${r.email}`} className="block truncate text-ink hover:underline">{r.email}</a> : <span className="text-ink-faint">—</span>}</td>
                   <td className="px-3 py-2.5"><StatusPill status={r.status} label={r.statusLabel} color={r.statusColor} size="sm" />{all && <div className="mt-0.5 text-[11.5px] text-ink-muted">{r.business.name}</div>}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-ink">{r.assignee?.name ?? <span className="text-ink-faint">Unassigned</span>}</td>

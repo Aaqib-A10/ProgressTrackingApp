@@ -132,7 +132,7 @@ function NoteCard({ note, onEdit, onDelete }: { note: MeetingNote; onEdit: () =>
             <button onClick={onEdit} className="rounded p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Edit">
               <Pencil size={15} />
             </button>
-            <button onClick={onDelete} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger" aria-label="Delete">
+            <button onClick={onDelete} className="rounded p-1.5 text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label="Delete">
               <Trash2 size={15} />
             </button>
           </div>

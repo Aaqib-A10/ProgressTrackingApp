@@ -67,7 +67,7 @@ export function ImportModal({ business, onClose, onDone }: { business: MetaBusin
     <Modal open onClose={onClose} title={cmr ? 'Import the CMR Lead Tracker sheet' : 'Import leads from a sheet'} size="lg" footer={<><Button variant="ghost" onClick={onClose}>{result ? 'Close' : 'Cancel'}</Button>{!result && <Button disabled={!file || busy} onClick={go}>{busy ? 'Importing…' : `Import ${file?.rows.length ?? 0} rows`}</Button>}</>}>
       {result ? (
         <div className="space-y-3">
-          <p className="rounded-btn bg-success/10 px-3 py-2 text-body-md text-success">{result.text}</p>
+          <p className="rounded-btn bg-success/10 px-3 py-2 text-body-md text-success-ink">{result.text}</p>
           {result.problems.length > 0 && <div><p className="mb-1 text-body-sm font-semibold text-ink">Checked by hand, not guessed:</p><ul className="max-h-60 list-disc space-y-0.5 overflow-auto pl-5 text-body-sm text-ink-muted">{result.problems.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
           {cmr && <p className="text-body-sm text-ink-muted">Compare the Jesse Summary page with the sheet's Jesse Summary tab before switching the sheet off.</p>}
         </div>
@@ -80,7 +80,7 @@ export function ImportModal({ business, onClose, onDone }: { business: MetaBusin
           )}
           <label className={cn('flex cursor-pointer flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed px-4 py-8 text-center', file ? 'border-success/50 bg-success/5' : 'border-line hover:border-primary/50')} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) void pick(f) }}>
             <input type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(f) }} />
-            {file ? <FileSpreadsheet className="text-success" /> : <Upload className="text-ink-faint" />}
+            {file ? <FileSpreadsheet className="text-success-ink" /> : <Upload className="text-ink-faint" />}
             <span className="text-body-md font-medium text-ink">{file ? `${file.name} · ${file.rows.length} rows` : 'Drop a CSV or Excel file here, or click to choose'}</span>
             <span className="text-body-sm text-ink-muted">{cmr ? 'Google Sheets: File → Download → CSV (the Leads tab).' : 'The first row must be the column names.'}</span>
           </label>

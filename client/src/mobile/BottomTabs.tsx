@@ -75,18 +75,18 @@ export function BottomTabs({ user, onMore }: { user: CurrentUser; onMore: () => 
           const on = active === t.to
           return (
             <li key={t.to} className="min-w-0 flex-1">
-              <Link to={t.to} aria-current={on ? 'page' : undefined} className={cn('relative flex h-full flex-col items-center justify-center gap-0.5 text-[0.75rem] font-medium', on ? 'text-primary' : 'text-ink-muted active:text-ink')}>
+              <Link to={t.to} aria-current={on ? 'page' : undefined} className={cn('relative flex h-full flex-col items-center justify-center gap-0.5 text-[0.75rem] font-medium', on ? 'text-primary-ink' : 'text-ink-muted active:text-ink')}>
                 <span className={cn('flex h-7 w-14 items-center justify-center rounded-full transition-colors', on && 'bg-primary/10')}>
                   <t.icon size={22} strokeWidth={on ? 2.4 : 2} />
                 </span>
                 <span className="truncate">{t.label}</span>
-                {t.to === '/app/chat' && chat.total > 0 && <span className="absolute left-1/2 top-1 ml-1.5 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-white ring-2 ring-card">{chat.total > 99 ? '99+' : chat.total}</span>}
+                {t.to === '/app/chat' && chat.total > 0 && <span className="absolute left-1/2 top-1 ml-1.5 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-danger-on ring-2 ring-card">{chat.total > 99 ? '99+' : chat.total}</span>}
               </Link>
             </li>
           )
         })}
         <li className="min-w-0 flex-1">
-          <button type="button" onClick={onMore} className={cn('flex h-full w-full flex-col items-center justify-center gap-0.5 text-[0.75rem] font-medium active:text-ink', active ? 'text-ink-muted' : 'text-primary')} aria-label="More">
+          <button type="button" onClick={onMore} className={cn('flex h-full w-full flex-col items-center justify-center gap-0.5 text-[0.75rem] font-medium active:text-ink', active ? 'text-ink-muted' : 'text-primary-ink')} aria-label="More">
             <span className={cn('flex h-7 w-14 items-center justify-center rounded-full', !active && 'bg-primary/10')}><Menu size={22} /></span>
             <span>More</span>
           </button>

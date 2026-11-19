@@ -36,7 +36,7 @@ export default function InvoiceView() {
             <p className="text-label-md uppercase text-ink-muted">Invoice</p>
             <p className="text-headline-md tabular-nums text-ink">#{String(i.number).padStart(5, '0')}</p>
             <p className="text-body-sm text-ink-muted">{day(i.createdAt)}</p>
-            <p className={i.status === 'PAID' ? 'text-body-sm font-semibold text-success' : 'text-body-sm font-semibold text-danger'}>{i.status === 'PAID' ? `Paid ${i.paidAt ? day(i.paidAt) : ''}` : i.status === 'FAILED' ? 'Payment failed' : 'Due'}</p>
+            <p className={i.status === 'PAID' ? 'text-body-sm font-semibold text-success-ink' : 'text-body-sm font-semibold text-danger-ink'}>{i.status === 'PAID' ? `Paid ${i.paidAt ? day(i.paidAt) : ''}` : i.status === 'FAILED' ? 'Payment failed' : 'Due'}</p>
           </div>
         </div>
         <div className="mt-6">
@@ -52,7 +52,7 @@ export default function InvoiceView() {
             <tr><td className="pt-1 text-right font-semibold text-ink">Total</td><td className="pt-1 text-right text-headline-md tabular-nums text-ink">{money(i.amountCents, i.currency)}</td></tr>
           </tbody>
         </table>
-        {i.provider === 'test' && <p className="mt-6 text-body-sm text-warning">Test payment: no real money was taken.</p>}
+        {i.provider === 'test' && <p className="mt-6 text-body-sm text-warning-ink">Test payment: no real money was taken.</p>}
       </div>
     </div>
   )

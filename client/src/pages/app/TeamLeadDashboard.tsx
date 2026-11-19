@@ -109,11 +109,11 @@ export default function TeamLeadDashboard() {
           {/* Improvement summary */}
           <Card className="border-primary/20 bg-primary/5">
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink">
                 <Sparkles size={18} />
               </span>
               <div>
-                <p className="text-body-sm font-semibold uppercase tracking-wide text-primary">Improvement Summary</p>
+                <p className="text-body-sm font-semibold uppercase tracking-wide text-primary-ink">Improvement Summary</p>
                 <p className="mt-0.5 text-body-md text-ink">{data.improvement}</p>
               </div>
             </div>

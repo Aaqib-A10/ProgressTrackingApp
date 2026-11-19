@@ -52,19 +52,19 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
   async function saveViews(next: SavedView[], msg: string) {
     try { await dialerApi.savePrefs({ views: next }); setViews(next); addToast({ type: 'success', message: msg }) } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save the view') }) }
   }
-  const sel = (active: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', active ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-line bg-card text-ink')
+  const sel = (active: boolean) => cn('h-8 rounded-full border px-3 text-body-sm focus:border-primary focus:outline-none', active ? 'border-primary bg-primary/5 font-semibold text-primary-ink' : 'border-line bg-card text-ink')
 
   return (
     <div className="space-y-3">
       {/* Saved views */}
       <div className="flex flex-wrap items-center gap-1.5">
         {PRESET_VIEWS.map((v) => (
-          <button key={v.id} type="button" onClick={() => pickPreset(v.id)} title={v.hint} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-body-sm font-semibold', activeView === v.id ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink hover:bg-slate-50')}>
-            {v.name}<span className={cn('tabular-nums', activeView === v.id ? 'text-white/80' : 'text-ink-muted')}>{counts[v.id].toLocaleString()}</span>
+          <button key={v.id} type="button" onClick={() => pickPreset(v.id)} title={v.hint} className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-body-sm font-semibold', activeView === v.id ? 'border-primary bg-primary text-primary-on' : 'border-line bg-card text-ink hover:bg-slate-50')}>
+            {v.name}<span className={cn('tabular-nums', activeView === v.id ? 'text-primary-on/80' : 'text-ink-muted')}>{counts[v.id].toLocaleString()}</span>
           </button>
         ))}
         {views.map((v) => (
-          <span key={v.id} className={cn('inline-flex items-center rounded-full border text-body-sm font-semibold', activeView === v.id ? 'border-primary bg-primary text-white' : 'border-dashed border-line bg-card text-ink')}>
+          <span key={v.id} className={cn('inline-flex items-center rounded-full border text-body-sm font-semibold', activeView === v.id ? 'border-primary bg-primary text-primary-on' : 'border-dashed border-line bg-card text-ink')}>
             <button type="button" onClick={() => pickView(v)} className="py-1 pl-3 pr-1.5">{v.name}</button>
             <button type="button" onClick={() => saveViews(views.filter((x) => x.id !== v.id), `"${v.name}" removed.`)} className="rounded-full p-1 pr-2 opacity-60 hover:opacity-100" aria-label={`Remove ${v.name}`}><X size={12} /></button>
           </span>
@@ -94,7 +94,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
               {timePick && (
                 <label className="inline-flex items-center gap-1.5 text-body-sm text-ink">
                   <span className="text-ink-muted">At</span>
-                  <input type="time" value={f.callAt} onChange={(e) => e.target.value && set('callAt', e.target.value)} className="h-8 rounded-full border border-primary bg-primary/5 px-3 text-body-sm font-semibold text-primary focus:outline-none" aria-label="Pakistan time to call" />
+                  <input type="time" value={f.callAt} onChange={(e) => e.target.value && set('callAt', e.target.value)} className="h-8 rounded-full border border-primary bg-primary/5 px-3 text-body-sm font-semibold text-primary-ink focus:outline-none" aria-label="Pakistan time to call" />
                   <span className="text-ink-muted">PKT</span>
                 </label>
               )}
@@ -109,7 +109,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
           <FilterBar page="leads" defs={defs} prefs={data.prefs}
             search={<label className="relative"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" /><input value={f.q ?? ''} onChange={(e) => setF((x) => ({ ...x, q: e.target.value || undefined }))} placeholder="Name, company, phone, email or city" className="h-9 w-72 rounded-btn border border-line bg-card pl-8 pr-2 text-body-sm text-ink focus:border-primary focus:outline-none" /></label>}
             onClearAll={() => write({ preset: 'all' }, 'all')}
-            after={extra > 0 && !activeView ? <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Save size={14} /> Save view</button> : undefined} />
+            after={extra > 0 && !activeView ? <button type="button" onClick={() => setNaming(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink"><Save size={14} /> Save view</button> : undefined} />
         )
       })()}
 

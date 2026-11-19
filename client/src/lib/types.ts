@@ -39,9 +39,11 @@ export interface CurrentUser {
   memberships?: Membership[]
   avatarUrl?: string | null
   /** The company (or personal workspace) they are in (Phase 1). */
-  company?: { id: string; name: string; slug?: string; kind: 'TEAM' | 'PERSONAL'; plan: string; status: string; timeZone: string; trialEndsAt?: string | null; setupDone?: boolean; paymentsOpen?: boolean; sectionsOff?: string[]; departmentKinds?: string[] } | null
+  company?: { id: string; name: string; slug?: string; kind: 'TEAM' | 'PERSONAL'; plan: string; status: string; timeZone: string; trialEndsAt?: string | null; setupDone?: boolean; paymentsOpen?: boolean; sectionsOff?: string[]; departmentKinds?: string[] ; theme?: string | null; brandColor?: string | null } | null
   /** Signed up on their own and has not confirmed the email yet (step 7). */
   emailCheckPending?: boolean
+  /** The colour theme this person picked (src/theme/themes); null: the company's (company.theme). */
+  uiTheme?: string | null
   /** A role the company made itself, on top of `role`. */
   customRole?: { id: string; name: string } | null
   /** Extra powers: 'finance', 'company.settings', 'holidays.manage'. */

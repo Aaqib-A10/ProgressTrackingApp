@@ -32,7 +32,7 @@ export default function TestCheckout() {
   return (
     <div className="mx-auto max-w-md space-y-4 pt-6">
       <Card>
-        <div className="flex items-center gap-2 text-warning"><FlaskConical size={18} /><span className="text-body-sm font-semibold uppercase tracking-wide">Test checkout</span></div>
+        <div className="flex items-center gap-2 text-warning-ink"><FlaskConical size={18} /><span className="text-body-sm font-semibold uppercase tracking-wide">Test checkout</span></div>
         <h1 className="mt-2 text-headline-lg text-ink">{plan[0].toUpperCase() + plan.slice(1)}, paid {interval === 'year' ? 'yearly' : 'monthly'}</h1>
         <p className="mt-1 text-body-md text-ink-muted">No real money moves here. On the live server this is Stripe or Paddle's own payment page.</p>
         <div className="mt-5 grid gap-2">

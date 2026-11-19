@@ -70,7 +70,7 @@ function Hero({ free }: { free: boolean }) {
           <SecondaryCta to="/product">See how it works</SecondaryCta>
         </div>
         <p className="mk-up mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[13.5px] text-ink-muted" style={{ '--mk-delay': '780ms' } as CSSProperties}>
-          {[free ? 'Free while we launch' : '14 days free', 'No card needed', 'Ready in minutes'].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><IconCheck size={14} className="text-success" />{t}</span>)}
+          {[free ? 'Free while we launch' : '14 days free', 'No card needed', 'Ready in minutes'].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><IconCheck size={14} className="text-success-ink" />{t}</span>)}
         </p>
       </Container>
       <Container className="relative pb-16 sm:pb-28">
@@ -229,7 +229,7 @@ function Reach() {
           <Reveal className="relative flex flex-col overflow-hidden rounded-[22px] border border-line bg-card">
             <div className="p-7 pb-0">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><IconPhone size={22} /></span>
+                <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary-ink ring-1 ring-primary/20"><IconPhone size={22} /></span>
                 <h3 className="text-[19px] font-semibold tracking-[-0.015em] text-ink">The whole app on your phone</h3>
               </div>
               <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">Check in, move a deal, call a contact and answer the team chat from your phone. Add Metriq to your home screen and it opens like an app, with notifications. iPhone and Android store apps are on the way.</p>
@@ -243,7 +243,7 @@ function Reach() {
           <Reveal delay={120} className="relative flex flex-col overflow-hidden rounded-[22px] border border-line bg-card">
             <div className="p-7 pb-0">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><IconConnect size={22} /></span>
+                <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary-ink ring-1 ring-primary/20"><IconConnect size={22} /></span>
                 <h3 className="text-[19px] font-semibold tracking-[-0.015em] text-ink">Connected to the AI you use</h3>
               </div>
               <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">Ask your assistant who to call first, add a lead or tick off a to-do. It works as you: it sees only what you can see, and everything it does shows under your name.</p>
@@ -298,7 +298,7 @@ function Bento() {
               <div key={b.key} className="mk-bento-in group relative flex min-h-[360px] flex-col overflow-hidden rounded-[22px] border border-line bg-bg p-7" style={{ animationDelay: `${n * 120}ms` }}>
                 <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
                 <div className="relative flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary ring-1 ring-primary/20"><Icon size={22} /></span>
+                  <span className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-gradient-to-b from-primary/15 to-primary/5 text-primary-ink ring-1 ring-primary/20"><Icon size={22} /></span>
                   <h3 className="text-[19px] font-semibold tracking-[-0.015em] text-ink">{b.title}</h3>
                 </div>
                 <p className="relative mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">{b.text}</p>
@@ -426,7 +426,7 @@ function Fit() {
         <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
           <Reveal className="rounded-[20px] border border-success/30 bg-success/[0.05] p-7">
             <h3 className="text-[17px] font-semibold text-ink">A good fit</h3>
-            <ul className="mt-4 space-y-3">{FIT.good.map((t) => <li key={t} className="flex gap-2.5 text-[14.5px] leading-relaxed text-ink"><IconCheck size={17} className="mt-0.5 shrink-0 text-success" />{t}</li>)}</ul>
+            <ul className="mt-4 space-y-3">{FIT.good.map((t) => <li key={t} className="flex gap-2.5 text-[14.5px] leading-relaxed text-ink"><IconCheck size={17} className="mt-0.5 shrink-0 text-success-ink" />{t}</li>)}</ul>
           </Reveal>
           <Reveal delay={120} className="rounded-[20px] border border-line bg-card p-7">
             <h3 className="text-[17px] font-semibold text-ink">Not the right fit yet</h3>
@@ -452,12 +452,12 @@ export function PlanCards({ yearly }: { yearly: boolean }) {
             <p className="mt-1.5 min-h-[40px] text-[14px] leading-snug text-ink-muted">{p.blurb}</p>
             <p className="mt-5 flex items-end gap-1.5">
               <span className={cn('text-[42px] font-semibold leading-none tracking-[-0.03em] tabular-nums', free ? 'text-ink-faint line-through decoration-2' : 'text-ink')}>${Number.isInteger(price) ? price : price.toFixed(2)}</span>
-              {free ? <span className="pb-1 text-[15px] font-semibold text-success">Free while we launch</span> : <span className="pb-1 text-[14px] text-ink-muted">/ month{p.people > 1 ? ', whole team' : ''}</span>}
+              {free ? <span className="pb-1 text-[15px] font-semibold text-success-ink">Free while we launch</span> : <span className="pb-1 text-[14px] text-ink-muted">/ month{p.people > 1 ? ', whole team' : ''}</span>}
             </p>
             <p className="mt-1.5 text-[13px] text-ink-muted">{free ? `Then $${p.monthly} a month or $${p.yearly} a year` : yearly ? `$${p.yearly} billed once a year` : `or $${p.yearly} a year (2 months free)`} · {p.people === 1 ? 'just you' : `up to ${p.people} people`}</p>
             <Link to="/start" className={cn('mt-6 inline-flex h-11 items-center justify-center rounded-btn text-[15px] font-semibold transition-colors', hl ? 'bg-primary text-white hover:bg-primary-700' : 'border border-line bg-bg text-ink hover:bg-slate-50')}>{free ? 'Start free' : 'Start 14-day trial'}</Link>
             <ul className="mt-6 space-y-2.5 border-t border-line pt-6">
-              {p.includes.map((f) => <li key={f} className="flex gap-2.5 text-[14px] text-ink"><IconCheck size={16} className="mt-0.5 shrink-0 text-success" />{f}</li>)}
+              {p.includes.map((f) => <li key={f} className="flex gap-2.5 text-[14px] text-ink"><IconCheck size={16} className="mt-0.5 shrink-0 text-success-ink" />{f}</li>)}
             </ul>
           </div>
         )
@@ -487,7 +487,7 @@ function PricingPreview({ free }: { free: boolean }) {
           {!free && <BillingToggle yearly={yearly} onChange={setYearly} />}
         </div>
         <div className="mt-10"><PlanCards yearly={yearly} /></div>
-        <p className="mt-6 text-center text-[13.5px] text-ink-muted">{free ? 'Prices in US dollars, for when online payment opens. We will write to you before then.' : 'Prices in US dollars.'} <Link to="/pricing" className="font-semibold text-primary hover:underline">Compare plans</Link></p>
+        <p className="mt-6 text-center text-[13.5px] text-ink-muted">{free ? 'Prices in US dollars, for when online payment opens. We will write to you before then.' : 'Prices in US dollars.'} <Link to="/pricing" className="font-semibold text-primary-ink hover:underline">Compare plans</Link></p>
       </Container>
     </section>
   )
@@ -512,9 +512,9 @@ function Origin() {
               const Icon = DAY_ICON[x.icon]
               return (
                 <li key={x.time} className={cn('mk-reveal relative flex gap-4 rounded-[12px] p-2', seen && 'mk-in')} style={{ '--mk-delay': `${i * 300}ms` } as CSSProperties}>
-                  <span className="relative z-[1] flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line bg-card text-primary shadow-xs"><Icon size={18} /></span>
+                  <span className="relative z-[1] flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line bg-card text-primary-ink shadow-xs"><Icon size={18} /></span>
                   <span className="pt-1">
-                    <span className="flex items-baseline gap-2"><span className="text-[12.5px] font-semibold tabular-nums text-primary">{x.time}</span><span className="text-[15px] font-semibold text-ink">{x.title}</span></span>
+                    <span className="flex items-baseline gap-2"><span className="text-[12.5px] font-semibold tabular-nums text-primary-ink">{x.time}</span><span className="text-[15px] font-semibold text-ink">{x.title}</span></span>
                     <span className="mt-0.5 block text-[14px] text-ink-muted">{x.text}</span>
                   </span>
                 </li>
@@ -563,7 +563,7 @@ function Faq({ free }: { free: boolean }) {
                 <div>
                   <p className="text-[15px] font-semibold text-ink">Something else on your mind?</p>
                   <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">Start free and write to us from the Help button inside Metriq. A person answers, usually the same day.</p>
-                  <Link to="/start" className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-primary hover:underline">Start free <IconArrow size={15} /></Link>
+                  <Link to="/start" className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-primary-ink hover:underline">Start free <IconArrow size={15} /></Link>
                 </div>
               </div>
             </div>
@@ -576,7 +576,7 @@ function Faq({ free }: { free: boolean }) {
               <li key={f.q} className={cn('group relative overflow-hidden rounded-[16px] border bg-bg transition-all duration-300', on ? 'border-primary/30 shadow-[0_18px_40px_-26px_rgb(var(--primary)/0.6)]' : 'border-line hover:border-line-strong')}>
                 <span aria-hidden className={cn('absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-primary to-cyan-500 transition-opacity duration-300', on ? 'opacity-100' : 'opacity-0')} />
                 <button type="button" aria-expanded={on} onClick={() => setOpen(on ? null : f.q)} className="flex w-full items-center gap-4 px-5 py-4 text-left">
-                  <span className={cn('w-6 shrink-0 text-[12.5px] font-semibold tabular-nums transition-colors', on ? 'text-primary' : 'text-ink-faint')}>{String(i + 1).padStart(2, '0')}</span>
+                  <span className={cn('w-6 shrink-0 text-[12.5px] font-semibold tabular-nums transition-colors', on ? 'text-primary-ink' : 'text-ink-faint')}>{String(i + 1).padStart(2, '0')}</span>
                   <span className="flex-1 text-[15.5px] font-medium text-ink">{f.q}</span>
                   <span aria-hidden className={cn('relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-all duration-300', on ? 'rotate-180 border-primary bg-primary text-white' : 'border-line text-ink-muted group-hover:border-line-strong')}>
                     <span className="absolute h-[1.5px] w-3 rounded bg-current" />

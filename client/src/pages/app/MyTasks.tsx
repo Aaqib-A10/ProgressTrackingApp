@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, CheckSquare, Columns3, ExternalLink, List as ListIcon, ListChecks, Search, Send, X } from 'lucide-react'
@@ -10,6 +10,7 @@ import { useToast } from '../../components/ui/Toast'
 import { useAuth } from '../../lib/auth'
 import { apiErrorText } from '../../lib/api'
 import { cn } from '../../lib/cn'
+import { role } from '../../theme/css'
 
 /**
  * /app/tasks — every task given to me (or that I gave to others), across all projects and boards,
@@ -24,6 +25,9 @@ type Row =
   | { kind: 'other'; id: string; other: PendingTask; category: ColumnCategory }
 
 const CAT_ORDER: Record<ColumnCategory, number> = { TODO: 0, IN_PROGRESS: 1, DONE: 2 }
+type StatusColumn = { name: string; category: ColumnCategory; position: number; color: string | null }
+/** The columns the board always shows, even with nothing in them (the default project columns, server lib/pm/tasks.ts). */
+const MAIN_STAGES: [string, ColumnCategory, number][] = [['To Do', 'TODO', 1], ['In Progress', 'IN_PROGRESS', 2], ['In Review', 'IN_PROGRESS', 3], ['Done', 'DONE', 5]]
 const SOURCE_LABEL: Record<string, string> = { ecommerce: 'E-commerce', marketing: 'Marketing' }
 const VIEW_KEY = 'pt.myTasks.view'
 const readView = (): 'board' | 'list' => { try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'board' } catch { return 'board' } }
@@ -84,7 +88,7 @@ export default function MyTasks() {
     return out
   }, [cards, summary, scope])
 
-  const projects = useMemo(() => [...new Map(rows.map((r) => [rowProject(r), r.kind === 'project' ? r.card.project.color : '#94A3B8'])).entries()].sort((a, b) => a[0].localeCompare(b[0])), [rows])
+  const projects = useMemo(() => [...new Map(rows.map((r) => [rowProject(r), r.kind === 'project' ? r.card.project.color : role('neutral-400')])).entries()].sort((a, b) => a[0].localeCompare(b[0])), [rows])
 
   const today = new Date().toDateString()
   const shown = useMemo(() => rows.filter((r) => {
@@ -104,23 +108,31 @@ export default function MyTasks() {
   const filtered = !!(q || project || priority || quick || hideDone)
   const clear = () => { setQ(''); setProject(''); setPriority(''); setQuick(''); setHideDone(false) }
 
-  // Board columns: every status name in use, in the order of their category, then position.
+  // Board columns: the main stages always, every status that has a task, and every column already shown on this
+  // visit. A column never disappears when its last card moves out (or a filter hides its cards): it stays, empty.
+  const seenColumns = useRef(new Map<string, StatusColumn>())
+  useEffect(() => { seenColumns.current.clear() }, [scope])
   const statusColumns = useMemo(() => {
-    const m = new Map<string, { name: string; category: ColumnCategory; position: number; color: string | null }>()
-    for (const r of shown) {
-      const name = rowStatus(r)
-      const col = r.kind === 'project' ? columns[r.card.project.key]?.find((c) => c.id === r.card.columnId) : null
-      const key = name.toLowerCase()
+    const m = new Map<string, StatusColumn>()
+    const put = (cand: StatusColumn) => {
+      const key = cand.name.toLowerCase()
       const cur = m.get(key)
-      const cand = { name, category: rowCategory(r), position: col?.position ?? 50, color: col?.color ?? null }
-      if (!cur || (cand.position < cur.position && cand.category === cur.category)) m.set(key, cur ? { ...cur, position: cand.position } : cand)
+      if (!cur) { m.set(key, cand); return }
+      m.set(key, {
+        ...cur,
+        position: cand.category === cur.category ? Math.min(cur.position, cand.position) : cur.position,
+        color: cur.color ?? cand.color,
+      })
     }
-    // Always show the three main stages, even when empty.
-    for (const [name, category] of [['To Do', 'TODO'], ['In Progress', 'IN_PROGRESS'], ['Done', 'DONE']] as const) {
-      if (![...m.values()].some((x) => x.category === category)) m.set(name.toLowerCase(), { name, category, position: 0, color: null })
+    for (const [name, category, position] of MAIN_STAGES) put({ name, category, position, color: null })
+    for (const c of seenColumns.current.values()) put(c)
+    for (const r of rows) {
+      const col = r.kind === 'project' ? columns[r.card.project.key]?.find((c) => c.id === r.card.columnId) : null
+      put({ name: rowStatus(r), category: rowCategory(r), position: col?.position ?? 50, color: col?.color ?? null })
     }
+    for (const [k, v] of m) seenColumns.current.set(k, v)
     return [...m.values()].sort((a, b) => CAT_ORDER[a.category] - CAT_ORDER[b.category] || a.position - b.position || a.name.localeCompare(b.name))
-  }, [shown, columns])
+  }, [rows, columns])
 
   const replaceCard = (c: TaskCard) => setCards((cur) => (cur ?? []).map((x) => (x.id === c.id ? { ...x, ...c } : x)))
 
@@ -164,8 +176,8 @@ export default function MyTasks() {
           <p className="mt-0.5 text-body-md text-ink-muted">{scope === 'mine' ? 'Everything given to you, across every project and board. Drag a card to change its status.' : 'Tasks you gave to other people: open ones, and the ones finished lately.'}</p>
         </div>
         <div className="inline-flex rounded-btn border border-line bg-card p-0.5 shadow-xs">
-          <button type="button" onClick={() => setParam({ scope: null })} className={cn('inline-flex h-8 items-center gap-1.5 rounded-[6px] px-3 text-body-md font-medium', scope === 'mine' ? 'bg-primary/10 text-primary' : 'text-ink-muted hover:text-ink')}><CheckSquare size={15} />Assigned to me</button>
-          <button type="button" onClick={() => setParam({ scope: 'byme' })} className={cn('inline-flex h-8 items-center gap-1.5 rounded-[6px] px-3 text-body-md font-medium', scope === 'byme' ? 'bg-primary/10 text-primary' : 'text-ink-muted hover:text-ink')}><Send size={14} />Assigned by me</button>
+          <button type="button" onClick={() => setParam({ scope: null })} className={cn('inline-flex h-8 items-center gap-1.5 rounded-[6px] px-3 text-body-md font-medium', scope === 'mine' ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:text-ink')}><CheckSquare size={15} />Assigned to me</button>
+          <button type="button" onClick={() => setParam({ scope: 'byme' })} className={cn('inline-flex h-8 items-center gap-1.5 rounded-[6px] px-3 text-body-md font-medium', scope === 'byme' ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:text-ink')}><Send size={14} />Assigned by me</button>
         </div>
       </div>
 
@@ -188,11 +200,11 @@ export default function MyTasks() {
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks" className="h-8 w-full rounded-btn border border-line bg-card pl-8 pr-2.5 text-body-md placeholder:text-ink-faint" />
         </div>
-        <select value={project} onChange={(e) => setProject(e.target.value)} className={cn('h-8 rounded-btn border bg-card px-2 text-body-md', project ? 'border-primary text-primary' : 'border-line text-ink')} aria-label="Project">
+        <select value={project} onChange={(e) => setProject(e.target.value)} className={cn('h-8 rounded-btn border bg-card px-2 text-body-md', project ? 'border-primary text-primary-ink' : 'border-line text-ink')} aria-label="Project">
           <option value="">All projects</option>
           {projects.map(([name]) => <option key={name} value={name}>{name}</option>)}
         </select>
-        <select value={priority} onChange={(e) => setPriority(e.target.value as PmPriority | '')} className={cn('h-8 rounded-btn border bg-card px-2 text-body-md', priority ? 'border-primary text-primary' : 'border-line text-ink')} aria-label="Priority">
+        <select value={priority} onChange={(e) => setPriority(e.target.value as PmPriority | '')} className={cn('h-8 rounded-btn border bg-card px-2 text-body-md', priority ? 'border-primary text-primary-ink' : 'border-line text-ink')} aria-label="Priority">
           <option value="">Any priority</option>
           {(['URGENT', 'HIGH', 'MEDIUM', 'LOW'] as PmPriority[]).map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
         </select>
@@ -211,7 +223,7 @@ export default function MyTasks() {
             <option value="due">Group by due date</option>
           </select>
         )}
-        {filtered && <button type="button" onClick={clear} className="inline-flex h-8 items-center gap-1 rounded-btn px-2 text-body-md font-medium text-primary hover:bg-primary/5"><X size={14} />Clear filters</button>}
+        {filtered && <button type="button" onClick={clear} className="inline-flex h-8 items-center gap-1 rounded-btn px-2 text-body-md font-medium text-primary-ink hover:bg-primary/5"><X size={14} />Clear filters</button>}
         <span className="ml-auto text-body-sm text-ink-muted">{cards ? `${shown.length} of ${rows.length}` : 'Loading…'}</span>
       </div>
 
@@ -219,7 +231,7 @@ export default function MyTasks() {
         <div className="grid gap-3 md:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="h-64 animate-pulse rounded-card bg-slate-100" />)}</div>
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-card border border-line bg-card py-14 text-center">
-          <CheckCircle2 size={26} className="text-success" />
+          <CheckCircle2 size={26} className="text-success-ink" />
           <p className="text-body-md text-ink-muted">{scope === 'mine' ? 'You have no open tasks. Nice work.' : "You haven't given project tasks to others yet."}</p>
         </div>
       ) : view === 'board' ? (
@@ -250,7 +262,7 @@ export default function MyTasks() {
 }
 
 function Tile({ icon, label, value, tone = 'primary', active, onClick }: { icon: ReactNode; label: string; value: number; tone?: 'primary' | 'warning' | 'danger' | 'success'; active?: boolean; onClick?: () => void }) {
-  const toneCls = { primary: 'text-primary', warning: 'text-warning', danger: 'text-danger', success: 'text-success' }[tone]
+  const toneCls = { primary: 'text-primary-ink', warning: 'text-warning-ink', danger: 'text-danger-ink', success: 'text-success-ink' }[tone]
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag type={onClick ? 'button' : undefined} onClick={onClick} className={cn('rounded-card border bg-card px-4 py-3 text-left shadow-xs transition-all', onClick && 'hover:-translate-y-px hover:shadow-sm', active ? 'border-primary ring-2 ring-primary/15' : 'border-line')}>
@@ -262,7 +274,7 @@ function Tile({ icon, label, value, tone = 'primary', active, onClick }: { icon:
 
 function ViewTab({ on, onClick, icon, children }: { on: boolean; onClick: () => void; icon: ReactNode; children: ReactNode }) {
   return (
-    <button type="button" role="tab" aria-selected={on} onClick={onClick} className={cn('relative inline-flex h-8 items-center gap-1.5 rounded-btn px-2.5 text-body-md font-medium transition-colors', on ? 'bg-primary/10 text-primary' : 'text-ink-muted hover:bg-slate-100 hover:text-ink')}>
+    <button type="button" role="tab" aria-selected={on} onClick={onClick} className={cn('relative inline-flex h-8 items-center gap-1.5 rounded-btn px-2.5 text-body-md font-medium transition-colors', on ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:bg-slate-100 hover:text-ink')}>
       {icon}{children}
     </button>
   )
@@ -366,12 +378,12 @@ function CardBody({ row, showAssignees }: { row: Row; showAssignees: boolean }) 
       <p className="line-clamp-3 text-body-md font-medium leading-snug text-ink">{rowTitle(row)}</p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <ProjectChip row={row} />
-        {row.kind === 'project' ? <DueChip dueAt={row.card.dueAt} category={row.card.category} compact /> : row.other.dueDate && <span className={cn('text-[11px] font-medium', row.other.overdue ? 'text-danger' : 'text-ink-muted')}>{row.other.overdue ? 'Overdue · ' : 'Due '}{row.other.dueDate}</span>}
+        {row.kind === 'project' ? <DueChip dueAt={row.card.dueAt} category={row.card.category} compact /> : row.other.dueDate && <span className={cn('text-[11px] font-medium', row.other.overdue ? 'text-danger-ink' : 'text-ink-muted')}>{row.other.overdue ? 'Overdue · ' : 'Due '}{row.other.dueDate}</span>}
       </div>
       <div className="mt-2.5 flex items-center gap-2">
         {row.kind === 'project' ? (
           <>
-            <CheckSquare size={13} className="text-primary" />
+            <CheckSquare size={13} className="text-primary-ink" />
             <span className="font-mono text-[11.5px] font-medium text-ink-muted">{row.card.code}</span>
             <span className="ml-auto flex items-center gap-2">
               <span title={`${PRIORITY_META[row.card.priority].label} priority`}><PriorityGlyph priority={row.card.priority} /></span>
@@ -387,7 +399,7 @@ function CardBody({ row, showAssignees }: { row: Row; showAssignees: boolean }) 
 }
 
 function ProjectChip({ row }: { row: Row }) {
-  const color = row.kind === 'project' ? row.card.project.color : '#94A3B8'
+  const color = row.kind === 'project' ? row.card.project.color : role('neutral-400')
   return (
     <span className="inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-px text-[11px] font-medium" style={{ borderColor: `${color}55`, color, background: `${color}12` }}>
       <span className="truncate">{rowProject(row)}</span>
@@ -476,7 +488,7 @@ function GroupRows({ title, rows, columns, onOpen, onStatus, showAssignees }: { 
       {title && (
         <tr className="bg-slate-50 dark:bg-white/[0.03]">
           <td colSpan={9} className="px-4 py-2">
-            <button type="button" onClick={() => setOpen(!open)} className={cn('inline-flex items-center gap-2 text-body-sm font-semibold', title === 'Overdue' ? 'text-danger' : 'text-ink')}>
+            <button type="button" onClick={() => setOpen(!open)} className={cn('inline-flex items-center gap-2 text-body-sm font-semibold', title === 'Overdue' ? 'text-danger-ink' : 'text-ink')}>
               <span className={cn('inline-block transition-transform', open ? 'rotate-90' : '')}>›</span>{title}<span className="font-normal text-ink-faint">{rows.length}</span>
             </button>
           </td>
@@ -486,13 +498,13 @@ function GroupRows({ title, rows, columns, onOpen, onStatus, showAssignees }: { 
         const cols = r.kind === 'project' ? columns[r.card.project.key] ?? [] : []
         return (
           <tr key={r.id} onClick={() => onOpen(r)} className={cn('border-b border-line/70 transition-colors last:border-0 hover:bg-slate-50 dark:hover:bg-white/[0.03]', r.kind === 'project' && 'cursor-pointer')}>
-            <td className="whitespace-nowrap px-4 py-2">{r.kind === 'project' ? <span className="inline-flex items-center gap-1.5 font-mono text-[12px] text-ink-muted"><CheckSquare size={13} className="text-primary" />{r.card.code}</span> : <Link to={r.other.link} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-body-sm text-primary hover:underline"><ExternalLink size={12} />Open</Link>}</td>
+            <td className="whitespace-nowrap px-4 py-2">{r.kind === 'project' ? <span className="inline-flex items-center gap-1.5 font-mono text-[12px] text-ink-muted"><CheckSquare size={13} className="text-primary-ink" />{r.card.code}</span> : <Link to={r.other.link} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-body-sm text-primary-ink hover:underline"><ExternalLink size={12} />Open</Link>}</td>
             <td className="max-w-[520px] px-3 py-2"><span className="line-clamp-1 font-medium text-ink" title={rowTitle(r)}>{rowTitle(r)}</span></td>
             <td className="whitespace-nowrap px-3 py-2"><ProjectChip row={r} /></td>
             <td className="whitespace-nowrap px-3 py-2" onClick={(e) => e.stopPropagation()}>
               {r.kind === 'project' && cols.length ? (
                 <select value={r.card.columnId} onChange={(e) => { const c = cols.find((x) => x.id === e.target.value); if (c) onStatus(r.card, c) }}
-                  className={cn('h-7 rounded-md border-0 px-2 text-[12px] font-semibold uppercase tracking-wide', r.card.category === 'DONE' ? 'bg-success/15 text-success' : r.card.category === 'IN_PROGRESS' ? 'bg-primary/10 text-primary' : 'bg-slate-200/70 text-ink-muted dark:bg-white/10')}>
+                  className={cn('h-7 rounded-md border-0 px-2 text-[12px] font-semibold uppercase tracking-wide', r.card.category === 'DONE' ? 'bg-success/15 text-success-ink' : r.card.category === 'IN_PROGRESS' ? 'bg-primary/10 text-primary-ink' : 'bg-slate-200/70 text-ink-muted dark:bg-white/10')}>
                   {cols.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               ) : (
@@ -500,7 +512,7 @@ function GroupRows({ title, rows, columns, onOpen, onStatus, showAssignees }: { 
               )}
             </td>
             <td className="whitespace-nowrap px-3 py-2">{r.kind === 'project' ? <span className="inline-flex items-center gap-1.5 text-body-sm text-ink-muted"><PriorityGlyph priority={r.card.priority} />{PRIORITY_META[r.card.priority].label}</span> : <span className="text-ink-faint">—</span>}</td>
-            <td className="whitespace-nowrap px-3 py-2">{r.kind === 'project' ? (r.card.dueAt ? <DueChip dueAt={r.card.dueAt} category={r.card.category} compact /> : <span className="text-ink-faint">—</span>) : r.other.dueDate ? <span className={cn('text-body-sm', r.other.overdue ? 'font-semibold text-danger' : 'text-ink-muted')}>{r.other.dueDate}</span> : <span className="text-ink-faint">—</span>}</td>
+            <td className="whitespace-nowrap px-3 py-2">{r.kind === 'project' ? (r.card.dueAt ? <DueChip dueAt={r.card.dueAt} category={r.card.category} compact /> : <span className="text-ink-faint">—</span>) : r.other.dueDate ? <span className={cn('text-body-sm', r.other.overdue ? 'font-semibold text-danger-ink' : 'text-ink-muted')}>{r.other.dueDate}</span> : <span className="text-ink-faint">—</span>}</td>
             <td className="whitespace-nowrap px-3 py-2">{r.kind === 'project' ? (showAssignees ? <AvatarStack people={r.card.assignees} size={22} /> : <span className="inline-flex items-center gap-2 text-body-sm text-ink"><AvatarStack people={[r.card.createdBy]} size={22} />{r.card.createdBy.name}</span>) : <span className="text-ink-faint">—</span>}</td>
             <td className="whitespace-nowrap px-3 py-2 text-body-sm text-ink-muted">{r.kind === 'project' ? fmtShort(r.card.createdAt) : ''}</td>
             <td className="whitespace-nowrap px-3 py-2 text-body-sm text-ink-muted">{r.kind === 'project' ? fmtShort(r.card.updatedAt) : ''}</td>

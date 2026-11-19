@@ -95,7 +95,7 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-body-sm">
               <RegionBadge lead={l} now={now} />
               {win && <span className="text-ink-muted">{win.localTime} there</span>}
-              {win && <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', win.open ? (win.closingSoon ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success') : 'bg-slate-100 text-ink-muted')}>{win.open ? (win.prime ? 'Open · prime time' : win.closingSoon ? 'Closing soon' : 'Open now') : 'Closed now'}</span>}
+              {win && <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', win.open ? (win.closingSoon ? 'bg-warning/10 text-warning-ink' : 'bg-success/10 text-success-ink') : 'bg-slate-100 text-ink-muted')}>{win.open ? (win.prime ? 'Open · prime time' : win.closingSoon ? 'Closing soon' : 'Open now') : 'Closed now'}</span>}
               <StatusPill lead={l} />
               <span className="text-[11px] text-ink-muted">Stage {l.stage}</span>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-ink" title="Industry">{l.industry ?? 'No industry'}</span>
@@ -161,8 +161,8 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
                 <StatusChanger lead={l} statusHere={d.lead.statusHere ?? null} statusHereFrom={d.lead.statusHereFrom ?? null} settings={settings} onDone={changed} />
                 {(l.snoozeUntil && new Date(l.snoozeUntil) > now) && <p className="py-0.5 text-ink">Snoozed until {new Date(l.snoozeUntil).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
                 {l.callLaterAt && <p className="py-0.5 text-ink">Call back {new Date(l.callLaterAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
-                {l.followUpDropped && <p className="py-0.5 text-ink-muted">Dropped from follow-ups until the status changes. <button type="button" className="font-semibold text-primary" onClick={() => dialerApi.followUpBulk([l.id], 'UNDROP').then(changed)}>Undo</button></p>}
-                {(l.snoozeUntil || l.callLaterAt) && <button type="button" className="text-body-sm font-semibold text-primary" onClick={() => dialerApi.action(l.id, { kind: 'CLEAR' }).then(changed)}>Clear snooze / call back</button>}
+                {l.followUpDropped && <p className="py-0.5 text-ink-muted">Dropped from follow-ups until the status changes. <button type="button" className="font-semibold text-primary-ink" onClick={() => dialerApi.followUpBulk([l.id], 'UNDROP').then(changed)}>Undo</button></p>}
+                {(l.snoozeUntil || l.callLaterAt) && <button type="button" className="text-body-sm font-semibold text-primary-ink" onClick={() => dialerApi.action(l.id, { kind: 'CLEAR' }).then(changed)}>Clear snooze / call back</button>}
                 <p className="mb-1 mt-2 text-[11px] font-semibold uppercase text-ink-muted">Status path since Metriq started tracking</p>
                 <ol className="flex flex-wrap items-center gap-1.5">
                   {d.changes.map((c, i) => (
@@ -235,7 +235,7 @@ function Group({ name, title, tag, defaultOpen = true, action, children, open: f
 }
 
 function Tag({ tone, children }: { tone: 'crm' | 'here'; children: ReactNode }) {
-  return <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase', tone === 'crm' ? 'bg-slate-100 text-ink-muted' : 'bg-primary/10 text-primary')}>{children}</span>
+  return <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase', tone === 'crm' ? 'bg-slate-100 text-ink-muted' : 'bg-primary/10 text-primary-ink')}>{children}</span>
 }
 
 function Field({ k, v, copy, link }: { k: string; v: string | null | undefined; copy?: boolean; link?: string }) {
@@ -243,7 +243,7 @@ function Field({ k, v, copy, link }: { k: string; v: string | null | undefined; 
   return (
     <div className="flex items-center gap-2 py-1">
       <span className="w-28 shrink-0 text-ink-muted">{k}</span>
-      {v ? (link ? <a href={link} target="_blank" rel="noreferrer noopener" className="inline-flex min-w-0 items-center gap-1 break-all text-primary hover:underline">{v}<ExternalLink size={11} className="shrink-0" /></a> : <span className="min-w-0 break-words text-ink">{v}</span>) : <span className="text-ink-muted">—</span>}
+      {v ? (link ? <a href={link} target="_blank" rel="noreferrer noopener" className="inline-flex min-w-0 items-center gap-1 break-all text-primary-ink hover:underline">{v}<ExternalLink size={11} className="shrink-0" /></a> : <span className="min-w-0 break-words text-ink">{v}</span>) : <span className="text-ink-muted">—</span>}
       {v && copy && <button type="button" onClick={() => navigator.clipboard?.writeText(v).then(() => addToast({ type: 'success', message: `${v} copied.` })).catch(() => {})} className="rounded p-1 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label={`Copy ${k}`}><Copy size={12} /></button>}
     </div>
   )
@@ -296,9 +296,9 @@ function AddedHere({ lead, settings, onSave }: { lead: DialerLead; settings: Dia
 }
 
 const SOURCE: Record<NoteSource, { label: string; cls: string }> = {
-  EARTHZONE: { label: 'Earth Zone', cls: 'bg-warning/15 text-warning' },
-  METRIQ: { label: 'Metriq', cls: 'bg-primary/10 text-primary' },
-  CLAUDE: { label: 'Claude', cls: 'bg-accent/15 text-accent' },
+  EARTHZONE: { label: 'Earth Zone', cls: 'bg-warning/15 text-warning-ink' },
+  METRIQ: { label: 'Metriq', cls: 'bg-primary/10 text-primary-ink' },
+  CLAUDE: { label: 'Claude', cls: 'bg-accent/15 text-highlight-ink' },
 }
 /** Where a note came from: Earth Zone (the sync), Metriq, or Claude (the connector). */
 export function SourceChip({ source }: { source?: NoteSource | string | null }) {
@@ -311,7 +311,7 @@ function EzMarker({ ezText }: { ezText: string }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button type="button" onClick={() => setOpen((o) => !o)} title={`In Earth Zone: ${ezText}`} className="rounded-full border border-dashed border-warning/60 px-1.5 text-[10.5px] font-semibold text-warning">edited here, differs from Earth Zone</button>
+      <button type="button" onClick={() => setOpen((o) => !o)} title={`In Earth Zone: ${ezText}`} className="rounded-full border border-dashed border-warning/60 px-1.5 text-[10.5px] font-semibold text-warning-ink">edited here, differs from Earth Zone</button>
       {open && <span className="basis-full whitespace-pre-wrap rounded-btn bg-warning/5 px-2 py-1 text-[12px] text-ink"><b>In Earth Zone:</b> {ezText}</span>}
     </>
   )
@@ -364,7 +364,7 @@ function NotesGroup({ lead, notes, meId, canEdit, deletedEz, settings, focusKey,
                 <>
                   <p className="whitespace-pre-wrap break-words text-ink">{n.text}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-muted">
-                    {n.pinned && <span className="inline-flex items-center gap-0.5 font-semibold text-primary"><Pin size={10} />Pinned</span>}
+                    {n.pinned && <span className="inline-flex items-center gap-0.5 font-semibold text-primary-ink"><Pin size={10} />Pinned</span>}
                     <SourceChip source={n.source} />
                     <span>{n.author} · {fmt(n.createdAt)}</span>
                     {n.editedAt && <span title={`Edited ${fmt(n.editedAt)}`}>edited</span>}
@@ -373,8 +373,8 @@ function NotesGroup({ lead, notes, meId, canEdit, deletedEz, settings, focusKey,
                       <button type="button" onClick={() => update(n.id, { pinned: !n.pinned })} className="rounded p-1 hover:text-ink" title={n.pinned ? 'Unpin' : 'Pin to the top'} aria-label={n.pinned ? 'Unpin' : 'Pin'}>{n.pinned ? <PinOff size={12} /> : <Pin size={12} />}</button>
                       {(n.authorId === meId || canEdit) && <button type="button" onClick={() => setEditing({ id: n.id, text: n.text })} className="rounded p-1 hover:text-ink" title="Edit (shows as edited)" aria-label="Edit note"><Pencil size={12} /></button>}
                       {(n.authorId === meId || canEdit) && (deleting === n.id
-                        ? <span className="flex items-center gap-1.5"><span>Delete?</span><button type="button" onClick={() => remove(n.id)} className="font-semibold text-danger">Yes</button><button type="button" onClick={() => setDeleting(null)} className="font-semibold hover:text-ink">No</button></span>
-                        : <button type="button" onClick={() => setDeleting(n.id)} className="rounded p-1 hover:text-danger" title={n.source === 'EARTHZONE' ? 'Delete (stays deleted after any Earth Zone sync)' : 'Delete'} aria-label="Delete note"><Trash2 size={12} /></button>)}
+                        ? <span className="flex items-center gap-1.5"><span>Delete?</span><button type="button" onClick={() => remove(n.id)} className="font-semibold text-danger-ink">Yes</button><button type="button" onClick={() => setDeleting(null)} className="font-semibold hover:text-ink">No</button></span>
+                        : <button type="button" onClick={() => setDeleting(n.id)} className="rounded p-1 hover:text-danger-ink" title={n.source === 'EARTHZONE' ? 'Delete (stays deleted after any Earth Zone sync)' : 'Delete'} aria-label="Delete note"><Trash2 size={12} /></button>)}
                     </span>
                     {n.ezText && <EzMarker ezText={n.ezText} />}
                   </div>
@@ -419,7 +419,7 @@ function ContactsGroup({ contacts, canEdit, onChanged }: { contacts: DialerConta
       <div className="space-y-2 py-1">
         {suggested.map((c) => (
           <div key={c.id} className="rounded-btn border border-dashed border-primary/40 bg-primary/[0.03] px-3 py-2">
-            <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-primary"><UserPlus size={12} />Found in a note</p>
+            <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-primary-ink"><UserPlus size={12} />Found in a note</p>
             {editing?.id === c.id ? (
               <div className="space-y-1.5">
                 {(Object.keys(LABEL) as (keyof Draft)[]).map((k) => (
@@ -502,7 +502,7 @@ function StatusChanger({ lead, statusHere, statusHereFrom, settings, onDone }: {
         <p className="mb-1.5 rounded-btn bg-primary/5 px-2.5 py-1.5 text-[12px] text-ink">Changed in Metriq. Earthzone still shows <b>{statusHereFrom}</b>; imports keep <b>{statusHere}</b> until Earthzone shows it.</p>
       )}
       {!open ? (
-        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary"><Pencil size={13} /> Change status</button>
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink"><Pencil size={13} /> Change status</button>
       ) : (
         <div className="space-y-2 rounded-btn border border-line p-2.5">
           <select autoFocus value={status} onChange={(e) => setStatus(e.target.value)} className="h-8 w-full rounded-btn border border-line bg-card px-2 text-body-sm text-ink" aria-label="New status">
@@ -557,7 +557,7 @@ function TouchesAndTasks({ lead, d, leads, now, onChanged }: { lead: DialerLead;
                 {edit && <input type="checkbox" onChange={() => run(dialerApi.updateTask(t.id, { done: true }), 'Task done.')} className="mt-0.5 h-4 w-4 accent-primary" aria-label="Mark done" />}
                 <div className="min-w-0 flex-1">
                   <p className="text-body-sm font-semibold text-ink">{TASK_KINDS.find((k) => k.key === t.kind)?.label ?? t.kind}{t.reason === 'CALL_LATER' ? ' · call back' : t.reason === 'FOLLOW_UP_RULE' ? ' · follow-up rule' : ''}</p>
-                  <p className={cn('text-[12px]', late ? 'font-semibold text-rose-600 dark:text-rose-300' : 'text-ink-muted')}>Due {t.dueAt ? new Date(t.dueAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</p>
+                  <p className={cn('text-[12px]', late ? 'font-semibold text-red-ink' : 'text-ink-muted')}>Due {t.dueAt ? new Date(t.dueAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</p>
                   {t.note && <p className="text-[12px] text-ink-muted">{t.note}</p>}
                 </div>
               </li>
@@ -573,12 +573,12 @@ function TouchesAndTasks({ lead, d, leads, now, onChanged }: { lead: DialerLead;
               <span className="w-14 shrink-0 tabular-nums text-ink-muted">{day(t.at)}</span>
               <span className="text-ink">{t.statusChange ? 'status changed' : 'touched'}</span>
               {t.outcome && <span className="rounded-full bg-slate-100 px-1.5 text-[11.5px] text-ink">{outcomeLabel(t.outcome)}</span>}
-              {edit && <button type="button" onClick={() => run(dialerApi.dismissTouch(t.id), 'Touch dismissed.')} className="ml-auto text-[12px] font-semibold text-ink-faint opacity-0 hover:text-danger group-hover:opacity-100" title="Not a real try (e.g. a re-assignment): take it out">Dismiss</button>}
+              {edit && <button type="button" onClick={() => run(dialerApi.dismissTouch(t.id), 'Touch dismissed.')} className="ml-auto text-[12px] font-semibold text-ink-faint opacity-0 hover:text-danger-ink group-hover:opacity-100" title="Not a real try (e.g. a re-assignment): take it out">Dismiss</button>}
             </li>
           ))}
         </ul>
       )}
-      {touches.length > 8 && <button type="button" onClick={() => setAll(!all)} className="mt-1 text-[12px] font-semibold text-primary">{all ? 'Show fewer' : `Show all ${touches.length}`}</button>}
+      {touches.length > 8 && <button type="button" onClick={() => setAll(!all)} className="mt-1 text-[12px] font-semibold text-primary-ink">{all ? 'Show fewer' : `Show all ${touches.length}`}</button>}
       {touch && <AddTouchModal lead={lead} onClose={() => setTouch(false)} onDone={() => { setTouch(false); onChanged() }} />}
       {task && <AddTaskModal leads={leads} leadId={lead.id} onClose={() => setTask(false)} onDone={() => { setTask(false); onChanged() }} />}
     </Group>

@@ -123,7 +123,7 @@ export function CommandPalette() {
   // Metra (switch `metra`): ask the typed words as a question.
   useFlags()
   const metra = metraReady(useMetraStatus()) && flagOn('metra')
-  const metraHits: Hit[] = useMemo(() => (metra && term ? [{ id: 'ask-metra', title: `Ask Metra: ${term}`, sub: 'Answers from your own Metriq data', link: '', icon: <Sparkles size={15} className="text-primary" />, run: () => openMetra(term) }] : []), [metra, term])
+  const metraHits: Hit[] = useMemo(() => (metra && term ? [{ id: 'ask-metra', title: `Ask Metra: ${term}`, sub: 'Answers from your own Metriq data', link: '', icon: <Sparkles size={15} className="text-primary-ink" />, run: () => openMetra(term) }] : []), [metra, term])
 
   const groups = useMemo(() => GROUPS
     .map((g) => ({ ...g, label: g.key === 'pages' && !term ? 'Go to' : g.label, hits: g.key === 'pages' ? pages : g.key === 'metra' ? metraHits : (term.length >= 2 ? res?.[g.key] ?? [] : []) }))

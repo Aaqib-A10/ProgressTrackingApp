@@ -5,6 +5,8 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/Toast'
 import { initials } from '../../../components/MentionBox'
 import { getMarketingTeam, DISCIPLINE_META, type TeamGroup, type TeamMember } from '../../../lib/marketingApi'
+import { dataTint } from '../../../theme/css'
+import { role } from '../../../theme/css'
 
 const ROLE_LABEL: Record<string, string> = {
   MEMBER: 'Member', SUB_DEPT_LEAD: 'Sub-Dept Lead', TEAM_LEAD: 'Team Lead', SUPER_ADMIN: 'Admin',
@@ -18,9 +20,9 @@ const GROUP_COLOR: Record<string, string> = {
   social: DISCIPLINE_META.SOCIAL.color,
   content: DISCIPLINE_META.CONTENT.color,
   seo: DISCIPLINE_META.SEO.color,
-  ads: '#EC4899',
-  email: '#8B5CF6',
-  leadership: '#0F172A',
+  ads: role('pink-vivid'),
+  email: role('purple-vivid'),
+  leadership: role('text-primary-ink'),
 }
 
 export default function MarketingTeam() {
@@ -39,7 +41,7 @@ export default function MarketingTeam() {
     <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-card bg-primary/10 text-primary"><Users size={22} /></span>
+          <span className="flex h-11 w-11 items-center justify-center rounded-card bg-primary/10 text-primary-ink"><Users size={22} /></span>
           <div>
             <h1 className="text-headline-lg text-ink">Marketing Team</h1>
             <p className="mt-0.5 text-body-md text-ink-muted">People by sub-department, with their live workload. {totalMembers} {totalMembers === 1 ? 'person' : 'people'}.</p>
@@ -61,7 +63,7 @@ export default function MarketingTeam() {
 }
 
 function GroupCard({ group }: { group: TeamGroup }) {
-  const color = GROUP_COLOR[group.slug] ?? '#64748B'
+  const color = GROUP_COLOR[group.slug] ?? role('neutral-500')
   const open = group.members.reduce((n, m) => n + m.openTasks, 0)
   return (
     <div className="overflow-hidden rounded-card border border-line bg-card shadow-card">
@@ -88,13 +90,13 @@ function MemberRow({ m, leadId, color }: { m: TeamMember; leadId?: string; color
   const isLead = m.id === leadId
   return (
     <li className="flex items-center gap-3 px-5 py-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-body-sm font-semibold" style={{ backgroundColor: `${color}1a`, color }}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-body-sm font-semibold" style={dataTint(color)}>
         {initials(m.name)}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate font-medium text-ink">{m.name}</span>
-          {isLead && <Crown size={13} className="shrink-0 text-warning" aria-label="Sub-department lead" />}
+          {isLead && <Crown size={13} className="shrink-0 text-warning-ink" aria-label="Sub-department lead" />}
         </div>
         <Badge tone={ROLE_TONE[m.role] ?? 'neutral'} className="mt-0.5">{ROLE_LABEL[m.role] ?? m.role}</Badge>
       </div>

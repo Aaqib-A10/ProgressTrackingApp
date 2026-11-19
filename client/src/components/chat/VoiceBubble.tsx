@@ -139,7 +139,7 @@ export function VoiceBubble({ href, name, mine }: { href: string; name: string |
   if (broken) {
     return (
       <a href={href} className="mt-1 inline-flex items-center gap-2 rounded-btn border border-line bg-card px-3 py-2 text-body-sm text-ink hover:bg-slate-50">
-        <Mic size={16} className="text-primary" /> Voice message (this browser cannot play it here) <Download size={14} className="text-ink-muted" />
+        <Mic size={16} className="text-primary-ink" /> Voice message (this browser cannot play it here) <Download size={14} className="text-ink-muted" />
       </a>
     )
   }
@@ -151,7 +151,7 @@ export function VoiceBubble({ href, name, mine }: { href: string; name: string |
       <button
         type="button"
         onClick={toggle}
-        className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-card transition-transform active:scale-95', mine ? 'bg-primary hover:bg-primary/90' : 'bg-teal-500 hover:bg-teal-500/90')}
+        className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-card transition-transform active:scale-95', mine ? 'bg-primary text-primary-on hover:bg-primary/90' : 'bg-teal-vivid text-teal-on hover:bg-teal-vivid/90')}
         aria-label={isPlaying ? 'Pause voice message' : 'Play voice message'}
       >
         {loading && isPlaying ? <Loader2 size={18} className="animate-spin" /> : isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
@@ -178,12 +178,12 @@ export function VoiceBubble({ href, name, mine }: { href: string; name: string |
           {bars.map((v, i) => (
             <span
               key={i}
-              className={cn('flex-1 rounded-full transition-colors', (i + 0.5) / bars.length <= done ? (mine ? 'bg-primary' : 'bg-teal-500') : 'bg-slate-300', !peaks && 'opacity-60')}
+              className={cn('flex-1 rounded-full transition-colors', (i + 0.5) / bars.length <= done ? (mine ? 'bg-primary' : 'bg-teal-vivid') : 'bg-slate-300', !peaks && 'opacity-60')}
               style={{ height: `${Math.round(v * 100)}%`, minHeight: 3 }}
             />
           ))}
           {/* the playhead */}
-          {duration > 0 && <span className={cn('pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow', mine ? 'bg-primary' : 'bg-teal-500')} style={{ left: `${done * 100}%` }} />}
+          {duration > 0 && <span className={cn('pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow', mine ? 'bg-primary' : 'bg-teal-vivid')} style={{ left: `${done * 100}%` }} />}
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-muted">
           <span className="tabular-nums">{isPlaying || pos > 0 ? fmtClock(pos) : fmtClock(duration)}</span>

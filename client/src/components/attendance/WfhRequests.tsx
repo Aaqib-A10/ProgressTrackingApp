@@ -160,7 +160,7 @@ export function TeamWfhInbox({ onDecided, highlight }: { onDecided?: () => void;
   if (rows.length === 0) return null
   return (
     <Card
-      title={<span className="flex items-center gap-2"><House size={16} className="text-accent" />Work from home requests <Badge tone="warning">{rows.length}</Badge></span>}
+      title={<span className="flex items-center gap-2"><House size={16} className="text-highlight-ink" />Work from home requests <Badge tone="warning">{rows.length}</Badge></span>}
       subtitle="Approved days let them check in from any network. You see their hours here as usual."
       className={highlight ? 'ring-2 ring-primary/30' : undefined}
     >

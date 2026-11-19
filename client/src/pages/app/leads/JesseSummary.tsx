@@ -5,6 +5,7 @@ import { EmptyState } from '../../../components/ui/EmptyState'
 import { apiErrorText } from '../../../lib/api'
 import { leadsApi, type Summary } from '../../../lib/leadsApi'
 import { BusinessPicker, PageHeader, Tile, useBusiness } from './shared'
+import { role } from '../../../theme/css'
 
 /** Jesse Summary: the sheet's tab, live — key numbers, pipeline by status, calls by SDR, calls by segment, plus the qualify rate. */
 export default function JesseSummary() {
@@ -22,25 +23,25 @@ export default function JesseSummary() {
   return (
     <div className="mx-auto w-full max-w-[1300px] space-y-4">
       <PageHeader title="Jesse Summary" hint={`${biz?.name ?? ''} · the sheet's Jesse Summary tab, live.`} actions={cmrBiz.length > 1 ? <BusinessPicker /> : undefined} />
-      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">{err}</p>}
+      {err && <p className="rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">{err}</p>}
       {k && (
         <>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <Tile label="Total companies" value={k.total} color="#4F46E5" onClick={() => go({ status: 'all' })} />
-            <Tile label="Waiting on Jesse" value={k.waiting} color="#F97316" onClick={() => go({ flag: '1', status: 'all' })} hint={`avg ${k.avgWaitDays} business days`} />
-            <Tile label="Qualified" value={k.qualified} color="#22C55E" onClick={() => go({ status: 'QUALIFIED' })} />
-            <Tile label="Follow-ups overdue" value={k.overdue} color="#EF4444" onClick={() => go({ overdue: '1' })} />
-            <Tile label="Calls this week" value={k.callsWeek} color="#0EA5E9" onClick={() => nav(`/app/leads/calls?business=${biz?.id}`)} />
-            <Tile label="Calls last 30 days" value={k.calls30} color="#14B8A6" onClick={() => nav(`/app/leads/calls?business=${biz?.id}`)} />
+            <Tile label="Total companies" value={k.total} color={role('accent')} onClick={() => go({ status: 'all' })} />
+            <Tile label="Waiting on Jesse" value={k.waiting} color={role('orange-vivid')} onClick={() => go({ flag: '1', status: 'all' })} hint={`avg ${k.avgWaitDays} business days`} />
+            <Tile label="Qualified" value={k.qualified} color={role('success')} onClick={() => go({ status: 'QUALIFIED' })} />
+            <Tile label="Follow-ups overdue" value={k.overdue} color={role('error')} onClick={() => go({ overdue: '1' })} />
+            <Tile label="Calls this week" value={k.callsWeek} color={role('blue-vivid')} onClick={() => nav(`/app/leads/calls?business=${biz?.id}`)} />
+            <Tile label="Calls last 30 days" value={k.calls30} color={role('teal-vivid')} onClick={() => nav(`/app/leads/calls?business=${biz?.id}`)} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Tile label="Meetings booked this month" value={k.meetingsMonth} color="#8B5CF6" hint="Invites sent" />
-            <Tile label="Jesse's decision time" value={`${k.avgDecideDays} d`} color="#64748B" hint="Average business days, last 50 decisions" />
+            <Tile label="Meetings booked this month" value={k.meetingsMonth} color={role('purple-vivid')} hint="Invites sent" />
+            <Tile label="Jesse's decision time" value={`${k.avgDecideDays} d`} color={role('neutral-500')} hint="Average business days, last 50 decisions" />
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
             <Bars title="Pipeline by status" rows={d!.pipeline.map((p) => ({ label: p.label, n: p.count, color: p.color, onClick: () => go({ status: p.status }) }))} />
-            <Bars title="Calls by SDR (30 days)" rows={d!.callsBySdr.map((x) => ({ label: x.name, n: x.calls, color: '#0EA5E9', onClick: x.userId ? () => nav(`/app/leads/calls?business=${biz?.id}&user=${x.userId}`) : undefined }))} empty="No calls in the last 30 days." />
-            <Bars title="Companies by segment" rows={d!.bySegment.map((x) => ({ label: x.segment, n: x.count, color: '#14B8A6', onClick: () => go({ status: 'all', industry: x.segment }) }))} />
+            <Bars title="Calls by SDR (30 days)" rows={d!.callsBySdr.map((x) => ({ label: x.name, n: x.calls, color: role('blue-vivid'), onClick: x.userId ? () => nav(`/app/leads/calls?business=${biz?.id}&user=${x.userId}`) : undefined }))} empty="No calls in the last 30 days." />
+            <Bars title="Companies by segment" rows={d!.bySegment.map((x) => ({ label: x.segment, n: x.count, color: role('teal-vivid'), onClick: () => go({ status: 'all', industry: x.segment }) }))} />
           </div>
           <section className="rounded-card border border-line bg-card shadow-xs">
             <header className="border-b border-line px-4 py-2.5 text-[14px] font-semibold text-ink">Qualify rate by SDR</header>

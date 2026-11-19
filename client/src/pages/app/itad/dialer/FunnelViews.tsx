@@ -52,7 +52,7 @@ export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: 
       <div className="flex flex-wrap items-center gap-2 text-body-sm">
         <span className="text-ink-muted">Count by</span>
         {([[false, 'Current status'], [true, 'Ever reached stage']] as const).map(([v, label]) => (
-          <button key={label} type="button" onClick={() => setEver(v)} className={cn('rounded-full border px-3 py-1 font-semibold', ever === v ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink hover:bg-slate-50')}>{label}</button>
+          <button key={label} type="button" onClick={() => setEver(v)} className={cn('rounded-full border px-3 py-1 font-semibold', ever === v ? 'border-primary bg-primary text-primary-on' : 'border-line bg-card text-ink hover:bg-slate-50')}>{label}</button>
         ))}
         {ever && <span className="text-[11px] text-ink-muted">Uses the highest stage seen at any import (history starts with the first import).</span>}
       </div>
@@ -95,7 +95,7 @@ export function FunnelView({ leads, settings, now, showReps, onPick }: { leads: 
         action={
           <div className="flex flex-wrap gap-1">
             {(['state', 'industry', 'region', ...(showReps ? ['rep'] : []), 'status'] as By[]).map((b) => (
-              <button key={b} type="button" onClick={() => { setBy(b); pg.setPage(1) }} className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize', by === b ? 'bg-primary text-white' : 'bg-slate-100 text-ink-muted hover:text-ink')}>{b}</button>
+              <button key={b} type="button" onClick={() => { setBy(b); pg.setPage(1) }} className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize', by === b ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:text-ink')}>{b}</button>
             ))}
           </div>
         }
@@ -149,10 +149,10 @@ function SegmentTable({ segs, totals, min, onPick, stuck }: { segs: Segment[]; t
                 <td className="px-2 text-right tabular-nums text-ink">{num(s.funnel.connected)}</td>
                 <td className="px-2 text-right tabular-nums text-ink">{num(s.funnel.positive)}</td>
                 <td className="px-2 text-right tabular-nums text-ink-muted">{r(s.funnel.attemptRate, n)}</td>
-                <td className={cn('px-2 text-right tabular-nums', n >= min && cr != null ? (cr >= 0.5 ? 'font-semibold text-success' : cr < 0.4 ? 'font-semibold text-warning' : 'text-ink') : 'text-ink-muted')}>{r(cr, n)}</td>
+                <td className={cn('px-2 text-right tabular-nums', n >= min && cr != null ? (cr >= 0.5 ? 'font-semibold text-success-ink' : cr < 0.4 ? 'font-semibold text-warning-ink' : 'text-ink') : 'text-ink-muted')}>{r(cr, n)}</td>
                 <td className="px-2 text-right tabular-nums text-ink-muted">{r(s.funnel.winRate, n)}</td>
                 <td className="px-2 text-right tabular-nums text-ink-muted">{r(s.funnel.positiveRate, n)}</td>
-                {stuck && <td className={cn('px-2 text-right tabular-nums', s.stuckShare >= 0.5 ? 'font-bold text-danger' : s.stuckShare >= 0.3 ? 'font-semibold text-warning' : 'text-ink-muted')}>{n < min ? 'n/a' : `${Math.round(s.stuckShare * 100)}%`}</td>}
+                {stuck && <td className={cn('px-2 text-right tabular-nums', s.stuckShare >= 0.5 ? 'font-bold text-danger-ink' : s.stuckShare >= 0.3 ? 'font-semibold text-warning-ink' : 'text-ink-muted')}>{n < min ? 'n/a' : `${Math.round(s.stuckShare * 100)}%`}</td>}
               </tr>
             )
           })}

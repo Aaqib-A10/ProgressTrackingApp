@@ -58,7 +58,7 @@ export default function Feedback() {
       ) : threads.length === 0 ? (
         <Card>
           <div className="flex flex-col items-center gap-2 py-12 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary"><MessagesSquare size={22} /></span>
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary-ink"><MessagesSquare size={22} /></span>
             <p className="text-headline-md text-ink">No feedback yet</p>
             <p className="max-w-sm text-body-md text-ink-muted">When your team lead leaves feedback, it will show up here.</p>
           </div>
@@ -83,7 +83,7 @@ export default function Feedback() {
                 className="block rounded-card border border-line bg-card p-4 shadow-card transition-colors hover:border-primary/30"
               >
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-body-sm font-semibold text-primary-ink">
                     {initials(other.name)}
                   </span>
                   <div className="min-w-0 flex-1">

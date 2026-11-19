@@ -10,6 +10,7 @@ export const AREA_APP: Record<string, string[]> = {
   projects: ['/app/projects'],
   tasks: ['/app/tasks'],
   todos: ['/app/todo'],
+  notes: ['/app/notes'],
   chat: ['/app/chat', '/app/calendar', '/app/meetings'],
   feedback: ['/app/feedback'],
   itad: ['/app/itad'],

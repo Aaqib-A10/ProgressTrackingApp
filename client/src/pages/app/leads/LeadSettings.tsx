@@ -15,6 +15,8 @@ import { Label, Select, Tile, useCrmWords, useLeadsMeta } from './shared'
 import { useAuth } from '../../../lib/auth'
 import { readFile } from '../itad/dialer/ImportModal'
 import { CreateBusinessWizard, SetupChecklist, SetupSteps, WhoSeesWhat, type SetupPerson } from './SetupGuide'
+import { dataTint } from '../../../theme/css'
+import { role } from '../../../theme/css'
 
 /**
  * Lead Settings (Super Admin): the businesses that receive leads, who works them (managers assign,
@@ -131,7 +133,7 @@ function BusinessEditor({ biz, people, cmrOn, plain, onSaved, onDeleted, toast }
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <button type="button" className="inline-flex items-center gap-1.5 text-body-sm text-danger hover:underline" onClick={() => { if (window.confirm(`Delete ${biz.name}? Only a business with no leads can be deleted.`)) void leadsApi.deleteBusiness(biz.id).then(onDeleted).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not delete') })) }}><Trash2 size={14} />{plain ? 'Delete pipeline' : 'Delete business'}</button>
+          <button type="button" className="inline-flex items-center gap-1.5 text-body-sm text-danger-ink hover:underline" onClick={() => { if (window.confirm(`Delete ${biz.name}? Only a business with no leads can be deleted.`)) void leadsApi.deleteBusiness(biz.id).then(onDeleted).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not delete') })) }}><Trash2 size={14} />{plain ? 'Delete pipeline' : 'Delete business'}</button>
           <Button size="sm" disabled={!dirty || busy || !f.name.trim()} onClick={() => run(() => leadsApi.updateBusiness(biz.id, { name: f.name.trim(), website: f.website.trim() || null, color: f.color, slaAssignMins: f.slaAssignMins, slaContactMins: f.slaContactMins }), 'Saved')}>Save changes</Button>
         </div>
       </Section>
@@ -162,7 +164,7 @@ function PeopleSection({ biz, people, onSaved, toast }: { biz: BusinessRow; peop
               <select value={m.role} onChange={(e) => act(() => leadsApi.setMember(biz.id, m.id, e.target.value as 'MANAGER' | 'REP'), () => 'Saved')} className="h-8 rounded-btn border border-line bg-card px-2 text-body-sm">
                 <option value="MANAGER">Manager</option><option value="REP">Rep</option>
               </select>
-              <button type="button" className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-danger" aria-label={`Remove ${m.name}`} onClick={() => act(() => leadsApi.removeMember(biz.id, m.id), (r) => r.returned ? `Removed. ${r.returned} open lead${r.returned === 1 ? '' : 's'} went back to the managers.` : 'Removed')}><Trash2 size={15} /></button>
+              <button type="button" className="rounded-btn p-1.5 text-ink-faint hover:bg-slate-100 hover:text-danger-ink" aria-label={`Remove ${m.name}`} onClick={() => act(() => leadsApi.removeMember(biz.id, m.id), (r) => r.returned ? `Removed. ${r.returned} open lead${r.returned === 1 ? '' : 's'} went back to the managers.` : 'Removed')}><Trash2 size={15} /></button>
             </li>
           ))}
         </ul>
@@ -263,7 +265,7 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
     <Section icon={<Mail size={17} />} title="Email inbox" hint="New emails to this mailbox become leads (checked every 2 minutes). Only emails that arrive after it is switched on; nothing in the mailbox is changed."
       action={<Toggle checked={biz.inboxOn} onChange={(v) => void save(v)} label={biz.inboxOn ? 'On' : 'Off'} />}>
       <div className="pt-tabs mb-3 flex flex-wrap gap-1.5">
-        {PRESETS.map((p) => <button key={p.label} type="button" onClick={() => setF({ ...f, inboxHost: p.host || f.inboxHost, inboxPort: p.port, inboxSecure: true })} className={cn('h-8 rounded-full border px-3 text-body-sm', preset?.label === p.label ? 'border-primary bg-primary/[0.06] text-primary' : 'border-line text-ink-muted hover:text-ink')}>{p.label}</button>)}
+        {PRESETS.map((p) => <button key={p.label} type="button" onClick={() => setF({ ...f, inboxHost: p.host || f.inboxHost, inboxPort: p.port, inboxSecure: true })} className={cn('h-8 rounded-full border px-3 text-body-sm', preset?.label === p.label ? 'border-primary bg-primary/[0.06] text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{p.label}</button>)}
       </div>
       {preset && <p className="mb-3 text-body-sm text-ink-muted">{preset.hint}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -276,8 +278,8 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
         <TextField label={biz.inboxHasPassword ? 'Password (saved; type to change)' : 'Password'} type="password" autoComplete="new-password" placeholder={biz.inboxHasPassword ? '••••••••' : ''} value={f.password ?? ''} onChange={(e) => setF({ ...f, password: e.target.value })} />
         <TextField label="Folder" value={f.inboxFolder} onChange={(e) => setF({ ...f, inboxFolder: e.target.value })} />
       </div>
-      {test && <p className={cn('mt-3 rounded-btn px-3 py-2 text-body-sm', test.ok ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger')}>{test.text}</p>}
-      {biz.inboxOn && (biz.inboxError ? <p className="mt-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger">Last check failed: {biz.inboxError}</p> : biz.inboxCheckedAt ? <p className="mt-3 text-body-sm text-ink-muted">Last checked {ago(biz.inboxCheckedAt)}.</p> : <p className="mt-3 text-body-sm text-ink-muted">First check within 2 minutes.</p>)}
+      {test && <p className={cn('mt-3 rounded-btn px-3 py-2 text-body-sm', test.ok ? 'bg-success/10 text-success-ink' : 'bg-danger/10 text-danger-ink')}>{test.text}</p>}
+      {biz.inboxOn && (biz.inboxError ? <p className="mt-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">Last check failed: {biz.inboxError}</p> : biz.inboxCheckedAt ? <p className="mt-3 text-body-sm text-ink-muted">Last checked {ago(biz.inboxCheckedAt)}.</p> : <p className="mt-3 text-body-sm text-ink-muted">First check within 2 minutes.</p>)}
       <div className="mt-4 flex justify-end gap-2">
         <Button size="sm" variant="secondary" disabled={busy || !f.inboxHost || !f.inboxUser} onClick={tryIt}>Test connection</Button>
         <Button size="sm" disabled={busy} onClick={() => save()}>Save inbox</Button>
@@ -315,14 +317,14 @@ function TalkLoopSection({ toast }: { toast: Toast }) {
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-4">
-            <Tile label="Connected" value={info.error ? 'No' : 'Yes'} color={info.error ? '#EF4444' : '#059669'} hint={info.error ?? `${info.talkloopUsers.length} TalkLoop user${info.talkloopUsers.length === 1 ? '' : 's'}`} />
-            <Tile label="Last sync" value={when(st.lastRunAt)} color="#4F46E5" hint={st.lastError ? `Failed: ${st.lastError}` : st.lastRunAt ? `${st.lastRunSynced} new, ${st.lastRunUnmatched} unmatched` : 'runs every 3 minutes'} />
-            <Tile label="Calls on leads" value={st.synced} color="#0EA5E9" hint="since the start" />
-            <Tile label="No lead yet" value={st.waiting ?? st.unmatched} color="#F59E0B" hint={<Link to="/app/leads/calls?view=unmatched" className="font-semibold text-primary hover:underline">calls kept aside: add as lead →</Link>} />
+            <Tile label="Connected" value={info.error ? 'No' : 'Yes'} color={info.error ? role('error') : role('success')} hint={info.error ?? `${info.talkloopUsers.length} TalkLoop user${info.talkloopUsers.length === 1 ? '' : 's'}`} />
+            <Tile label="Last sync" value={when(st.lastRunAt)} color={role('accent')} hint={st.lastError ? `Failed: ${st.lastError}` : st.lastRunAt ? `${st.lastRunSynced} new, ${st.lastRunUnmatched} unmatched` : 'runs every 3 minutes'} />
+            <Tile label="Calls on leads" value={st.synced} color={role('blue-vivid')} hint="since the start" />
+            <Tile label="No lead yet" value={st.waiting ?? st.unmatched} color={role('warning')} hint={<Link to="/app/leads/calls?view=unmatched" className="font-semibold text-primary-ink hover:underline">calls kept aside: add as lead →</Link>} />
           </div>
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-body-sm text-ink-muted">Who is who: each person's TalkLoop user. Only linked people's calls are filed. <button type="button" className="font-semibold text-primary hover:underline" disabled={busy} onClick={() => run(() => leadsApi.talkloopLink({ auto: true }), (r) => `${(r as { linked: number }).linked} linked by email`)}>Match by email</button></p>
+              <p className="text-body-sm text-ink-muted">Who is who: each person's TalkLoop user. Only linked people's calls are filed. <button type="button" className="font-semibold text-primary-ink hover:underline" disabled={busy} onClick={() => run(() => leadsApi.talkloopLink({ auto: true }), (r) => `${(r as { linked: number }).linked} linked by email`)}>Match by email</button></p>
             </div>
             <ul className="divide-y divide-line rounded-card border border-line">
               {info.people.map((p) => (
@@ -367,7 +369,7 @@ function KindSection({ biz, people, cmrOn, plain, onSaved, toast }: { biz: Busin
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3"><span className="text-[11.5px] text-ink-muted">What people pick from when they add or edit a lead, and the filter on the Leads page.</span>{industriesChanged && industryList.length > 0 && <Button size="sm" onClick={() => void save({ settings: { segments: industryList } }, 'Industries saved')}>Save industries</Button>}</div>
         </div>
       )}
-      {biz.kind === 'CMR' && !biz.headId && <p className="mt-3 rounded-btn bg-warning/10 px-3 py-2 text-body-sm text-amber-800">Set Jesse as the head so flagged leads reach him. If he is not in Metriq yet, invite him under Admin → Users first.</p>}
+      {biz.kind === 'CMR' && !biz.headId && <p className="mt-3 rounded-btn bg-warning/10 px-3 py-2 text-body-sm text-warning-ink">Set Jesse as the head so flagged leads reach him. If he is not in Metriq yet, invite him under Admin → Users first.</p>}
     </Section>
   )
 }
@@ -382,7 +384,7 @@ function PipelineSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (
   return (
     <Section icon={<ListOrdered size={17} />} title="Pipeline" hint="The statuses leads move through, in order. Open statuses count as active; the rest close a lead." action={<div className="flex flex-wrap gap-2">{flagOn('deal-board') && biz.kind !== 'CMR' && !biz.pipeline.some((x) => x.key === 'PROPOSAL') && !edit && <Button size="sm" variant="ghost" title="New → Contacted → Qualified → Proposal → Negotiation → Won / Lost" onClick={() => { if (window.confirm('Use the sales pipeline (adds Proposal and Negotiation)? Leads keep their status.')) void save(SALES_PIPELINE) }}>Use the sales pipeline</Button>}{biz.ownPipeline && <Button size="sm" variant="ghost" onClick={() => save(null)}>Use the standard one</Button>}{edit ? <><Button size="sm" variant="ghost" onClick={() => { setRows(biz.pipeline); setEdit(false) }}>Cancel</Button><Button size="sm" onClick={() => save(rows)}>Save</Button></> : <Button size="sm" variant="secondary" onClick={() => setEdit(true)}>Edit</Button>}</div>}>
       {!edit ? (
-        <div className="flex flex-wrap gap-2">{biz.pipeline.map((s) => <span key={s.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-body-sm font-semibold" style={{ background: `${s.color}1a`, color: s.color }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />{s.label}{!s.open && <span className="font-normal opacity-70">· closes</span>}</span>)}</div>
+        <div className="flex flex-wrap gap-2">{biz.pipeline.map((s) => <span key={s.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-body-sm font-semibold" style={dataTint(s.color)}><span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />{s.label}{!s.open && <span className="font-normal opacity-70">· closes</span>}</span>)}</div>
       ) : (
         <div className="space-y-2">
           {rows.map((s, i) => (
@@ -391,7 +393,7 @@ function PipelineSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (
               <Select value={s.color} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))} style={{ color: s.color }}>{PIPE_COLORS.map((c) => <option key={c} value={c} style={{ color: c }}>●  {c}</option>)}</Select>
               <label className="flex items-center gap-1.5 text-body-sm text-ink"><input type="checkbox" checked={s.open} disabled={s.key === 'NEW'} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, open: e.target.checked } : x)))} />Open</label>
               <span className="flex gap-0.5"><button type="button" disabled={i === 0} className="rounded p-1 text-ink-faint hover:text-ink disabled:opacity-30" onClick={() => { const r = [...rows]; [r[i - 1], r[i]] = [r[i], r[i - 1]]; setRows(r) }} aria-label="Up">↑</button><button type="button" disabled={i === rows.length - 1} className="rounded p-1 text-ink-faint hover:text-ink disabled:opacity-30" onClick={() => { const r = [...rows]; [r[i + 1], r[i]] = [r[i], r[i + 1]]; setRows(r) }} aria-label="Down">↓</button></span>
-              <button type="button" disabled={s.key === 'NEW' || rows.length <= 2} className="rounded p-1 text-ink-faint hover:text-danger disabled:opacity-30" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label="Remove"><Trash2 size={14} /></button>
+              <button type="button" disabled={s.key === 'NEW' || rows.length <= 2} className="rounded p-1 text-ink-faint hover:text-danger-ink disabled:opacity-30" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label="Remove"><Trash2 size={14} /></button>
             </div>
           ))}
           <Button size="sm" variant="ghost" leadingIcon={<Plus size={14} />} onClick={() => setRows([...rows, { key: `STATUS_${rows.length + 1}`, label: '', color: PIPE_COLORS[rows.length % PIPE_COLORS.length], open: true }])}>Add status</Button>
@@ -453,12 +455,12 @@ function ListsSection({ biz, toast }: { biz: BusinessRow; toast: Toast }) {
       <div className="mb-3 inline-flex rounded-btn border border-line bg-card p-0.5">{(['PROHIBITED', 'CUSTOMER'] as const).map((k) => <button key={k} type="button" onClick={() => setKind(k)} className={cn('h-8 rounded-md px-3 text-body-sm font-semibold', kind === k ? 'bg-ink text-card' : 'text-ink-muted')}>{k === 'PROHIBITED' ? 'Prohibited Leads' : 'Existing customers'}{rows && kind === k ? ` (${rows.length})` : ''}</button>)}</div>
       <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
         <div className="max-h-72 overflow-auto rounded-card border border-line">
-          {rows?.length ? <ul className="divide-y divide-line">{rows.map((r) => <li key={r.id} className="flex items-center gap-3 px-3 py-2 text-body-sm"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-ink">{r.name}</span><span className="block truncate text-[11.5px] text-ink-muted">{[r.phone, r.email, r.website, r.note].filter(Boolean).join(' · ')}</span></span><button type="button" className="text-ink-faint hover:text-danger" aria-label={`Remove ${r.name}`} onClick={() => leadsApi.removeEntry(biz.id, r.id).then(() => load())}><Trash2 size={14} /></button></li>)}</ul> : <p className="p-4 text-body-sm text-ink-muted">{rows ? 'Empty. Add names on the right, or upload the list.' : 'Loading…'}</p>}
+          {rows?.length ? <ul className="divide-y divide-line">{rows.map((r) => <li key={r.id} className="flex items-center gap-3 px-3 py-2 text-body-sm"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-ink">{r.name}</span><span className="block truncate text-[11.5px] text-ink-muted">{[r.phone, r.email, r.website, r.note].filter(Boolean).join(' · ')}</span></span><button type="button" className="text-ink-faint hover:text-danger-ink" aria-label={`Remove ${r.name}`} onClick={() => leadsApi.removeEntry(biz.id, r.id).then(() => load())}><Trash2 size={14} /></button></li>)}</ul> : <p className="p-4 text-body-sm text-ink-muted">{rows ? 'Empty. Add names on the right, or upload the list.' : 'Loading…'}</p>}
         </div>
         <div className="space-y-2">
           <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={'One per line, e.g.\nKBI\nLRI, 602-555-0100\nS&P Global, , , spglobal.com'} />
           <div className="flex items-center justify-between gap-2">
-            <label className="cursor-pointer text-body-sm text-primary hover:underline">Upload CSV / Excel<input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void fromFile(f); e.target.value = '' }} /></label>
+            <label className="cursor-pointer text-body-sm text-primary-ink hover:underline">Upload CSV / Excel<input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void fromFile(f); e.target.value = '' }} /></label>
             <Button size="sm" disabled={!text.trim()} onClick={() => add(text.split('\n').map((line) => { const [name, phone, email, website, note] = line.split(',').map((x) => x.trim()); return { name: name ?? '', phone: phone || null, email: email || null, website: website || null, note: note || null } }).filter((e) => e.name))}>Add</Button>
           </div>
           <p className="text-[11.5px] text-ink-muted">Columns in a file: Company, Phone, Email, Website, Note (any order; the first row names them).</p>
@@ -499,7 +501,7 @@ function DialCard({ plain, dial, pbxDomain, onSaved, toast }: { plain?: boolean;
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-body-sm">
         <span className="text-ink-muted">A Call button will open:</span><code className="rounded bg-card px-2 py-1 text-[12px] text-ink">{example}</code>
-        <span className="ml-auto flex items-center gap-2"><TextField value={test} onChange={(e) => setTest(e.target.value)} placeholder="Your own number to test" className="w-48" />{test && <a href={dialHref(test, f) ?? '#'} className="inline-flex h-9 items-center rounded-btn border border-line bg-card px-3 font-semibold text-primary hover:border-primary">Test call</a>}</span>
+        <span className="ml-auto flex items-center gap-2"><TextField value={test} onChange={(e) => setTest(e.target.value)} placeholder="Your own number to test" className="w-48" />{test && <a href={dialHref(test, f) ?? '#'} className="inline-flex h-9 items-center rounded-btn border border-line bg-card px-3 font-semibold text-primary-ink hover:border-primary">Test call</a>}</span>
       </div>
     </div>
   )

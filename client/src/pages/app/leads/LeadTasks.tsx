@@ -38,7 +38,7 @@ export default function LeadTasks() {
       </>} />
       <div className="flex flex-wrap items-center gap-2">
         <div className="pt-tabs inline-flex max-w-full flex-wrap rounded-btn border border-line bg-card p-0.5">
-          {TABS.map(([k, l]) => <button key={k} type="button" onClick={() => setP('tab', k === 'today' ? null : k)} className={cn('inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-body-sm font-semibold', tab === k ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>{l}{d && k !== 'done' && k !== 'all' && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', tab === k ? 'bg-card/20' : k === 'overdue' && d.counts.overdue ? 'bg-danger/10 text-danger' : 'bg-slate-100 dark:bg-white/10')}>{d.counts[k as 'today' | 'overdue' | 'upcoming']}</span>}</button>)}
+          {TABS.map(([k, l]) => <button key={k} type="button" onClick={() => setP('tab', k === 'today' ? null : k)} className={cn('inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-body-sm font-semibold', tab === k ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')}>{l}{d && k !== 'done' && k !== 'all' && <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', tab === k ? 'bg-card/20' : k === 'overdue' && d.counts.overdue ? 'bg-danger/10 text-danger-ink' : 'bg-slate-100 dark:bg-white/10')}>{d.counts[k as 'today' | 'overdue' | 'upcoming']}</span>}</button>)}
         </div>
       </div>
       {/* Phones: one card per task. */}

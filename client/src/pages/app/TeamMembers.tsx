@@ -141,7 +141,7 @@ export default function TeamMembers() {
         <div className="inline-flex items-center gap-1">
           <button
             onClick={(e) => { e.stopPropagation(); setToReset(m) }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-primary/10 hover:text-primary"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-primary/10 hover:text-primary-ink"
             aria-label={`Reset password for ${m.name}`}
             title="Reset / change password"
           >
@@ -149,7 +149,7 @@ export default function TeamMembers() {
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setToRemove(m) }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink"
             aria-label={`Remove ${m.name}`}
             title="Remove from team"
           >
@@ -322,11 +322,11 @@ function ResetPasswordModal({
 function toneBg(tone: BadgeTone): string {
   switch (tone) {
     case 'success':
-      return 'bg-success/10 text-success'
+      return 'bg-success/10 text-success-ink'
     case 'danger':
-      return 'bg-danger/10 text-danger'
+      return 'bg-danger/10 text-danger-ink'
     case 'accent':
-      return 'bg-accent/10 text-accent'
+      return 'bg-accent/10 text-highlight-ink'
     default:
       return 'bg-slate-100 text-ink-muted'
   }

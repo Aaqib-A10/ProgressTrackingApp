@@ -94,14 +94,14 @@ export function MetraAdmin() {
                     <td className="px-5 py-2 text-ink">{x.label}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-ink">{num(x.chunks)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-ink-muted">{when(x.lastRunAt)}</td>
-                    <td className={cn('px-5 py-2', x.lastError ? 'text-danger' : 'text-ink-faint')}>{x.lastError ? <span className="line-clamp-2 break-words" title={x.lastError}>{x.lastError}</span> : '—'}</td>
+                    <td className={cn('px-5 py-2', x.lastError ? 'text-danger-ink' : 'text-ink-faint')}>{x.lastError ? <span className="line-clamp-2 break-words" title={x.lastError}>{x.lastError}</span> : '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <div className="flex justify-end px-5 py-3"><button type="button" onClick={load} className="text-body-sm font-medium text-primary hover:underline">Refresh</button></div>
+        <div className="flex justify-end px-5 py-3"><button type="button" onClick={load} className="text-body-sm font-medium text-primary-ink hover:underline">Refresh</button></div>
       </Card>
     </div>
   )
@@ -128,7 +128,7 @@ function FeedbackCards() {
     }
   }
 
-  if (failed) return <Card title="What people say about Metra"><p className="text-body-md text-ink-muted">Could not load the feedback. <button type="button" onClick={load} className="font-medium text-primary hover:underline">Try again</button></p></Card>
+  if (failed) return <Card title="What people say about Metra"><p className="text-body-md text-ink-muted">Could not load the feedback. <button type="button" onClick={load} className="font-medium text-primary-ink hover:underline">Try again</button></p></Card>
   if (!data) return <Card title="What people say about Metra"><p className="flex items-center gap-2 text-body-md text-ink-muted"><Loader2 size={15} className="animate-spin" />Loading…</p></Card>
 
   const open = data.general.filter((g) => !g.handled).length
@@ -147,7 +147,7 @@ function FeedbackCards() {
             {general.map((g) => (
               <li key={g.id} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', g.rating === 'HELPS' ? 'bg-success/10 text-success' : 'bg-warning/15 text-ink')}>{g.rating === 'HELPS' ? 'It helps' : 'Needs changes'}</span>
+                  <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', g.rating === 'HELPS' ? 'bg-success/10 text-success-ink' : 'bg-warning/15 text-ink')}>{g.rating === 'HELPS' ? 'It helps' : 'Needs changes'}</span>
                   <span className="text-body-sm font-medium text-ink">{person(g)}</span>
                   <span className="text-[12px] text-ink-faint">{day(g.createdAt)}</span>
                   <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-body-sm text-ink-muted">
@@ -163,7 +163,7 @@ function FeedbackCards() {
       <Card title="Answers people rated" subtitle={`${down} not helpful, ${data.answers.length - down} helpful. You see their note, and the question only if they sent one with it. Never the answer.`}
         action={<span className="flex items-center gap-3">
           {/* The questions people shared with a note, as a list the developer adds to Metra's go-live check (npm run metra:check -- --extra file.json). */}
-          {data.answers.some((x) => x.feedback === 'DOWN' && x.question) && <button type="button" className="text-body-sm font-medium text-primary hover:underline" onClick={() => { void navigator.clipboard?.writeText(JSON.stringify(data.answers.filter((x) => x.feedback === 'DOWN' && x.question).map((x) => ({ ask: x.question, team: x.department, note: x.note })), null, 1)) }}>Copy as test questions</button>}
+          {data.answers.some((x) => x.feedback === 'DOWN' && x.question) && <button type="button" className="text-body-sm font-medium text-primary-ink hover:underline" onClick={() => { void navigator.clipboard?.writeText(JSON.stringify(data.answers.filter((x) => x.feedback === 'DOWN' && x.question).map((x) => ({ ask: x.question, team: x.department, note: x.note })), null, 1)) }}>Copy as test questions</button>}
           <FilterLink on={onlyDown} onClick={() => setOnlyDown((v) => !v)} onLabel="Show all" offLabel="Only not helpful" />
         </span>}>
         {answers.length === 0 ? (
@@ -191,9 +191,9 @@ function FeedbackCards() {
 }
 
 const PROBLEM: Record<MetraProblem['kind'], { label: string; tone: string }> = {
-  ERROR: { label: 'Could not answer', tone: 'bg-danger/10 text-danger' },
-  LOOKUP_FAILED: { label: 'A lookup failed', tone: 'bg-danger/10 text-danger' },
-  NUMBERS: { label: 'A number had no source', tone: 'bg-danger/10 text-danger' },
+  ERROR: { label: 'Could not answer', tone: 'bg-danger/10 text-danger-ink' },
+  LOOKUP_FAILED: { label: 'A lookup failed', tone: 'bg-danger/10 text-danger-ink' },
+  NUMBERS: { label: 'A number had no source', tone: 'bg-danger/10 text-danger-ink' },
   GAVE_UP: { label: 'Said it could not find it', tone: 'bg-warning/15 text-ink' },
   NOT_HELPFUL: { label: 'Marked not helpful', tone: 'bg-slate-100 text-ink' },
 }
@@ -214,7 +214,7 @@ function ProblemsCard() {
     try { await navigator.clipboard.writeText(text); addToast({ type: 'success', message: `${what} copied.` }) } catch { addToast({ type: 'error', message: 'Could not copy.' }) }
   }
   const title = 'Problems Metra had'
-  if (failed) return <Card title={title}><p className="text-body-md text-ink-muted">Could not load this. <button type="button" onClick={load} className="font-medium text-primary hover:underline">Try again</button></p></Card>
+  if (failed) return <Card title={title}><p className="text-body-md text-ink-muted">Could not load this. <button type="button" onClick={load} className="font-medium text-primary-ink hover:underline">Try again</button></p></Card>
   if (!data) return <Card title={title}><p className="flex items-center gap-2 text-body-md text-ink-muted"><Loader2 size={15} className="animate-spin" />Loading…</p></Card>
   // Problems from before this version went live are often already fixed: they are hidden until asked for.
   const fresh = data.problems.filter((p) => p.createdAt >= data.since)
@@ -227,7 +227,7 @@ function ProblemsCard() {
   return (
     <Card title={title}
       subtitle={`${all ? 'Last 14 days' : `Since this version went live (${when(data.since)})`}: ${count} of ${answers} answers had a problem${answers ? ` (${rate}%)` : ''}.${causes.length ? ` ${causes.map(([c, n]) => `${n} × ${c}`).join(', ')}.` : ''} You see what Metra looked up and why it failed, never the question or the answer.`}
-      action={<span className="flex items-center gap-3"><button type="button" onClick={() => setAll((v) => !v)} className="text-body-sm font-medium text-primary hover:underline">{all ? 'Only since this version' : `Show the last 14 days (${data.total})`}</button>{shown.length ? <Button size="sm" variant="secondary" onClick={() => void copy(JSON.stringify(shown, null, 1), 'These problems')}>Copy for the developer</Button> : null}</span>}>
+      action={<span className="flex items-center gap-3"><button type="button" onClick={() => setAll((v) => !v)} className="text-body-sm font-medium text-primary-ink hover:underline">{all ? 'Only since this version' : `Show the last 14 days (${data.total})`}</button>{shown.length ? <Button size="sm" variant="secondary" onClick={() => void copy(JSON.stringify(shown, null, 1), 'These problems')}>Copy for the developer</Button> : null}</span>}>
       {shown.length === 0 ? (
         <p className="text-body-md text-ink-muted">{all ? 'No problems in the last 14 days.' : 'No problems since this version went live.'}</p>
       ) : (
@@ -238,16 +238,16 @@ function ProblemsCard() {
                 <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-semibold', PROBLEM[p.kind].tone)}>{PROBLEM[p.kind].label}</span>
                 <span className="text-body-sm font-medium text-ink">{person(p)}</span>
                 <span className="text-[12px] text-ink-faint">{when(p.createdAt)}{p.latencyMs != null ? ` · ${(p.latencyMs / 1000).toFixed(1)} s` : ''}{p.model ? ` · ${p.model}` : ''}</span>
-                <button type="button" onClick={() => void copy(JSON.stringify(p, null, 1), 'Details')} className="ml-auto text-body-sm font-medium text-primary hover:underline">Copy details</button>
+                <button type="button" onClick={() => void copy(JSON.stringify(p, null, 1), 'Details')} className="ml-auto text-body-sm font-medium text-primary-ink hover:underline">Copy details</button>
               </div>
-              {p.error && <p className="mt-1.5 break-words text-body-sm text-danger">{p.error}</p>}
+              {p.error && <p className="mt-1.5 break-words text-body-sm text-danger-ink">{p.error}</p>}
               {p.tools.length > 0 && (
                 <ul className="mt-1.5 space-y-0.5">
                   {p.tools.map((t, i) => (
                     <li key={i} className="break-words text-[12.5px] text-ink-muted">
-                      <span className={cn('font-medium', t.ok ? 'text-ink' : 'text-danger')}>{t.name.replace(/_/g, ' ')}</span>
+                      <span className={cn('font-medium', t.ok ? 'text-ink' : 'text-danger-ink')}>{t.name.replace(/_/g, ' ')}</span>
                       {shortArgs(t.args) && <span className="ml-1 font-mono text-[11.5px]">{shortArgs(t.args)}</span>}
-                      {!t.ok && <span className="ml-1 text-danger">failed{t.error ? `: ${t.error}` : ''}</span>}
+                      {!t.ok && <span className="ml-1 text-danger-ink">failed{t.error ? `: ${t.error}` : ''}</span>}
                     </li>
                   ))}
                 </ul>
@@ -261,11 +261,11 @@ function ProblemsCard() {
 }
 
 function FilterLink({ on, onClick, onLabel, offLabel }: { on: boolean; onClick: () => void; onLabel: string; offLabel: string }) {
-  return <button type="button" onClick={onClick} className="text-body-sm font-medium text-primary hover:underline">{on ? onLabel : offLabel}</button>
+  return <button type="button" onClick={onClick} className="text-body-sm font-medium text-primary-ink hover:underline">{on ? onLabel : offLabel}</button>
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="flex items-baseline justify-between gap-3"><dt className="text-ink-muted">{label}</dt><dd className="text-right text-ink">{children}</dd></div>
 }
-const Ok = ({ children }: { children: React.ReactNode }) => <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 size={14} />{children}</span>
-const Warn = ({ children }: { children: React.ReactNode }) => <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={14} />{children}</span>
+const Ok = ({ children }: { children: React.ReactNode }) => <span className="inline-flex items-center gap-1 text-success-ink"><CheckCircle2 size={14} />{children}</span>
+const Warn = ({ children }: { children: React.ReactNode }) => <span className="inline-flex items-center gap-1 text-warning-ink"><AlertTriangle size={14} />{children}</span>
