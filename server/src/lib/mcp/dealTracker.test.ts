@@ -4,7 +4,7 @@ import { cutToolText } from '../metra/agent'
 
 // Metra once answered "Active 1, Submitted 0, Won 0, Lost 5" for a Deal Tracker showing 6 / 8 / 15 / 5, because it
 // counted the few bids search returned. The deal_tracker tool counts every deal itself, the same way the page does.
-const bid = (n: number, status: 'ACTIVE' | 'SUBMITTED' | 'WON' | 'LOST', agentName: string, dueDate: string, extra: Partial<DealTrackerData['bids'][number]> = {}) => ({
+const bid = (n: number, status: DealTrackerData['bids'][number]['status'], agentName: string, dueDate: string, extra: Partial<DealTrackerData['bids'][number]> = {}) => ({
   number: n, title: `Deal ${n}`, company: `Company ${n}`, type: 'PO', district: '', agentName, status, dueDate, submissionType: 'EMAIL', priceQuoted: 1000, awardedPrice: status === 'WON' ? 2500.5 : null, bidBond: false, bidBondAmount: null, closedDate: status === 'WON' || status === 'LOST' ? dueDate : null, reminderSet: false, ...extra,
 })
 const data: DealTrackerData = {

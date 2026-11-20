@@ -9,7 +9,7 @@ import { dialerApi, type DialerData, type SavedView } from '../../../../lib/dial
 import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, multiLabel, type LeadFilters } from '../../../../lib/dialer'
 import { FilterBar, type FilterDef } from './filters'
 import { DownloadLeads, InfoTip, MultiFilter, Pager, errMsg, usePaged } from './ui'
-import { ColumnPicker, LeadsTable } from './LeadColumns'
+import { ColumnPicker, LeadsTable, parseSort, sortLeads, type LeadSort } from './LeadColumns'
 import { BulkBar } from './TaskParts'
 import { BulkFillModal } from './BulkFillModal'
 import { downloadNotes } from './exports'
@@ -37,7 +37,10 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
   const [notesOpen, setNotesOpen] = useState(false)
   const lastImport = useMemo(() => (data.lastImport ? { id: data.lastImport.id, at: new Date(data.lastImport.at) } : null), [data.lastImport])
   const leads = data.leads
-  const list = useMemo(() => filterLeads(leads, f, now, lastImport, data.settings), [leads, f, now, lastImport, data.settings])
+  // The sort (a column header's arrows) also lives in the address bar ("ls=updated:desc") and covers every page.
+  const sort = parseSort(params.get('ls'))
+  const setSort = (s: LeadSort) => setParams((prev) => { const n = new URLSearchParams(prev); if (s) n.set('ls', `${s.key}:${s.dir}`); else n.delete('ls'); n.delete('lp'); return n }, { replace: true })
+  const list = useMemo(() => sortLeads(filterLeads(leads, f, now, lastImport, data.settings), sort, now), [leads, f, now, lastImport, data.settings, sort?.key, sort?.dir]) // eslint-disable-line react-hooks/exhaustive-deps
   const p = usePaged(list, 25, 'l')
   const counts = useMemo(() => Object.fromEntries(PRESET_VIEWS.map((v) => [v.id, filterLeads(leads, { preset: v.id }, now, lastImport).length])), [leads, now, lastImport])
 
@@ -126,7 +129,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
         {list.length === 0 ? <p className="py-8 text-center text-body-md text-ink-muted">No leads match.</p> : (
           <>
             <LeadsTable leads={p.rows} now={now} columns={columns} showOwner={showOwner} onOpen={(id) => onOpenLead(id, list.map((l) => l.id))}
-              picked={picked} canPick={(l) => l.ownerId === data.me.id}
+              picked={picked} canPick={(l) => l.ownerId === data.me.id} sort={sort} onSort={setSort}
               onPick={(ids, on) => setPicked((s) => { const n = new Set(s); ids.forEach((id) => (on ? n.add(id) : n.delete(id))); return n })} />
             <Pager p={p} />
           </>

@@ -10,8 +10,8 @@ import { actsAs } from '../lib/acting'
  *  - Member: only their own bids.
  *  - Team Lead (ITAD): every bid in the ITAD department (team-wide aggregation).
  *  - Super Admin: all bids.
- * awardedPrice is required whenever status = WON. A CONTRACT deal (won and signed as a contract) has no awarded
- * price: its contract value is the deal's totalAmount, which is required, with optional contract start and end dates.
+ * awardedPrice is required whenever status = WON. A CONTRACT deal (won, a contract was sent, often no fixed price)
+ * has no awarded price: its contract value, when known, is the deal's totalAmount; start and end dates are optional.
  */
 
 const DECIDED = ['WON', 'LOST', 'CONTRACT'] as const
@@ -144,12 +144,11 @@ function resolveClosedDate(status: string, supplied: string | null | undefined, 
 }
 
 /**
- * A Contract deal needs its contract value (the Total amount) and keeps its optional start and end dates (the end not
- * before the start). Any other status keeps no contract dates.
+ * A Contract deal keeps its optional start and end dates (the end not before the start). Its value is optional: a
+ * contract is often sent with no fixed price. Any other status keeps no contract dates.
  */
-function contractFields(status: string, total: number | null, start: Date | null, end: Date | null): { start: Date | null; end: Date | null } | { error: string } {
+function contractFields(status: string, start: Date | null, end: Date | null): { start: Date | null; end: Date | null } | { error: string } {
   if (status !== 'CONTRACT') return { start: null, end: null }
-  if (total == null || total <= 0) return { error: 'Contract value is required to mark a deal as Contract' }
   if (start && end && end < start) return { error: 'The contract cannot end before it starts' }
   return { start, end }
 }
@@ -176,7 +175,7 @@ export async function createBid(req: AuthedRequest, res: Response): Promise<void
     res.status(400).json({ error: 'Awarded price is required to mark a bid as Won' })
     return
   }
-  const contract = contractFields(v.status ?? 'ACTIVE', v.totalAmount ?? null, dayOnly(v.contractStart), dayOnly(v.contractEnd))
+  const contract = contractFields(v.status ?? 'ACTIVE', dayOnly(v.contractStart), dayOnly(v.contractEnd))
   if ('error' in contract) {
     res.status(400).json({ error: contract.error })
     return
@@ -259,10 +258,8 @@ export async function updateBid(req: AuthedRequest, res: Response): Promise<void
     return
   }
 
-  const nextTotal = v.totalAmount !== undefined ? v.totalAmount : (existing.totalAmount?.toNumber() ?? null)
   const contract = contractFields(
     nextStatus,
-    nextTotal,
     v.contractStart !== undefined ? dayOnly(v.contractStart) : existing.contractStart,
     v.contractEnd !== undefined ? dayOnly(v.contractEnd) : existing.contractEnd,
   )

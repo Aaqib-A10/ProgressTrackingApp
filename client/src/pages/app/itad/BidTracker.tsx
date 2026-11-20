@@ -147,6 +147,22 @@ export default function BidTracker() {
 
   const extraFilters = Boolean(typeFilter || agentFilter || from || to)
 
+  // What each card's deals are worth: their quoted prices added up (Won: the awarded prices; Contract: contract values).
+  // A "Total" line joins when Total deal amounts were entered. Every deal this person can see, like the counts.
+  const worth = useMemo(() => {
+    const of = (st: BidStatus) => (bids ?? []).filter((b) => b.status === st)
+    const sum = (list: Bid[], f: (b: Bid) => number | null) => list.reduce((t, b) => t + (f(b) ?? 0), 0)
+    const lines = (st: BidStatus): [string, string][] => {
+      const list = of(st)
+      const main: [string, string] = st === 'WON' ? ['Awarded', money(sum(list, (b) => b.awardedPrice))]
+        : st === 'CONTRACT' ? ['Contract value', usd(sum(list, (b) => b.totalAmount))]
+        : ['Quoted', money(sum(list, (b) => b.priceQuoted))]
+      const total = sum(list, (b) => b.totalAmount)
+      return st !== 'CONTRACT' && total > 0 ? [main, ['Total', usd(total)]] : [main]
+    }
+    return { ACTIVE: lines('ACTIVE'), SUBMITTED: lines('SUBMITTED'), WON: lines('WON'), CONTRACT: lines('CONTRACT'), LOST: lines('LOST') }
+  }, [bids])
+
   // Total amount of the deals on screen (the filters apply, so a lead can pick one agent or a period).
   const totals = useMemo(() => {
     const sum = (list: Bid[]) => list.reduce((t, b) => t + (b.totalAmount ?? 0), 0)
@@ -220,8 +236,8 @@ export default function BidTracker() {
     { key: 'awardedPrice', header: 'Awarded Price', align: 'right', render: (b) => {
       if (b.status === 'CONTRACT') return (
         <span className="inline-flex flex-col items-end leading-tight">
-          <span className="font-semibold tabular-nums text-highlight-ink">{usd(b.totalAmount)}</span>
-          <span className="text-body-sm text-ink-muted">contract{b.contractEnd ? ` · until ${fmtDate(`${b.contractEnd}T12:00:00`)}` : ''}</span>
+          <span className="font-semibold tabular-nums text-highlight-ink">{b.totalAmount != null ? usd(b.totalAmount) : 'Contract'}</span>
+          <span className="text-body-sm text-ink-muted">{b.totalAmount != null ? 'contract' : 'no fixed price'}{b.contractEnd ? ` · until ${fmtDate(`${b.contractEnd}T12:00:00`)}` : ''}</span>
         </span>
       )
       const tone = b.awardedPrice == null ? 'text-ink-muted' : b.status === 'LOST' ? 'font-semibold text-danger-ink' : 'font-semibold text-success-ink'
@@ -278,11 +294,11 @@ export default function BidTracker() {
 
       {/* Interactive status filter cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <MetricCard label="Active Opportunities" count={summary?.active ?? 0} money={[['Total', usd(summary?.amounts?.ACTIVE ?? 0)]]} tone="primary" active={filter === 'ACTIVE'} onClick={() => setFilter(filter === 'ACTIVE' ? null : 'ACTIVE')} />
-        <MetricCard label="Submitted" count={summary?.submitted ?? 0} money={[['Total', usd(summary?.amounts?.SUBMITTED ?? 0)]]} tone="warning" active={filter === 'SUBMITTED'} onClick={() => setFilter(filter === 'SUBMITTED' ? null : 'SUBMITTED')} />
-        <MetricCard label="Won" count={summary?.won ?? 0} money={[['Awarded', money(summary?.wonValue ?? 0)], ['Total', usd(summary?.amounts?.WON ?? 0)]]} tone="success" active={filter === 'WON'} onClick={() => setFilter(filter === 'WON' ? null : 'WON')} />
-        <MetricCard label="Contract" count={summary?.contract ?? 0} money={[['Contract value', usd(summary?.contractValue ?? 0)]]} tone="accent" active={filter === 'CONTRACT'} onClick={() => setFilter(filter === 'CONTRACT' ? null : 'CONTRACT')} />
-        <MetricCard label="Lost" count={summary?.lost ?? 0} money={[['Total', usd(summary?.amounts?.LOST ?? 0)]]} tone="danger" active={filter === 'LOST'} onClick={() => setFilter(filter === 'LOST' ? null : 'LOST')} />
+        <MetricCard label="Active Opportunities" count={summary?.active ?? 0} money={worth.ACTIVE} tone="primary" active={filter === 'ACTIVE'} onClick={() => setFilter(filter === 'ACTIVE' ? null : 'ACTIVE')} />
+        <MetricCard label="Submitted" count={summary?.submitted ?? 0} money={worth.SUBMITTED} tone="warning" active={filter === 'SUBMITTED'} onClick={() => setFilter(filter === 'SUBMITTED' ? null : 'SUBMITTED')} />
+        <MetricCard label="Won" count={summary?.won ?? 0} money={worth.WON} tone="success" active={filter === 'WON'} onClick={() => setFilter(filter === 'WON' ? null : 'WON')} />
+        <MetricCard label="Contract" count={summary?.contract ?? 0} money={worth.CONTRACT} tone="accent" active={filter === 'CONTRACT'} onClick={() => setFilter(filter === 'CONTRACT' ? null : 'CONTRACT')} />
+        <MetricCard label="Lost" count={summary?.lost ?? 0} money={worth.LOST} tone="danger" active={filter === 'LOST'} onClick={() => setFilter(filter === 'LOST' ? null : 'LOST')} />
         <div className="rounded-card border border-line bg-card p-4 shadow-card" aria-live="polite">
           <div className="text-body-sm font-medium text-ink-muted">
             {filter || extraFilters || query.trim() ? 'Total amount · shown deals' : user?.role === 'MEMBER' ? 'Total amount · my deals' : 'Total amount · all deals'}
@@ -412,10 +428,6 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
       addToast({ type: 'error', message: 'Title, company and due date are required.' })
       return
     }
-    if (status === 'CONTRACT' && !(toTotal(totalAmount) ?? 0)) {
-      addToast({ type: 'error', message: 'Enter the contract value to mark a deal as Contract.' })
-      return
-    }
     if (status === 'CONTRACT' && contractStart && contractEnd && contractEnd < contractStart) {
       addToast({ type: 'error', message: 'The contract cannot end before it starts.' })
       return
@@ -513,15 +525,22 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
           <Field label={(priceProminent ? 'Price quoted (buyback rate)' : 'Price quoted (optional at this stage)') + (unit === 'cents' ? ' · in cents' : '')}>
             <PriceInput value={priceQuoted} onChange={setPriceQuoted} unit={unit} onUnit={setUnit} className={inputCls + (priceProminent ? ' border-primary ring-2 ring-primary/20' : '')} />
           </Field>
-          {(status === 'WON' || status === 'LOST') && (
-            <Field label={(status === 'LOST' ? 'Awarded price (winning bid)' : 'Awarded price') + (unit === 'cents' ? ' · in cents' : '')} required>
+          {status === 'LOST' && (
+            <Field label={'Awarded price (winning bid)' + (unit === 'cents' ? ' · in cents' : '')} required>
               <PriceInput value={awardedPrice} onChange={setAwardedPrice} unit={unit} onUnit={setUnit} className={inputCls} />
             </Field>
           )}
-          <Field label={status === 'CONTRACT' ? 'Contract value ($)' : 'Total deal amount ($)'} required={status === 'CONTRACT'}>
+          {(status === 'WON' || status === 'CONTRACT') && (
+            <Field label={'Awarded price' + (status === 'WON' && unit === 'cents' ? ' · in cents' : '')} required={status === 'WON'}>
+              <AwardedOrContract contract={status === 'CONTRACT'} onContract={(on) => setStatus(on ? 'CONTRACT' : 'WON')}>
+                <PriceInput value={awardedPrice} onChange={setAwardedPrice} unit={unit} onUnit={setUnit} className={inputCls} />
+              </AwardedOrContract>
+            </Field>
+          )}
+          <Field label={status === 'CONTRACT' ? 'Contract value ($, if known)' : 'Total deal amount ($)'}>
             <input type="number" min="0" step="0.01" inputMode="decimal" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} placeholder="e.g. 14400" className={inputCls} aria-label={status === 'CONTRACT' ? 'Contract value in dollars' : 'Total deal amount in dollars'} />
             <span className="mt-1 block text-body-sm text-ink-muted">
-              {status === 'CONTRACT' ? 'The value of the signed contract. It counts as won money in the reports.' : 'The full dollar figure of the deal, not the per-lb rate. Optional.'}
+              {status === 'CONTRACT' ? 'Optional. Leave empty when there is no fixed price; add it later if it becomes known.' : 'The full dollar figure of the deal, not the per-lb rate. Optional.'}
             </span>
           </Field>
           {status === 'CONTRACT' && (
@@ -589,12 +608,30 @@ function BidFormModal({ bid, agentName, teamDeals, onClose, onSaved }: { bid?: B
  *  - Lost: capture the winning price and the company it went to.
  */
 function DecisionModal({ bid, status, onClose, onSaved }: { bid: Bid; status: Decision; onClose: () => void; onSaved: () => void }) {
-  if (status === 'CONTRACT') return <ContractModal bid={bid} onClose={onClose} onSaved={onSaved} />
-  return <WonLostModal bid={bid} status={status} onClose={onClose} onSaved={onSaved} />
+  // Won can turn into Contract (a contract was sent, no price) and back, without closing the window.
+  const [mode, setMode] = useState<Decision>(status)
+  if (mode === 'CONTRACT') return <ContractModal bid={bid} onClose={onClose} onSaved={onSaved} onPrice={() => setMode('WON')} />
+  return <WonLostModal bid={bid} status={mode} onClose={onClose} onSaved={onSaved} onContract={() => setMode('CONTRACT')} />
 }
 
-/** Mark a deal as Contract: won and signed. No awarded price; the contract value (required) and when it runs. */
-function ContractModal({ bid, onClose, onSaved }: { bid: Bid; onClose: () => void; onSaved: () => void }) {
+/** Where the awarded price goes: the price box, or "Contract (no price)" when a contract was sent and there is no fixed price. */
+function AwardedOrContract({ contract, onContract, children }: { contract: boolean; onContract: (on: boolean) => void; children: React.ReactNode }) {
+  const chip = (on: boolean) => 'rounded-btn px-3 py-1 text-body-sm font-semibold transition-colors ' + (on ? 'bg-ink text-card' : 'text-ink-muted hover:text-ink')
+  return (
+    <div className="space-y-2">
+      <div className="inline-flex rounded-btn border border-line bg-card p-0.5" role="radiogroup" aria-label="Awarded price or contract">
+        <button type="button" role="radio" aria-checked={!contract} onClick={() => onContract(false)} className={chip(!contract)}>Price</button>
+        <button type="button" role="radio" aria-checked={contract} onClick={() => onContract(true)} className={chip(contract)}>Contract (no price)</button>
+      </div>
+      {contract
+        ? <p className="rounded-btn border border-accent/40 bg-highlight-muted px-3 py-2 text-body-sm text-highlight-ink">A contract was sent: no awarded price needed. The deal is saved as <b>Contract</b>.</p>
+        : children}
+    </div>
+  )
+}
+
+/** Mark a deal as Contract: won, a contract was sent, no fixed price. The contract value and dates are optional. */
+function ContractModal({ bid, onClose, onSaved, onPrice }: { bid: Bid; onClose: () => void; onSaved: () => void; onPrice: () => void }) {
   const { addToast } = useToast()
   const [value, setValue] = useState(bid.totalAmount != null ? String(bid.totalAmount) : '')
   const [start, setStart] = useState(bid.contractStart ?? '')
@@ -603,7 +640,6 @@ function ContractModal({ bid, onClose, onSaved }: { bid: Bid; onClose: () => voi
 
   async function save() {
     const v = toTotal(value)
-    if (!v) { addToast({ type: 'error', message: 'Enter the contract value.' }); return }
     if (start && end && end < start) { addToast({ type: 'error', message: 'The contract cannot end before it starts.' }); return }
     setSaving(true)
     try {
@@ -626,11 +662,14 @@ function ContractModal({ bid, onClose, onSaved }: { bid: Bid; onClose: () => voi
       footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={save} disabled={saving}>Save as Contract</Button></>}
     >
       <p className="mb-3 text-body-sm text-ink-muted">
-        <b className="text-ink">{bid.title}</b> is won and signed as a contract. Enter the contract value: it counts as won money in the reports.
+        <b className="text-ink">{bid.title}</b> is won with a contract and no fixed price, so there is no awarded price to enter.
       </p>
       <div className="space-y-4">
-        <Field label="Contract value ($)" required>
-          <input type="number" min="0" step="0.01" inputMode="decimal" autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. 14400" className={inputCls} aria-label="Contract value in dollars" />
+        <Field label="Awarded price">
+          <AwardedOrContract contract onContract={(on) => { if (!on) onPrice() }}>{null}</AwardedOrContract>
+        </Field>
+        <Field label="Contract value ($, if known)">
+          <input type="number" min="0" step="0.01" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Optional" className={inputCls} aria-label="Contract value in dollars" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Starts">
@@ -645,7 +684,7 @@ function ContractModal({ bid, onClose, onSaved }: { bid: Bid; onClose: () => voi
   )
 }
 
-function WonLostModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'WON' | 'LOST'; onClose: () => void; onSaved: () => void }) {
+function WonLostModal({ bid, status, onClose, onSaved, onContract }: { bid: Bid; status: 'WON' | 'LOST'; onClose: () => void; onSaved: () => void; onContract: () => void }) {
   const { addToast } = useToast()
   const isLost = status === 'LOST'
   const [unit, setUnit] = useState<PriceUnit>(readUnit)
@@ -690,7 +729,13 @@ function WonLostModal({ bid, status, onClose, onSaved }: { bid: Bid; status: 'WO
       </p>
       <div className="space-y-4">
         <Field label={(isLost ? 'Awarded price (winning bid)' : 'Awarded price') + (unit === 'cents' ? ' · in cents' : '')} required>
-          <PriceInput value={price} onChange={setPrice} unit={unit} onUnit={setUnit} autoFocus className={inputCls} />
+          {isLost
+            ? <PriceInput value={price} onChange={setPrice} unit={unit} onUnit={setUnit} autoFocus className={inputCls} />
+            : (
+              <AwardedOrContract contract={false} onContract={(on) => { if (on) onContract() }}>
+                <PriceInput value={price} onChange={setPrice} unit={unit} onUnit={setUnit} autoFocus className={inputCls} />
+              </AwardedOrContract>
+            )}
         </Field>
         {!isLost && (
           <Field label="Total deal amount ($)">

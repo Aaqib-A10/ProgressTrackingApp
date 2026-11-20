@@ -63,14 +63,20 @@ describe('team active deals', () => {
     expect((await request(app).get('/api/itad/bids').set(...auth(w.itadMember)).expect(200)).body.summary.totalValue).toBe(0)
   })
 
-  it('Contract: won and signed, needs a contract value instead of an awarded price, and counts as won money', async () => {
+  it('Contract: won with a contract, no awarded price (a value only when known), and counts as won money', async () => {
     const month = new Date().toISOString().slice(0, 7)
     const itadRevenue = async () => (await buildFinancialReport({ from: month, to: month })).teams.find((t) => t.team === 'ITAD')!.revenue!
     const before = await itadRevenue()
 
+    // A contract sent with no fixed price: nothing to enter, it is simply Contract.
+    const noPrice = (await request(app).post('/api/itad/bids').set(...auth(w.itadMember)).send(deal('Contract, no price', 'Contract Co')).expect(201)).body.bid
+    const np = (await request(app).patch(`/api/itad/bids/${noPrice.id}`).set(...auth(w.itadMember)).send({ status: 'CONTRACT' }).expect(200)).body.bid
+    expect(np).toMatchObject({ status: 'CONTRACT', awardedPrice: null, totalAmount: null })
+    expect(await itadRevenue()).toBeCloseTo(before, 2)
+    await request(app).delete(`/api/itad/bids/${noPrice.id}`).set(...auth(w.itadMember)).expect(204)
+
     const c = (await request(app).post('/api/itad/bids').set(...auth(w.itadMember)).send(deal('Contract deal', 'Contract Co')).expect(201)).body.bid
-    // No contract value: refused. An end before the start: refused.
-    expect((await request(app).patch(`/api/itad/bids/${c.id}`).set(...auth(w.itadMember)).send({ status: 'CONTRACT' }).expect(400)).body.error).toMatch(/Contract value is required/)
+    // An end before the start: refused.
     await request(app).patch(`/api/itad/bids/${c.id}`).set(...auth(w.itadMember)).send({ status: 'CONTRACT', totalAmount: 50000, contractStart: '2026-12-01', contractEnd: '2026-06-01' }).expect(400)
     // No awarded price needed; the closed date is set like any decided deal.
     const done = (await request(app).patch(`/api/itad/bids/${c.id}`).set(...auth(w.itadMember)).send({ status: 'CONTRACT', totalAmount: 50000, contractStart: '2026-12-01', contractEnd: '2027-11-30', awardedPrice: 9 }).expect(200)).body.bid
