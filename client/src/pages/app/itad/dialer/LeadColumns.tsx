@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -24,7 +25,7 @@ const time = (iso: string | null | undefined) => (iso ? new Date(iso).getTime() 
 const firstNumber = (s: string | null) => { const m = s?.replace(/,/g, '').match(/\d+/); return m ? Number(m[0]) : null }
 
 export const LEAD_COLUMNS: Col[] = [
-  { key: 'company', label: 'Company', sort: (l) => l.company, cell: (l) => <span className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning-ink" title={`Update Earthzone: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</span> },
+  { key: 'company', label: 'Company', sort: (l) => l.company, cell: (l) => <span className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning-ink" title={`Update ${crmName('Earthzone')}: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</span> },
   { key: 'contact', label: 'Contact', sort: (l) => l.contactName, cell: (l) => l.contactName ?? '—' },
   { key: 'phone', label: 'Phone', sort: (l) => l.phone?.replace(/\D/g, ''), cell: (l) => <span className="whitespace-nowrap tabular-nums">{l.phone ?? '—'}</span> },
   { key: 'title', label: 'Title', sort: (l) => l.jobTitle, cell: (l) => l.jobTitle ?? '—' },

@@ -3,6 +3,7 @@ import { pageModule } from '../../lib/staleChunks'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { asPreviewed, usePreview } from '../../lib/preview'
+import { MetraOnDashboard } from '../../components/metra/MetraOnDashboard'
 
 // Each person downloads only their own dashboard (the charts library comes only with the ones that chart).
 const DashboardHome = lazy(pageModule(() => import('./DashboardHome')))
@@ -25,9 +26,11 @@ export default function DashboardIndex() {
   // A CMR department (SDRs and Jesse) works from Lead Management: its home is the Lead Dashboard.
   if (user.department === 'CMR' && user.role !== 'SUPER_ADMIN') return <Navigate to="/app/leads/dashboard" replace />
   // Department Studio, part B: the department's own dashboard of cards.
-  if (user.dashboard && user.role !== 'SUPER_ADMIN') return <CardDashboard user={user} cards={user.dashboard} editable={!preview} />
-  if (user.role === 'SUPER_ADMIN') return <ExecutiveDashboard />
-  if (user.role === 'QA' || user.role === 'QA_LEAD') return <QaTeam />
-  if (user.role === 'TEAM_LEAD' || user.role === 'SUB_DEPT_LEAD') return <TeamLeadDashboard />
-  return <DashboardHome />
+  // What Metra noticed (the day's brief, the weekly summary, alerts) sits above every dashboard; nothing shows when there is nothing to say.
+  const metra = preview ? null : <MetraOnDashboard />
+  if (user.dashboard && user.role !== 'SUPER_ADMIN') return <>{metra}<CardDashboard user={user} cards={user.dashboard} editable={!preview} /></>
+  if (user.role === 'SUPER_ADMIN') return <>{metra}<ExecutiveDashboard /></>
+  if (user.role === 'QA' || user.role === 'QA_LEAD') return <>{metra}<QaTeam /></>
+  if (user.role === 'TEAM_LEAD' || user.role === 'SUB_DEPT_LEAD') return <>{metra}<TeamLeadDashboard /></>
+  return <>{metra}<DashboardHome /></>
 }

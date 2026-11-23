@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import type { Args, Column, Ctx, Entry, Loaded, Row, Table } from './types'
+import type { Args, Column, Ctx, Entry, Flag, Loaded, Row, Table } from './types'
 
 /**
  * The one reader behind `metriq_data`: rows of any data set, filtered and counted here, never by the model.
@@ -87,7 +87,21 @@ export function renderTable(e: Entry, d: Loaded, a: Args, ctx: Ctx): string {
     return flags.find(([k, f]) => norm(k) === x || norm(f.label) === x || f.says.some((s) => norm(s) === x))
       ?? flags.find(([k, f]) => [k, f.label, ...f.says].some((s) => norm(s).includes(x) || x.includes(norm(s))))
   }
-  const wanted: string[] = several(str(a.only))
+  // A condition is applied only when the person asked for it. The model adds conditions of its own ("only: meetings"
+  // for "what is on my calendar?", "deadline still ahead" for "our last meeting notes"), and the answer then leaves out
+  // what the person wanted (metra:check, 21 Nov 2026). When the question names another condition of this data, that
+  // one is used instead ("which items need restocking?" read with "low stock": "needs restocking" is what was asked).
+  // The counts of every condition are printed whatever happens, so nothing is lost by not narrowing.
+  const said = (phrase: string) => !!ctx.asked && !!norm(phrase) && new RegExp(`(^| )${norm(phrase).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(` ${norm(ctx.asked)}`)
+  const asksFor = (f: [string, Flag]) => [f[0], f[1].label, ...f[1].says].some(said)
+  const wanted: string[] = []
+  for (const g of several(str(a.only))) {
+    const f = flagOf(g)
+    if (!ctx.asked || !f || asksFor(f)) { wanted.push(g); continue }
+    const instead = flags.find((x) => asksFor(x))
+    if (instead) { if (!wanted.includes(instead[0])) wanted.push(instead[0]); notes.push(`The question asks for "${instead[1].label}", so that was used instead of "${f[1].label}".`) }
+    else notes.push(`The question does not ask for "${f[1].label}", so all ${many} are listed (how many are ${f[1].label} is counted above).`)
+  }
   const statuses = new Set<string>()
   const st = str(a.status)
   if (st && !/^(all|any)$/i.test(st)) {
@@ -127,9 +141,15 @@ export function renderTable(e: Entry, d: Loaded, a: Args, ctx: Ctx): string {
   if (q.length) {
     const hay = (r: Row) => norm(t.columns.map((c) => `${r[c.key] ?? ''} ${word(c.key, r[c.key])}`).join(' '))
     const every = rows.filter((r) => { const h = hay(r); return q.every((w) => h.includes(w)) })
-    if (every.length || q.length === 1) rows = every
-    else { rows = rows.filter((r) => { const h = hay(r); return q.some((w) => h.includes(w)) }); if (rows.length) notes.push(`No ${one} has all of the words "${str(a.search)}"; these have some of them.`) }
-    applied.push(`words "${str(a.search)}"`)
+    const some = every.length ? every : rows.filter((r) => { const h = hay(r); return q.some((w) => h.includes(w)) })
+    // Words that are in no row at all ("Vendor" for the rows of the Vendors block, whose name is the data set itself)
+    // would leave nothing to answer from: they are dropped, as dates the model added that match nothing are.
+    if (!some.length && rows.length) notes.push(`No ${one} contains "${str(a.search)}", so the words were left out: all ${many} are listed.`)
+    else {
+      if (!every.length) notes.push(`No ${one} has all of the words "${str(a.search)}"; these have some of them.`)
+      rows = some
+      applied.push(`words "${str(a.search)}"`)
+    }
   }
 
   // ---- dates
@@ -174,7 +194,13 @@ export function renderTable(e: Entry, d: Loaded, a: Args, ctx: Ctx): string {
     else out.push(`Grouped by ${by.label}: ${tally(rows, by.key).slice(0, 40).map(([v, k]) => `${v} ${k}${(t.sums ?? []).filter((s) => s !== by.key).map((s) => `, ${colOf(s).label} ${num(sum(rows.filter((r) => word(by.key, r[by.key]) === v), s))}`).join('')}`).join('; ') || 'nothing'}.`)
   }
 
-  // ---- the rows
+  // ---- the rows: those the question names (a person, an item) come first, so a long list does not cut them off
+  if (ctx.asked && rows.length > 5) {
+    const said2 = ` ${norm(ctx.asked)} `
+    const keys = [...(t.people ?? []), t.columns.find((c) => !c.hidden)?.key].filter((k): k is string => !!k)
+    const named = (r: Row) => keys.some((k) => { const v = norm(r[k]); return v.length >= 4 && said2.includes(` ${v} `) })
+    if (rows.some(named)) rows = [...rows.filter(named), ...rows.filter((r) => !named(r))]
+  }
   const cols = t.columns.filter((c) => !c.hidden)
   let limit = Math.min(60, Math.max(1, Math.round(Number(a.limit)) || 25))
   const line = (r: Row, long: number) => cols.map((c) => show(c, r[c.key], t, ctx.zone, long)).join(' | ')

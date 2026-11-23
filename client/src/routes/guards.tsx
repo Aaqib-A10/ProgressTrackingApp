@@ -10,6 +10,28 @@ import { inHomeCompany } from '../lib/types'
 import { canOpen } from '../lib/access'
 import { asPreviewed, usePreview } from '../lib/preview'
 import { AppShell } from '../components/layout/AppShell'
+import { TwoStepSetup } from '../components/account/TwoStep'
+import { Button } from '../components/ui/Button'
+
+/**
+ * The company requires two-step sign-in and this person has none yet: the setup is all they see (the server refuses
+ * everything else too, see middleware/auth). Once it is on, the app opens.
+ */
+function TwoStepRequired() {
+  const { user, refresh, logout } = useAuth()
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-bg p-4">
+      <div className="w-full max-w-xl rounded-card border border-line bg-card p-6 shadow-card">
+        <h1 className="text-headline-md text-ink">Set up two-step sign-in</h1>
+        <p className="mb-5 mt-1 text-body-sm text-ink-muted">{user?.company?.name ?? 'Your company'} asks everyone to sign in with their password and a 6-digit code from an app on their phone. It takes a minute, once.</p>
+        <TwoStepSetup onDone={() => void refresh()} />
+        <div className="mt-6 border-t border-line pt-3">
+          <Button variant="ghost" size="sm" onClick={() => void logout()}>Sign out</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function FullScreenSpinner() {
   return (
@@ -35,6 +57,7 @@ export function AppShellRoute() {
   // Department Studio preview: the Super Admin sees a department's menu as its member or team lead.
   const preview = usePreview()
   if (!real) return <Navigate to="/login" replace />
+  if (real.twoStep?.required && !real.twoStep.on && !real.supportSession) return <TwoStepRequired />
   const user = asPreviewed(real, preview)
   // Every page under /app checks the same access list as the menu (lib/access.ts), so a
   // screen for another department or role cannot be opened by typing its address.

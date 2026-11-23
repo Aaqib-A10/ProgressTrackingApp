@@ -1,5 +1,6 @@
 import { embedQuery, rerank, tokens } from './embed'
 import { indexOf, type StoredChunk } from './store'
+import { dbIndexOn, dbSearch, fillVectors } from './dbIndex'
 import { canRead, type Asker } from './access'
 
 /**
@@ -23,14 +24,20 @@ const MIN_RERANK = Number(process.env.METRA_MIN_RERANK ?? -6)
  */
 const RERANK_TOP = Math.max(1, Number(process.env.METRA_RERANK_TOP ?? 10))
 
+/** Pieces saved before the database index was switched on get their numbers once per company (per server start). */
+const filled = new Map<string, Promise<number>>()
+const readyInDatabase = (companyId: string) => { let p = filled.get(companyId); if (!p) { p = fillVectors(companyId).catch(() => 0); filled.set(companyId, p) } return p }
+
 export async function searchMetriq(asker: Asker, query: string, o: SearchOptions = {}): Promise<Hit[]> {
   const q = query.trim().slice(0, 500)
   if (!q) return []
   const sources = new Set([...asker.sources].filter((s) => !o.sources?.length || o.sources.includes(s)))
   if (!sources.size) return []
-  const ix = await indexOf(asker.companyId)
   const [vec, words] = [await embedQuery(q), tokens(q)]
-  const { vector, keyword } = ix.search(vec, words, { principals: asker.principals, sources, from: o.from, to: o.to }, 50)
+  const filter = { principals: asker.principals, sources, from: o.from, to: o.to }
+  // In the database (METRA_INDEX=database) or in the server's memory (the default).
+  const ix = dbIndexOn() ? (await readyInDatabase(asker.companyId), await dbSearch(asker.companyId, vec, words, filter, 50)) : await indexOf(asker.companyId)
+  const { vector, keyword } = 'search' in ix ? ix.search(vec, words, filter, 50) : ix
 
   // Reciprocal rank fusion.
   const fused = new Map<number, { rrf: number; cos: number; kw: boolean }>()

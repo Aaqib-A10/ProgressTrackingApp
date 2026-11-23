@@ -46,7 +46,8 @@ export async function createCompanyWithOwner(input: {
         name: companyName, slug, kind, status: 'TRIAL',
         plan: kind === 'PERSONAL' ? 'personal' : 'business',
         trialEndsAt: new Date(now.getTime() + TRIAL_DAYS * 86400_000),
-        timeZone: input.timeZone || 'Asia/Karachi',
+        // The browser sends its own zone on sign-up; with none, UTC (changed any time in Company settings).
+        timeZone: input.timeZone || 'UTC',
         helpEnabled: true,
       },
     })

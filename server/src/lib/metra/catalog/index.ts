@@ -14,12 +14,13 @@ import { NUMBERS } from './numbers'
 import { MARKETING } from './marketing'
 import { WORK } from './work'
 import { MORE } from './more'
+import { BUSINESS } from './business'
 
 /**
  * The catalog: every entry, the guide made from it for one person and one question, and the `metriq_data` reader.
  * Order matters for the guide: personal screens, the calendar, then each area.
  */
-export const ENTRIES: Entry[] = [...CORE_PERSONAL, ...CALENDAR, ...PEOPLE, ...CORE_WORK, ...NUMBERS, ...MARKETING, ...ECOMMERCE, ...INVENTORY, ...WORK, ...MORE]
+export const ENTRIES: Entry[] = [...CORE_PERSONAL, ...CALENDAR, ...PEOPLE, ...CORE_WORK, ...NUMBERS, ...MARKETING, ...ECOMMERCE, ...INVENTORY, ...WORK, ...MORE, ...BUSINESS]
 
 export type { Entry, Args, Ctx } from './types'
 
@@ -79,7 +80,19 @@ export function pick(a: Asker, question: string, earlier = '', max = 4): Entry[]
 export function unclear(a: Asker, question: string, earlier = ''): [Entry, Entry] | null {
   const [x, y] = rank(a, question, earlier)
   if (!x || !y || x.e.area === y.e.area) return null
-  return x.s >= 3 && y.s >= x.s * 0.6 ? [x.e, y.e] : null
+  return x.s >= 3 && y.s >= x.s * 0.55 ? [x.e, y.e] : null
+}
+
+/**
+ * The one data set a question is plainly about ("what is in my notes?" is Notes): the model is told to read it first.
+ * It went to the search or another tool instead (notes, a colleague's email, the e-commerce board; metra:check,
+ * 21 Nov 2026) although the guide ranked the right data set first.
+ */
+export function clear(a: Asker, question: string, earlier = ''): Entry | null {
+  const [x, y] = rank(a, question, earlier)
+  // Alone, even a weak fit is the one ("what is X's email?" fits only the directory); with others, a clear lead.
+  if (!x || x.s < (y ? 5 : 3)) return null
+  return !y || y.s < x.s * 0.55 ? x.e : null
 }
 
 // ------------------------------------------------------------------ the guide
@@ -118,6 +131,8 @@ export function guideFor(a: Asker, question = '', earlier = '', page = ''): stri
     if (e.pin?.(a) || chosen.has(e.key)) { if (!said) { lines.push(DATA_LINE); said = true } lines.push(lineOf(e)) } else rest.push(e)
   }
   if (rest.length) lines.push(`More data sets read the same way (metriq_data with what = the name in quotes): ${rest.map((e) => `"${e.key}" = ${e.label} (${e.area})`).join('; ')}.`)
+  const one = clear(a, question, earlier)
+  if (one && !two) lines.push(`THIS QUESTION is answered by "${one.key}" (${one.label}, ${one.area}): read it first with metriq_data what="${one.key}", before search_metriq or any other tool, and answer from what it gives. Search is for words inside records, not for this.`)
   if (two) lines.push(`THIS QUESTION fits two data sets about equally: "${two[0].key}" (${two[0].label}, ${two[0].area}) and "${two[1].key}" (${two[1].label}, ${two[1].area}). If the person's words or the screen they are on do not say which, read both in the same round and answer for each under its own name; ask one short question only if the two answers would contradict each other.`)
   lines.push(RANGES_LINE)
   return lines
@@ -137,13 +152,18 @@ export function entryOf(a: Asker, what: unknown): Entry | null {
     ?? list.map((e) => ({ e, s: fit(e, w) })).filter((y) => y.s >= 2).sort((p, q) => q.s - p.s)[0]?.e ?? null
 }
 
-export function ctxOf(a: Asker, me: { id: string; role: Role; name: string }, now = new Date()): Ctx {
+export function ctxOf(a: Asker, me: { id: string; role: Role; name: string }, now = new Date(), asked?: string): Ctx {
   const zone = companyTz()
-  return { me, asker: a, zone, now, today: DateTime.fromJSDate(now).setZone(zone).toISODate()! }
+  return { me, asker: a, zone, now, today: DateTime.fromJSDate(now).setZone(zone).toISODate()!, ...(asked ? { asked } : {}) }
+}
+
+/** The words a read is judged against: the question (Roman Urdu also in English) and, for a follow-up, the one it continues. */
+export function askedWords(question: string, earlier = ''): string {
+  return [plainWords(question), isFollowUp(question, earlier) ? plainWords(earlier) : ''].filter(Boolean).join(' ')
 }
 
 /** Read one data set as the person: filtered and counted by Metriq, as text for the model. */
-export async function readData(a: Asker, me: { id: string; role: Role; name: string }, given: Record<string, unknown>): Promise<{ ok: boolean; text: string }> {
+export async function readData(a: Asker, me: { id: string; role: Role; name: string }, given: Record<string, unknown>, asked?: string): Promise<{ ok: boolean; text: string }> {
   const e = entryOf(a, given.what)
   if (!e) {
     const open = readable(a)
@@ -154,7 +174,7 @@ export async function readData(a: Asker, me: { id: string; role: Role; name: str
     from: str(given.from) || undefined, to: str(given.to) || undefined, range: str(given.range) || undefined, date: str(given.date) || undefined,
     item: str(given.item) || undefined, group_by: str(given.group_by) || undefined, limit: Number(given.limit) || undefined,
   }
-  const ctx = ctxOf(a, me)
+  const ctx = ctxOf(a, me, new Date(), asked)
   // An entry that breaks on data it did not expect says so; it never takes the whole answer down.
   try {
     const got = await e.load!(ctx, args)

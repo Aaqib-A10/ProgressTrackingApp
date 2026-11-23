@@ -152,7 +152,7 @@ export function ChatThread({ conversationId, meId, compact, prefill, onHeaderCli
         if (!atBottom.current) setNewBelow((n) => n + r.messages.filter((m) => m.user.id !== meId).length)
       }
     } catch { /* transient */ }
-  }, 2500), [conversationId, markRead])
+  }, 2500, (p) => p.topic === 'chat' && p.conversationId === conversationId), [conversationId, markRead])
 
   useEffect(() => visiblePoll(() => { chatApi.conversation(conversationId).then((r) => setConv((cur) => (sameJson(cur, r.conversation) ? cur : r.conversation))).catch(() => undefined) }, 30000), [conversationId])
 

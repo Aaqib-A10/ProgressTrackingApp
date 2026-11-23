@@ -31,6 +31,34 @@ const me = asker('MEMBER', ['ECOMMERCE'])
 const read = (a: Record<string, unknown>) => renderTable(STOCK, { rows }, a, ctx(me))
 
 describe('the reader behind metriq_data', () => {
+  it('applies a condition only when the person asked for it, and uses the one they asked for instead', () => {
+    const BOARD: Entry = { ...STOCK, table: { ...STOCK.table!, flags: { ...STOCK.table!.flags, mine: { label: 'mine', says: ['assigned to me'], test: (r) => r.assigneeId === 'u1' } } } }
+    const asking = (asked: string, a: Record<string, unknown>) => renderTable(BOARD, { rows }, a, { ...ctx(me), asked })
+    // Asked plainly: the model's "not resolved" is not applied; all four are listed and the count is still given.
+    const plain = asking('what is in stock tracking?', { only: 'not resolved' })
+    expect(plain).toContain('The question does not ask for "not resolved", so all stock requests are listed')
+    expect(plain).toContain('Lenovo M720q')
+    expect(plain).toContain('not resolved 3')
+    // Asked for it ("pending", one of its words): applied.
+    expect(asking('which ones are pending?', { only: 'not resolved' })).not.toContain('Lenovo M720q')
+    // The model picked another condition than the one asked for: the asked one is used.
+    const other = asking('which are assigned to me?', { only: 'not resolved' })
+    expect(other).toContain('The question asks for "mine", so that was used instead of "not resolved".')
+    expect(other).toContain('Dell Latitude 5490')
+    expect(other).not.toContain('HP EliteDesk')
+    // A word must start a word of the question: "open" is not found in "reopened".
+    expect(asking('which were reopened?', { only: 'open' })).toContain('does not ask for')
+    // Without the question (tests, the coverage gate), the condition is applied as given.
+    expect(read({ only: 'not resolved' })).not.toContain('Lenovo M720q')
+  })
+
+  it('words that are in no row are left out instead of leaving nothing', () => {
+    const t = read({ search: 'Vendors' })
+    expect(t).toContain('No stock request contains "Vendors", so the words were left out: all stock requests are listed.')
+    expect(t).toContain('HP EliteDesk 800 G4')
+    expect(read({ search: 'Dell' })).not.toContain('HP EliteDesk')
+  })
+
   it('gives the totals of every row first, with each status, each condition and the sums', () => {
     const t = read({})
     expect(t).toContain('All: 4 stock requests; by status: Requested 2, Assigned 1, Resolved 1; not resolved 3; total quantity 21.')
@@ -168,8 +196,13 @@ describe('the catalog', () => {
     expect(keys(asker('TEAM_LEAD', ['ITAD']))).toEqual(expect.arrayContaining(['itad.team', 'attendance.now', 'attendance.team', 'reports.missing', 'reports.monthly']))
     expect(keys(asker('TEAM_LEAD', ['ITAD'])).some((k) => k.startsWith('leadgen.'))).toBe(false)
     expect(keys(asker('MEMBER', ['MARKETING']))).toEqual(expect.arrayContaining(['marketing.tasks', 'marketing.blogs', 'marketing.ads', 'marketing.brands']))
-    // The Super Admin reads every data set, once the parts behind a switch (Lead Management, Daily Report, Lead Dialer) are on.
-    expect(keys({ ...admin, principals: new Set(['leads']), sources: new Set(['LEAD', 'REPORT_ENTRY', 'DIALER_LEAD']) }).length).toBe(ENTRIES.filter((e) => e.load && e.table).length)
+    // The Super Admin reads every data set, once the parts behind a switch (Lead Management, Daily Report, Lead Dialer,
+    // and the plan 2026-11 modules: requests, people records, quotes and invoices, the report builder, project extras) are on.
+    const everySwitch = ['leads', 'on:requests', 'on:people-records', 'on:sales-docs', 'on:report-builder', 'on:project-extras']
+    expect(keys({ ...admin, principals: new Set(everySwitch), sources: new Set(['LEAD', 'REPORT_ENTRY', 'DIALER_LEAD']) }).length).toBe(ENTRIES.filter((e) => e.load && e.table).length)
+    // With those modules off (as for 99 Technologies), none of their data sets is offered, to anyone.
+    expect(keys({ ...admin, principals: new Set(['leads']), sources: new Set(['LEAD', 'REPORT_ENTRY', 'DIALER_LEAD']) }).filter((k) => /^(requests\.|leave\.balance|people\.records|sales\.|projects\.time|reports\.saved)/.test(k))).toEqual([])
+    expect(keys({ ...itad, principals: new Set([...itad.principals, 'on:requests']) }).filter((k) => k.startsWith('requests.') || k === 'leave.balance').sort()).toEqual(['leave.balance', 'requests.list', 'requests.rules', 'requests.waiting'])
     expect((dataTool(itad)!.parameters as { properties: { what: { enum: string[] } } }).properties.what.enum).toEqual(keys(itad))
   })
 

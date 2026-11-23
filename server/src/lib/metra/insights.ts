@@ -1,5 +1,6 @@
 import cron from 'node-cron'
 import { DateTime } from 'luxon'
+import { companyTz, tzLabel } from '../time'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
 import { forEachCompany } from '../company'
@@ -9,6 +10,8 @@ import { runTracked } from '../health/jobs'
 import { withDefaults } from '../dialer/rules'
 import { nextStepIn } from './nextStep'
 import { completeText, llmReady } from './llm'
+import { isAlertHour, runAlerts } from './alerts'
+import { isWeeklyTime, runWeekly } from './weekly'
 
 /**
  * Metra's insights for ITAD agents (ITAD update 12 Nov, section 5): "leads with a stated next step and nothing logged
@@ -16,9 +19,8 @@ import { completeText, llmReady } from './llm'
  * never adds facts (a plain template is used when no model is set up). Suggested actions are cards the agent confirms.
  */
 
-const PKT = 'Asia/Karachi'
-/** The agent's work day starts at noon Pakistan time (a night shift is one day). */
-export const shiftDay = (now = new Date()) => DateTime.fromJSDate(now).setZone(PKT).minus({ hours: 12 }).toISODate()!
+/** The agent's work day starts at noon on the company's clock (a night shift is one day). */
+export const shiftDay = (now = new Date()) => DateTime.fromJSDate(now).setZone(companyTz()).minus({ hours: 12 }).toISODate()!
 
 export interface NextStepMiss { leadId: string; company: string; status: string; said: string; due: string; noteAt: string }
 
@@ -51,7 +53,7 @@ export async function nextStepMisses(ownerId: string, now = new Date()): Promise
 
 /** The facts the brief is written from. */
 export async function briefFacts(ownerId: string, now = new Date()) {
-  const endOfDay = DateTime.fromJSDate(now).setZone(PKT).plus({ hours: 18 }).toJSDate()
+  const endOfDay = DateTime.fromJSDate(now).setZone(companyTz()).plus({ hours: 18 }).toJSDate()
   const [followUps, callBacks, misses, hot] = await Promise.all([
     prisma.workLogEntry.count({ where: { userId: ownerId, autoReason: 'FOLLOW_UP_RULE', status: { not: 'DONE' }, cancelledAt: null, dueAt: { lte: endOfDay } } }),
     prisma.workLogEntry.findMany({ where: { userId: ownerId, autoReason: 'CALL_LATER', status: { not: 'DONE' }, cancelledAt: null, dueAt: { lte: endOfDay } }, select: { title: true, dueAt: true }, take: 10, orderBy: { dueAt: 'asc' } }),
@@ -60,7 +62,7 @@ export async function briefFacts(ownerId: string, now = new Date()) {
   ])
   return {
     followUpsDue: followUps,
-    callBacksToday: callBacks.map((c) => ({ what: c.title, at: c.dueAt ? DateTime.fromJSDate(c.dueAt).setZone(PKT).toFormat('HH:mm') + ' PKT' : null })),
+    callBacksToday: callBacks.map((c) => ({ what: c.title, at: c.dueAt ? DateTime.fromJSDate(c.dueAt).setZone(companyTz()).toFormat('HH:mm') + ` ${tzLabel()}` : null })),
     nextStepsMissed: misses.slice(0, 5).map((m) => ({ company: m.company, status: m.status, said: m.said, due: m.due })),
     quietestHotLeads: hot.map((h) => ({ company: h.company, status: h.status, lastActivity: h.lastActivityAt?.toISOString().slice(0, 10) ?? null })),
   }
@@ -94,7 +96,7 @@ export async function runInsights(now = new Date(), forceBrief = false): Promise
   if (!companyId || !(await isOn('metra', companyId))) return { nextSteps: 0, briefs: 0 }
   const day = shiftDay(now)
   const briefHour = Number(process.env.METRA_BRIEF_HOUR ?? 18)
-  const briefTime = forceBrief || DateTime.fromJSDate(now).setZone(PKT).hour === briefHour
+  const briefTime = forceBrief || DateTime.fromJSDate(now).setZone(companyTz()).hour === briefHour
   const owners = await prisma.dialerLead.findMany({ where: { inLatestImport: true }, distinct: ['ownerId'], select: { ownerId: true, owner: { select: { name: true, isActive: true } } } })
   let nextSteps = 0, briefs = 0
   for (const o of owners) {
@@ -122,6 +124,11 @@ export async function runInsights(now = new Date(), forceBrief = false): Promise
 
 export function startMetraInsights(): void {
   cron.schedule('5 * * * *', () => {
-    void runTracked('metra-insights', () => forEachCompany(() => runInsights())).catch(() => undefined)
+    void runTracked('metra-insights', () => forEachCompany(async () => {
+      await runInsights()
+      // Once a day: what needs someone (lib/metra/alerts). Mondays: the week for leads and admins (lib/metra/weekly).
+      if (isAlertHour()) await runAlerts()
+      if (isWeeklyTime()) await runWeekly()
+    })).catch(() => undefined)
   })
 }

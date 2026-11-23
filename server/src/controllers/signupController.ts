@@ -9,6 +9,7 @@ import { sendVerifyEmail } from '../lib/mail'
 import { PROVIDERS, authorizeLink, exchangeCode, providerList, type ProviderKey } from '../lib/oauth'
 import { getClientIp } from '../lib/ip'
 import { isOn } from '../lib/flags'
+import { returnInvite, signupAllowed, spendInvite, usableInvite } from '../lib/signupInvites'
 import { activeProvider } from '../lib/billing/providers'
 
 const NOT_OPEN = 'Metriq is not open for new companies yet.'
@@ -18,8 +19,10 @@ const NOT_OPEN = 'Metriq is not open for new companies yet.'
  * switch), and is online payment open yet? Until it is, the website says Metriq is free while
  * it launches.
  */
-export async function signupOpen(_req: Request, res: Response): Promise<void> {
-  res.json({ newCompanies: await isOn('new-companies'), paymentsOpen: !!activeProvider() })
+export async function signupOpen(req: Request, res: Response): Promise<void> {
+  // With a good invite link (/start?invite=<code>) the sign-up page opens for that person even while the switch is off.
+  const { allowed, invite } = await signupAllowed(req.query.invite)
+  res.json({ newCompanies: allowed, invited: !!invite, paymentsOpen: !!activeProvider() })
 }
 
 /**
@@ -42,12 +45,15 @@ const startSchema = z.object({
   password: z.string().min(8, 'At least 8 characters').max(200).refine((p) => /[a-zA-Z]/.test(p) && /\d/.test(p), 'Use letters and numbers'),
   companyName: z.string().trim().max(80).optional(),
   timeZone: z.string().trim().max(60).optional(),
+  /** The code of an invite link, when the person came by one. */
+  invite: z.string().trim().max(80).optional(),
 })
 
 /** POST /api/auth/start — sign up with an email and password. */
 export async function start(req: Request, res: Response): Promise<void> {
-  if (!(await isOn('new-companies'))) { res.status(403).json({ error: NOT_OPEN }); return }
   const p = startSchema.safeParse(req.body)
+  const gate = await signupAllowed(p.success ? p.data.invite : (req.body as { invite?: unknown } | undefined)?.invite)
+  if (!gate.allowed) { res.status(403).json({ error: NOT_OPEN }); return }
   if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Invalid input' }); return }
   const v = p.data
   if (v.mode === 'team' && (!v.companyName || v.companyName.length < 2)) { res.status(400).json({ error: "Your company's name, please" }); return }
@@ -56,7 +62,11 @@ export async function start(req: Request, res: Response): Promise<void> {
   // needs to know: point them to sign in instead.
   if (await prisma.user.findUnique({ where: { email: v.email }, select: { id: true } })) { res.status(409).json({ error: 'This email already has a Metriq account. Sign in instead.' }); return }
   const tz = v.timeZone && IANAZone.isValidZone(v.timeZone) ? v.timeZone : null
+  // By invite: take one use first, so a one-company link cannot start two at the same moment.
+  if (gate.invite && !(await spendInvite(gate.invite))) { res.status(403).json({ error: 'This invite link has been used. Ask for a new one.' }); return }
   const { company, user } = await createCompanyWithOwner({ mode: v.mode, companyName: v.companyName, name: v.name, email: v.email, passwordHash: await hashPassword(v.password), verified: false, timeZone: tz })
+    .catch(async (e) => { if (gate.invite) await returnInvite(gate.invite); throw e })
+  if (gate.invite) await prisma.ownerAuditLog.create({ data: { action: 'INVITE_USED', companyId: company.id, target: company.name, ip: getClientIp(req), detail: { note: gate.invite.note } } }).catch(() => undefined)
   const token = signVerifyToken(user.id)
   await sendVerifyEmail({ to: user.email, name: user.name.split(' ')[0], token })
   await prisma.loginEvent.create({ data: { userId: user.id, kind: 'SIGNUP', ip: getClientIp(req), userAgent: String(req.headers['user-agent'] ?? '').slice(0, 400) || null } }).catch(() => undefined)
@@ -109,8 +119,9 @@ export async function oauthStart(req: Request, res: Response): Promise<void> {
   const intent = req.query.intent === 'signup' ? 'signup' : 'signin'
   const mode = req.query.mode === 'solo' ? 'solo' : 'team'
   const company = String(req.query.company ?? '').trim().slice(0, 80)
+  const invite = String(req.query.invite ?? '').trim().slice(0, 80)
   const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36)
-  const state = signOAuthState({ provider, intent, mode, company, nonce })
+  const state = signOAuthState({ provider, intent, mode, company, nonce, ...(invite ? { invite } : {}) })
   // The same note in a cookie: the answer must come back to the browser that asked.
   res.cookie(STATE_COOKIE, nonce, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 10 * 60_000, path: '/api/auth/oauth' })
   res.redirect(authorizeLink(provider, state))
@@ -155,10 +166,12 @@ export async function oauthCallback(req: Request, res: Response): Promise<void> 
     res.redirect('/app/dashboard')
     return
   }
-  if (!(await isOn('new-companies'))) { fail(`There is no Metriq account for ${who.email}.`); return }
+  const byInvite = (await isOn('new-companies')) ? null : await usableInvite(st.invite)
+  if (!(await isOn('new-companies')) && !byInvite) { fail(`There is no Metriq account for ${who.email}.`); return }
   if (st.intent !== 'signup') { fail(`There is no Metriq account for ${who.email} yet. Start free instead.`); return }
   // A new company only with an email the provider confirmed, so no one can take someone else's address.
   if (!who.emailVerified) { fail(`${PROVIDERS[provider].label} could not confirm that ${who.email} is yours. Start with your email and a password instead.`); return }
+  if (byInvite && !(await spendInvite(byInvite))) { fail('This invite link has been used. Ask for a new one.'); return }
   const { user } = await createCompanyWithOwner({
     mode: st.mode === 'solo' ? 'solo' : 'team', companyName: st.company || null, name: who.name, email: who.email, passwordHash: null,
     googleId: provider === 'google' ? who.subject : null, verified: true,

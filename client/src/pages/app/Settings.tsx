@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { LanguageCard } from '../../components/account/LanguageCard'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { TextField, PasswordField } from '../../components/ui/Input'
@@ -15,6 +16,8 @@ import { DARK_ONLY, themeById } from '../../theme/themes'
 import { applyAppearance, useTheme } from '../../lib/theme'
 import { Link } from 'react-router-dom'
 import { Plug } from 'lucide-react'
+import { TwoStepCard } from '../../components/account/TwoStep'
+import { WhatsappCard } from '../../components/account/WhatsappCard'
 
 const NOTIF_KEY = 'metriq.notifications'
 const NOTIFS = [
@@ -156,6 +159,10 @@ export default function Settings() {
           <Button type="submit" disabled={savingPw || !curPw || !newPw}>{savingPw ? 'Saving…' : 'Change password'}</Button>
         </form>
       </Card>
+
+      <TwoStepCard />
+      <WhatsappCard />
+      <LanguageCard />
 
       {/* Connectors moved to their own page in the side menu */}
       <Card title="Connectors" subtitle="Connect Claude, ChatGPT or Gemini to Metriq">

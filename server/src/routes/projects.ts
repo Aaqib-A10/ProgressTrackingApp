@@ -4,6 +4,7 @@ import { pmHandler as h } from '../lib/pm/http'
 import * as P from '../controllers/projectsController'
 import * as T from '../controllers/pmTasksController'
 import * as R from '../controllers/pmReportsController'
+import * as X from '../controllers/pmExtrasController'
 
 /**
  * /api/projects — project management. Static paths are registered before the
@@ -16,6 +17,7 @@ projectsRouter.use(requireAuth)
 // Me + settings + pickers
 projectsRouter.get('/me/tasks', h(T.myTasks))
 projectsRouter.get('/me/metrics', h(R.myMetrics))
+projectsRouter.get('/me/time', h(X.myTime))
 projectsRouter.get('/notification-prefs', h(P.getPrefs))
 projectsRouter.put('/notification-prefs', h(P.putPrefs))
 projectsRouter.get('/users', h(P.listPickableUsers))
@@ -47,6 +49,18 @@ projectsRouter.get('/attachments/:id/download', h(T.downloadAttachment))
 projectsRouter.delete('/attachments/:id', h(T.deleteAttachment))
 projectsRouter.post('/extension-requests/:id/decide', h(T.decideExtension))
 
+// Extras: "waits on", time on a task, repeating tasks
+projectsRouter.get('/tasks/:code/dependencies', h(X.listDependencies))
+projectsRouter.post('/tasks/:code/dependencies', h(X.addDependency))
+projectsRouter.delete('/dependencies/:id', h(X.removeDependency))
+projectsRouter.get('/tasks/:code/time', h(X.listTime))
+projectsRouter.post('/tasks/:code/time', h(X.addTime))
+projectsRouter.post('/tasks/:code/timer/start', h(X.startTimer))
+projectsRouter.post('/tasks/:code/timer/stop', h(X.stopTimer))
+projectsRouter.delete('/time/:id', h(X.deleteTime))
+projectsRouter.patch('/recurrences/:id', h(X.updateRecurrence))
+projectsRouter.delete('/recurrences/:id', h(X.deleteRecurrence))
+
 // Columns + labels by id
 projectsRouter.patch('/columns/:id', h(P.updateColumn))
 projectsRouter.delete('/columns/:id', h(P.deleteColumn))
@@ -68,5 +82,7 @@ projectsRouter.delete('/:key/members/:userId', h(P.removeMember))
 projectsRouter.post('/:key/columns', h(P.createColumn))
 projectsRouter.patch('/:key/columns/reorder', h(P.reorderColumns))
 projectsRouter.post('/:key/labels', h(P.createLabel))
+projectsRouter.get('/:key/recurrences', h(X.listRecurrences))
+projectsRouter.post('/:key/recurrences', h(X.createRecurrence))
 projectsRouter.post('/:key/tasks', h(T.createTask))
 projectsRouter.post('/:key/tasks/bulk', h(T.bulkUpdate))

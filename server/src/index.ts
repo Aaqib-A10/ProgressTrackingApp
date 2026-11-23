@@ -14,10 +14,13 @@ import { startLeadTasks } from './lib/leads/tasks'
 import { startTalkLoopSync } from './lib/talkloop/sync'
 import { startLeadInbox } from './lib/leads/inbox'
 import { startPmDeadlines } from './lib/pm/deadlines'
+import { startPmRecurrences } from './lib/pm/recurrence'
+import { startLive } from './lib/live'
 import { startCallSweeper, setOnCallEnded } from './lib/pm/calls'
 import { startMeetingReminders } from './lib/pm/meetings'
 import { startCleanup } from './lib/cleanup'
 import { startMetraIndexer } from './lib/metra/indexer'
+import { startWebhooks } from './lib/webhooks'
 import { scheduleNotes } from './controllers/chatController'
 import { recoverNotes } from './lib/pm/notes'
 import { captureError, flushErrors } from './lib/health/errors'
@@ -67,11 +70,15 @@ app.listen(PORT, () => {
   startTalkLoopSync()
   startLeadInbox()
   startPmDeadlines()
+  startPmRecurrences()
+  startLive()
   startCallSweeper()
   startMeetingReminders()
   startCleanup()
   // Metra: keeps its search index in step with Metriq (only for companies with the switch on).
   startMetraIndexer()
+  // Webhooks: tell each company's addresses when a lead comes in, a task is finished, someone checks in.
+  startWebhooks()
   setAuditBaseUrl(`http://127.0.0.1:${PORT}`)
   startHealthAudit()
   // Leads imported before the import learned First/Last Name and more website columns.

@@ -71,9 +71,9 @@ export default function Billing() {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div>
               <p className="text-headline-md text-ink">{data.plans.find((p) => p.key === current.plan)?.label ?? current.plan} · {current.interval === 'year' ? 'yearly' : 'monthly'}</p>
-              <p className="text-body-sm text-ink-muted">{current.cancelAtPeriodEnd ? `Ends on ${fmtDate(current.currentPeriodEnd)}.` : `Renews on ${fmtDate(current.currentPeriodEnd)}.`}{data.provider?.test ? ' (Test payments)' : ''}</p>
+              <p className="text-body-sm text-ink-muted">{current.provider === 'manual' ? `Paid until ${fmtDate(current.currentPeriodEnd)} (by bank transfer). To renew, send the next payment the same way; we record it and your plan runs on.` : current.cancelAtPeriodEnd ? `Ends on ${fmtDate(current.currentPeriodEnd)}.` : `Renews on ${fmtDate(current.currentPeriodEnd)}.`}{data.provider?.test && current.provider !== 'manual' ? ' (Test payments)' : ''}</p>
             </div>
-            <div className="ml-auto">
+            <div className={current.provider === 'manual' ? 'hidden' : 'ml-auto'}>
               {current.cancelAtPeriodEnd
                 ? <Button size="sm" disabled={!!busy} onClick={() => act(billingApi.resume, 'Your plan carries on.')}>Keep my plan</Button>
                 : <Button size="sm" variant="ghost" className="text-danger-ink" disabled={!!busy} onClick={() => act(billingApi.cancel, 'Cancelled. It runs to the end of what is paid.')}>Cancel plan</Button>}
@@ -166,6 +166,8 @@ function StateBanner({ data, onPortal }: { data: BillingOverview; onPortal: () =
   if (s === 'trial') return box('border-primary/20 bg-primary/5 text-ink', soon ? `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on.` : `Free trial: ${days} day${days === 1 ? '' : 's'} left, with everything on. Choose a plan any time; nothing stops when you do.`)
   if (s === 'trial_ended' && soon) return box('border-primary/20 bg-primary/5 text-ink', 'Your free trial has ended. Online payment is coming soon; until then everything keeps working as it is.')
   if (s === 'trial_ended') return box('border-danger/30 bg-danger/5 text-danger-ink', 'Your free trial has ended. Everything is still there and can be looked at; choose a plan to keep adding to it.')
+  // Paid outside the app (bank transfer): the paid-for date has passed, with a week to send the next payment.
+  if (s === 'past_due' && data.subscription?.provider === 'manual') return box('border-warning/40 bg-warning/10 text-ink', 'The date your plan was paid until has passed. Send the next payment within 7 days and nothing stops; after that Metriq becomes read-only until it is recorded.')
   if (s === 'past_due') return box('border-warning/40 bg-warning/10 text-ink', 'Your last payment did not go through. Please update your card within 7 days; after that Metriq becomes read-only until it is paid.', data.subscription?.hasPortal ? <Button size="sm" onClick={onPortal}>Update card</Button> : undefined)
   if (s === 'locked') return box('border-danger/30 bg-danger/5 text-danger-ink', 'Your payment has not gone through for 7 days, so Metriq is read-only. Pay to open it again; nothing has been lost.', data.subscription?.hasPortal ? <Button size="sm" onClick={onPortal}>Update card</Button> : undefined)
   if (s === 'ended') return box('border-danger/30 bg-danger/5 text-danger-ink', 'Your plan has ended. Everything is still there and can be looked at; choose a plan to keep going.')

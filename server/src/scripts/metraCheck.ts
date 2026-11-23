@@ -15,6 +15,8 @@ import type { AddressInfo } from 'node:net'
  *   npm run metra:check -w server -- --erp --unseed   take the test rows out again
  *   npm run metra:check -w server -- --erp --extra questions.json   also ask the questions people marked not helpful
  *   npm run metra:check -w server -- --erp --truth    print what the screens hold (the right answers), asking nothing
+ *   npm run metra:check -w server -- --erp --home     as 99 Technologies has it: Requests, People, Quotes and invoices,
+ *                                                     the report builder and project extras switched off, their questions skipped
  *
  * --erp uses the local erp database (pulsetrack_erp, the one `npm run dev:erp` runs on). It only ever touches a
  * database on this computer, and only rows it made itself (Lead Dialer list "METRA-CHECK", bids and marketing cards
@@ -171,6 +173,123 @@ const CASES: Case[] = [
   { as: 'leadgenlead', page: '/app/leads/board', ask: 'what is this page for?', names: () => ['Deal Board'], note: 'a screen outside the menu, known from the page the person is on' },
   { as: 'admin', ask: 'where do I add a new user and set their role?', names: () => ['Users'], note: 'where a screen is: the admin screens are in the list of screens' },
   { as: 'marketing', ask: 'what are the comments on the Saffron launch carousel?', names: () => ['Saffron launch carousel'], note: 'one marketing item in full (it has no comments: that must be said, not made up)' },
+
+  // The modules of plan 2026-11 (requests and approvals, leave days, people records, quotes and invoices). Rows from
+  // scripts/metraSeedMore.ts; the switches are turned on for the check and put back after it.
+  { as: 'leadgen', ask: 'which of my expense requests is still waiting for approval, and which one was approved?', names: () => ['Courier to the port', 'Trade show tickets'], numbers: () => [140, 900], note: 'Requests: my own, with their amounts and whether they were approved' },
+  { as: 'leadgenlead', ask: 'what is waiting on me to approve, and for how much?', names: () => ['Courier to the port'], absent: ['Trade show tickets'], numbers: () => [140], note: 'Requests: what waits on a team lead (the approved one is not waiting)' },
+  { as: 'leadgen', ask: 'how many annual leave days do I have left this year?', numbers: () => [M.annualLeave], note: "leave balance: the person's own number of days" },
+  { as: 'leadgen', ask: 'meri kitni annual chuttiyan bachi hain is saal?', numbers: () => [M.annualLeave], note: 'leave balance (Roman Urdu)' },
+  { as: 'admin', ask: 'which invoices are not paid yet, and how much are we owed?', names: () => ['Harlow Exports'], absent: ['Corvid Supplies'], numbers: () => [1750], note: 'Quotes and invoices: unpaid invoices (the paid one is left out)' },
+  { as: 'admin', ask: 'which quotes did we send that have no answer yet and what are they worth?', names: () => ['Bluewater Imports'], numbers: () => [2400], note: 'Quotes and invoices: open quotes' },
+  { as: 'leadgenlead', ask: 'what is the job title of Test LeadGen Member and who do they report to?', names: () => [M.job], note: 'People: a job title and a manager' },
+
+  // ---- To 200 (plan 2026-11, 3.1): the same seeded data asked the other ways people ask: other words, Roman Urdu,
+  // a count where the first question asked for names and the other way round. The right answer still comes from the
+  // app's own screens (the truth above), never from these lines.
+  // Lead Dialer and Deal Tracker
+  { as: 'member', ask: 'how many interested leads do I have?', numbers: (t) => [t.interested.length], note: 'more: interested, counted' },
+  { as: 'member', ask: 'list my interested leads', names: (t) => t.interested, note: 'more: interested, by name' },
+  { as: 'member', ask: 'mere interested leads kaun se hain?', names: (t) => t.interested, note: 'more: interested (Roman Urdu)' },
+  { as: 'member', ask: 'how many of my leads are in pipeline?', numbers: (t) => [t.byStatus.Pipeline], note: 'more: pipeline, counted' },
+  { as: 'member', ask: 'pipeline wale leads kitne hain mere?', numbers: (t) => [t.byStatus.Pipeline], note: 'more: pipeline (Roman Urdu)' },
+  { as: 'member', ask: 'how many of my leads still have the status Assigned?', numbers: (t) => [t.byStatus.Assigned], note: 'more: one status, counted' },
+  { as: 'member', ask: 'how many leads have I sent a voicemail to?', numbers: (t) => [t.byStatus['Voicemail Sent']], note: 'more: voicemail sent, counted' },
+  { as: 'member', ask: 'what is the total awarded value of the deals I won?', numbers: (t) => [t.won.reduce((s, w) => s + w.awarded, 0)], note: 'more: won total' },
+  { as: 'member', ask: 'which deals did I win?', names: (t) => t.won.map((w) => w.company), note: 'more: won deals, by name' },
+  { as: 'member', ask: 'how many deals have I won so far?', numbers: (t) => [t.won.length], note: 'more: won deals, counted' },
+  { as: 'lead', ask: 'what is the total number of leads in the dialer for my whole team?', numbers: (t) => [t.teamTotal], note: 'more: team total' },
+  { as: 'lead', ask: 'meri team ke dialer mein kitne leads hain?', numbers: (t) => [t.teamTotal], note: 'more: team total (Roman Urdu)' },
+  { as: 'lead', ask: 'which leads of Test ITAD Member are marked interested?', names: (t) => t.interested, note: 'more: one rep, by a manager' },
+  { as: 'admin', ask: 'how many bids are active in the deal tracker?', numbers: (t) => [t.deals.active], note: 'more: active bids' },
+  { as: 'admin', ask: 'how many bids did we lose?', numbers: (t) => [t.deals.lost], note: 'more: lost bids' },
+  { as: 'admin', ask: 'how many bids are submitted and still waiting for a result?', numbers: (t) => [t.deals.submitted], note: 'more: submitted bids' },
+  { as: 'admin', ask: 'deal tracker mein kitni bids won hain?', numbers: (t) => [t.deals.won], note: 'more: won bids (Roman Urdu)' },
+  { as: 'admin', ask: 'how many people did not send their daily report today?', numbers: (t) => [t.notSubmitted], note: 'more: missing reports' },
+  { as: 'member', ask: 'how many calls did I dial this month?', numbers: (t) => [t.myDials], note: 'more: own dials' },
+  { as: 'member', ask: 'is mahine maine kitne dials kiye?', numbers: (t) => [t.myDials], note: 'more: own dials (Roman Urdu)' },
+  { as: 'leadgen', ask: 'how many leads did I generate this month in my daily log?', numbers: (t) => [t.myLeadsGenerated], note: 'more: own leads generated' },
+  { as: 'leadgen', ask: 'is mahine maine kitne leads generate kiye?', numbers: (t) => [t.myLeadsGenerated], note: 'more: own leads generated (Roman Urdu)' },
+  // My Tasks
+  { as: 'marketing', ask: 'list the tasks assigned to me', names: (t) => t.myTasks, absent: [NOT_MINE], note: 'more: My Tasks, by name' },
+  { as: 'marketing', ask: 'how many open tasks do I have?', numbers: (t) => [t.myOpenTasks], absent: [NOT_MINE], note: 'more: My Tasks, counted' },
+  { as: 'marketing', ask: 'mere kitne tasks baqi hain?', numbers: (t) => [t.myOpenTasks], note: 'more: My Tasks counted (Roman Urdu)' },
+  // E-commerce
+  { as: 'ecom', ask: 'list the stock requests that are not resolved yet', names: (t) => t.x.s.stockOpen, note: 'more: open stock requests, by name' },
+  { as: 'ecom', ask: 'how many stock problems are still open?', numbers: (t) => [t.x.n.stockOpen], note: 'more: open stock requests, counted' },
+  { as: 'ecom', ask: 'how many listings have I added so far this month?', numbers: (t) => [t.x.n.myListings], note: 'more: own listings' },
+  { as: 'ecom', ask: 'is mahine maine kitni listings add ki hain?', numbers: (t) => [t.x.n.myListings], note: 'more: own listings (Roman Urdu)' },
+  { as: 'ecom', ask: 'on how many days did I fill in my daily log this month?', numbers: (t) => [t.x.n.myDaysLogged], note: 'more: days logged' },
+  { as: 'ecom', ask: 'what are the overdue tasks on our team board?', names: () => ['Fix Amazon suppressed listings'], absent: ['Refresh eBay store banners'], note: 'more: overdue board tasks' },
+  { as: 'ecom', ask: 'what comments are on the Fix Amazon suppressed listings task?', names: () => ['brand approval letter'], note: 'more: comments of a task' },
+  { as: 'ecom', ask: 'which meeting notes still have a deadline coming up?', names: () => ['Weekly sync on Amazon returns'], note: 'more: deadlines ahead' },
+  { as: 'ecom', ask: 'what was decided about the Optiplex bundles for Black Friday?', numbers: () => [15, 200], names: () => ['Optiplex bundles'], note: 'more: a meeting note by topic' },
+  { as: 'ecomlead', ask: 'how many free remote desktops do we have?', numbers: (t) => [t.x.n.rdpFree], note: 'more: free RDPs' },
+  { as: 'ecomlead', ask: 'meri team mein kitne logon ne is mahine koi listing log nahi ki?', numbers: (t) => [t.x.n.notLogged], note: 'more: who logged nothing (Roman Urdu)' },
+  { as: 'admin', ask: 'how many e-commerce stock requests are still open?', numbers: (t) => [t.x.n.stockOpenAdmin], note: 'more: e-commerce stock, as admin' },
+  // Inventory
+  { as: 'inv', ask: 'what is running low in stock?', names: (t) => t.x.s.invLow, note: 'more: low stock, by name' },
+  { as: 'inv', ask: 'list the items that are out of stock', names: (t) => t.x.s.invOut, note: 'more: out of stock, by name' },
+  { as: 'inv', ask: 'how many items are out of stock?', numbers: (t) => [t.x.n.invOut], note: 'more: out of stock, counted' },
+  { as: 'inv', ask: 'kitne items kam reh gaye hain stock mein?', numbers: (t) => [t.x.n.invLow], note: 'more: low stock (Roman Urdu)' },
+  { as: 'inv', ask: 'how many different items are in our stock list?', numbers: (t) => [t.x.n.invItems], note: 'more: total items' },
+  { as: 'inv', ask: 'how many stock requests are open right now?', numbers: (t) => [t.x.n.invOpen], note: 'more: open requests' },
+  { as: 'inv', ask: 'where is the Dell OptiPlex 7060 SFF kept?', names: () => ['Rack A3'], note: 'more: where an item is' },
+  { as: 'inv', ask: 'how many Dell OptiPlex 7060 SFF are in stock?', numbers: () => [14], note: 'more: one item, quantity' },
+  { as: 'inv', ask: 'why is the Samsung 256GB SSD out of stock?', names: () => ['Supplier delayed'], note: 'more: the note on an item' },
+  { as: 'invlead', ask: 'how many items are low in stock across the warehouse?', numbers: (t) => [t.x.n.invLow], note: 'more: low stock, as lead' },
+  { as: 'admin', ask: 'what is running low in inventory?', names: (t) => t.x.s.invLowAdmin, note: 'more: low stock, as admin' },
+  // Calendar and Notes
+  { as: 'ecom', ask: 'any meetings for me tomorrow?', names: () => ['Supplier call'], note: 'more: tomorrow' },
+  { as: 'ecom', ask: 'is there a holiday in the next 7 days?', names: () => ['Founders Day'], note: 'more: holidays' },
+  { as: 'ecom', ask: 'what notes are on tomorrow\'s supplier call?', names: () => ['warranty'], note: 'more: notes on a meeting' },
+  { as: 'ecom', ask: 'what is on my to-do list for today?', names: () => ['Count the returns shelf'], note: 'more: today\'s to-do' },
+  { as: 'ecom', ask: 'aaj mujhe kya karna hai?', names: () => ['Count the returns shelf'], note: 'more: today\'s to-do (Roman Urdu)' },
+  { as: 'ecom', ask: 'which of my tasks are due in the next seven days?', names: () => ['Upload Walmart bulk file'], note: 'more: due soon' },
+  { as: 'inv', ask: 'any holidays coming in the next 7 days?', names: () => ['Founders Day'], note: 'more: holidays (another person)' },
+  { as: 'ecom', ask: 'show my sticky notes', names: () => ['DHL about the Monday pickup'], note: 'more: own notes' },
+  { as: 'ecomlead', ask: 'what notes did people share with me?', names: () => ['DHL about the Monday pickup'], note: 'more: shared notes' },
+  // Attendance, leave, targets, reports, people
+  { as: 'lead', ask: 'how many of my team have not checked in yet?', numbers: (t) => [t.x.n.attNotIn], note: 'more: not in yet' },
+  { as: 'lead', ask: 'how many work from home days does my team have recorded?', numbers: (t) => [t.x.n.leaveWfh], note: 'more: WFH days' },
+  { as: 'lead', ask: 'how many leave days in total are recorded for my team?', numbers: (t) => [t.x.n.leaveDays], note: 'more: leave days' },
+  { as: 'lead', ask: 'what is our daily target for calls dialed?', numbers: (t) => [t.x.n.dialTarget], note: 'more: dial target' },
+  { as: 'lead', ask: 'last month my team made how many dials?', numbers: (t) => [t.x.n.dialsLastMonth], note: 'more: last month' },
+  { as: 'lead', ask: 'how many people on my team still have to submit today\'s report?', numbers: (t) => [t.x.n.notSubmittedTeam], note: 'more: missing reports, team' },
+  { as: 'leadgenlead', ask: 'pichle mahine lead gen team ne kitne leads banaye?', numbers: (t) => [t.x.n.lgLeadsLastMonth], note: 'more: last month (Roman Urdu)' },
+  { as: 'admin', ask: 'how many people work in the company?', numbers: (t) => [t.x.n.people], note: 'more: people' },
+  { as: 'admin', ask: 'how many departments do we have?', numbers: (t) => [t.x.n.departments], note: 'more: departments' },
+  { as: 'member', ask: 'what is Test ITAD Lead\'s email?', names: () => ['itad.lead@test.local'], note: 'more: an email from the directory' },
+  // Marketing and QA
+  { as: 'marketing', ask: 'how many ad campaigns are running right now?', numbers: (t) => [t.x.n.adsActive], note: 'more: active campaigns' },
+  { as: 'marketing', ask: 'how many ad campaigns are paused?', numbers: (t) => [t.x.n.adsPaused], note: 'more: paused campaigns' },
+  { as: 'marketing', ask: 'what is our total spend on ads?', numbers: (t) => [t.x.n.adsSpend], note: 'more: ad spend' },
+  { as: 'marketing', ask: 'which campaign brought us the most leads?', names: (t) => t.x.s.adsBest, note: 'more: best campaign' },
+  { as: 'marketing', ask: 'how many brands do we have?', numbers: (t) => [t.x.n.brands], note: 'more: brands' },
+  { as: 'marketing', ask: 'kitne ad campaigns chal rahe hain?', numbers: (t) => [t.x.n.adsActive], note: 'more: active campaigns (Roman Urdu)' },
+  { as: 'marketing', ask: 'list the authors of our blog posts', names: (t) => t.x.s.blogAuthors, note: 'more: blog authors' },
+  { as: 'marketing', ask: 'how many marketing items are waiting in the backlog?', numbers: (t) => [t.x.n.mktBacklog], note: 'more: backlog' },
+  { as: 'qa', ask: 'how many QA scorecards do we have?', numbers: (t) => [t.x.n.scorecards], note: 'more: scorecards' },
+  { as: 'qa', ask: 'what score is needed to pass the Call Quality Monitoring Form?', numbers: (t) => [t.x.n.callFormPass], note: 'more: pass mark' },
+  { as: 'csr', ask: 'what did I score in my most recent QA evaluation?', numbers: (t) => [t.x.n.myQaScore], note: 'more: own last score' },
+  // Lead Management, Daily Report, imports, blocks
+  { as: 'leadgenlead', ask: 'how many open leads in Lead Management are not assigned to anyone?', numbers: () => [M.leads.filter((l) => !l.mine).length], note: 'more: unassigned leads' },
+  { as: 'leadgen', ask: 'which of my lead follow-up tasks are overdue?', names: () => ['Send the rate sheet'], absent: ['Confirm the first order'], note: 'more: overdue lead tasks' },
+  { as: 'leadgen', ask: 'which calls have I logged on my leads in Lead Management?', names: () => ['Dana Whitfield', 'Omar Siddiqui'], absent: ['Lucia Ferrand'], note: 'more: own lead calls' },
+  { as: 'leadgenlead', ask: 'how many calls did Test LeadGen Member put in today\'s daily report?', numbers: () => [M.reports[0].calls], note: 'more: one field of a daily report' },
+  { as: 'leadgen', ask: 'how many quotes did I put in yesterday\'s daily report?', numbers: () => [M.reports[1].quotes], note: 'more: own report, yesterday' },
+  { as: 'admin', ask: 'what is the total amount of the records in the Vendors block?', numbers: () => [M.vendors.reduce((s, v) => s + v.amount, 0)], note: 'more: custom block total' },
+  { as: 'member', ask: 'how many rows did my last lead import have?', numbers: () => [40], note: 'more: last import' },
+  { as: 'csr', ask: 'did I pass my last QA evaluation, and with what score?', numbers: () => [88], note: 'more: last evaluation' },
+  // The modules of plan 2026-11 (skipped with --home)
+  { as: 'leadgen', ask: 'how much is my expense request for the courier?', numbers: () => [140], note: 'plan 2026-11: Requests: one amount' },
+  { as: 'leadgen', ask: 'was my request for the trade show tickets approved?', names: () => ['Trade show tickets', 'approved'], note: 'plan 2026-11: Requests: approved or not' },
+  { as: 'leadgenlead', ask: 'kya koi request meri approval ka intezar kar rahi hai?', names: () => ['Courier to the port'], note: 'plan 2026-11: Requests waiting (Roman Urdu)' },
+  { as: 'leadgen', ask: 'how many annual leave days am I allowed this year?', numbers: () => [M.annualLeave], note: 'plan 2026-11: leave balance, allowed' },
+  { as: 'admin', ask: 'how much are we owed on invoices that are not paid yet?', numbers: () => [1750], note: 'plan 2026-11: Quotes and invoices: owed' },
+  { as: 'admin', ask: 'which invoices have been paid?', names: () => ['Corvid Supplies'], note: 'plan 2026-11: Quotes and invoices: paid' },
+  { as: 'admin', ask: 'what is our quote for Bluewater Imports worth?', numbers: () => [2400], note: 'plan 2026-11: Quotes and invoices: one quote' },
+  { as: 'leadgenlead', ask: 'who does Test LeadGen Member report to?', names: () => ['Test LeadGen Lead'], note: 'plan 2026-11: People: manager' },
 ]
 
 /** Words that mean Metra gave up; never right when the data is there. */
@@ -284,7 +403,10 @@ async function main() {
 
   // E-commerce, Inventory and the calendar (ROADMAP phase 1). Made again on every run: their dates are relative to today.
   const flagsBefore = await prisma.featureFlagCompany.findMany({ where: { companyId: HOME_COMPANY_ID, key: { in: [...MORE_FLAGS] } } })
-  for (const k of MORE_FLAGS) await setCompanyFlag(k, HOME_COMPANY_ID, true, 'metra:check')
+  // --home: check Metra as 99 Technologies has it, with the parts of plan 2026-11 switched off (their questions are skipped).
+  const NEW_PARTS = ['requests', 'people-records', 'sales-docs', 'report-builder', 'project-extras']
+  const asHome = flag('--home')
+  for (const k of MORE_FLAGS) await setCompanyFlag(k, HOME_COMPANY_ID, !(asHome && NEW_PARTS.includes(k)), 'metra:check')
   const flagsBack = async () => { for (const k of MORE_FLAGS) { const b = flagsBefore.find((x) => x.key === k); await setCompanyFlag(k, HOME_COMPANY_ID, b ? b.enabled : null, 'metra:check') } }
   await runAsCompany(HOME_COMPANY_ID, async () => {
     await clearAreas()
@@ -440,6 +562,9 @@ async function main() {
   const plain = (t: string) => Array.from(t).map((ch) => ('    '.includes(ch) ? ' ' : '‐‑‒–—'.includes(ch) ? '-' : ch)).join('')
   // A true zero is often said in words ("you haven't generated any leads yet").
   const NONE = /\b(no|none|zero|any|nothing)\b|haven|n['’]t/i
+  // A small number said in words is the same number ("One item is out of stock", "a single item").
+  const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+  const inWords = (text: string, n: number) => n >= 1 && n < WORDS.length && new RegExp(`\\b(${WORDS[n]}${n === 1 ? '|a single|only one|ek' : ''})\\b`, 'i').test(text)
   let failed = 0, asked = 0
   const unasked: number[] = []
   // Questions real people asked and marked not helpful (Company settings > Metra > "Copy as test questions", saved to a
@@ -456,6 +581,7 @@ async function main() {
   }
   for (const [i, c] of [...CASES, ...extra].entries()) {
     if (only && !only.includes(i + 1)) continue
+    if (asHome && /plan 2026-11|Requests:|leave balance|Quotes and invoices:|People: a job title/.test(c.note)) continue
     asked++
     const who = people[c.as]
     const t0 = Date.now()
@@ -470,8 +596,10 @@ async function main() {
       tokens = r.tokensIn + r.tokensOut
       calls = r.tools.length
       tools = r.tools.map((x) => `${x.name}${x.ok ? '' : ' (FAILED: ' + (x.error ?? '').slice(0, 80) + ')'} ${JSON.stringify(x.args)}`).join(' ; ')
-      for (const n of c.numbers?.(truth) ?? []) if (!hasNumber(text, n) && !(n === 0 && NONE.test(text))) problems.push(`the number ${n.toLocaleString('en-US')} is missing`)
-      for (const n of c.names?.(truth) ?? []) if (!text.toLowerCase().includes(n.toLowerCase())) problems.push(`"${n}" is missing`)
+      for (const n of c.numbers?.(truth) ?? []) if (!hasNumber(text, n) && !(n === 0 && NONE.test(text)) && !inWords(text, n)) problems.push(`the number ${n.toLocaleString('en-US')} is missing`)
+      // A name counts when its letters and digits are there in order: "Samsung 256 GB SSD" is "Samsung 256GB SSD".
+      const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '')
+      for (const n of c.names?.(truth) ?? []) if (!text.toLowerCase().includes(n.toLowerCase()) && !squash(text).includes(squash(n))) problems.push(`"${n}" is missing`)
       for (const n of c.absent ?? []) if (text.toLowerCase().includes(n.toLowerCase())) problems.push(`"${n}" is in the answer and must not be`)
       if (GAVE_UP.test(text)) problems.push('it says it could not find or read something')
       if (r.tools.some((x) => !x.ok)) problems.push('a lookup failed')

@@ -45,7 +45,9 @@ export default function Security() {
               <li>• Members see their own work; team leads see their team; the Super Admin sees the company.</li>
               <li>• Finance and company settings are powers you give to named people only.</li>
               <li>• Check-in can be limited to your office network.</li>
-              <li>• An activity log shows who changed what.</li>
+              <li>• Two-step sign-in with an authenticator app, with recovery codes; a company can require it for everyone.</li>
+              <li>• An activity log shows who changed what: records, people, roles, settings and billing.</li>
+              <li>• A password-reset link works once and for 30 minutes.</li>
             </ul>
           </div>
           <div>

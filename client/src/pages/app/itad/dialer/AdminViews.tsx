@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { CHART } from '../../../../components/charts/chartTheme'
 import { PredictiveDialer } from './PredictiveDialer'
 import { useEffect, useState } from 'react'
@@ -6,7 +7,7 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, RotateCcw } from 'lucide
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerSettings, type DuplicateGroup, type EzMatchKey, type ImportRecord, type RegionCode } from '../../../../lib/dialerApi'
-import { REGIONS, REGION_META, num, pct } from '../../../../lib/dialer'
+import { REGIONS, REGION_META, num, pct, repZoneLabel } from '../../../../lib/dialer'
 import { cn } from '../../../../lib/cn'
 import { InfoTip, Pager, Panel, errMsg, usePaged } from './ui'
 import { ImportSummaryView } from './ImportSummaryView'
@@ -294,7 +295,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
 
       <Panel title="Calling hours">
         <div className="mb-3 flex flex-wrap gap-4 text-body-sm">
-          {([['FIXED_PKT', 'Fixed PKT slots', "The rep's hours stay the same; the lead's local time shifts when the US changes its clocks."], ['FIXED_LOCAL', 'Fixed local hours', "The lead's local hours stay the same; the PKT slots shift by an hour."]] as const).map(([v, label, hint]) => (
+          {([['FIXED_PKT', `Fixed ${repZoneLabel()} slots`, "The rep's hours stay the same; the lead's local time shifts when the US changes its clocks."], ['FIXED_LOCAL', 'Fixed local hours', `The lead's local hours stay the same; the ${repZoneLabel()} slots shift by an hour.`]] as const).map(([v, label, hint]) => (
             <label key={v} className={cn('flex max-w-sm cursor-pointer gap-2 rounded-btn border p-3', s.clockMode === v ? 'border-primary bg-primary/5' : 'border-line')}>
               <input type="radio" disabled={!canEdit} checked={s.clockMode === v} onChange={() => set('clockMode', v)} className="mt-0.5 accent-primary" />
               <span><b className="text-ink">{label}</b><br /><span className="text-ink-muted">{hint}</span></span>
@@ -312,10 +313,10 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
             </span>
           ))}
         </div>
-        <label className="mb-3 flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" disabled={!canEdit} checked={s.earthzoneTick} onChange={(e) => set('earthzoneTick', e.target.checked)} className="h-4 w-4 accent-primary" /> Mark leads "needs Earthzone update" when something is added in the dialer<InfoTip>Off: reps don't double-enter, but then Earthzone and Metriq hold different information.</InfoTip></label>
+        <label className="mb-3 flex items-center gap-2 text-body-sm text-ink"><input type="checkbox" disabled={!canEdit} checked={s.earthzoneTick} onChange={(e) => set('earthzoneTick', e.target.checked)} className="h-4 w-4 accent-primary" /> Mark leads "needs {crmName('Earthzone')} update" when something is added in the dialer<InfoTip>Off: reps don't double-enter, but then {crmName('Earthzone')} and Metriq hold different information.</InfoTip></label>
         <div className="-mx-1 overflow-x-auto">
           <table className="w-full min-w-[720px] text-body-sm">
-            <thead className="text-[11px] uppercase text-ink-muted"><tr><th className="px-1 py-1 text-left">Region</th><th className="px-1 text-left">PKT start</th><th className="px-1 text-left">PKT end</th><th className="px-1 text-left">Local start</th><th className="px-1 text-left">Local end</th><th className="px-1 text-left">Best hours (from management)</th></tr></thead>
+            <thead className="text-[11px] uppercase text-ink-muted"><tr><th className="px-1 py-1 text-left">Region</th><th className="px-1 text-left">{repZoneLabel()} start</th><th className="px-1 text-left">{repZoneLabel()} end</th><th className="px-1 text-left">Local start</th><th className="px-1 text-left">Local end</th><th className="px-1 text-left">Best hours (from management)</th></tr></thead>
             <tbody className="divide-y divide-line">
               {REGIONS.map((r: RegionCode) => (
                 <tr key={r}>
@@ -329,7 +330,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] text-ink-muted">Calling hours: 9 AM to 5 PM on the lead's clock in every region. With fixed local hours only the local times count; with fixed PKT slots only the PKT times count.</p>
+        <p className="mt-2 text-[11px] text-ink-muted">Calling hours: 9 AM to 5 PM on the lead's clock in every region. With fixed local hours only the local times count; with fixed {repZoneLabel()} slots only the {repZoneLabel()} times count.</p>
       </Panel>
 
       <Panel title="Follow-ups, touches and tasks">
@@ -338,7 +339,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
             A bulk update, not calls, when more than
             <input type="number" min={1} max={100} disabled={!canEdit} value={s.bulkUpdatePct ?? 20} onChange={(e) => set('bulkUpdatePct', Math.max(1, Math.min(100, Number(e.target.value) || 20)))} className={cn(inp, 'w-20')} />
             % of an import's leads get the same new Updated At
-            <InfoTip>Such a date counts no re-attempts (a batch of new leads, or a mass edit in Earthzone). Status changes on that date still count. Check it against your past imports before changing it.</InfoTip>
+            <InfoTip>Such a date counts no re-attempts (a batch of new leads, or a mass edit in {crmName('Earthzone')}). Status changes on that date still count. Check it against your past imports before changing it.</InfoTip>
           </label>
           <div>
             <p className="mb-1.5">One-tap outcome chips after Call now on these rows (the others use "..." and Add touch):</p>
@@ -372,7 +373,7 @@ export function SettingsView({ canEdit, onSaved, extraStatuses }: { canEdit: boo
   )
 }
 
-const MATCH_LABEL: Record<EzMatchKey, string> = { ezId: 'Earth Zone Lead ID', email: 'Primary email', phone: 'Primary phone', companyLastName: 'Company + last name' }
+const MATCH_LABEL: Record<EzMatchKey, string> = { get ezId() { return `${crmName('Earth Zone')} Lead ID` }, email: 'Primary email', phone: 'Primary phone', companyLastName: 'Company + last name' }
 const MATCH_ALL: EzMatchKey[] = ['ezId', 'email', 'phone', 'companyLastName']
 
 /** ITAD update 12 Nov: touches from notes, follow-ups that close themselves, and how the Earth Zone sync matches rows. */
@@ -382,7 +383,7 @@ function NotesSettings({ s, set, canEdit, statuses }: { s: DialerSettings; set: 
   const order = s.ezMatchOrder ?? MATCH_ALL
   const move = (i: number, d: number) => { const n = [...order]; const [x] = n.splice(i, 1); n.splice(i + d, 0, x); set('ezMatchOrder', n) }
   return (
-    <Panel title="Notes, touches and the Earth Zone sync">
+    <Panel title={`Notes, touches and the ${crmName('Earth Zone')} sync`}>
       <div className="space-y-3 text-body-sm text-ink">
         <label className="flex items-start gap-2"><input type="checkbox" disabled={!canEdit} checked={fromNotes} onChange={(e) => set('touchesFromNotes', e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" /><span>Last touched and tries come from the agent's own notes (Updated At only for leads with none), and a follow-up closes by itself when the agent makes contact<InfoTip>A colleague's note never counts. Two notes on one day count once.</InfoTip></span></label>
         <label className={cn('flex items-start gap-2', !fromNotes && 'opacity-50')}><input type="checkbox" disabled={!canEdit || !fromNotes} checked={s.manualTouchesCount ?? true} onChange={(e) => set('manualTouchesCount', e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" /><span>The agent's logged calls (outcome chips, Add touch) count as contacts too</span></label>
@@ -396,7 +397,7 @@ function NotesSettings({ s, set, canEdit, statuses }: { s: DialerSettings; set: 
           </div>
         </div>
         <div>
-          <p className="mb-1.5">Earth Zone sync: a row finds its lead by, in this order</p>
+          <p className="mb-1.5">{crmName('Earth Zone')} sync: a row finds its lead by, in this order</p>
           <ol className="max-w-sm space-y-1.5">
             {order.map((k, i) => (
               <li key={k} className="flex items-center gap-2 rounded-btn border border-line px-2.5 py-1.5">

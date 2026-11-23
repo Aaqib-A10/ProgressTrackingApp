@@ -2,6 +2,7 @@ import type { Response } from 'express'
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { DepartmentType, TagType, Role, LeaveType, UserStatus } from '@prisma/client'
+import { recordActivity } from '../lib/audit'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { hashPassword, signInviteToken } from '../lib/auth'
@@ -47,6 +48,8 @@ export async function listUsers(req: AuthedRequest, res: Response): Promise<void
       id: u.id,
       name: u.name,
       email: u.email,
+      // Two-step sign-in is on for this person (the admin can turn it off if they lose their phone).
+      twoStep: !!u.twoStepOn,
       role: u.role,
       department: u.department?.type ?? null,
       departmentName: u.department?.name ?? null,
@@ -122,6 +125,7 @@ export async function createUser(req: AuthedRequest, res: Response): Promise<voi
   })
   // Email the invitee a "set password & join" link (best-effort: the account exists either way, and the temp password is shown on screen).
   try { await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword: v.password ? undefined : tempPassword }) } catch (e) { console.warn('[admin] invite email failed:', e instanceof Error ? e.message : e) }
+  await recordActivity(me.id, 'CREATE', 'User', user.id, { after: { summary: `Added ${user.name} (${user.email}) as ${user.role}${dept ? ` in ${dept.name}` : ''}` } })
   res.status(201).json({
     user: { id: user.id, name: user.name, email: user.email, role: user.role, department: dept?.type ?? null, subDepartment: v.subDepartmentSlug ?? null, status: user.status, isActive: user.isActive },
     tempPassword: v.password ? undefined : tempPassword,
@@ -184,6 +188,9 @@ export async function updateUser(req: AuthedRequest, res: Response): Promise<voi
       create: { userId: u.id, departmentId: u.departmentId, subDepartmentId: u.subDepartmentId, role: u.role },
     })
   }
+  // What was asked to change: role, status, on or off, department, working from home (this form carries no password).
+  const changed = (Object.keys(v) as (keyof typeof v)[]).filter((k) => v[k] !== undefined).map((k) => `${String(k)} ${String(v[k])}`)
+  await recordActivity(me.id, 'UPDATE', 'User', u.id, { after: { summary: `${u.name}: ${changed.join(', ') || 'details changed'}` } })
   res.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, department: u.department?.type ?? null, subDepartment: u.subDepartment?.slug ?? null, status: u.status, isActive: u.isActive, attendanceRemote: u.attendanceRemote } })
 }
 
@@ -321,6 +328,7 @@ export async function deleteUser(req: AuthedRequest, res: Response): Promise<voi
   }
   try {
     await prisma.user.delete({ where: { id } })
+    await recordActivity(me.id, 'DELETE', 'User', id, { before: { summary: `Deleted ${target.name} (${target.email}), ${target.role}` } })
     res.status(204).end()
   } catch (e) {
     // Prisma P2003 = FK constraint (user is referenced by feedback / QA / comments).
@@ -359,6 +367,7 @@ export async function resetUserPassword(req: AuthedRequest, res: Response): Prom
   const tempPassword = parsed.data.password ?? randomBytes(6).toString('base64url')
   // Show-once: the temp password is returned in this response only, never persisted.
   await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(tempPassword), sessionsValidFrom: new Date() } })
+  await recordActivity(me.id, 'PASSWORD_RESET', 'User', target.id, { after: { summary: `Reset the password of ${target.name}` } })
   res.json({ tempPassword })
 }
 
@@ -504,6 +513,7 @@ export async function inviteTeamMember(req: AuthedRequest, res: Response): Promi
   })
   // Email the member a "set password & join" link (best-effort).
   await sendInviteEmail({ to: user.email, name: user.name, token: signInviteToken(user.id), inviterName: me.name, tempPassword })
+  await recordActivity(me.id, 'CREATE', 'User', user.id, { after: { summary: `Invited ${user.name} (${user.email}) to the team` } })
   res.status(201).json({
     member: {
       id: user.id,
@@ -547,6 +557,7 @@ export async function resetTeamMemberPassword(req: AuthedRequest, res: Response)
     where: { id: target.id },
     data: { passwordHash: await hashPassword(tempPassword), sessionsValidFrom: new Date() },
   })
+  await recordActivity(me.id, 'PASSWORD_RESET', 'User', target.id, { after: { summary: `Reset the password of ${target.name}` } })
   res.json({ tempPassword })
 }
 
@@ -572,6 +583,7 @@ export async function removeTeamMember(req: AuthedRequest, res: Response): Promi
   }
 
   await prisma.user.update({ where: { id: target.id }, data: { isActive: false } })
+  await recordActivity(me.id, 'UPDATE', 'User', target.id, { after: { summary: `Removed ${target.name} from the team (account switched off)` } })
   const departmentId = scope.whole ? target.departmentId : scope.departmentId
   if (departmentId) {
     await prisma.teamMemberEvent.create({
@@ -978,6 +990,16 @@ export async function listLoginEvents(req: AuthedRequest, res: Response): Promis
 }
 
 /** GET /api/admin/audit-log — data-change activity (Super Admin: all; Team Lead: own department). */
+/** The short line an Activity Log entry shows: its own summary, or the name or title of what was changed. */
+function activitySummary(before: unknown, after: unknown): string | null {
+  for (const v of [after, before]) {
+    if (!v || typeof v !== 'object') continue
+    const o = v as Record<string, unknown>
+    for (const k of ['summary', 'name', 'title']) if (typeof o[k] === 'string' && o[k]) return (o[k] as string).slice(0, 240)
+  }
+  return null
+}
+
 export async function listAuditLog(req: AuthedRequest, res: Response): Promise<void> {
   const scope = await activityScope(req, res)
   if (!scope.ok) return
@@ -997,6 +1019,7 @@ export async function listAuditLog(req: AuthedRequest, res: Response): Promise<v
       action: a.action,
       entityType: a.entityType,
       entityId: a.entityId,
+      summary: activitySummary(a.before, a.after),
       createdAt: a.createdAt.toISOString(),
     })),
   })

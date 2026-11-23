@@ -1,3 +1,4 @@
+import { tzLabel } from '../time'
 import { timingSafeEqual } from 'node:crypto'
 import { prisma } from '../prisma'
 import { alertDevelopers } from './alerts'
@@ -53,7 +54,7 @@ export async function recordOutage(o: { downAt: Date; upAt: Date; detail?: strin
   const fmt = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: zone })
   const alerted = await alertDevelopers({
     title: o.appUp === false ? `Metriq stopped answering for ${minutes} min` : `The site was down for ${minutes} min`,
-    body: `Down from ${fmt(o.downAt)} to ${fmt(o.upAt)} PKT${o.detail ? `. ${o.detail}` : ''}`.slice(0, 180),
+    body: `Down from ${fmt(o.downAt)} to ${fmt(o.upAt)} ${tzLabel(zone)}${o.detail ? `. ${o.detail}` : ''}`.slice(0, 180),
     link: '/app/admin/health?tab=server',
     key: `outage:${row.id}`,
   })

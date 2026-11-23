@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { BellOff, Check, ChevronDown, Search, X, ChevronLeft, ChevronRight, Clock3, Download, FileSpreadsheet, FileText, Info, MessageSquarePlus, Phone, Pin } from 'lucide-react'
@@ -299,7 +300,7 @@ export function LeadTable({ leads, now, showOwner, onOpen, extra }: { leads: Dia
           {leads.map((l) => (
             <tr key={l.id} onClick={() => onOpen(l.id)} className="cursor-pointer hover:bg-slate-50" title={l.pinnedNote ? `Pinned note: ${l.pinnedNote}` : undefined}>
               <td className="px-2 py-2">
-                <p className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning-ink" title={`Update Earthzone: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</p>
+                <p className="flex items-center gap-1 font-semibold text-ink">{l.company}{l.pinnedNote && <Pin size={11} className="shrink-0 text-ink-muted" />}{l.needsCrmUpdate && <span className="rounded bg-warning/10 px-1 text-[10px] font-bold text-warning-ink" title={`Update ${crmName('Earthzone')}: ${l.crmUpdateWhat ?? ''}`}>EZ</span>}</p>
                 {l.contactName && <p className="text-ink-muted">{l.contactName}</p>}
               </td>
               <td className="whitespace-nowrap px-2 tabular-nums text-ink">{l.phone ?? '—'}</td>

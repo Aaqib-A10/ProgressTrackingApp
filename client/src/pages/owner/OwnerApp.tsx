@@ -13,6 +13,7 @@ import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
 import {
   ownerApi, ownerErr, OwnerApiError, STATUS_LABEL, PRIORITY_LABEL,
   type OwnerCompany, type OwnerHome, type OwnerSettings, type OwnerErrorRow, type OwnerErrorDetail, type ErrorState, type ErrorSource, type OwnerFlag, type CompanyFlag, type TicketRow, type TicketDetail, type TicketStatus, type TicketPriority, type ActivityRow,
+  type OwnerInvite,
 } from '../../lib/ownerApi'
 
 /**
@@ -169,6 +170,7 @@ const NAV = [
   { to: '/owner/companies', label: 'Companies', icon: Building2 },
   { to: '/owner/support', label: 'Support', icon: LifeBuoy },
   { to: '/owner/errors', label: 'Errors', icon: Bug },
+  { to: '/owner/invites', label: 'Invites', icon: UserCheck },
   { to: '/owner/switches', label: 'Switches', icon: ToggleRight },
   { to: '/owner/activity', label: 'Activity log', icon: ScrollText },
   { to: '/owner/settings', label: 'Settings', icon: SettingsIcon },
@@ -194,6 +196,7 @@ function OwnerShell() {
     { path: 'support/:id', element: <TicketPage /> },
     { path: 'errors', element: <ErrorsPage /> },
     { path: 'errors/:id', element: <ErrorPage /> },
+    { path: 'invites', element: <InvitesPage /> },
     { path: 'switches', element: <SwitchesPage /> },
     { path: 'switches/:id', element: <CompanySwitchesPage /> },
     { path: 'activity', element: <ActivityPage /> },
@@ -399,6 +402,42 @@ function CompaniesPage() {
   )
 }
 
+/** A company paid by bank transfer or a local wallet: record it here and their plan runs a month or a year further. */
+function RecordPayment({ companyId, plans, plan, onDone }: { companyId: string; plans: { key: string; label: string }[]; plan: string; onDone: () => Promise<void> }) {
+  const { addToast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ plan: plans.some((p) => p.key === plan) ? plan : plans[0]?.key ?? '', interval: 'month' as 'month' | 'year', amount: '', currency: 'USD', paidOn: new Date().toISOString().slice(0, 10) })
+  const [busy, setBusy] = useState(false)
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const r = await ownerApi.recordPayment(companyId, { plan: f.plan, interval: f.interval, amount: Number(f.amount), currency: f.currency.trim(), paidOn: f.paidOn || undefined })
+      await onDone()
+      setOpen(false)
+      addToast({ type: 'success', message: `Recorded. Their plan is paid until ${new Date(r.paidThrough).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.` })
+    } catch (err) { addToast({ type: 'error', message: ownerErr(err) }) } finally { setBusy(false) }
+  }
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="text-body-sm font-semibold text-primary-ink hover:underline">Record a payment made outside the app (bank transfer)</button>
+  const small = inputCls + ' !h-9 !w-auto'
+  return (
+    <form onSubmit={save} className="space-y-3 rounded-btn border border-line bg-bg p-3">
+      <p className="text-body-sm text-ink">They paid by bank transfer or a local wallet. Their plan runs one more month or year from the date already paid for, an invoice marked paid is kept, and their admins get an email.</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-body-sm text-ink-muted">Plan<select className={small + ' ml-1.5'} value={f.plan} onChange={(e) => setF({ ...f, plan: e.target.value })}>{plans.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
+        <label className="text-body-sm text-ink-muted">For<select className={small + ' ml-1.5'} value={f.interval} onChange={(e) => setF({ ...f, interval: e.target.value as 'month' | 'year' })}><option value="month">1 month</option><option value="year">1 year</option></select></label>
+        <label className="text-body-sm text-ink-muted">Amount<input className={small + ' ml-1.5 !w-28'} type="number" min="0" step="0.01" required value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="29" /></label>
+        <label className="text-body-sm text-ink-muted">Currency<input className={small + ' ml-1.5 !w-20 uppercase'} maxLength={3} required value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })} placeholder="USD" /></label>
+        <label className="text-body-sm text-ink-muted">Paid on<input className={small + ' ml-1.5'} type="date" value={f.paidOn} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setF({ ...f, paidOn: e.target.value })} /></label>
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" type="submit" disabled={busy || !f.plan || !(Number(f.amount) > 0) || !/^[A-Za-z]{3}$/.test(f.currency.trim())}>{busy ? 'Recording…' : 'Record payment'}</Button>
+        <Button size="sm" type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+      </div>
+    </form>
+  )
+}
+
 function CompanyPage() {
   const { id = '' } = useParams()
   const { addToast } = useToast()
@@ -456,12 +495,13 @@ function CompanyPage() {
             {!c.home && (
               <p className="text-body-sm text-ink">
                 <span className="font-semibold">Billing:</span>{' '}
-                {({ trial: 'Free trial', trial_ended: 'Trial ended (read-only)', active: 'Paying', canceling: 'Cancelled, runs to the end of the period', past_due: 'Payment failed (7 days to fix)', locked: 'Payment failed for over 7 days (read-only)', ended: 'Plan ended (read-only)', free: 'No plan', internal: 'Never billed' } as Record<string, string>)[data.billing.state] ?? data.billing.state}
-                {data.billing.subscription && ` · ${data.billing.subscription.plan} ${data.billing.subscription.interval === 'year' ? 'yearly' : 'monthly'} · ${data.billing.subscription.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(data.billing.subscription.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${data.billing.subscription.provider === 'test' ? ' (test)' : ''}`}
+                {({ trial: 'Free trial', trial_ended: 'Trial ended (read-only)', active: 'Paying', canceling: 'Cancelled, runs to the end of the period', past_due: data.billing.subscription?.provider === 'manual' ? 'Paid-for date passed (7 days to renew)' : 'Payment failed (7 days to fix)', locked: 'Payment failed for over 7 days (read-only)', ended: 'Plan ended (read-only)', free: 'No plan', internal: 'Never billed' } as Record<string, string>)[data.billing.state] ?? data.billing.state}
+                {data.billing.subscription && ` · ${data.billing.subscription.plan} ${data.billing.subscription.interval === 'year' ? 'yearly' : 'monthly'} · ${data.billing.subscription.provider === 'manual' ? 'paid until' : data.billing.subscription.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(data.billing.subscription.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${data.billing.subscription.provider === 'test' ? ' (test)' : data.billing.subscription.provider === 'manual' ? ' (paid outside the app)' : ''}`}
                 {data.billing.trialEndsAt && ` · trial ends ${new Date(data.billing.trialEndsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                 {data.billing.invoices.length > 0 && <span className="block text-ink-muted">Last invoices: {data.billing.invoices.slice(0, 3).map((i) => `#${i.number} ${(i.amountCents / 100).toFixed(2)} ${i.currency} ${i.status.toLowerCase()}`).join(' · ')}</span>}
               </p>
             )}
+            {!c.home && <RecordPayment companyId={c.id} plans={data.plans.filter((p) => p.sellable)} plan={c.plan} onDone={async () => setData(await ownerApi.company(c.id))} />}
             <Meter label="People" used={u.people.used} limit={u.people.limit} show={(n) => String(n)} />
             <Meter label="Files" used={u.storage.usedBytes} limit={u.storage.limitBytes} show={bytes} />
             <Meter label="AI meeting notes this month" used={u.aiHours.used} limit={u.aiHours.limit} show={(n) => `${n} h`} />
@@ -746,6 +786,7 @@ const ACTIONS: Record<string, string> = {
   OWNER_CREATED: 'Owner account created', PASSWORD_CHANGED: 'Password changed', CODE_RESET: 'Authenticator key changed', UNLOCKED: 'Sign in unlocked',
   COMPANY_UPDATE: 'Company changed', TICKET_REPLY: 'Replied to a complaint', TICKET_UPDATE: 'Complaint updated',
   SWITCH: 'Switch changed', CODE_OFF: 'Phone code switched off',
+  PAYMENT_RECORDED: 'Payment recorded (paid outside the app)', INVITE_CREATED: 'Sign-up invite made', INVITE_WITHDRAWN: 'Sign-up invite withdrawn', INVITE_USED: 'Company started from an invite',
 }
 function describe(action: string, detail: unknown): string {
   const base = ACTIONS[action] ?? action
@@ -780,6 +821,74 @@ function ActivityPage() {
                 {rows.map((a: ActivityRow) => (
                   <tr key={a.id}><td className="whitespace-nowrap px-5 py-3.5 text-ink-muted">{fmt(a.at)}</td><td className="px-3 py-3.5 text-ink">{describe(a.action, a.detail)}</td>
                     <td className="px-3 py-3.5 text-ink-muted">{a.company ?? '—'}</td><td className="px-3 py-3.5 text-ink-muted">{a.target ?? '—'}</td><td className="px-5 py-3.5 tabular-nums text-ink-muted">{a.ip ?? '—'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      )}
+    </>
+  )
+}
+
+// ------------------------------------------------------------------ sign-up invites
+
+/**
+ * Invites: let chosen companies sign up while "New companies can sign up" is off. Make a link, send it yourself
+ * (email, WhatsApp); it works for the number of companies you set, until the day you set, or until you withdraw it.
+ */
+function InvitesPage() {
+  const { addToast } = useToast()
+  const { data, error, setData } = useLoad(() => ownerApi.invites(), [])
+  const [f, setF] = useState({ note: '', maxUses: '1', days: '30' })
+  const [busy, setBusy] = useState(false)
+  async function create(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const r = await ownerApi.createInvite({ note: f.note.trim(), maxUses: Number(f.maxUses) || 1, days: f.days ? Number(f.days) : null })
+      if (data) setData({ ...data, invites: [r.invite, ...data.invites] })
+      setF({ ...f, note: '' })
+      await navigator.clipboard.writeText(r.invite.link).then(() => addToast({ type: 'success', message: 'Invite made. The link is copied: paste it to them.' })).catch(() => addToast({ type: 'success', message: 'Invite made. Copy its link below.' }))
+    } catch (err) { addToast({ type: 'error', message: ownerErr(err) }) } finally { setBusy(false) }
+  }
+  async function withdraw(i: OwnerInvite) {
+    if (!window.confirm(`Withdraw the invite for "${i.note}"? The link stops working. Companies already started with it stay.`)) return
+    try { const r = await ownerApi.withdrawInvite(i.id); if (data) setData({ ...data, invites: data.invites.map((x) => (x.id === i.id ? r.invite : x)) }) } catch (err) { addToast({ type: 'error', message: ownerErr(err) }) }
+  }
+  const copy = (i: OwnerInvite) => navigator.clipboard.writeText(i.link).then(() => addToast({ type: 'success', message: 'Link copied.' })).catch(() => addToast({ type: 'error', message: 'Could not copy. Select the link and copy it.' }))
+  const tone: Record<OwnerInvite['state'], BadgeTone> = { open: 'success', used: 'neutral', expired: 'warning', withdrawn: 'danger' }
+  const small = inputCls + ' !h-9'
+  return (
+    <>
+      <Title sub="Let chosen companies sign up while sign-up is closed to everyone else. You send the link yourself.">Invites</Title>
+      {data?.openToAll && <p className="mb-3 rounded-btn border border-primary/20 bg-primary/5 px-3 py-2 text-body-sm text-ink">Sign-up is open to everyone right now (the switch "New companies can sign up" is on), so nobody needs an invite. Invites matter again when you turn it off.</p>}
+      <Panel className="mb-4">
+        <PanelHead title="New invite" />
+        <form onSubmit={create} className="flex flex-wrap items-end gap-3 px-5 pb-5">
+          <label className="min-w-[220px] flex-1 text-body-sm text-ink-muted">Who is it for<input className={small + ' mt-1'} required minLength={2} maxLength={120} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="e.g. Ali at Northwind Traders" /></label>
+          <label className="text-body-sm text-ink-muted">Companies it can start<input className={small + ' mt-1 !w-28'} type="number" min={1} max={500} value={f.maxUses} onChange={(e) => setF({ ...f, maxUses: e.target.value })} /></label>
+          <label className="text-body-sm text-ink-muted">Works for<select className={small + ' mt-1 !w-36'} value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })}><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option><option value="">No last day</option></select></label>
+          <Button type="submit" disabled={busy || f.note.trim().length < 2}>{busy ? 'Making…' : 'Make invite link'}</Button>
+        </form>
+      </Panel>
+      {!data ? <Loading error={error} /> : (
+        <Panel className="overflow-x-auto">
+          {data.invites.length === 0 ? <Empty>No invites yet.</Empty> : (
+            <table className="w-full min-w-[720px] text-body-md">
+              <thead><tr className="border-b border-line text-left text-label-md uppercase text-ink-muted"><th className="px-5 py-3">For</th><th className="px-3 py-2.5">Link</th><th className="px-3 py-2.5">Used</th><th className="px-3 py-2.5">Last day</th><th className="px-3 py-2.5">State</th><th className="px-5 py-3" /></tr></thead>
+              <tbody className="divide-y divide-line">
+                {data.invites.map((i) => (
+                  <tr key={i.id}>
+                    <td className="px-5 py-3 text-ink">{i.note}<span className="block text-body-sm text-ink-muted">made {fmt(i.createdAt)}</span></td>
+                    <td className="max-w-[280px] px-3 py-3"><span className="block truncate font-mono text-body-sm text-ink-muted" title={i.link}>{i.link}</span></td>
+                    <td className="px-3 py-3 tabular-nums text-ink">{i.uses} of {i.maxUses}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-ink-muted">{i.expiresAt ? new Date(i.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'None'}</td>
+                    <td className="px-3 py-3"><Badge tone={tone[i.state]}>{i.state === 'open' ? 'Open' : i.state === 'used' ? 'Used up' : i.state === 'expired' ? 'Expired' : 'Withdrawn'}</Badge></td>
+                    <td className="whitespace-nowrap px-5 py-3 text-right">
+                      {i.state === 'open' && <><Button size="sm" variant="secondary" leadingIcon={<Copy size={14} />} onClick={() => void copy(i)}>Copy link</Button>{' '}<Button size="sm" variant="ghost" onClick={() => void withdraw(i)}>Withdraw</Button></>}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>

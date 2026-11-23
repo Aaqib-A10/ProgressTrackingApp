@@ -2,6 +2,7 @@ import webpush from 'web-push'
 import { prisma, onNotificationSaved, type NotificationRow } from './prisma'
 import { inAudit } from './health/auditContext'
 import { sendNativePush } from './nativePush'
+import { whatsappNotify } from './whatsapp'
 import { isMuted } from './notifyCategories'
 
 /**
@@ -200,6 +201,8 @@ onNotificationSaved((rows: NotificationRow[]) => {
       const people = await prisma.user.findMany({ where: { id: { in: [...new Set(unique.map((r) => r.userId))] } }, select: { id: true, notifyMuted: true } })
       for (const p of people) if (p.notifyMuted.length) muted.set(p.id, p.notifyMuted)
     } catch { /* send as if nothing is muted */ }
+    // The same notifications go to WhatsApp for the people who turned that on (lib/whatsapp).
+    void whatsappNotify(unique.filter((row) => !isMuted(row.type, muted.get(row.userId))).map((row) => ({ userId: row.userId, title: row.title, body: row.body }))).catch(() => undefined)
     for (const row of unique) {
       if (isMuted(row.type, muted.get(row.userId))) continue
       const tag = `n-${row.entityType ?? row.type}-${row.entityId ?? row.title}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60)

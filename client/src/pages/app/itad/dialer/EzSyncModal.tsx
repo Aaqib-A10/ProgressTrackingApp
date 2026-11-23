@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useRef, useState } from 'react'
 import { CheckCircle2, FileSpreadsheet } from 'lucide-react'
 import { Modal } from '../../../../components/ui/Modal'
@@ -87,7 +88,7 @@ export function EzSyncModal({ onClose, onDone }: { onClose: () => void; onDone: 
       : file ? <><Button variant="secondary" onClick={() => setFile(null)}>Choose another file</Button><Button disabled={busy || !canMatch} onClick={check}>{busy ? 'Checking…' : 'Preview'}</Button></> : undefined
 
   return (
-    <Modal open onClose={onClose} title="Earth Zone sync" size="xl" footer={footer}>
+    <Modal open onClose={onClose} title={`${crmName('Earth Zone')} sync`} size="xl" footer={footer}>
       {done ? (
         <div className="space-y-3 text-body-md">
           <p className="flex items-center gap-2 font-semibold text-ink"><CheckCircle2 size={18} className="text-success-ink" />Done. {plural(done.updated, 'lead')} updated.</p>
@@ -105,16 +106,16 @@ export function EzSyncModal({ onClose, onDone }: { onClose: () => void; onDone: 
       ) : !file ? (
         <div className="space-y-4 text-body-md">
           <ol className="list-decimal space-y-1 pl-5 text-ink">
-            <li>Pull your leads from Earth Zone with the notes timeline (CSV or Excel).</li>
+            <li>Pull your leads from {crmName('Earth Zone')} with the notes timeline (CSV or Excel).</li>
             <li>Upload it here and check the preview. Nothing is saved until you confirm.</li>
           </ol>
           <div onClick={() => fileRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); pick(e.dataTransfer.files[0]) }} className="flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed border-line px-6 py-10 text-center hover:border-primary/50">
             <FileSpreadsheet size={28} className="text-primary-ink" />
-            <p className="font-semibold text-ink">Drop the Earth Zone file here or click to choose</p>
+            <p className="font-semibold text-ink">Drop the {crmName('Earth Zone')} file here or click to choose</p>
             <p className="text-body-sm text-ink-muted">Fills alternative numbers, secondary email, job title, description and links, and the notes timeline. Nothing else on the lead changes.</p>
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }} />
           </div>
-          <p className="text-body-sm text-ink-muted">Only your own leads are updated. Metriq never writes to Earth Zone.</p>
+          <p className="text-body-sm text-ink-muted">Only your own leads are updated. Metriq never writes to {crmName('Earth Zone')}.</p>
         </div>
       ) : !preview ? (
         <div className="space-y-3 text-body-sm">

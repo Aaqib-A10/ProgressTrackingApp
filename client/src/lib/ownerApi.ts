@@ -80,6 +80,8 @@ export interface OwnerSettings {
   signIn: { open: boolean; google: boolean; microsoft: boolean }
 }
 
+export interface OwnerInvite { id: string; code: string; note: string; maxUses: number; uses: number; expiresAt: string | null; revokedAt: string | null; createdAt: string; link: string; state: 'open' | 'used' | 'expired' | 'withdrawn' }
+
 export const ownerApi = {
   login: (email: string, password: string) => call<{ needCode: boolean; ticket?: string; owner?: { name: string; email: string } }>('POST', '/login', { email, password }),
   code: (ticket: string, code: string) => call<{ owner: { name: string; email: string } }>('POST', '/login/code', { ticket, code }),
@@ -92,6 +94,8 @@ export const ownerApi = {
     billing: { state: string; trialEndsAt: string | null; subscription: { plan: string; interval: string; status: string; provider: string; currentPeriodEnd: string; cancelAtPeriodEnd: boolean } | null; invoices: { id: string; number: number; amountCents: number; currency: string; status: string; createdAt: string }[] }
     tickets: TicketRow[]; activity: { at: string; action: string; by: string; detail: unknown }[]
   }>('GET', `/companies/${id}`),
+  /** A payment made outside the app (bank transfer, local wallet): the plan runs a month or a year further. */
+  recordPayment: (id: string, input: { plan: string; interval: 'month' | 'year'; amount: number; currency: string; paidOn?: string }) => call<{ paidThrough: string }>('POST', `/companies/${id}/payment`, input),
   updateCompany: (id: string, input: { name?: string; status?: CompanyStatus; helpEnabled?: boolean; plan?: string; module?: { key: string; on: boolean | null } }) => call<{ company: OwnerCompany }>('PATCH', `/companies/${id}`, input),
   exportUrl: (id: string) => `/api/owner/companies/${id}/export`,
   removeCompany: (id: string, confirm: string) => call<void>('DELETE', `/companies/${id}`, { confirm }),
@@ -101,6 +105,10 @@ export const ownerApi = {
   reply: (id: string, body: string, status?: TicketStatus) => call<{ ticket: TicketDetail }>('POST', `/support/${id}/reply`, { body, status }),
   updateTicket: (id: string, input: { status?: TicketStatus; priority?: TicketPriority }) => call<{ ticket: TicketDetail }>('PATCH', `/support/${id}`, input),
   flags: () => call<{ flags: OwnerFlag[] }>('GET', '/flags'),
+  // Sign-up by invite link, while sign-up is closed to everyone else.
+  invites: () => call<{ invites: OwnerInvite[]; openToAll: boolean }>('GET', '/invites'),
+  createInvite: (input: { note: string; maxUses?: number; days?: number | null }) => call<{ invite: OwnerInvite }>('POST', '/invites', input),
+  withdrawInvite: (id: string) => call<{ invite: OwnerInvite }>('POST', `/invites/${id}/withdraw`),
   setFlag: (key: string, enabled: boolean) => call<{ flags: OwnerFlag[] }>('PATCH', `/flags/${key}`, { enabled }),
   companyFlags: (id: string) => call<{ flags: CompanyFlag[] }>('GET', `/companies/${id}/flags`),
   setCompanyFlag: (id: string, key: string, enabled: boolean | null) => call<{ flags: CompanyFlag[]; all: OwnerFlag[] }>('PATCH', `/companies/${id}/flags/${key}`, { enabled }),

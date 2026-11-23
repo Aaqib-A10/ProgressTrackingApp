@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
+import { t, useLang } from '../../lib/i18n'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Settings, ChevronRight, X } from 'lucide-react'
+import { Settings, ChevronRight, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import metriqLogo from '../../assets/metriq-logo.svg'
 import metriqLogoDark from '../../assets/metriq-logo-dark.svg'
@@ -8,7 +9,8 @@ import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
 import { Badge } from '../ui/Badge'
 import { getUnreadFeedbackCount } from '../../lib/feedbackApi'
 import { getQaUnreadCount } from '../../lib/qaApi'
-import { filterNav, sidebarNav, type NavGroup } from './navConfig'
+import { filterNav, hideNav, sidebarNav, type NavGroup } from './navConfig'
+import { MenuEditor } from './MenuEditor'
 import { useChatUnread } from '../chat/useChatUnread'
 import { useFlags } from '../../lib/flags'
 import { visiblePoll } from '../../lib/chatApi'
@@ -55,11 +57,16 @@ function useIsProjectAdmin(user: CurrentUser): boolean {
 
 export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
   useFlags() // the menu re-draws once the owner's switches are in
+  useLang() // and in the person's language
   const isProjectAdmin = useIsProjectAdmin(user)
   const chatUnread = useChatUnread().total
-  const groups = sidebarNav(filterNav(user)
+  // Everything this person may see, then without what they took off their own menu ("My menu", the button by Settings).
+  const allGroups = sidebarNav(filterNav(user)
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.projectAdminOnly || isProjectAdmin) }))
     .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0))
+  const groups = hideNav(allGroups, user.navHidden)
+  const [editingMenu, setEditingMenu] = useState(false)
+  const companyLogo = avatarUrl(useAvatarIndex(), 'company', user.company?.id)
   const location = useLocation()
   const [unreadFeedback, setUnreadFeedback] = useState(0)
   const [unreadQa, setUnreadQa] = useState(0)
@@ -145,7 +152,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
     getUnreadFeedbackCount().then((r) => setUnreadFeedback(r.count)).catch(() => undefined)
     getQaUnreadCount().then((r) => setUnreadQa(r.count)).catch(() => undefined)
   }, [])
-  useEffect(() => { loadUnread(); return visiblePoll(loadUnread, 60000) }, [loadUnread])
+  useEffect(() => { loadUnread(); return visiblePoll(loadUnread, 60000, () => true) }, [loadUnread])
   const readingPage = /^\/app\/(feedback|qa)/.test(location.pathname)
   useEffect(() => { if (readingPage) loadUnread() }, [location.pathname, readingPage, loadUnread])
 
@@ -170,7 +177,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
               {({ isActive }) => (
                 <>
                   <Icon size={16} strokeWidth={isActive ? 2 : 1.75} className={cn('shrink-0', isActive ? 'text-primary-ink' : 'text-ink-faint group-hover:text-ink-muted')} />
-                  <span className="flex-1 truncate">{item.label}</span>
+                  <span className="flex-1 truncate">{t(item.label)}</span>
                   {item.to === '/app/feedback' && unreadFeedback > 0 && (
                     <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-on">
                       {unreadFeedback > 9 ? '9+' : unreadFeedback}
@@ -204,8 +211,18 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
     <aside className="pt-sidebar flex h-full w-[248px] shrink-0 flex-col border-r border-line bg-sidebar">
       {/* Brand */}
       <div className="flex h-[52px] items-center justify-between gap-2 px-4">
-        <img src={metriqLogo} alt="Metriq" className="h-[22px] w-auto dark:hidden" />
-        <img src={metriqLogoDark} alt="Metriq" className="hidden h-[22px] w-auto dark:block" />
+        {companyLogo ? (
+          // The company's own logo and name, when it has set one (Company settings → Look).
+          <span className="flex min-w-0 items-center gap-2">
+            <img src={companyLogo} alt="" className="h-7 w-7 shrink-0 rounded-md object-cover" />
+            <span className="truncate text-[14px] font-semibold text-ink">{user.company?.name}</span>
+          </span>
+        ) : (
+          <>
+            <img src={metriqLogo} alt="Metriq" className="h-[22px] w-auto dark:hidden" />
+            <img src={metriqLogoDark} alt="Metriq" className="hidden h-[22px] w-auto dark:block" />
+          </>
+        )}
         {/* Close (mobile drawer only) */}
         <button
           type="button"
@@ -226,7 +243,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
       <nav className="flex-1 overflow-y-auto px-2.5 pb-3">
         {pins.length > 0 && !q && (
           <div className="mb-3">
-            <p className="flex h-6 items-center px-2 text-[11.5px] font-medium text-ink-faint">Pinned</p>
+            <p className="flex h-6 items-center px-2 text-[11.5px] font-medium text-ink-faint">{t('Pinned')}</p>
             <ul className="space-y-px">
               {pins.map((p) => (
                 <li key={p.key}>
@@ -271,7 +288,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                       <GroupIcon size={12} strokeWidth={2.2} />
                     </span>
                   )}
-                  <span className="truncate">{group.title}</span>
+                  <span className="truncate">{t(group.title)}</span>
                 </span>
                 <ChevronRight
                   size={13}
@@ -293,7 +310,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                         className="group/sub ml-[17px] flex h-[28px] w-[calc(100%-17px)] items-center justify-between rounded-md px-2 text-[12px] font-medium text-ink-faint transition-colors hover:bg-slate-200/45 hover:text-ink"
                         aria-expanded={subOpen}
                       >
-                        <span>{sg.title}</span>
+                        <span>{t(sg.title)}</span>
                         <ChevronRight
                           size={12}
                           className={cn('shrink-0 text-ink-faint transition-transform duration-200', subOpen && 'rotate-90')}
@@ -312,13 +329,26 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
 
       {/* Footer: settings and who is signed in */}
       <div className="border-t border-line px-2.5 py-2">
-        <NavLink
-          to="/app/settings"
-          onClick={onNavigate}
-          className={({ isActive }) => cn('flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', isActive ? 'bg-primary-50 font-medium text-primary-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
-        >
-          <Settings size={16} strokeWidth={1.75} className="text-ink-faint" /> Settings
-        </NavLink>
+        <div className="flex items-center gap-1">
+          <NavLink
+            to="/app/settings"
+            onClick={onNavigate}
+            className={({ isActive }) => cn('flex h-[30px] min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', isActive ? 'bg-primary-50 font-medium text-primary-ink' : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink')}
+          >
+            <Settings size={16} strokeWidth={1.75} className="text-ink-faint" /> Settings
+          </NavLink>
+          <button
+            type="button"
+            onClick={() => setEditingMenu(true)}
+            title="My menu: choose what shows in your sidebar"
+            aria-label="Edit my menu"
+            className="relative flex h-[30px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-ink-muted transition-colors hover:bg-slate-200/45 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <SlidersHorizontal size={14} strokeWidth={1.75} className="text-ink-faint" /> Edit menu
+            {(user.navHidden?.length ?? 0) > 0 && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />}
+          </button>
+        </div>
+        {editingMenu && <MenuEditor groups={allGroups} hidden={user.navHidden ?? []} onClose={() => setEditingMenu(false)} />}
         <div className="mt-1 flex items-center gap-2.5 rounded-md px-2 py-1.5">
           <Avatar user={user} size={24} />
           <div className="min-w-0 leading-tight">

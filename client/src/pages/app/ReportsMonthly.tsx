@@ -1,3 +1,4 @@
+import { deptName } from '../../lib/departments'
 import { useEffect, useMemo, useState } from 'react'
 import { Trophy, Send, FileDown, Layers } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
@@ -9,7 +10,7 @@ import { useAuth } from '../../lib/auth'
 import { getMonthlyReport, sendMonthlyReport, monthlyPreviewUrl, managementPreviewUrl, sendManagementReport, type MonthlyReport, type ItadReport, type LeadGenReport } from '../../lib/reportsApi'
 
 type Dept = 'ITAD' | 'LEAD_GEN'
-const DEPT_LABEL: Record<Dept, string> = { ITAD: 'ITAD', LEAD_GEN: 'Lead Generation' }
+const DEPT_LABEL: Record<Dept, string> = { get ITAD() { return deptName('ITAD', 'ITAD') }, get LEAD_GEN() { return deptName('LEAD_GEN', 'Lead Generation') } }
 
 function prevMonth(): string {
   const d = new Date()
@@ -110,7 +111,7 @@ export default function ReportsMonthly() {
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink"><Layers size={20} /></span>
             <div>
-              <p className="text-body-md font-semibold text-ink">Management report — ITAD + Bid Tracker + Marketing</p>
+              <p className="text-body-md font-semibold text-ink">Management report: {deptName('ITAD', 'ITAD')}, Deal Tracker and {deptName('MARKETING', 'Marketing')}</p>
               <p className="mt-0.5 text-body-sm text-ink-muted">One consolidated email that goes to management on the 1st of each month. Preview or send it now.</p>
             </div>
           </div>

@@ -7,6 +7,7 @@ import {
   listCompanies, getCompany, updateCompany,
   listTickets, getTicket, replyTicket, updateTicket, ownerActivity, listFlags, updateFlag, listCompanyFlags, updateCompanyFlag, exportCompany, deleteCompany, helpSignIn,
   ownerErrors, ownerError, ownerErrorState, ownerSettings, ownerSaveSeller,
+  recordPayment, listInvites, createInvite, withdrawInvite,
 } from '../controllers/ownerController'
 
 // The owner console's API (erp, step 0). Only the owner's own session opens it.
@@ -20,6 +21,7 @@ ownerRouter.get('/home', requireOwner, asyncHandler(ownerHome))
 ownerRouter.get('/companies', requireOwner, asyncHandler(listCompanies))
 ownerRouter.get('/companies/:id', requireOwner, asyncHandler(getCompany))
 ownerRouter.patch('/companies/:id', requireOwner, asyncHandler(updateCompany))
+ownerRouter.post('/companies/:id/payment', requireOwner, asyncHandler(recordPayment))
 ownerRouter.get('/companies/:id/export', requireOwner, asyncHandler(exportCompany))
 ownerRouter.delete('/companies/:id', requireOwner, asyncHandler(deleteCompany))
 ownerRouter.post('/companies/:id/help-sign-in', requireOwner, asyncHandler(helpSignIn))
@@ -28,6 +30,10 @@ ownerRouter.get('/support/:id', requireOwner, asyncHandler(getTicket))
 ownerRouter.post('/support/:id/reply', requireOwner, asyncHandler(replyTicket))
 ownerRouter.patch('/support/:id', requireOwner, asyncHandler(updateTicket))
 ownerRouter.get('/activity', requireOwner, asyncHandler(ownerActivity))
+// Sign-up by invite, while "New companies can sign up" is off.
+ownerRouter.get('/invites', requireOwner, asyncHandler(listInvites))
+ownerRouter.post('/invites', requireOwner, asyncHandler(createInvite))
+ownerRouter.post('/invites/:id/withdraw', requireOwner, asyncHandler(withdrawInvite))
 ownerRouter.get('/flags', requireOwner, asyncHandler(listFlags))
 ownerRouter.patch('/flags/:key', requireOwner, asyncHandler(updateFlag))
 ownerRouter.get('/companies/:id/flags', requireOwner, asyncHandler(listCompanyFlags))

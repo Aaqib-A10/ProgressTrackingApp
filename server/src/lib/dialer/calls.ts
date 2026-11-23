@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { DateTime } from 'luxon'
+import { companyTz, tzLabel } from '../time'
 import type { DialerIntegration, DialerLead, Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
 import { completeOnTouch, syncAutoTasks } from './tasks'
@@ -261,7 +262,7 @@ export async function applyToLead(callId: string, leadId: string, outcome: Outco
     const at = c.callbackAt && c.callbackAt > now ? c.callbackAt : new Date(now.getTime() + 24 * 3600_000)
     data.callLaterAt = at
     data.snoozeUntil = null
-    changes.push(`call back ${DateTime.fromJSDate(at).setZone('Asia/Karachi').toFormat('ccc d LLL, h:mm a')} PKT${c.callbackAt && c.callbackAt > now ? '' : ' (no time sent: tomorrow)'}`)
+    changes.push(`call back ${DateTime.fromJSDate(at).setZone(companyTz()).toFormat('ccc d LLL, h:mm a')} ${tzLabel()}${c.callbackAt && c.callbackAt > now ? '' : ' (no time sent: tomorrow)'}`)
   }
   if (outcome === 'DNC' && !lead.doNotCall) {
     Object.assign(data, { doNotCall: true, doNotCallAt: now, callLaterAt: null, snoozeUntil: null })
@@ -274,7 +275,7 @@ export async function applyToLead(callId: string, leadId: string, outcome: Outco
   if (outcome === 'NOT_INTERESTED') data.callLaterAt = null
   if (changes.length && settings.earthzoneTick) {
     data.needsCrmUpdate = true
-    const what = `Dialer ${DateTime.fromJSDate(c.calledAt).setZone('Asia/Karachi').toFormat('d LLL')}: ${changes.join(', ')}`
+    const what = `Dialer ${DateTime.fromJSDate(c.calledAt).setZone(companyTz()).toFormat('d LLL')}: ${changes.join(', ')}`
     data.crmUpdateWhat = lead.crmUpdateWhat ? `${lead.crmUpdateWhat}; ${what}`.slice(-500) : what
   }
 

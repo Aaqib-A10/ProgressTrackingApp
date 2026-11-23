@@ -1,5 +1,9 @@
+import { PictureEditor } from '../../../components/ui/Pictures'
+import { avatarUrl, useAvatarIndex } from '../../../lib/avatars'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers, SlidersHorizontal, LayoutGrid, Sparkles } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Building2, Users, ShieldCheck, Layers, SlidersHorizontal, LayoutGrid, Sparkles, Plug } from 'lucide-react'
+import { ApiSettings } from './ApiSettings'
+import { SsoSettings } from '../../../components/account/SsoSettings'
 import { useNavigate } from 'react-router-dom'
 import { flagOn } from '../../../lib/flags'
 import { Card } from '../../../components/ui/Card'
@@ -36,6 +40,7 @@ const TABS = [
   { key: 'departments', label: 'Departments', icon: Layers },
   { key: 'roles', label: 'Roles', icon: ShieldCheck },
   { key: 'people', label: 'People', icon: Users },
+  { key: 'api', label: 'API', icon: Plug },
   { key: 'metra', label: 'Metra', icon: Sparkles },
 ] as const
 type Tab = (typeof TABS)[number]['key']
@@ -49,7 +54,8 @@ export default function CompanySettings() {
   const { user } = useAuth()
   useFlags()
   // Metra's index and use: Super Admins, while the switch is on for the company.
-  const tabs = TABS.filter((t) => t.key !== 'metra' || (user?.role === 'SUPER_ADMIN' && flagOn('metra')))
+  // API keys and webhooks: people with the Company settings power.
+  const tabs = TABS.filter((t) => (t.key !== 'metra' || (user?.role === 'SUPER_ADMIN' && flagOn('metra'))) && (t.key !== 'api' || !!user?.permissions?.includes('company.settings')))
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-5">
       <div>
@@ -68,6 +74,7 @@ export default function CompanySettings() {
       {tab === 'departments' && <DepartmentsTab />}
       {tab === 'roles' && <RolesTab />}
       {tab === 'people' && <PeopleTab />}
+      {tab === 'api' && tabs.some((t) => t.key === 'api') && <ApiSettings />}
       {tab === 'metra' && tabs.some((t) => t.key === 'metra') && <MetraAdmin />}
     </div>
   )
@@ -128,6 +135,9 @@ function GeneralTab() {
       </form>
     </Card>
     <CompanyLook company={c} canEdit={data.canEdit} onSaved={(company) => { setData({ ...data, company }); void refresh?.() }} />
+    {data.canEdit && <CompanySecurity company={c} onSaved={(company) => { setData({ ...data, company: { ...c, ...company } }); void refresh?.() }} />}
+    {data.canEdit && <SsoSettings />}
+    {data.canEdit && <CompanyData company={c} />}
     {u && (
       <Card title="Your plan" subtitle={c.home ? 'Internal: no limits.' : 'Change it in Billing.'}>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -172,6 +182,105 @@ function accentHex(): string {
 }
 
 /**
+ * Your data: take everything the company has in Metriq as one file, any time; and (the Super Admin of a company that
+ * is not 99 Technologies) remove the company for good.
+ */
+function CompanyData({ company }: { company: CompanyInfo }) {
+  const { user } = useAuth()
+  const { addToast } = useToast()
+  const [removing, setRemoving] = useState(false)
+  const [confirm, setConfirm] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function remove() {
+    setBusy(true)
+    try {
+      await companyApi.remove({ confirm, password })
+      // The company and this session are gone: a full load to the public site.
+      window.location.assign('/')
+    } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not remove the company.') }); setBusy(false) }
+  }
+  return (
+    <Card title="Your data" subtitle="Everything your company puts into Metriq is yours.">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-body-md font-semibold text-ink">Download everything</p>
+            <p className="mt-0.5 text-body-sm text-ink-muted">One file (JSON) with every record: people, reports, attendance, tasks, chats, leads and the rest. Passwords and sign-in secrets are left out. Uploaded files are not in it.</p>
+          </div>
+          <a href="/api/company/export" download className="inline-flex h-10 items-center rounded-btn border border-line bg-card px-4 text-body-md font-semibold text-ink hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">Download my data</a>
+        </div>
+        {!company.home && user?.role === 'SUPER_ADMIN' && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+            <div className="min-w-0">
+              <p className="text-body-md font-semibold text-danger-ink">Remove {company.name} from Metriq</p>
+              <p className="mt-0.5 text-body-sm text-ink-muted">Removes the company, every person's account and every record and file, for good. It cannot be brought back. Download your data first.</p>
+            </div>
+            <Button variant="danger" onClick={() => { setConfirm(''); setPassword(''); setRemoving(true) }}>Remove company</Button>
+          </div>
+        )}
+      </div>
+      {removing && (
+        <Modal open onClose={() => setRemoving(false)} title={`Remove ${company.name}`} size="sm"
+          footer={<><Button variant="secondary" onClick={() => setRemoving(false)}>Cancel</Button><Button variant="danger" disabled={busy || confirm.trim() !== company.name} onClick={() => void remove()}>{busy ? 'Removing…' : 'Remove for good'}</Button></>}>
+          <p className="mb-3 text-body-sm text-ink">This removes <b>{company.name}</b>, everyone's accounts and everything in it, straight away and for good. Nobody will be able to sign in.</p>
+          <label className="mb-3 block text-body-sm font-semibold text-ink">Type the company's name to confirm
+            <input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={company.name} className={inputCls + ' mt-1 font-normal'} autoFocus />
+          </label>
+          <label className="block text-body-sm font-semibold text-ink">Your password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" className={inputCls + ' mt-1 font-normal'} />
+          </label>
+        </Modal>
+      )}
+    </Card>
+  )
+}
+
+/** The company's logo: shown at the top of everyone's sidebar in place of Metriq's own. A square picture works best. */
+function CompanyLogo({ company, canEdit }: { company: CompanyInfo; canEdit: boolean }) {
+  const url = avatarUrl(useAvatarIndex(), 'company', company.id)
+  const preview = url
+    ? <img src={url} alt={`${company.name} logo`} className="h-16 w-16 rounded-btn border border-line object-cover" />
+    : <div className="flex h-16 w-16 items-center justify-center rounded-btn border border-dashed border-line bg-bg text-headline-md font-semibold text-ink-muted" aria-hidden>{company.name.slice(0, 1).toUpperCase()}</div>
+  return (
+    <div>
+      <span className="mb-2 block text-body-sm font-semibold text-ink">Logo</span>
+      <div className="flex flex-wrap items-center gap-4">
+        <PictureEditor kind="company" id={company.id} label="Company logo" preview={preview} canEdit={canEdit} />
+        <p className="max-w-md text-body-sm text-ink-muted">{url ? 'Shown at the top of the sidebar for everyone in your company.' : 'Add your logo and it replaces the Metriq mark at the top of the sidebar for everyone in your company. A square picture works best.'}</p>
+      </div>
+    </div>
+  )
+}
+
+/** Security: require two-step sign-in for everyone. The person turning it on must have their own on first (the server checks). */
+function CompanySecurity({ company, onSaved }: { company: CompanyInfo; onSaved: (c: CompanyInfo) => void }) {
+  const { addToast } = useToast()
+  const [saving, setSaving] = useState(false)
+  const on = !!company.requireTwoStep
+  async function set(next: boolean) {
+    if (next && !window.confirm('Require two-step sign-in for everyone?\n\nFrom their next page, each person must set it up with an authenticator app before they can use Metriq. Tell your team first.')) return
+    setSaving(true)
+    try {
+      const r = await companyApi.update({ requireTwoStep: next })
+      onSaved(r.company)
+      addToast({ type: 'success', message: next ? 'Two-step sign-in is now required for everyone.' : 'Two-step sign-in is optional again.' })
+    } catch (err) { addToast({ type: 'error', message: errMsg(err, 'Could not save.') }) } finally { setSaving(false) }
+  }
+  return (
+    <Card title="Security" subtitle="Two-step sign-in: after the password, a 6-digit code from an app on the person's phone.">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-body-md font-semibold text-ink"><ShieldCheck size={17} className={on ? 'text-success-ink' : 'text-ink-muted'} /> Require two-step sign-in for everyone</p>
+          <p className="mt-0.5 text-body-sm text-ink-muted">{on ? 'On: nobody uses Metriq without it. If someone loses their phone, turn theirs off under Admin → Users and they set it up again.' : 'Off: each person chooses in their own Settings. Turn your own on first, then you can require it.'}</p>
+        </div>
+        <Button variant={on ? 'secondary' : 'primary'} disabled={saving} onClick={() => void set(!on)}>{on ? 'Make it optional' : 'Require it'}</Button>
+      </div>
+    </Card>
+  )
+}
+
+/**
  * The company's look: the colour theme everyone sees unless they pick their own (Settings), and a brand colour for
  * buttons, links and selection in place of the theme's own. Applied to this page straight away so it can be judged.
  */
@@ -193,6 +302,7 @@ function CompanyLook({ company, canEdit, onSaved }: { company: CompanyInfo; canE
   return (
     <Card title="Look" subtitle={canEdit ? "The colour theme your people see, unless they pick their own in Settings, and your brand colour for buttons and links." : "Set by your company's admins. You can pick your own theme in Settings."}>
       <div className="space-y-6">
+        <CompanyLogo company={company} canEdit={canEdit} />
         <ThemePicker
           value={company.theme ?? themeById(null).id}
           allowCompany={false}

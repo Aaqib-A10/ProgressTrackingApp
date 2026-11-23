@@ -15,7 +15,7 @@ export const MORE_MARK = 'METRA-CHECK'
 const FORM_KEY = 'metra-check-freight'
 
 /** The switches these parts sit behind. The scripts turn them on for the test company while they run. */
-export const MORE_FLAGS = ['lead-management', 'deal-board', 'cmr', 'daily-report', 'department-studio'] as const
+export const MORE_FLAGS = ['lead-management', 'deal-board', 'cmr', 'daily-report', 'department-studio', 'requests', 'people-records', 'sales-docs', 'report-builder', 'project-extras'] as const
 
 export const MORE_TRUTH = {
   business: `${MORE_MARK} Freight`,
@@ -56,10 +56,21 @@ export const MORE_TRUTH = {
   importFile: `${MORE_MARK} leads.csv`,
   block: `${MORE_MARK} Vendors`,
   vendors: [{ vendor: 'Kestrel Freight', amount: 1200, note: 'Pays in 30 days' }, { vendor: 'Dune Packaging', amount: 450, note: '' }, { vendor: 'Halden Tools', amount: 3100, note: 'New this month' }],
+  // Requests (asked by the rep; their team lead approves), the rep's own leave days and job, quotes and invoices.
+  requests: [{ title: `${MORE_MARK} Courier to the port`, amount: 140, approved: false }, { title: `${MORE_MARK} Trade show tickets`, amount: 900, approved: true }],
+  annualLeave: 18,
+  job: 'Senior freight agent',
+  docs: [
+    { kind: 'QUOTE', number: 'Q-9001', customer: `${MORE_MARK} Bluewater Imports`, total: 2400, status: 'SENT' },
+    { kind: 'INVOICE', number: 'INV-9001', customer: `${MORE_MARK} Harlow Exports`, total: 1750, status: 'SENT' },
+    { kind: 'INVOICE', number: 'INV-9002', customer: `${MORE_MARK} Corvid Supplies`, total: 620, status: 'PAID' },
+  ],
 }
 
 export async function clearMore(prisma: PrismaClient): Promise<number> {
   let n = 0
+  n += (await prisma.approvalRequest.deleteMany({ where: { title: { startsWith: MORE_MARK } } })).count // its steps go with it
+  n += (await prisma.salesDoc.deleteMany({ where: { customerName: { startsWith: MORE_MARK } } })).count
   // Leads, tasks, calls and members go with their business.
   n += (await prisma.leadBusiness.deleteMany({ where: { OR: [{ formKey: FORM_KEY }, { name: { startsWith: MORE_MARK } }] } })).count
   n += (await prisma.reportForm.deleteMany({ where: { name: { startsWith: MORE_MARK } } })).count
@@ -124,4 +135,26 @@ export async function seedMore(prisma: PrismaClient, p: { admin: Who; manager: W
   for (const v of MORE_TRUTH.vendors) await prisma.customRecord.create({ data: { blockId: block.id, departmentId: rep.departmentId, createdById: p.rep.id, data: v } })
 
   await prisma.dialerImport.create({ data: { userId: p.dialer.id, fileName: MORE_TRUTH.importFile, headerSignature: 'company|phone|status', mapping: {}, rowCount: 40, summary: { added: 31, changed: 7, unchanged: 2 }, funnel: {}, createdAt: at(-1, 10) } })
+
+  // ---- plan 2026-11 modules: requests and approvals, leave days, a person record, quotes and invoices
+  const year = day.year
+  let number = (await prisma.approvalRequest.aggregate({ _max: { number: true } }))._max.number ?? 0
+  for (const r of MORE_TRUTH.requests) {
+    await prisma.approvalRequest.create({
+      data: {
+        number: ++number, kind: 'EXPENSE', title: r.title, amount: r.amount, currency: 'USD', requesterId: p.rep.id, status: r.approved ? 'APPROVED' : 'PENDING', decidedAt: r.approved ? at(-1) : null, createdAt: at(-2),
+        steps: { create: [{ position: 0, approver: 'LEAD', status: r.approved ? 'APPROVED' : 'PENDING', decidedById: r.approved ? p.manager.id : null, decidedAt: r.approved ? at(-1) : null }] },
+      },
+    })
+  }
+  await prisma.leaveAllowance.upsert({ where: { userId_year_kind: { userId: p.rep.id, year, kind: 'ANNUAL' } }, update: { days: MORE_TRUTH.annualLeave }, create: { userId: p.rep.id, year, kind: 'ANNUAL', days: MORE_TRUTH.annualLeave } })
+  await prisma.personRecord.upsert({ where: { userId: p.rep.id }, update: { jobTitle: MORE_TRUTH.job, managerId: p.manager.id }, create: { userId: p.rep.id, jobTitle: MORE_TRUTH.job, managerId: p.manager.id } })
+  for (const d of MORE_TRUTH.docs) {
+    await prisma.salesDoc.create({
+      data: {
+        kind: d.kind, number: d.number, customerName: d.customer, issueDate: new Date(`${day.minus({ days: 3 }).toISODate()}T00:00:00.000Z`), status: d.status, subtotal: d.total, total: d.total, createdById: p.admin.id, paidAt: d.status === 'PAID' ? at(-1) : null,
+        lines: { create: [{ position: 0, description: 'Freight handling', quantity: 1, unitPrice: d.total }] },
+      },
+    })
+  }
 }

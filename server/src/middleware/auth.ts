@@ -26,6 +26,8 @@ export interface AuthUser {
   supportBy?: string
   /** The request came through a connector key (Claude...): what it writes is labelled so (Claude log, note source). */
   via?: 'connector'
+  /** Signed in through the company's single sign-on (SAML). */
+  sso?: boolean
 }
 
 export interface AuthedRequest extends Request {
@@ -67,8 +69,8 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
-        id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true,
-        company: { select: { id: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true, trialEndsAt: true, subscription: { select: { status: true, currentPeriodEnd: true, pastDueSince: true, cancelAtPeriodEnd: true } } } },
+        id: true, role: true, companyId: true, isActive: true, status: true, sessionsValidFrom: true, twoStepOn: true,
+        company: { select: { id: true, requireTwoStep: true, status: true, timeZone: true, plan: true, modulesOff: true, modulesOn: true, supportAccessUntil: true, trialEndsAt: true, subscription: { select: { status: true, currentPeriodEnd: true, pastDueSince: true, cancelAtPeriodEnd: true, provider: true } } } },
         customRole: { select: { areasOff: true } },
         department: { select: { type: true, layout: true } },
       },
@@ -94,6 +96,13 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         res.status(403).json({ error: 'Metriq support cannot open this part.' })
         return
       }
+    }
+    // The company requires two-step sign-in and this person has not set it up: only their own account routes
+    // (/api/auth: who am I, the setup, sign out) answer until they have. A help sign-in by Metriq support is exempt.
+    // A sign-in through the company's single sign-on is exempt too: the company's identity provider does the second step.
+    if (user.company?.requireTwoStep && !user.twoStepOn && !payload.support && !payload.sso && !/^\/api\/auth(\/|\?|$)/.test(req.originalUrl)) {
+      res.status(403).json({ error: 'Set up two-step sign-in to continue.', code: 'TWO_STEP_REQUIRED' })
+      return
     }
     // A free trial that ended, a payment that has failed for a week, or a plan that ended
     // (Phase 1, steps 7 and 8): everything can still be looked at, and Billing opens, but
@@ -140,7 +149,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
         }
       }
     }
-    req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}), ...(payload.via === 'connector' ? { via: 'connector' as const } : {}) }
+    req.user = { id: user.id, role: user.role, companyId: user.companyId, ...(payload.support ? { supportBy: payload.support } : {}), ...(payload.via === 'connector' ? { via: 'connector' as const } : {}), ...(payload.sso ? { sso: true } : {}) }
     // Every answer says whose it is. The sign-in is one cookie for the whole browser: when someone signs in as another
     // account in a second tab, the first tab still shows the first account while its requests are answered as the
     // second (one person saw another's recent Metra chats that way). The page compares this with the account it shows

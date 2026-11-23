@@ -12,8 +12,9 @@ const base = new PrismaClient()
 
 /** A bell notification was saved: lib/push sends it to the person's phone too (registered late, to avoid an import cycle). */
 export type NotificationRow = { id?: string; userId: string; type: string; title: string; body: string; link?: string | null; entityType?: string | null; entityId?: string | null }
-let afterNotification: ((rows: NotificationRow[]) => void) | null = null
-export function onNotificationSaved(fn: (rows: NotificationRow[]) => void): void { afterNotification = fn }
+const afterNotification = new Map<string, (rows: NotificationRow[]) => void>()
+/** `name` keeps one listener per user of the hook: registering again under the same name replaces it. */
+export function onNotificationSaved(fn: (rows: NotificationRow[]) => void, name = 'push'): void { afterNotification.set(name, fn) }
 function notificationRows(args: unknown): NotificationRow[] {
   const d = (args as { data?: NotificationRow | NotificationRow[] } | undefined)?.data
   return !d ? [] : Array.isArray(d) ? d : [d]
@@ -49,6 +50,16 @@ function reportWrite(model: string, operation: string, args: unknown, result: un
   } catch { /* indexing never breaks a save */ }
 }
 
+/**
+ * A single record was saved, with what was asked and what came back (lib/webhooks turns some of these into events
+ * for the company's webhooks). Bulk changes are not reported here: their rows are not known.
+ */
+export type RecordChange = { model: string; operation: string; args: unknown; result: unknown }
+const afterChange = new Map<string, (c: RecordChange) => void>()
+/** `name` keeps one listener per user of the hook (webhooks, live updates): registering again under it replaces it. */
+export function onRecordChanged(fn: (c: RecordChange) => void, name = 'webhooks'): void { afterChange.set(name, fn) }
+const SINGLE = new Set(['create', 'update', 'upsert'])
+
 const client = base.$extends({
   query: {
     $allModels: {
@@ -57,10 +68,14 @@ const client = base.$extends({
         const saving = model === 'Notification' && (operation === 'create' || operation === 'createMany')
         if (saving) args = withNotificationIds(args)
         const result = await query(applyWalls(base, model, operation, args as Record<string, unknown>) as typeof args)
-        if (saving && afterNotification) {
-          try { afterNotification(notificationRows(args)) } catch { /* a pop-up never breaks the save */ }
+        if (saving && afterNotification.size) {
+          const rows = notificationRows(args)
+          for (const fn of afterNotification.values()) { try { fn(rows) } catch { /* a pop-up never breaks the save */ } }
         }
         reportWrite(model, operation, args, result)
+        if (afterChange.size && SINGLE.has(operation)) {
+          for (const fn of afterChange.values()) { try { fn({ model, operation, args, result }) } catch { /* telling others never breaks a save */ } }
+        }
         return result
       },
     },

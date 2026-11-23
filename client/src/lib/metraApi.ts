@@ -84,6 +84,10 @@ export interface MetraNextStepPayload { leadId: string; company: string; status:
 export type MetraInsight =
   | { id: string; kind: 'BRIEF'; day: string; title: string; payload: MetraBriefPayload; createdAt: string }
   | { id: string; kind: 'NEXT_STEP'; day: string; title: string; payload: MetraNextStepPayload; createdAt: string }
+  /** Something Metra noticed without being asked (a deal gone quiet, a person with too much overdue work...). */
+  | { id: string; kind: 'ALERT'; day: string; title: string; payload: { type: string; text: string; link?: string }; createdAt: string }
+  /** The week for a team lead or an admin, made every Monday. */
+  | { id: string; kind: 'WEEKLY'; day: string; title: string; payload: MetraBriefPayload; createdAt: string }
 
 // ------------------------------------------------------------------ the answer stream
 

@@ -200,6 +200,19 @@ model User {
   /// The colour theme this person picked (client/src/theme/themes: metriq, neutral, stone, matcha, chocolate, butter, gothic).
   /// null: the company's theme.
   uiTheme           String?
+  /// Menu items this person took off their own sidebar ("My menu"): a screen's path, "g:<section>" or "s:<section> › <sub>".
+  /// Only the sidebar: the screens stay reachable through search and links, and access rules are unchanged.
+  navHidden         String[]     @default([])
+  /// The person's language for Metriq's menus: en, ur or ar (null: English).
+  language          String?
+  /// WhatsApp number (with country code) and whether the person wants their notifications there too.
+  whatsappNumber    String?
+  whatsappOn        Boolean      @default(false)
+  /// Two-step sign-in (an authenticator app). The secret is kept from the moment the person starts setting it up, but
+  /// it only counts once twoStepOn is set. Recovery codes are stored hashed; each works once.
+  totpSecret        String?
+  twoStepOn         DateTime?
+  twoStepRecovery   String[]     @default([])
   // Permanently remote: exempt from the office-network IP check-in restriction.
   attendanceRemote  Boolean      @default(false)
   // Sessions (JWTs) issued before this instant are rejected — bumped on disable,
@@ -226,6 +239,14 @@ model User {
   talkloopEntries    TalkloopDailyEntry[]
   metraConversations AiConversation[]     @relation("MetraConversationOwner")
   metraInsights      AiInsight[]          @relation("MetraInsightOwner")
+  approvalRequests   ApprovalRequest[]    @relation("ApprovalRequester")
+  approvalDecisions  ApprovalStep[]       @relation("ApprovalDecider")
+  personRecord       PersonRecord?        @relation("PersonRecordOf")
+  reports            PersonRecord[]       @relation("PersonRecordManager")
+  leaveAllowances    LeaveAllowance[]     @relation("LeaveAllowanceOf")
+  salesDocs          SalesDoc[]           @relation("SalesDocCreator")
+  savedReports       SavedReport[]        @relation("SavedReportOwner")
+  pmTimeEntries      PmTimeEntry[]        @relation("PmTimeEntryOf")
   seoEntries         SeoDailyEntry[]
   socialEntries      SocialDailyEntry[]
   contentEntries     ContentDailyEntry[]
@@ -1215,6 +1236,9 @@ enum NotificationType {
   NOTE_REMINDER
   ATTENDANCE_FIX_REQUESTED
   ATTENDANCE_FIX_DECIDED
+  // Requests and approvals (expenses, purchases, leave)
+  APPROVAL_REQUESTED
+  APPROVAL_DECIDED
 }
 
 enum BreakType {
@@ -2294,6 +2318,7 @@ model PmProject {
   members      PmProjectMember[]
   columns      PmColumn[]
   tasks        PmTask[]
+  recurrences  PmRecurrence[]
   labels       PmLabel[]
   conversation ChatConversation?
   meetings     Meeting[]
@@ -2381,6 +2406,9 @@ model PmTask {
   extensionRequests PmExtensionRequest[]
   dispatches        PmDispatchLog[]
   chatRefs          ChatMessage[]
+  blockedBy         PmTaskDependency[]   @relation("PmBlocked")
+  blocking          PmTaskDependency[]   @relation("PmBlocking")
+  timeEntries       PmTimeEntry[]
 
   @@unique([companyId, code])
   @@index([projectId, columnId, position])
@@ -3725,6 +3753,22 @@ model Company {
   /// null: the theme's own). Each person can still pick their own theme (User.uiTheme).
   theme              String?
   brandColor         String?
+  /// Everyone in the company must set up two-step sign-in before they can use the app (Company settings → Security).
+  requireTwoStep     Boolean       @default(false)
+  /// When the company's logo was last set (the picture is a file, like profile pictures); null: no logo.
+  logoAt             DateTime?
+  /// Days of leave a person gets in a year unless they have their own number: { ANNUAL, SICK, CASUAL }.
+  leaveAllowances    Json?
+  /// Single sign-on (SAML): the identity provider's sign-in address, its issuer, its signing certificate (PEM), the
+  /// email domains that sign in through it, whether passwords are closed (except Super Admins), and whether a person
+  /// who is not in Metriq yet is added on their first sign-in.
+  ssoOn              Boolean       @default(false)
+  ssoEntryPoint      String?
+  ssoIdpIssuer       String?
+  ssoCert            String?
+  ssoDomains         String[]      @default([])
+  ssoRequired        Boolean       @default(false)
+  ssoCreatePeople    Boolean       @default(false)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -3829,6 +3873,20 @@ model Company {
   wfhRequestRows           WfhRequest[]
   attendanceFixRequestRows AttendanceFixRequest[]
   noteRows                 Note[]
+  apiKeyRows               ApiKey[]
+  webhookRows              Webhook[]
+  webhookDeliveryRows      WebhookDelivery[]
+  approvalRuleRows         ApprovalRule[]
+  approvalRequestRows      ApprovalRequest[]
+  approvalStepRows         ApprovalStep[]
+  personRecordRows         PersonRecord[]
+  leaveAllowanceRows       LeaveAllowance[]
+  salesDocRows             SalesDoc[]
+  salesDocLineRows         SalesDocLine[]
+  savedReportRows          SavedReport[]
+  pmRecurrenceRows         PmRecurrence[]
+  pmTaskDependencyRows     PmTaskDependency[]
+  pmTimeEntryRows          PmTimeEntry[]
   noteShareRows            NoteShare[]
   dialerLeadRows           DialerLead[]
   dialerImportRows         DialerImport[]
@@ -4180,6 +4238,79 @@ model Invoice {
 }
 
 /// Every message from a payment provider, kept once (a provider can send the same one twice).
+/// A key a company makes so another program can read (or add to) its Metriq through the public API (/api/v1).
+/// The key itself is shown once and never stored: only its hash, and its first characters to tell keys apart.
+model ApiKey {
+  id          String    @id @default(cuid())
+  companyId   String    @default("")
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  prefix      String
+  tokenHash   String    @unique
+  /// "read", or "write" (which includes reading).
+  access      String    @default("read")
+  createdById String?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([companyId])
+}
+
+/// An address a company wants told when something happens (a lead comes in, a task is finished, someone checks in).
+/// Each message is signed with `secret` so the receiver can check it came from Metriq.
+model Webhook {
+  id          String            @id @default(cuid())
+  companyId   String            @default("")
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  url         String
+  secret      String
+  /// Which events it wants, e.g. "lead.created"; see lib/webhooks EVENTS.
+  events      String[]          @default([])
+  active      Boolean           @default(true)
+  createdById String?
+  /// Failures in a row; the webhook is switched off after 20.
+  failCount   Int               @default(0)
+  lastStatus  Int?
+  lastAt      DateTime?
+  createdAt   DateTime          @default(now())
+  deliveries  WebhookDelivery[]
+
+  @@index([companyId])
+}
+
+/// One message sent (or tried) to a webhook: kept for a while so the company can see what happened.
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  companyId  String   @default("")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  webhookId  String
+  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event      String
+  ok         Boolean
+  status     Int?
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([webhookId, createdAt(sort: Desc)])
+  @@index([companyId])
+}
+
+/// An invite to sign up while the owner's switch "New companies can sign up" is off (owner console → Invites).
+/// The link is /start?invite=<code>. Platform-wide: it belongs to no company.
+model SignupInvite {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  /// Who it is for (the owner's own note).
+  note      String
+  maxUses   Int       @default(1)
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
 model BillingEvent {
   id          String    @id @default(cuid())
   provider    String
@@ -4710,6 +4841,9 @@ model AiChunk {
   meta       Json?
   /// float32 x dimensions, normalised.
   embedding  Bytes
+  /// The same vector as numbers, for searching inside the database (METRA_INDEX=database, lib/metra/dbIndex.ts).
+  /// Empty until filled; the in-memory index does not use it.
+  vec        Float[]  @default([]) @db.Real
   model      String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -4801,4 +4935,253 @@ model AiIndexState {
   updatedAt  DateTime  @updatedAt
 
   @@unique([companyId, sourceType])
+}
+
+// ========== Plan 2026-11, stage 2: approvals, people records, quotes and invoices, saved reports, project extras ==========
+
+/// Who must approve a kind of request, in order. No rule for a kind: the requester's team lead, else an admin.
+model ApprovalRule {
+  id        String   @id @default(cuid())
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// EXPENSE, PURCHASE, LEAVE or OTHER.
+  kind      String
+  /// The rule applies from this amount up (null: any amount). The highest matching rule wins.
+  minAmount Decimal? @db.Decimal(14, 2)
+  /// In order: "LEAD" (the requester's team lead), "ADMIN" (any admin), or a person's id.
+  chain     String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, kind])
+}
+
+/// Something a person asks for that someone else must approve: an expense, a purchase, leave, or anything else.
+model ApprovalRequest {
+  id          String         @id @default(cuid())
+  companyId   String         @default("")
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// The request's number inside its own company (1, 2, 3...).
+  number      Int
+  /// EXPENSE, PURCHASE, LEAVE or OTHER.
+  kind        String
+  title       String
+  details     String?
+  amount      Decimal?       @db.Decimal(14, 2)
+  currency    String         @default("USD")
+  /// LEAVE: the days asked for (YYYY-MM-DD) and the kind of leave (ANNUAL, SICK, CASUAL, UNPAID).
+  days        String[]       @default([])
+  leaveKind   String?
+  requesterId String
+  requester   User           @relation("ApprovalRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  /// PENDING, APPROVED, REJECTED or CANCELLED.
+  status      String         @default("PENDING")
+  decidedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  steps       ApprovalStep[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([requesterId])
+}
+
+/// One approver's turn on a request. Steps are decided in order.
+model ApprovalStep {
+  id          String          @id @default(cuid())
+  companyId   String          @default("")
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requestId   String
+  request     ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  position    Int
+  /// "LEAD", "ADMIN" or a person's id: who may decide this step.
+  approver    String
+  /// WAITING (not its turn yet), PENDING (its turn), APPROVED, REJECTED or SKIPPED.
+  status      String          @default("WAITING")
+  decidedById String?
+  decidedBy   User?           @relation("ApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  note        String?
+  decidedAt   DateTime?
+
+  @@unique([requestId, position])
+  @@index([companyId])
+}
+
+/// The facts a company keeps about a person beyond their sign-in: job, dates, contacts. One per person.
+model PersonRecord {
+  id             String    @id @default(cuid())
+  companyId      String    @default("")
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId         String    @unique
+  user           User      @relation("PersonRecordOf", fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode   String?
+  jobTitle       String?
+  /// FULL_TIME, PART_TIME, CONTRACT or INTERN.
+  employmentType String?
+  joinedOn       DateTime? @db.Date
+  leftOn         DateTime? @db.Date
+  birthday       DateTime? @db.Date
+  phone          String?
+  address        String?
+  emergencyName  String?
+  emergencyPhone String?
+  managerId      String?
+  manager        User?     @relation("PersonRecordManager", fields: [managerId], references: [id], onDelete: SetNull)
+  /// Seen by team leads and admins only.
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([companyId])
+}
+
+/// A person's own number of leave days for a year and kind, when it differs from the company's.
+model LeaveAllowance {
+  id        String  @id @default(cuid())
+  companyId String  @default("")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation("LeaveAllowanceOf", fields: [userId], references: [id], onDelete: Cascade)
+  year      Int
+  /// ANNUAL, SICK or CASUAL.
+  kind      String
+  days      Float
+
+  @@unique([userId, year, kind])
+  @@index([companyId])
+}
+
+/// A quote or an invoice sent to a customer. No ledger: totals and whether it was paid, nothing more.
+model SalesDoc {
+  id              String         @id @default(cuid())
+  companyId       String         @default("")
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// QUOTE or INVOICE.
+  kind            String
+  /// Q-0001 or INV-0001: one run of numbers per company and kind.
+  number          String
+  customerName    String
+  customerEmail   String?
+  customerAddress String?
+  issueDate       DateTime       @db.Date
+  /// An invoice's due date, or the day a quote stops being valid.
+  dueDate         DateTime?      @db.Date
+  currency        String         @default("USD")
+  /// Quotes: DRAFT, SENT, ACCEPTED, DECLINED. Invoices: DRAFT, SENT, PAID, VOID.
+  status          String         @default("DRAFT")
+  /// Percent.
+  taxRate         Float          @default(0)
+  discount        Decimal        @default(0) @db.Decimal(14, 2)
+  notes           String?
+  subtotal        Decimal        @default(0) @db.Decimal(14, 2)
+  total           Decimal        @default(0) @db.Decimal(14, 2)
+  paidAt          DateTime?
+  paidNote        String?
+  /// The quote an invoice was made from.
+  fromDocId       String?
+  createdById     String
+  createdBy       User           @relation("SalesDocCreator", fields: [createdById], references: [id])
+  lines           SalesDocLine[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([companyId, kind, number])
+  @@index([companyId, kind, status])
+}
+
+model SalesDocLine {
+  id          String   @id @default(cuid())
+  companyId   String   @default("")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  docId       String
+  doc         SalesDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+  position    Int
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Decimal  @db.Decimal(14, 2)
+
+  @@index([docId])
+  @@index([companyId])
+}
+
+/// A report someone built in the report builder and kept.
+model SavedReport {
+  id        String   @id @default(cuid())
+  companyId String   @default("")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  ownerId   String
+  owner     User     @relation("SavedReportOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Seen by everyone who may run it, or only by its owner.
+  shared    Boolean  @default(false)
+  /// { source, measure, groupBy, range, filters, chart }
+  spec      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+/// A task that makes itself again: every day, week or month a new task appears on the project's board.
+model PmRecurrence {
+  id          String    @id @default(cuid())
+  companyId   String    @default("")
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     PmProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  priority    Priority  @default(MEDIUM)
+  assigneeIds String[]  @default([])
+  /// DAILY, WEEKLY or MONTHLY.
+  every       String
+  /// WEEKLY: 1 (Monday) to 7. MONTHLY: the day of the month, 1 to 28.
+  onDay       Int?
+  /// Days after it is made that the task is due.
+  dueInDays   Int       @default(1)
+  /// The next day (company clock) a task is made.
+  nextOn      DateTime  @db.Date
+  active      Boolean   @default(true)
+  lastMadeAt  DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([nextOn, active])
+}
+
+/// "This task waits on that one."
+model PmTaskDependency {
+  id          String   @id @default(cuid())
+  companyId   String   @default("")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskId      String
+  task        PmTask   @relation("PmBlocked", fields: [taskId], references: [id], onDelete: Cascade)
+  blockedById String
+  blockedBy   PmTask   @relation("PmBlocking", fields: [blockedById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([taskId, blockedById])
+  @@index([companyId])
+}
+
+/// Time a person spent on a task: a running timer (no end yet) or a finished stretch.
+model PmTimeEntry {
+  id        String    @id @default(cuid())
+  companyId String    @default("")
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      PmTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation("PmTimeEntryOf", fields: [userId], references: [id], onDelete: Cascade)
+  startedAt DateTime
+  endedAt   DateTime?
+  minutes   Int       @default(0)
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@index([taskId])
+  @@index([userId, endedAt])
+  @@index([companyId])
 }

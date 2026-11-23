@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
-import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, CheckSquare, Columns3, ExternalLink, List as ListIcon, ListChecks, Search, Send, X } from 'lucide-react'
-import { getMyTasks, type MyTasksResponse, type PendingTask } from '../../lib/tasksApi'
+import { AlertTriangle, ArrowDown, ArrowUp, CalendarClock, CheckCircle2, CheckSquare, Columns3, ExternalLink, List as ListIcon, ListChecks, Search, Send, Trash2, X } from 'lucide-react'
+import { deleteMyMarketingTask, getMyTasks, type MyTasksResponse, type PendingTask } from '../../lib/tasksApi'
 import { projectsApi, type BoardColumn, type BoardData, type ColumnCategory, type PmPriority, type TaskCard } from '../../lib/projectsApi'
 import { AvatarStack, DueChip, PRIORITY_META, PriorityGlyph, StatusIcon, dueState, fmtShort } from '../../components/projects/pmUi'
 import { TaskDrawer } from './projects/TaskDrawer'
@@ -80,6 +80,20 @@ export default function MyTasks() {
   }, [scope, doneDays])
   useEffect(() => { setCards(null); load() }, [load])
   useEffect(() => { getMyTasks().then(setSummary).catch(() => undefined) }, [])
+
+  // A Marketing board task can be deleted from here: the Marketing Board itself was retired, so a leftover one had no other way out.
+  const removeOther = useCallback(async (t: PendingTask) => {
+    if (t.source !== 'marketing') return
+    if (!confirm(`Delete the Marketing task "${t.title}"?\n\nIt is deleted for everyone and cannot be brought back.`)) return
+    try {
+      await deleteMyMarketingTask(t.id)
+      setSummary((s) => (s ? { ...s, pending: s.pending.filter((x) => !(x.source === 'marketing' && x.id === t.id)) } : s))
+      getMyTasks().then(setSummary).catch(() => undefined)
+      addToast({ type: 'success', message: 'Task deleted.' })
+    } catch (e) {
+      addToast({ type: 'error', message: apiErrorText(e, 'Could not delete the task') })
+    }
+  }, [addToast])
 
   const rows: Row[] = useMemo(() => {
     const out: Row[] = (cards ?? []).map((c) => ({ kind: 'project', id: c.id, card: c }))
@@ -235,9 +249,9 @@ export default function MyTasks() {
           <p className="text-body-md text-ink-muted">{scope === 'mine' ? 'You have no open tasks. Nice work.' : "You haven't given project tasks to others yet."}</p>
         </div>
       ) : view === 'board' ? (
-        <Board rows={shown} statusColumns={statusColumns} onOpen={openRow} onMove={moveTo} showAssignees={scope === 'byme'} />
+        <RemoveOther.Provider value={removeOther}><Board rows={shown} statusColumns={statusColumns} onOpen={openRow} onMove={moveTo} showAssignees={scope === 'byme'} /></RemoveOther.Provider>
       ) : (
-        <ListView rows={shown} columns={columns} group={group} sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : 1 }))} onOpen={openRow} onStatus={moveTo} showAssignees={scope === 'byme'} />
+        <RemoveOther.Provider value={removeOther}><ListView rows={shown} columns={columns} group={group} sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : 1 }))} onOpen={openRow} onStatus={moveTo} showAssignees={scope === 'byme'} /></RemoveOther.Provider>
       )}
 
       {stats && scope === 'mine' && (
@@ -283,6 +297,21 @@ function ViewTab({ on, onClick, icon, children }: { on: boolean; onClick: () => 
 // ------------------------------------------------------------------ board
 
 type StatusCol = { name: string; category: ColumnCategory; color: string | null }
+
+/** Deletes a leftover Marketing board task from My Tasks (the page provides it; null outside). */
+const RemoveOther = createContext<((t: PendingTask) => void) | null>(null)
+
+/** The bin on a Marketing board task: the only kind that can be deleted from My Tasks. */
+function RemoveOtherButton({ task, className }: { task: PendingTask; className?: string }) {
+  const remove = useContext(RemoveOther)
+  if (!remove || task.source !== 'marketing') return null
+  return (
+    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(task) }} title="Delete this task" aria-label={`Delete ${task.title}`}
+      className={cn('rounded p-1 text-ink-faint hover:bg-danger/10 hover:text-danger-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', className)}>
+      <Trash2 size={14} />
+    </button>
+  )
+}
 
 function Board({ rows, statusColumns, onOpen, onMove, showAssignees }: { rows: Row[]; statusColumns: StatusCol[]; onOpen: (r: Row) => void; onMove: (c: Card, to: StatusCol) => void; showAssignees: boolean }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
@@ -364,7 +393,12 @@ function BoardCard({ row, onOpen, showAssignees }: { row: Row; onOpen: (r: Row) 
   const body = <CardBody row={row} showAssignees={showAssignees} />
   // While it is dragged the overlay shows the card; the one in the column stays put as a faint placeholder.
   const cls = cn('block w-full cursor-pointer rounded-btn border border-line bg-card p-3 text-left shadow-xs transition-shadow hover:border-line-strong hover:shadow-sm', drag.isDragging && 'opacity-30 shadow-none')
-  if (row.kind === 'other') return <Link to={row.other.link} className={cls}>{body}</Link>
+  if (row.kind === 'other') return (
+    <div className="relative">
+      <Link to={row.other.link} className={cls}>{body}</Link>
+      <RemoveOtherButton task={row.other} className="absolute bottom-2 right-2" />
+    </div>
+  )
   return (
     <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes} role="button" tabIndex={0} onClick={() => onOpen(row)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(row) }} className={cls}>
       {body}
@@ -498,7 +532,7 @@ function GroupRows({ title, rows, columns, onOpen, onStatus, showAssignees }: { 
         const cols = r.kind === 'project' ? columns[r.card.project.key] ?? [] : []
         return (
           <tr key={r.id} onClick={() => onOpen(r)} className={cn('border-b border-line/70 transition-colors last:border-0 hover:bg-slate-50 dark:hover:bg-white/[0.03]', r.kind === 'project' && 'cursor-pointer')}>
-            <td className="whitespace-nowrap px-4 py-2">{r.kind === 'project' ? <span className="inline-flex items-center gap-1.5 font-mono text-[12px] text-ink-muted"><CheckSquare size={13} className="text-primary-ink" />{r.card.code}</span> : <Link to={r.other.link} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-body-sm text-primary-ink hover:underline"><ExternalLink size={12} />Open</Link>}</td>
+            <td className="whitespace-nowrap px-4 py-2">{r.kind === 'project' ? <span className="inline-flex items-center gap-1.5 font-mono text-[12px] text-ink-muted"><CheckSquare size={13} className="text-primary-ink" />{r.card.code}</span> : <Link to={r.other.link} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-body-sm text-primary-ink hover:underline"><ExternalLink size={12} />Open</Link>}{r.kind === 'other' && <RemoveOtherButton task={r.other} className="ml-1 align-middle" />}</td>
             <td className="max-w-[520px] px-3 py-2"><span className="line-clamp-1 font-medium text-ink" title={rowTitle(r)}>{rowTitle(r)}</span></td>
             <td className="whitespace-nowrap px-3 py-2"><ProjectChip row={r} /></td>
             <td className="whitespace-nowrap px-3 py-2" onClick={(e) => e.stopPropagation()}>

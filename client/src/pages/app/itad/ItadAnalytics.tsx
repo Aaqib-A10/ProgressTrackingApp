@@ -1,3 +1,4 @@
+import { deptName } from '../../../lib/departments'
 import { useEffect, useState } from 'react'
 import { Card } from '../../../components/ui/Card'
 import { StatCard } from '../../../components/StatCard'
@@ -47,7 +48,7 @@ export default function ItadAnalytics() {
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
-        <h1 className="text-headline-lg text-ink">ITAD Analytics</h1>
+        <h1 className="text-headline-lg text-ink">{deptName('ITAD', 'ITAD')} Analytics</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Trends, period comparison & lifecycle · {RANGE_LABEL[range] ?? 'This Month'}</p>
       </div>
 

@@ -34,12 +34,17 @@ export const WORK: Entry[] = [
   {
     key: 'qa.mine', label: 'My QA Scores', area: 'Quality', app: '/app/qa/my',
     about: "The asker's own call-quality evaluations: the score and band of each, pass or fail, whether coaching is needed, who evaluated it and when.",
-    says: ['my qa', 'my qa score', 'my qa scores', 'my quality score', 'my evaluations', 'my call score', 'did i pass', 'my last evaluation', 'mera qa score'],
+    says: ['my qa', 'my qa score', 'my qa scores', 'my quality score', 'my evaluations', 'my call score', 'did i pass', 'my last evaluation', 'my most recent evaluation', 'my most recent qa evaluation', 'my latest evaluation', 'my latest qa score', 'my recent qa', 'what did i score', 'mera qa score'],
     who: everyone,
     blocks: ['my-qa'], apis: ['/api/qa/my-evaluations'], models: ['QaEvaluation', 'QaEvaluationCategory', 'QaAnswer'],
     load: reader<{ evaluations: Evaluation[] }>('/api/qa/my-evaluations', {
       rows: (b) => b.evaluations.map(evalRow),
-      head: (b) => (b.evaluations.length ? [`Average score over these ${b.evaluations.length}: ${Math.round((b.evaluations.reduce((s, e) => s + e.totalScore, 0) / b.evaluations.length) * 10) / 10}. Newest first.`] : []),
+      head: (b) => (b.evaluations.length ? [
+        `The newest (the last evaluation) is the first row: score ${b.evaluations[0].totalScore}, ${b.evaluations[0].band}, ${b.evaluations[0].passed ? 'passed' : 'failed'}.`,
+        `Average score over these ${b.evaluations.length}: ${Math.round((b.evaluations.reduce((s, e) => s + e.totalScore, 0) / b.evaluations.length) * 10) / 10}. Newest first.`,
+        // This list has no comments: never answer "no comment" from it.
+        'This list does not hold the evaluator\'s comments, the category scores or the questions: they are read with what="qa.evaluation".',
+      ] : []),
     }),
     table: EVALS,
   },

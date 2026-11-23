@@ -18,7 +18,11 @@ export interface AdminUser {
   isActive: boolean
   attendanceRemote?: boolean
   tempPassword: string | null
+  /** Two-step sign-in is on for this person. */
+  twoStep?: boolean
 }
+/** Someone lost their phone: turn their two-step sign-in off (they sign in with the password and set it up again). */
+export const turnOffTwoStep = (id: string) => api.post<{ ok: true }>(`/admin/users/${id}/two-step-off`)
 export interface MembershipInput {
   department?: Department
   /** A company's own department (Phase 1, step 4), instead of the kind. */
@@ -172,9 +176,11 @@ export interface LoginEvent {
 export interface AuditEntry {
   id: string
   userName: string
-  action: string // "CREATE" | "UPDATE" | "DELETE"
+  action: string // "CREATE" | "UPDATE" | "DELETE", or a named action such as "PASSWORD_RESET"
   entityType: string
   entityId: string
+  /** One line saying what happened, when the entry has one. */
+  summary?: string | null
   createdAt: string
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { t, useLang } from '../../lib/i18n'
 import { CalendarDays, ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
@@ -29,6 +30,7 @@ export interface RangeSelectorProps {
 
 /** Today / Week / Month / 3 Months / Custom (with a start–end date picker). */
 export function RangeSelector({ value, onChange, custom, onApplyCustom, className }: RangeSelectorProps) {
+  useLang()
   const [open, setOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -96,7 +98,7 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
                 opt.value === value ? 'bg-primary/10 text-primary-ink' : 'text-ink hover:bg-slate-100',
               )}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
           <button
@@ -126,7 +128,7 @@ export function RangeSelector({ value, onChange, custom, onApplyCustom, classNam
                 active ? 'bg-primary/10 text-primary-ink' : 'text-ink-muted hover:text-ink',
               )}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           )
         })}

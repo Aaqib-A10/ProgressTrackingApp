@@ -18,7 +18,7 @@ export const CALENDAR: Entry[] = [
   {
     key: 'calendar.my', label: 'My calendar', area: 'Calendar', app: '/app/calendar',
     about: "The asker's own days: meetings with the notes (agenda) written on them and who is invited, company holidays, their leave and days off, tasks due, to-dos, and e-commerce meeting notes and deadlines. Today and the next 7 days unless dates are given.",
-    says: ['calendar', 'my calendar', 'schedule', 'my schedule', 'my week', 'this week', 'next week', 'today', 'tomorrow', 'my day', 'what do i have', 'what is on', 'whats on', 'upcoming', 'meetings', 'meeting', 'agenda', 'notes in my calendar', 'notes on my calendar', 'calendar notes', 'event', 'events', 'appointment', 'due this week', 'holiday', 'holidays', 'day off', 'am i free', 'aaj kya hai', 'kal kya hai', 'is hafte', 'meeting kab', 'chutti'],
+    says: ['calendar', 'my calendar', 'schedule', 'my schedule', 'my week', 'this week', 'next week', 'today', 'tomorrow', 'my day', 'what do i have', 'what is on', 'whats on', 'upcoming', 'meetings', 'meeting', 'agenda', 'notes in my calendar', 'notes on my calendar', 'notes on the call', 'notes on tomorrow', 'supplier call', 'call tomorrow', 'calendar notes', 'event', 'events', 'appointment', 'due this week', 'holiday', 'holidays', 'day off', 'am i free', 'aaj kya hai', 'kal kya hai', 'is hafte', 'meeting kab', 'chutti'],
     who: () => true, pin: () => true, takes: ['from_to', 'date'],
     blocks: ['calendar'], apis: ['/api/meetings', '/api/admin/holidays', '/api/attendance/history', '/api/tasks/mine', '/api/worklog', '/api/todos', '/api/ecommerce/meeting-notes'], models: ['Meeting', 'MeetingAttendee', 'Holiday', 'LeaveDay'],
     async load(ctx, a) {

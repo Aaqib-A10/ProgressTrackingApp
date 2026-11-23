@@ -1,3 +1,4 @@
+import { deptName } from '../../../../lib/departments'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Columns3, Download, FileUp, Save, Search, X } from 'lucide-react'
@@ -6,7 +7,7 @@ import { Modal } from '../../../../components/ui/Modal'
 import { useToast } from '../../../../components/ui/Toast'
 import { cn } from '../../../../lib/cn'
 import { dialerApi, type DialerData, type SavedView } from '../../../../lib/dialerApi'
-import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, multiLabel, type LeadFilters } from '../../../../lib/dialer'
+import { PRESET_VIEWS, REGIONS, filterLeads, fmtPkt, leadState, multiLabel, repZone, repZoneLabel, type LeadFilters } from '../../../../lib/dialer'
 import { FilterBar, type FilterDef } from './filters'
 import { DownloadLeads, InfoTip, MultiFilter, Pager, errMsg, usePaged } from './ui'
 import { ColumnPicker, LeadsTable, parseSort, sortLeads, type LeadSort } from './LeadColumns'
@@ -86,19 +87,19 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
           { key: 'stage', label: 'Stage', group: 'Stage', active: !!f.stage, summary: multiLabel(f.stage), clear: () => set('stage', ''), control: <MultiFilter label="Stage" value={f.stage} onChange={(v) => set('stage', v)} options={[{ value: '1', label: '1 New / assigned' }, { value: '2', label: '2 Attempted' }, { value: '3', label: '3 Connected' }, { value: '4', label: '4 Positive' }]} /> },
           { key: 'inStatus', label: 'Days in status', group: 'Activity', active: !!f.inStatus, summary: f.inStatus ? `${f.inStatus}+ days` : '', clear: () => set('inStatus', ''), control: <select value={f.inStatus ?? ''} onChange={(e) => set('inStatus', e.target.value)} className={sel(!!f.inStatus)} aria-label="Days in status"><option value="">Days in status</option>{[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d}+ days</option>)}</select> },
           { key: 'updated', label: 'Last updated', group: 'Activity', active: !!f.updated, summary: f.updated ? `last ${f.updated === '1' ? 'day' : `${f.updated} days`}` : '', clear: () => set('updated', ''), control: <select value={f.updated ?? ''} onChange={(e) => set('updated', e.target.value)} className={sel(!!f.updated)} aria-label="Last updated"><option value="">Last updated</option>{[1, 7, 30, 90].map((d) => <option key={d} value={d}>In the last {d === 1 ? 'day' : `${d} days`}</option>)}</select> },
-          { key: 'callAt', label: 'Call time', group: 'Activity', active: !!f.callAt, summary: f.callAt === 'now' ? 'can call now' : f.callAt === 'prime' ? 'prime time now' : f.callAt ? `${fmtPkt(f.callAt)} PKT` : '', clear: () => set('callAt', ''), control: (
+          { key: 'callAt', label: 'Call time', group: 'Activity', active: !!f.callAt, summary: f.callAt === 'now' ? 'can call now' : f.callAt === 'prime' ? 'prime time now' : f.callAt ? `${fmtPkt(f.callAt)} ${repZoneLabel()}` : '', clear: () => set('callAt', ''), control: (
             <span className="inline-flex flex-wrap items-center gap-2">
               <select value={f.callAt ? (timePick ? 'time' : f.callAt) : ''} onChange={(e) => set('callAt', e.target.value === 'time' ? nextHour(now) : e.target.value)} className={sel(!!f.callAt)} aria-label="Call time">
                 <option value="">Call time</option>
                 <option value="now">Can call now</option>
                 <option value="prime">Prime time now</option>
-                <option value="time">At a time I pick (PKT)</option>
+                <option value="time">At a time I pick ({repZoneLabel()})</option>
               </select>
               {timePick && (
                 <label className="inline-flex items-center gap-1.5 text-body-sm text-ink">
                   <span className="text-ink-muted">At</span>
-                  <input type="time" value={f.callAt} onChange={(e) => e.target.value && set('callAt', e.target.value)} className="h-8 rounded-full border border-primary bg-primary/5 px-3 text-body-sm font-semibold text-primary-ink focus:outline-none" aria-label="Pakistan time to call" />
-                  <span className="text-ink-muted">PKT</span>
+                  <input type="time" value={f.callAt} onChange={(e) => e.target.value && set('callAt', e.target.value)} className="h-8 rounded-full border border-primary bg-primary/5 px-3 text-body-sm font-semibold text-primary-ink focus:outline-none" aria-label="Time to call, on your own clock" />
+                  <span className="text-ink-muted">{repZoneLabel()}</span>
                 </label>
               )}
             </span>
@@ -118,7 +119,7 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
 
       <div className="rounded-card border border-line bg-card p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-body-sm text-ink-muted"><b className="text-ink">{list.length.toLocaleString()}</b> leads{f.callAt && /^\d/.test(f.callAt) ? <> you can call at <b className="text-ink">{fmtPkt(f.callAt)} PKT</b> (inside their calling hours then)</> : f.callAt === 'now' ? ' you can call now' : f.callAt === 'prime' ? ' in prime time now' : ''}</span>
+          <span className="text-body-sm text-ink-muted"><b className="text-ink">{list.length.toLocaleString()}</b> leads{f.callAt && /^\d/.test(f.callAt) ? <> you can call at <b className="text-ink">{fmtPkt(f.callAt)} {repZoneLabel()}</b> (inside their calling hours then)</> : f.callAt === 'now' ? ' you can call now' : f.callAt === 'prime' ? ' in prime time now' : ''}</span>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" leadingIcon={<Columns3 size={14} />} onClick={() => setPicking(true)}>Columns</Button>
             <Button size="sm" variant="secondary" leadingIcon={<FileUp size={14} />} onClick={() => setFill(true)}>Bulk fill extra contacts</Button>
@@ -147,9 +148,9 @@ export function LeadsView({ data, now, showOwner, onOpenLead, onChanged }: { dat
   )
 }
 
-/** The next whole hour on the Pakistan clock, as 'HH:MM' (the time picker's starting value). */
+/** The next whole hour on the rep's own clock (the company's time zone), as 'HH:MM' (the time picker's starting value). */
 function nextHour(now: Date): string {
-  const h = Number(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hourCycle: 'h23' }))
+  const h = Number(now.toLocaleTimeString('en-GB', { timeZone: repZone(), hour: '2-digit', hourCycle: 'h23' }))
   return `${String((h + 1) % 24).padStart(2, '0')}:00`
 }
 
@@ -184,7 +185,7 @@ function NotesExportModal({ data, onClose }: { data: DialerData; onClose: () => 
       <div className="space-y-3 text-body-sm">
         {data.me.isManager && (
           <label className="block"><span className="mb-1 block font-semibold text-ink">Whose notes</span>
-            <select value={rep} onChange={(e) => setRep(e.target.value)} className={inp}><option value="me">Mine</option><option value="all">Everyone in ITAD</option>{data.reps.filter((r) => r.id !== data.me.id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+            <select value={rep} onChange={(e) => setRep(e.target.value)} className={inp}><option value="me">Mine</option><option value="all">Everyone in {deptName('ITAD', 'ITAD')}</option>{data.reps.filter((r) => r.id !== data.me.id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
           </label>
         )}
         <div className="grid grid-cols-2 gap-2">

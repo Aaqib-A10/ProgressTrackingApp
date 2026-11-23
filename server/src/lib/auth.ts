@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import bcrypt from 'bcryptjs'
 import jwt, { type SignOptions } from 'jsonwebtoken'
 import type { Role } from '@prisma/client'
@@ -40,9 +41,11 @@ export interface JwtPayload {
   support?: string
   /** A connector key (Claude, ChatGPT...) is working as this person (see signConnectorToken). */
   via?: 'connector'
+  /** Signed in through the company's single sign-on (SAML): the identity provider did the checks. */
+  sso?: boolean
 }
 
-export function signToken(payload: { sub: string; role: Role }): string {
+export function signToken(payload: { sub: string; role: Role; sso?: boolean }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as SignOptions)
 }
 
@@ -92,13 +95,39 @@ export function verifyOAuthState(token: string): Record<string, string> {
 }
 
 // --- Stateless password-reset token (no DB table needed) ---
-export function signResetToken(userId: string): string {
-  return jwt.sign({ sub: userId, kind: 'reset' }, JWT_SECRET, { expiresIn: RESET_EXPIRES_IN })
+/**
+ * A short fingerprint of the person's current password. A reset link carries it, so the link stops working the moment
+ * the password changes: each link sets a password once.
+ */
+export function resetStamp(passwordHash: string | null | undefined): string {
+  return createHash('sha256').update(passwordHash ?? '').digest('hex').slice(0, 16)
+}
+
+export function signResetToken(userId: string, stamp?: string): string {
+  return jwt.sign({ sub: userId, kind: 'reset', ...(stamp ? { st: stamp } : {}) }, JWT_SECRET, { expiresIn: RESET_EXPIRES_IN })
+}
+
+/** A reset link's person and, when the link carries one, the password fingerprint it was made for. */
+export function readResetToken(token: string): { userId: string; stamp?: string } {
+  const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { sub: string; kind?: string; st?: string }
+  if (payload.kind !== 'reset') throw new Error('Not a reset token')
+  return { userId: payload.sub, stamp: payload.st }
 }
 
 export function verifyResetToken(token: string): string {
   const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { sub: string; kind?: string }
   if (payload.kind !== 'reset') throw new Error('Not a reset token')
+  return payload.sub
+}
+
+// --- Two-step sign-in: the password was right, the code is still to come (5 minutes to enter it) ---
+export function signTwoStepTicket(userId: string): string {
+  return jwt.sign({ sub: userId, kind: 'two-step' }, JWT_SECRET, { expiresIn: '5m' })
+}
+
+export function verifyTwoStepTicket(token: string): string {
+  const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { sub: string; kind?: string }
+  if (payload.kind !== 'two-step') throw new Error('Not a two-step ticket')
   return payload.sub
 }
 

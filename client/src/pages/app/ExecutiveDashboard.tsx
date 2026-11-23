@@ -1,3 +1,4 @@
+import { deptName } from '../../lib/departments'
 import { useAuth } from '../../lib/auth'
 import { inHomeCompany } from '../../lib/types'
 import { useEffect, useState } from 'react'
@@ -118,7 +119,7 @@ export default function ExecutiveDashboard() {
       {kinds && <GettingStarted />}
 
       {data && has('ITAD', 'CSR') && (
-        <Card title="QA health" subtitle="Call quality across ITAD + CSR this period" action={<Link to="/app/qa/analytics" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink">Open QA <ArrowRight size={14} /></Link>}>
+        <Card title="QA health" subtitle={`Call quality across ${deptName('ITAD')} + ${deptName('CSR')} this period`} action={<Link to="/app/qa/analytics" className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink">Open QA <ArrowRight size={14} /></Link>}>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <MiniStat label="Avg QA score" value={formatPercent(data.qa.avgScore / 100)} />
             <MiniStat label="Pass rate" value={formatPercent(data.qa.passRate / 100)} />

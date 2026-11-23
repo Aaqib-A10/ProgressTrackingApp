@@ -14,6 +14,10 @@ import { cleanLayout, readLayout } from '../lib/blocks'
 import { cleanDashboard, readDashboard } from '../lib/cards'
 import { isOn } from '../lib/flags'
 import { BRAND_COLOR, isThemeId } from '../lib/themes'
+import { recordActivity } from '../lib/audit'
+import { removeCompany, streamCompanyExport } from '../lib/companyData'
+import { verifyPassword } from '../lib/auth'
+import { sendMail } from '../lib/mail'
 
 /**
  * Company settings (Phase 1, step 4), for the Super Admin or anyone with the Company settings
@@ -59,7 +63,7 @@ async function settingsUser(req: AuthedRequest) {
 /** GET /api/company — the company (everyone sees its name; the settings page needs canEdit). */
 export async function getCompany(req: AuthedRequest, res: Response): Promise<void> {
   const u = await me(req)
-  const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, supportAccessUntil: true, theme: true, brandColor: true } })
+  const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, supportAccessUntil: true, theme: true, brandColor: true, requireTwoStep: true } })
   res.json({
     company: { ...c, home: c.id === HOME_COMPANY_ID, supportAccessUntil: c.supportAccessUntil && c.supportAccessUntil > new Date() ? c.supportAccessUntil : null },
     usage: u.powers.includes('company.settings') ? await usageOf(c.id) : null,
@@ -75,6 +79,8 @@ const companySchema = z.object({
   // The company's colour theme (null: Metriq's own) and brand colour for buttons and links (null: the theme's own).
   theme: z.string().refine(isThemeId, 'Pick a theme from the list').nullable().optional(),
   brandColor: z.string().regex(BRAND_COLOR, 'A colour like #4F46E5').nullable().optional(),
+  // Security: everyone must set up two-step sign-in before they can use the app.
+  requireTwoStep: z.boolean().optional(),
 })
 
 /** PATCH /api/company { name?, timeZone?, theme?, brandColor? } */
@@ -83,9 +89,63 @@ export async function updateCompany(req: AuthedRequest, res: Response): Promise<
     const u = await settingsUser(req)
     const body = companySchema.parse(req.body)
     if (body.timeZone && u.companyId === HOME_COMPANY_ID && process.env.APP_TIMEZONE && body.timeZone !== process.env.APP_TIMEZONE) throw new Refused(409, "99 Technologies' time zone is set on the server.")
-    const c = await prisma.company.update({ where: { id: u.companyId }, data: { ...body, ...(body.brandColor ? { brandColor: body.brandColor.toLowerCase() } : {}) }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, theme: true, brandColor: true } })
+    // Requiring two-step sign-in locks out everyone who has not set it up, so the person turning it on goes first.
+    if (body.requireTwoStep === true && !(await prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { twoStepOn: true } })).twoStepOn) throw new Refused(409, 'Turn on your own two-step sign-in first (Settings → Security). Then you can require it for everyone.')
+    const c = await prisma.company.update({ where: { id: u.companyId }, data: { ...body, ...(body.brandColor ? { brandColor: body.brandColor.toLowerCase() } : {}) }, select: { id: true, name: true, kind: true, timeZone: true, plan: true, status: true, createdAt: true, theme: true, brandColor: true, requireTwoStep: true } })
+    if (body.requireTwoStep !== undefined) await recordActivity(u.id, body.requireTwoStep ? 'TWO_STEP_REQUIRED_ON' : 'TWO_STEP_REQUIRED_OFF', 'Company', c.id)
     forgetTimeZone(c.id)
+    const what = (['name', 'timeZone', 'theme', 'brandColor'] as const).filter((k) => body[k] !== undefined).map((k) => `${k} ${String(body[k])}`)
+    if (what.length) await recordActivity(u.id, 'UPDATE', 'Company', c.id, { after: { summary: `Company settings: ${what.join(', ')}` } })
     res.json({ company: { ...c, home: c.id === HOME_COMPANY_ID } })
+  } catch (e) { send(res, e) }
+}
+
+// ------------------------------------------------------------------ your data
+
+/** Not during a help sign-in: Metriq support never takes or removes a company's data from inside its account. */
+function notSupport(req: AuthedRequest): void {
+  if (req.user!.supportBy) throw new Refused(403, 'Metriq support cannot do this. Ask your Super Admin.')
+}
+
+/**
+ * GET /api/company/export — everything the company has in Metriq as one JSON file (people, reports, tasks, chats,
+ * leads, attendance and the rest), without passwords or sign-in secrets. For people with Company settings.
+ */
+export async function exportData(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const u = await settingsUser(req)
+    notSupport(req)
+    const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId } })
+    await recordActivity(u.id, 'COMPANY_EXPORT', 'Company', c.id)
+    await streamCompanyExport(res, c)
+  } catch (e) { send(res, e) }
+}
+
+/**
+ * POST /api/company/remove { confirm: "<company name>", password } — the Super Admin removes the company and everything it
+ * has, for good. They type the company's name and their own password. A plan that still renews online must be
+ * cancelled first, so nobody is charged for a company that no longer exists. 99 Technologies can never be removed.
+ */
+export async function deleteOwnCompany(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const u = await settingsUser(req)
+    notSupport(req)
+    if (u.role !== 'SUPER_ADMIN') throw new Refused(403, 'Only the Super Admin can remove the company.')
+    if (u.companyId === HOME_COMPANY_ID) throw new Refused(400, '99 Technologies is company 1 and can never be removed.')
+    const c = await prisma.company.findUniqueOrThrow({ where: { id: u.companyId }, include: { subscription: true } })
+    const body = z.object({ confirm: z.string(), password: z.string().optional() }).parse(req.body)
+    if (body.confirm.trim() !== c.name) throw new Refused(400, `Type the company's name (${c.name}) to remove it.`)
+    const me = await prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { passwordHash: true, email: true, name: true } })
+    if (me.passwordHash && !(await verifyPassword(body.password ?? '', me.passwordHash))) throw new Refused(400, 'That is not your password.')
+    const sub = c.subscription
+    if (sub && sub.status === 'ACTIVE' && !sub.cancelAtPeriodEnd && sub.provider !== 'manual' && sub.provider !== 'test') throw new Refused(409, 'Cancel your plan in Billing first, so you are not charged again. Then remove the company.')
+    const admins = (await prisma.user.findMany({ where: { role: 'SUPER_ADMIN', isActive: true }, select: { email: true } })).map((x) => x.email)
+    await removeCompany(c.id)
+    await prisma.ownerAuditLog.create({ data: { action: 'COMPANY_SELF_DELETE', companyId: c.id, target: c.name, detail: { by: me.name, slug: c.slug, plan: c.plan } } }).catch(() => undefined)
+    const text = `${c.name} and everything it had in Metriq has been removed, as ${me.name} asked. This cannot be undone. If this was not meant, write to us straight away.`
+    void sendMail({ to: admins.length ? admins : me.email, subject: `${c.name} has been removed from Metriq`, html: `<p style="font-family:Inter,Arial,sans-serif;font-size:14px;line-height:1.5;color:#0F172A">${text}</p>`, text, category: 'Company' })
+    res.clearCookie('token', { path: '/' })
+    res.status(204).end()
   } catch (e) { send(res, e) }
 }
 
@@ -107,14 +167,17 @@ async function departmentList() {
 }
 
 /** Each kind with what it is for and its sections (for the add form and the sections panel). */
-function kindsWithSections() {
-  return DEPARTMENT_KINDS.map((k) => ({ ...k, sections: sectionsOfKind(k.type).map((s) => ({ key: s.key, label: s.label, description: s.description })) }))
+function kindsWithSections(home = true) {
+  // A new company sees the kinds by what they are for. The names 99 Technologies' people know (ITAD) and its own
+  // client flow (CMR, for Jesse) are theirs alone.
+  const kinds = home ? DEPARTMENT_KINDS : DEPARTMENT_KINDS.filter((k) => k.type !== 'CMR').map((k) => ({ ...k, label: KIND_INFO[k.type].label, description: KIND_INFO[k.type].description }))
+  return kinds.map((k) => ({ ...k, sections: sectionsOfKind(k.type).map((s) => ({ key: s.key, label: s.label, description: s.description })) }))
 }
 
 /** GET /api/company/departments */
 export async function listDepartments(req: AuthedRequest, res: Response): Promise<void> {
-  await me(req)
-  res.json({ departments: await departmentList(), kinds: kindsWithSections() })
+  const u = await me(req)
+  res.json({ departments: await departmentList(), kinds: kindsWithSections(u.companyId === HOME_COMPANY_ID) })
 }
 
 const deptSchema = z.object({
@@ -139,13 +202,15 @@ async function nameTaken(name: string, exceptId?: string) {
 /** POST /api/company/departments { name, type } — one of each built-in kind, as many General ones as needed. */
 export async function createDepartment(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    await settingsUser(req)
+    const u = await settingsUser(req)
     const body = deptSchema.parse(req.body)
     if (await nameTaken(body.name)) throw new Refused(409, 'There is already a department with that name.')
+    if (body.type === 'CMR' && u.companyId !== HOME_COMPANY_ID) throw new Refused(400, 'Pick a kind from the list.')
     if (body.type !== 'GENERAL' && (await prisma.department.findFirst({ where: { type: body.type }, select: { id: true } }))) {
       throw new Refused(409, `You already have a ${DEPARTMENT_KINDS.find((k) => k.type === body.type)!.label} department. Make a General one, or rename the one you have.`)
     }
-    await prisma.department.create({ data: { name: body.name, type: body.type, sectionsOff: checkSections(body.type, body.sectionsOff ?? []) } })
+    const made = await prisma.department.create({ data: { name: body.name, type: body.type, sectionsOff: checkSections(body.type, body.sectionsOff ?? []) } })
+    await recordActivity(u.id, 'CREATE', 'Department', made.id, { after: { summary: `Added the department ${body.name}` } })
     forgetSections()
     res.status(201).json({ departments: await departmentList() })
   } catch (e) { send(res, e) }
@@ -154,12 +219,13 @@ export async function createDepartment(req: AuthedRequest, res: Response): Promi
 /** PATCH /api/company/departments/:id { name } */
 export async function renameDepartment(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    await settingsUser(req)
+    const u = await settingsUser(req)
     const { name } = deptSchema.pick({ name: true }).parse(req.body)
-    const d = await prisma.department.findUnique({ where: { id: req.params.id }, select: { id: true } })
+    const d = await prisma.department.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } })
     if (!d) throw new Refused(404, 'Department not found')
     if (await nameTaken(name, d.id)) throw new Refused(409, 'There is already a department with that name.')
     await prisma.department.update({ where: { id: d.id }, data: { name } })
+    await recordActivity(u.id, 'UPDATE', 'Department', d.id, { before: { name: d.name }, after: { summary: `Renamed the department ${d.name} to ${name}` } })
     res.json({ departments: await departmentList() })
   } catch (e) { send(res, e) }
 }
@@ -231,11 +297,12 @@ export async function setDepartmentDashboard(req: AuthedRequest, res: Response):
 /** DELETE /api/company/departments/:id — only an empty department (nobody in it). */
 export async function deleteDepartment(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    await settingsUser(req)
+    const u = await settingsUser(req)
     const d = (await departmentList()).find((x) => x.id === req.params.id)
     if (!d) throw new Refused(404, 'Department not found')
     if (d.people > 0) throw new Refused(409, 'Move its people to another department first.')
     try { await prisma.department.delete({ where: { id: d.id } }) } catch { throw new Refused(409, 'This department still has records (targets, tags or reports), so it cannot be removed.') }
+    await recordActivity(u.id, 'DELETE', 'Department', d.id, { before: { summary: `Removed the department ${d.name}` } })
     res.json({ departments: await departmentList() })
   } catch (e) { send(res, e) }
 }
@@ -279,7 +346,8 @@ export async function createRole(req: AuthedRequest, res: Response): Promise<voi
     checkGrant(u, body.baseRole, body.powers)
     if (ROLES.some((r) => ROLE_LABEL[r].toLowerCase() === body.name.toLowerCase())) throw new Refused(409, 'That is the name of a built-in role.')
     if (await prisma.companyRole.findFirst({ where: { name: { equals: body.name, mode: 'insensitive' } } })) throw new Refused(409, 'There is already a role with that name.')
-    await prisma.companyRole.create({ data: { name: body.name, baseRole: body.baseRole, areasOff: [...new Set(body.areasOff)], powers: [...new Set(body.powers)] } })
+    const role = await prisma.companyRole.create({ data: { name: body.name, baseRole: body.baseRole, areasOff: [...new Set(body.areasOff)], powers: [...new Set(body.powers)] } })
+    await recordActivity(u.id, 'CREATE', 'CompanyRole', role.id, { after: { summary: `Made the role ${role.name} (from ${ROLE_LABEL[role.baseRole]})${role.powers.length ? `, with ${role.powers.join(', ')}` : ''}` } })
     res.status(201).json({ roles: await roleList() })
   } catch (e) { send(res, e) }
 }
@@ -296,6 +364,7 @@ export async function updateRole(req: AuthedRequest, res: Response): Promise<voi
     checkGrant(u, r.baseRole, added)
     if (body.name && (await prisma.companyRole.findFirst({ where: { name: { equals: body.name, mode: 'insensitive' }, id: { not: r.id } } }))) throw new Refused(409, 'There is already a role with that name.')
     await prisma.companyRole.update({ where: { id: r.id }, data: { ...(body.name ? { name: body.name } : {}), ...(body.areasOff ? { areasOff: [...new Set(body.areasOff)] } : {}), ...(body.powers ? { powers: [...new Set(body.powers)] } : {}) } })
+    await recordActivity(u.id, 'UPDATE', 'CompanyRole', r.id, { before: { powers: r.powers, areasOff: r.areasOff }, after: { summary: `Changed the role ${body.name ?? r.name}${body.powers ? `: powers ${body.powers.join(', ') || 'none'}` : ''}${body.areasOff ? `; parts off: ${body.areasOff.join(', ') || 'none'}` : ''}` } })
     res.json({ roles: await roleList() })
   } catch (e) { send(res, e) }
 }
@@ -303,10 +372,11 @@ export async function updateRole(req: AuthedRequest, res: Response): Promise<voi
 /** DELETE /api/company/roles/:id — its people go back to just their built-in role. */
 export async function deleteRole(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    await settingsUser(req)
-    const r = await prisma.companyRole.findUnique({ where: { id: req.params.id }, select: { id: true } })
+    const u = await settingsUser(req)
+    const r = await prisma.companyRole.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } })
     if (!r) throw new Refused(404, 'Role not found')
     await prisma.companyRole.delete({ where: { id: r.id } })
+    await recordActivity(u.id, 'DELETE', 'CompanyRole', r.id, { before: { summary: `Removed the role ${r.name}` } })
     res.json({ roles: await roleList() })
   } catch (e) { send(res, e) }
 }
@@ -337,7 +407,7 @@ export async function updatePerson(req: AuthedRequest, res: Response): Promise<v
   try {
     const u = await settingsUser(req)
     const body = personSchema.parse(req.body)
-    const p = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, role: true, permissions: true } })
+    const p = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, role: true, permissions: true } })
     if (!p) throw new Refused(404, 'Person not found')
     if (body.customRoleId) {
       const r = await prisma.companyRole.findUnique({ where: { id: body.customRoleId } })
@@ -350,6 +420,7 @@ export async function updatePerson(req: AuthedRequest, res: Response): Promise<v
       checkGrant(u, 'MEMBER', [...added, ...removed])
     }
     await prisma.user.update({ where: { id: p.id }, data: { ...(body.customRoleId !== undefined ? { customRoleId: body.customRoleId } : {}), ...(body.permissions ? { permissions: [...new Set(body.permissions)] } : {}) } })
+    await recordActivity(u.id, 'UPDATE', 'User', p.id, { before: { permissions: p.permissions }, after: { summary: `${p.name}: ${[body.customRoleId !== undefined ? (body.customRoleId ? 'company role set' : 'company role removed') : '', body.permissions ? `extra powers ${body.permissions.join(', ') || 'none'}` : ''].filter(Boolean).join('; ')}` } })
     res.json({ ok: true })
   } catch (e) { send(res, e) }
 }

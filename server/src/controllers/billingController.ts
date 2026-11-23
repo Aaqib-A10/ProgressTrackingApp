@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { z } from 'zod'
+import { recordActivity } from '../lib/audit'
 import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { HOME_COMPANY_ID } from '../lib/company'
@@ -68,13 +69,15 @@ export const checkout = wrap(async (req, res) => {
   const provider = activeProvider()
   if (!provider) throw new Refused(409, 'Online payment is coming soon. Until then your trial keeps everything on; write to us from the Help button if you want a plan set by hand.')
   const sub = company.subscription
-  if (sub && sub.status !== 'CANCELED') { await change(company.id, sub, body.plan, body.interval); res.json({ changed: true }); return }
+  if (sub && sub.status !== 'CANCELED') { await change(company.id, sub, body.plan, body.interval); await recordActivity(u.id, 'PLAN_CHANGED', 'Billing', company.id, { before: { plan: sub.plan, interval: sub.interval }, after: { summary: `Plan changed to ${body.plan}, paid ${body.interval === 'year' ? 'yearly' : 'monthly'}` } }); res.json({ changed: true }); return }
   const r = await provider.checkout({ companyId: company.id, companyName: company.name, email: u.email, plan: body.plan, interval: body.interval, returnUrl: `${appUrl()}/app/billing`, customerId: sub?.customerId ?? null })
+  await recordActivity(u.id, 'PLAN_CHECKOUT', 'Billing', company.id, { after: { summary: `Went to pay for ${body.plan}, ${body.interval === 'year' ? 'yearly' : 'monthly'}` } })
   res.json({ url: r.url })
 })
 
 async function change(companyId: string, sub: { id: string; provider: string; externalId: string | null; plan: string; interval: string }, plan: string, interval: Interval) {
   if (sub.plan === plan && sub.interval === interval) return
+  if (sub.provider === 'manual') throw new Refused(409, 'Your plan is paid by bank transfer. Write to us from the Help button to change it.')
   const p = PROVIDERS[sub.provider as ProviderKey]
   if (sub.provider !== 'test') {
     if (!p?.configured() || !sub.externalId) throw new Refused(409, 'Online payment is coming soon. Write to us from the Help button.')
@@ -89,32 +92,36 @@ async function change(companyId: string, sub: { id: string; provider: string; ex
 
 /** POST /api/billing/change { plan, interval } — upgrade or downgrade (the difference is worked out by the provider). */
 export const changePlan = wrap(async (req, res) => {
-  const { company } = await payer(req)
+  const { u, company } = await payer(req)
   const body = planSchema.parse(req.body)
   const sub = company.subscription
   if (!sub || sub.status === 'CANCELED') throw new Refused(409, 'Choose a plan first.')
   const fit = await cannotFit(company.id, body.plan)
   if (fit) throw new Refused(409, fit)
   await change(company.id, sub, body.plan, body.interval)
+  await recordActivity(u.id, 'PLAN_CHANGED', 'Billing', company.id, { before: { plan: sub.plan, interval: sub.interval }, after: { summary: `Plan changed to ${body.plan}, paid ${body.interval === 'year' ? 'yearly' : 'monthly'}` } })
   res.json({ ok: true })
 })
 
 /** POST /api/billing/cancel { atPeriodEnd? } — stop at the end of what is paid (or undo with POST /resume). */
 export const cancel = wrap(async (req, res) => {
-  const { company } = await payer(req)
+  const { u, company } = await payer(req)
   const sub = company.subscription
   if (!sub || sub.status === 'CANCELED') throw new Refused(409, 'There is no plan to cancel.')
+  if (sub.provider === 'manual') throw new Refused(409, 'Your plan is paid by bank transfer: it simply ends on the date paid for. There is nothing to cancel.')
   if (sub.provider !== 'test') { const p = PROVIDERS[sub.provider as ProviderKey]; if (!p?.configured() || !sub.externalId) throw new Refused(409, 'Online payment is coming soon.'); await p.cancel(sub.externalId, true) }
   await prisma.subscription.update({ where: { id: sub.id }, data: { cancelAtPeriodEnd: true } })
+  await recordActivity(u.id, 'PLAN_CANCELLED', 'Billing', company.id, { after: { summary: `Cancelled the ${sub.plan} plan (runs to ${sub.currentPeriodEnd.toISOString().slice(0, 10)})` } })
   res.json({ ok: true, endsAt: sub.currentPeriodEnd })
 })
 
 export const resume = wrap(async (req, res) => {
-  const { company } = await payer(req)
+  const { u, company } = await payer(req)
   const sub = company.subscription
   if (!sub || sub.status === 'CANCELED' || !sub.cancelAtPeriodEnd) throw new Refused(409, 'Nothing to undo.')
   if (sub.provider !== 'test') throw new Refused(409, 'Open the payment page (Manage payment) to keep your plan.')
   await prisma.subscription.update({ where: { id: sub.id }, data: { cancelAtPeriodEnd: false } })
+  await recordActivity(u.id, 'PLAN_KEPT', 'Billing', company.id, { after: { summary: `Kept the ${sub.plan} plan (cancellation undone)` } })
   res.json({ ok: true })
 })
 

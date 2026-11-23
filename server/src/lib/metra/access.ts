@@ -88,6 +88,9 @@ export async function askerOf(userId: string): Promise<Asker> {
   // Anyone with a place in Lead Management (a rep, a manager, a head, or a Super Admin): its screens are theirs to open.
   if (sa || [...p].some((x) => x.startsWith('lbm:')) || (await prisma.leadBusinessMember.count({ where: { userId: u.id, business: { isActive: true } } })) > 0) p.add('leads')
 
+  // The parts of plan 2026-11 a company has switched on (their data sets are offered only then).
+  for (const f of ['requests', 'people-records', 'sales-docs', 'report-builder', 'project-extras'] as const) if (await isOn(f, u.companyId)) p.add(`on:${f}`)
+
   // Lead Dialer managers (Super Admin, or a Team Lead acting as ITAD) see the leads of the dialer's people, as itadUserIds.
   if (sa || (u.role === 'TEAM_LEAD' && kinds.includes('ITAD'))) {
     const borrowing = !sa && u.department && u.department.type !== 'ITAD' && u.departmentId

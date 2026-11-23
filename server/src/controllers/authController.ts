@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express'
 import { z } from 'zod'
-import { DepartmentType, Prisma } from '@prisma/client'
+import { DepartmentType, Prisma, type Role } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { activeProvider } from '../lib/billing/providers'
 import { leadsCmrOf, leadsHeadOnlyOf, leadsRoleOf } from '../lib/leads/access'
@@ -14,17 +14,21 @@ import {
   DUMMY_PASSWORD_HASH,
   signToken,
   signResetToken,
-  verifyResetToken,
+  readResetToken,
+  resetStamp,
+  signTwoStepTicket,
 } from '../lib/auth'
 import type { AuthedRequest } from '../middleware/auth'
+import { sendPasswordResetEmail } from '../lib/mail'
 import { getClientIp } from '../lib/ip'
 import { parseUserAgent } from '../lib/userAgent'
 import { powersOf } from '../lib/permissions'
 import { companyAreasOff } from '../lib/plans'
 import { isThemeId } from '../lib/themes'
+import { cleanNumber, whatsappReady } from '../lib/whatsapp'
 
 /** Record a sign-in for the Activity Log. Best-effort — never blocks auth. */
-async function logSignIn(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP'): Promise<void> {
+export async function logSignIn(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP'): Promise<void> {
   try {
     const ua = (req.headers['user-agent'] || '').slice(0, 400) || null
     const { browser, os, device } = parseUserAgent(ua)
@@ -37,7 +41,7 @@ async function logSignIn(req: Request, userId: string, kind: 'LOGIN' | 'SIGNUP')
 const COOKIE = 'token'
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
 
-function setAuthCookie(res: Response, token: string): void {
+export function setAuthCookie(res: Response, token: string): void {
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -61,10 +65,11 @@ async function publicUser(userId: string) {
         include: { department: { select: { type: true, name: true } }, subDepartment: { select: { slug: true } } },
         orderBy: { createdAt: 'asc' },
       },
-      company: { select: { id: true, name: true, slug: true, kind: true, plan: true, status: true, timeZone: true, modulesOff: true, modulesOn: true, trialEndsAt: true, setupDoneAt: true, theme: true, brandColor: true } },
+      company: { select: { id: true, name: true, slug: true, kind: true, plan: true, status: true, timeZone: true, modulesOff: true, modulesOn: true, trialEndsAt: true, setupDoneAt: true, theme: true, brandColor: true, requireTwoStep: true } },
       customRole: { select: { id: true, name: true, areasOff: true, powers: true } },
     },
   })
+  const companyDepartments = await prisma.department.findMany({ where: { companyId: user.companyId }, select: { type: true, name: true }, orderBy: { createdAt: 'asc' } })
   return {
     id: user.id,
     name: user.name,
@@ -91,7 +96,9 @@ async function publicUser(userId: string) {
       // Online payment open (a payment provider is set up), or "coming soon".
       paymentsOpen: !!activeProvider(),
       // The kinds of department the company has: the menu leaves out sections for kinds it has none of.
-      departmentKinds: [...new Set((await prisma.department.findMany({ where: { companyId: user.companyId }, select: { type: true } })).map((d) => d.type))],
+      departmentKinds: [...new Set(companyDepartments.map((d) => d.type))],
+      // What the company calls its department of each kind (the first one made), so its screens use its own names.
+      departmentNames: Object.fromEntries([...companyDepartments].reverse().map((d) => [d.type, d.name])),
       // Sections the company turned off (Phase 2): their screens are left out of the menu.
       sectionsOff: await companySectionsOff(user.companyId),
     },
@@ -105,6 +112,12 @@ async function publicUser(userId: string) {
     emailCheckPending: user.emailCheckPending,
     // The colour theme this person picked (null: the company's).
     uiTheme: user.uiTheme,
+    language: user.language,
+    // "My menu": the sidebar items this person hid for themselves.
+    navHidden: user.navHidden,
+    whatsapp: { number: user.whatsappNumber ?? '', on: user.whatsappOn, ready: whatsappReady() },
+    // Two-step sign-in: is theirs on, and does the company require it (then the app shows only the setup until it is).
+    twoStep: { on: !!user.twoStepOn, required: user.company.requireTwoStep },
     customRole: user.customRole ? { id: user.customRole.id, name: user.customRole.name } : null,
     permissions: powersOf(user),
     // Switched off for the company's plan (or by the owner) and for the person's company role.
@@ -233,15 +246,32 @@ export async function login(req: Request, res: Response): Promise<void> {
     res.status(403).json({ error: 'This account is disabled' })
     return
   }
-  if (user.companyId && (await prisma.company.findUnique({ where: { id: user.companyId }, select: { status: true } }))?.status === 'SUSPENDED') {
+  const co = user.companyId ? await prisma.company.findUnique({ where: { id: user.companyId }, select: { status: true, slug: true, ssoOn: true, ssoRequired: true } }) : null
+  // The company signs in through its own identity provider: passwords are closed, except for its Super Admins (so a
+  // broken identity provider never locks the company out of its own settings).
+  if (co?.ssoOn && co.ssoRequired && user.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Your company signs in with single sign-on. Use "Sign in with your company".', code: 'SSO_REQUIRED', ssoUrl: `/api/auth/sso/${encodeURIComponent(co.slug)}/start` })
+    return
+  }
+  if (co?.status === 'SUSPENDED') {
     res.status(403).json({ error: 'Your company\'s Metriq account is paused. Contact Metriq support.' })
     return
   }
 
+  // Two-step sign-in: the password was right, now the code from their app (POST /login/two-step with this ticket).
+  if (user.twoStepOn && user.totpSecret) {
+    res.json({ twoStep: true, ticket: signTwoStepTicket(user.id) })
+    return
+  }
+  await completeSignIn(req, res, user)
+}
+
+/** The last step of every sign-in: the session cookie, a line in the sign-in log, and the person's own details. */
+export async function completeSignIn(req: Request, res: Response, user: { id: string; role: Role }, extra: Record<string, unknown> = {}): Promise<void> {
   const token = signToken({ sub: user.id, role: user.role })
   setAuthCookie(res, token)
   await logSignIn(req, user.id, 'LOGIN')
-  res.json({ user: await publicUser(user.id), ...(fromApp(req) ? { token } : {}) })
+  res.json({ user: await publicUser(user.id), ...(fromApp(req) ? { token } : {}), ...extra })
 }
 
 export async function me(req: AuthedRequest, res: Response): Promise<void> {
@@ -299,11 +329,13 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
   }
   const user = await prisma.user.findUnique({ where: { email: parsed.data.email } })
 
-  // Always respond 200 so we don't leak which emails exist.
-  // Email delivery is Phase 4; in dev we return the token so the flow is testable.
+  // Always respond 200 so we don't leak which emails exist. The email is sent without waiting, so the answer takes
+  // the same time whether or not the address has an account. Outside production the link is also handed back, so the
+  // flow can be tried with no mail key.
   const body: { ok: true; devResetToken?: string } = { ok: true }
-  if (user) {
-    const token = signResetToken(user.id)
+  if (user && user.isActive) {
+    const token = signResetToken(user.id, resetStamp(user.passwordHash))
+    void sendPasswordResetEmail({ to: user.email, name: user.name.split(' ')[0], token })
     if (process.env.NODE_ENV !== 'production') body.devResetToken = token
   }
   res.json(body)
@@ -346,7 +378,13 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   }
   let userId: string
   try {
-    userId = verifyResetToken(parsed.data.token)
+    const link = readResetToken(parsed.data.token)
+    userId = link.userId
+    // A link made by "Forgot password" works once: it carries the fingerprint of the password it was made for.
+    if (link.stamp) {
+      const u = await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } })
+      if (!u || resetStamp(u.passwordHash) !== link.stamp) throw new Error('used')
+    }
   } catch {
     res.status(400).json({ error: 'This reset link is invalid or has expired' })
     return
@@ -367,6 +405,41 @@ export async function saveTheme(req: AuthedRequest, res: Response): Promise<void
   }
   await prisma.user.update({ where: { id: req.user!.id }, data: { uiTheme: parsed.data.theme } })
   res.json({ uiTheme: parsed.data.theme })
+}
+
+/**
+ * PUT /api/auth/me/nav { hidden: string[] } — "My menu": the sidebar items this person hid for themselves (a screen's
+ * path, "g:<section>" or "s:<section> › <sub>"). An empty list shows everything again. Only the sidebar changes: the
+ * screens stay reachable through search and links, and what the person may open is decided elsewhere, as before.
+ */
+export async function saveNav(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = z.object({ hidden: z.array(z.string().trim().min(1).max(160)).max(400) }).safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Send the list of menu items to hide.' })
+    return
+  }
+  const navHidden = [...new Set(parsed.data.hidden)]
+  await prisma.user.update({ where: { id: req.user!.id }, data: { navHidden } })
+  res.json({ navHidden })
+}
+
+/** PUT /api/auth/me/language { language }: the language of the person's menus (en, ur or ar). */
+export async function saveLanguage(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = z.object({ language: z.enum(['en', 'ur', 'ar']) }).safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Pick English, Urdu or Arabic.' }); return }
+  await prisma.user.update({ where: { id: req.user!.id }, data: { language: parsed.data.language === 'en' ? null : parsed.data.language } })
+  res.json({ language: parsed.data.language })
+}
+
+/** PUT /api/auth/me/whatsapp { number, on }: my WhatsApp number, and whether my notifications go there too. */
+export async function saveWhatsapp(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = z.object({ number: z.string().trim().max(30), on: z.boolean() }).safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Send your number and whether it is on.' }); return }
+  const number = parsed.data.number ? cleanNumber(parsed.data.number) : null
+  if (parsed.data.number && !number) { res.status(400).json({ error: 'Write the number with its country code, like +92 300 1234567.' }); return }
+  if (parsed.data.on && !number) { res.status(400).json({ error: 'Add your WhatsApp number first.' }); return }
+  await prisma.user.update({ where: { id: req.user!.id }, data: { whatsappNumber: number, whatsappOn: parsed.data.on } })
+  res.json({ whatsapp: { number: number ?? '', on: parsed.data.on, ready: whatsappReady() } })
 }
 
 /** PUT /api/auth/me/dashboard { order, hidden } | { reset: true } — how this person arranged their own dashboard. */

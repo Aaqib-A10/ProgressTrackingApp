@@ -10,6 +10,7 @@ import {
   listLoginEvents, listAuditLog, listAttendanceActivity,
 } from '../controllers/adminController'
 import { requireAuth, requireRole } from '../middleware/auth'
+import { adminTwoStepOff } from '../controllers/twoStepController'
 import { asyncHandler } from '../lib/asyncHandler'
 
 export const adminRouter = Router()
@@ -29,6 +30,8 @@ adminRouter.patch('/users/:id', superAdmin, asyncHandler(updateUser))
 adminRouter.put('/users/:id/departments', superAdmin, asyncHandler(setUserDepartments))
 adminRouter.delete('/users/:id', superAdmin, asyncHandler(deleteUser))
 adminRouter.post('/users/:id/reset-password', superAdmin, asyncHandler(resetUserPassword))
+// Someone lost their phone: the Super Admin turns their two-step sign-in off (written to the Activity Log).
+adminRouter.post('/users/:id/two-step-off', superAdmin, asyncHandler(adminTwoStepOff))
 
 // Team Members (Team Lead — own department roster + invites)
 adminRouter.get('/team-members', teamLeadOrAdmin, asyncHandler(listTeamMembers))

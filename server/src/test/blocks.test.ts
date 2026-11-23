@@ -87,7 +87,10 @@ describe('the starting menus of each kind', () => {
     const m = nav.filterNav(u)
     // Grouped under their headings, headings in the order they first come.
     expect(paths(m)).toEqual(['/app/dashboard', '/app/todo', '/app/itad/dialer', '/app/chat'])
-    expect(m.map((g) => g.title ?? '')).toEqual(['', 'ITAD', 'Projects'])
+    // Another company never sees 99 Technologies' word for it ("ITAD"): the section carries what the kind is for,
+    // or the company's own name for its department.
+    expect(m.map((g) => g.title ?? '')).toEqual(['', 'Sales calling', 'Projects'])
+    expect(nav.filterNav({ ...u, company: { ...u.company!, departmentNames: { ITAD: 'Sales' } } }).map((g) => g.title ?? '')).toEqual(['', 'Sales', 'Projects'])
     expect(access.canOpen(u, '/app/itad/dialer')).toBe(true)
     expect(access.canOpen(u, '/app/itad/log')).toBe(false)
     expect(access.canOpen(u, '/app/projects')).toBe(false)

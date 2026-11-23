@@ -1,4 +1,7 @@
 import { prisma } from '../prisma'
+import { appUrl, sendMail } from '../mail'
+
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**
  * Bell + phone push for System Health. It goes to developers (User.isDeveloper); while nobody
@@ -32,6 +35,13 @@ export async function alertDevelopers(a: { title: string; body: string; link: st
     data: to.map((userId) => ({ userId, type: 'SYSTEM_HEALTH' as const, title: a.title, body: a.body, link: a.link, entityType: 'SystemHealth' })),
   })
   // The phone pop-up follows the saved rows by itself (lib/push onNotificationSaved), even for people in the app.
+  // An email too, on the live server: it reaches a developer who has neither the app nor a phone pop-up at hand.
+  // Same limits as above (once per alert in 6 hours, 10 an hour), so a storm of errors is not a storm of emails.
+  if (process.env.NODE_ENV === 'production') {
+    const emails = (await prisma.user.findMany({ where: { id: { in: to } }, select: { email: true } })).map((u) => u.email)
+    const link = `${appUrl()}${a.link}`
+    void sendMail({ to: emails, subject: `Metriq alert: ${a.title}`.slice(0, 180), text: [a.title, '', a.body, '', link].join('\n'), html: `<div style="font-family:Inter,Arial,sans-serif;max-width:520px;color:#0F172A"><h1 style="font-size:18px">${esc(a.title)}</h1><p style="font-size:14px;line-height:1.5;white-space:pre-wrap">${esc(a.body)}</p><p><a href="${link}">Open System Health</a></p></div>`, category: 'System Health' })
+  }
   return true
 }
 

@@ -14,7 +14,9 @@ import { SOURCES } from '../lib/metra/sources'
 import { conversationContext, forget, memoriesOf } from '../lib/metra/memory'
 import { dayBrief } from '../lib/metra/catalog/brief'
 import { withApiCache } from '../lib/mcp/api'
-import { companyToday } from '../lib/time'
+import { DateTime } from 'luxon'
+import { companyToday, companyTz } from '../lib/time'
+import { HOME_COMPANY_ID } from '../lib/company'
 import { inAudit } from '../lib/health/auditContext'
 import { captureError } from '../lib/health/errors'
 
@@ -40,6 +42,19 @@ function tooMany(userId: string): boolean {
   return false
 }
 
+/**
+ * Fair use: Metra is included in every plan with no credits to buy, so one person cannot ask without end. The limit
+ * is per person per day on the company's clock (METRA_DAILY_QUESTIONS, default 200: far above a working day's use).
+ * 99 Technologies, on the internal plan, has no limit.
+ */
+export const fairUseLimit = () => Math.max(1, Number(process.env.METRA_DAILY_QUESTIONS ?? 200) || 200)
+async function overFairUse(userId: string, companyId: string): Promise<boolean> {
+  if (companyId === HOME_COMPANY_ID) return false
+  const since = DateTime.now().setZone(companyTz()).startOf('day').toJSDate()
+  const asked = await prisma.aiMessage.count({ where: { role: 'USER', createdAt: { gte: since }, conversation: { userId } } })
+  return asked >= fairUseLimit()
+}
+
 const chatSchema = z.object({ conversationId: z.string().min(1).max(60).optional(), message: z.string().trim().min(1, 'Ask a question.').max(4000), page: z.string().max(300).optional() })
 
 /**
@@ -50,6 +65,7 @@ export async function chat(req: AuthedRequest, res: Response): Promise<void> {
   if (!(await on(req, res))) return
   const p = chatSchema.safeParse(req.body)
   if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Ask a question.' }); return }
+  if (await overFairUse(req.user!.id, req.user!.companyId)) { res.status(429).json({ error: `You have asked Metra ${fairUseLimit()} questions today, which is the most one person can ask in a day. It opens again tomorrow.`, code: 'FAIR_USE' }); return }
   if (!llmReady()) { res.status(503).json({ error: 'Metra is not connected to its AI model yet (GROQ_API_KEY in server/.env).' }); return }
   if (tooMany(req.user!.id)) { res.status(429).json({ error: 'That is a lot of questions at once: wait a moment.' }); return }
   const userId = req.user!.id
@@ -272,7 +288,7 @@ export async function listInsights(req: AuthedRequest, res: Response): Promise<v
   // that person's brief for the day.
   if (!inAudit()) await ensureDayBrief(req.user!.id).catch(() => undefined) // a brief that cannot be made is simply not there
   // Only the insight kinds: memories (MEMORY) and feedback (FEEDBACK) live in the same table and are not insights.
-  const rows = await prisma.aiInsight.findMany({ where: { userId: req.user!.id, kind: { in: ['BRIEF', 'NEXT_STEP'] }, state: 'NEW', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: [{ kind: 'asc' }, { createdAt: 'desc' }], take: 50 })
+  const rows = await prisma.aiInsight.findMany({ where: { userId: req.user!.id, kind: { in: ['BRIEF', 'NEXT_STEP', 'ALERT', 'WEEKLY'] }, state: 'NEW', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: [{ kind: 'asc' }, { createdAt: 'desc' }], take: 50 })
   res.json({ insights: rows.map((r) => ({ id: r.id, kind: r.kind, day: r.day, title: r.title, payload: r.payload, createdAt: r.createdAt.toISOString() })) })
 }
 

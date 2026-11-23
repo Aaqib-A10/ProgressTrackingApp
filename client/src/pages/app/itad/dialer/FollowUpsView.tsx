@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ArrowDown, ArrowUp, Columns3, ListChecks, ListPlus, Plus, Save, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
@@ -160,7 +161,7 @@ export function FollowUpsView({ data, leads, settings, now, onOpenLead, onChange
         <div className="ml-auto flex items-center gap-2">
           <InfoTip side="bottom">
             A touch is one try at reaching a lead: a status change or a re-attempt seen between two imports, or one you log (an outcome, or Add touch). Call now only copies the number.
-            Limits: a call Earthzone does not show changes nothing until you log it; several calls between two imports count once (import at the start of each shift); a re-assignment can look like a re-attempt, so you can dismiss a touch on the lead.
+            Limits: a call {crmName('Earthzone')} does not show changes nothing until you log it; several calls between two imports count once (import at the start of each shift); a re-assignment can look like a re-attempt, so you can dismiss a touch on the lead.
           </InfoTip>
           <Button size="sm" leadingIcon={<Plus size={14} />} onClick={() => setAdding(true)}>Add task</Button>
         </div>

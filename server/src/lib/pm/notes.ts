@@ -1,3 +1,4 @@
+import { companyTz } from '../time'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma'
 import { chatJson, groqEnabled } from './groq'
@@ -244,7 +245,7 @@ async function writeNotesFor(callId: string, opts: { lang?: NotesLang | 'auto' }
   let notes: MeetingNotes | { error: string } | null = null
   try {
     if (!notesProvider()) throw new Error('no-key')
-    const date = call.startedAt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: process.env.APP_TIMEZONE || 'Asia/Karachi' })
+    const date = call.startedAt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: companyTz() })
     // Roman Urdu unless someone picks English or Urdu script with the switch.
     const lang: NotesLang = opts.lang && opts.lang !== 'auto' ? opts.lang : 'roman'
     // English notes are written from the English lines, the others from Roman Urdu (the original when not rewritten yet).

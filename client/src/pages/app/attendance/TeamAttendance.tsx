@@ -14,7 +14,7 @@ import { useRange } from '../../../components/layout/AppShell'
 import { useToast } from '../../../components/ui/Toast'
 import { useAuth } from '../../../lib/auth'
 import { downloadAttendanceCsv } from '../../../lib/reports'
-import { DEPARTMENTS, DEPARTMENT_LABEL } from '../../../lib/departments'
+import { DEPARTMENTS, DEPARTMENT_LABEL, shownDepartments } from '../../../lib/departments'
 import type { Department } from '../../../lib/types'
 import {
   getAttendanceTeam,
@@ -209,7 +209,7 @@ export default function TeamAttendance() {
               >
                 All
               </button>
-              {DEPARTMENTS.map((d) => (
+              {shownDepartments().map((d) => (
                 <button
                   key={d.value}
                   onClick={() => setDept(d.value)}

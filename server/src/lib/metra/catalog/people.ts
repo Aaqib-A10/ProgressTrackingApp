@@ -114,7 +114,7 @@ export const PEOPLE: Entry[] = [
   {
     key: 'leave.team', label: 'Leave and days off', area: 'Attendance', app: '/app/admin/leave',
     about: 'Every leave day, day off and work-from-home day entered for the people of the team: who, which date, which kind, and the note.',
-    says: ['leave', 'on leave', 'who is on leave', 'days off', 'who is off', 'work from home', 'wfh', 'leave this week', 'leave next week', 'upcoming leave', 'chutti', 'kaun chutti par'],
+    says: ['leave', 'on leave', 'who is on leave', 'days off', 'who is off', 'work from home', 'work from home days', 'wfh days', 'wfh', 'leave days', 'leave this week', 'leave next week', 'upcoming leave', 'chutti', 'kaun chutti par'],
     who: lead, pin: lead,
     blocks: [], apis: ['/api/admin/leave'], models: ['LeaveDay'],
     load: reader<{ leave: { userId: string; userName: string; date: string; type: string; note: string }[] }>('/api/admin/leave', {
@@ -136,14 +136,16 @@ export const PEOPLE: Entry[] = [
   {
     key: 'people.directory', label: 'People', area: 'People', app: '/app/team/members',
     about: 'Everyone in the company: name, email, which team they are in and whether they are online now; for a Super Admin also their role and whether the account is active.',
-    says: ['who is in', 'who works in', 'which team is', 'email of', 'email address', 'team members', 'people in', 'how many people', 'how many employees', 'staff', 'colleagues', 'who is online', 'department of', 'kaun kaun hai', 'team mein kaun'],
+    says: ['who is in', 'who works in', 'which team is', 'email of', 'email address', 'email', 'whose email', 'contact of', 'team members', 'people in', 'how many people', 'how many employees', 'staff', 'colleagues', 'who is online', 'department of', 'kaun kaun hai', 'team mein kaun'],
     who: everyone,
     blocks: ['my-team'], apis: ['/api/chat/users', '/api/admin/users'], models: ['User', 'UserDepartment'],
     async load(ctx) {
       if (ctx.asker.role === 'SUPER_ADMIN') {
         const r = await get<{ users: { id: string; name: string; email: string; role: string; departmentName: string | null; subDepartment: string | null; status: string; isActive: boolean }[] }>(ctx, '/api/admin/users')
         if (r.error !== undefined) return { error: r.error }
-        return { rows: r.body.users.map((u) => ({ id: u.id, name: u.name.trim(), email: u.email, department: u.departmentName ?? '', sub: u.subDepartment ?? '', role: u.role.replace(/_/g, ' ').toLowerCase(), account: u.isActive ? 'Active' : u.status === 'INVITED' ? 'Invited, not joined yet' : 'Not active' })) }
+        const depts = new Set(r.body.users.map((u) => u.departmentName?.trim()).filter(Boolean))
+        const none = r.body.users.filter((u) => !u.departmentName?.trim()).length
+        return { head: [`${depts.size} departments have people in them${none ? `; ${none} ${none === 1 ? 'person is' : 'people are'} in no department ("no team" below), which is not a department` : ''}.`], rows: r.body.users.map((u) => ({ id: u.id, name: u.name.trim(), email: u.email, department: u.departmentName?.trim() || 'no team', sub: u.subDepartment ?? '', role: u.role.replace(/_/g, ' ').toLowerCase(), account: u.isActive ? 'Active' : u.status === 'INVITED' ? 'Invited, not joined yet' : 'Not active' })) }
       }
       const r = await get<{ users: { id: string; name: string; email: string; department: string | null; presence: string }[] }>(ctx, '/api/chat/users')
       if (r.error !== undefined) return { error: r.error }

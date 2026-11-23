@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { companyTz, tzLabel } from '../time'
 
 /**
  * A ticket as plain text, ready for Claude: what to do, where the work lives, the checklist,
@@ -27,8 +28,8 @@ export interface BriefTask {
   attachments: { id: string; originalName: string; mimeType: string; size: number }[]
 }
 
-const ZONE = () => process.env.APP_TIMEZONE || 'Asia/Karachi'
-export const fmtWhen = (iso: string | null) => (iso ? DateTime.fromISO(iso).setZone(ZONE()).toFormat("ccc, LLL d, yyyy, h:mm a 'PKT'") : null)
+const ZONE = () => companyTz()
+export const fmtWhen = (iso: string | null) => (iso ? `${DateTime.fromISO(iso).setZone(ZONE()).toFormat('ccc, LLL d, yyyy, h:mm a')} ${tzLabel(ZONE(), new Date(iso))}` : null)
 const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 const VERDICT: Record<string, string> = { APPROVED: 'Approved', CHANGES_REQUESTED: 'Changes requested', COMMENT: 'Comment' }
 

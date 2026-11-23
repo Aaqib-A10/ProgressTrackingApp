@@ -112,7 +112,7 @@ export const MARKETING: Entry[] = [
   {
     key: 'marketing.ads', label: 'Ads campaigns', area: 'Marketing', app: '/app/marketing/ads',
     about: 'Paid campaigns: title, brand, platform (Google, Meta...), type, status, month, leads, business leads, spend, cost per lead, impressions and clicks; with the totals and the best campaign.',
-    says: ['ads', 'ad campaigns', 'campaigns', 'paid campaigns', 'ad spend', 'spend', 'cost per lead', 'cpl', 'google ads', 'meta ads', 'facebook ads', 'best campaign', 'leads from ads', 'impressions', 'clicks'],
+    says: ['ads', 'ad campaigns', 'campaigns', 'paid campaigns', 'ad spend', 'spend', 'cost per lead', 'cpl', 'google ads', 'meta ads', 'facebook ads', 'best campaign', 'which campaign', 'campaign brought', 'most leads', 'campaign with the most leads', 'leads from ads', 'impressions', 'clicks'],
     who: inTeam,
     blocks: ['mkt-ads'], apis: ['/api/marketing/ads', '/api/marketing/ads/summary'], models: ['AdCampaign'],
     async load(ctx, a) {

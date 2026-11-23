@@ -8,6 +8,8 @@ import { useToast } from '../../../components/ui/Toast'
 import { MentionBox, highlightMentions } from '../../../components/MentionBox'
 import { LabelPicker, PeoplePicker } from '../../../components/projects/Pickers'
 import { ReviewForm, ReviewItem } from '../../../components/projects/Reviews'
+import { TaskExtras } from '../../../components/projects/TaskExtras'
+import { flagOn } from '../../../lib/flags'
 import { PRIORITIES, PRIORITY_META, PersonAvatar, PriorityGlyph, StatusIcon, fieldCls, fmtAgo, fmtBytes, fmtDateTime, fmtSpan, fromLocalInput, toLocalInput } from '../../../components/projects/pmUi'
 import { errMsg, projectsApi, type ActivityRow, type BoardColumn, type Label, type PmPriority, type ProjectMember, type TaskCard, type TaskDetail, type TaskPerms } from '../../../lib/projectsApi'
 import { cn } from '../../../lib/cn'
@@ -181,6 +183,9 @@ export function TaskDrawer({ code, columns, members, labels, meId, onClose, onCh
             </form>
           )}
         </section>
+
+        {/* What it waits on, and time spent */}
+        {flagOn('project-extras') && <TaskExtras code={code} canEdit={canEdit} onOpenTask={(c) => navigate(`?task=${encodeURIComponent(c)}`)} />}
 
         {/* Attachments */}
         <section

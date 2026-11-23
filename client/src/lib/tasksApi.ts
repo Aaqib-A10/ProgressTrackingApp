@@ -30,3 +30,5 @@ export interface MyTasksResponse {
 }
 
 export const getMyTasks = () => api.get<MyTasksResponse>('/tasks/mine')
+/** Delete a Marketing task that is assigned to me (the Marketing Board was retired; My Tasks is where a leftover one is cleared). */
+export const deleteMyMarketingTask = (id: string) => api.del<void>(`/tasks/mine/marketing/${id}`)

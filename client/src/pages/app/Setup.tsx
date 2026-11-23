@@ -109,6 +109,18 @@ function CompanyStep({ s, solo, onNext }: { s: SetupStatus; solo: boolean; onNex
   )
 }
 
+/**
+ * Starting points by the kind of company: one click fills the departments in, each with the kind of work that brings
+ * its own screens. Everything can still be changed below, and later in Company Settings.
+ */
+const TEMPLATES: { key: string; label: string; hint: string; departments: { name: string; type: Department }[] }[] = [
+  { key: 'sales', label: 'Sales team', hint: 'Calling, leads and deals', departments: [{ name: 'Sales', type: 'ITAD' }, { name: 'Lead generation', type: 'LEAD_GEN' }, { name: 'Operations', type: 'GENERAL' }] },
+  { key: 'callcentre', label: 'Call centre', hint: 'Calling and customer service, with quality checks', departments: [{ name: 'Calling team', type: 'ITAD' }, { name: 'Customer service', type: 'CSR' }, { name: 'Operations', type: 'GENERAL' }] },
+  { key: 'agency', label: 'Marketing agency', hint: 'Social, content, SEO and ads by brand', departments: [{ name: 'Marketing', type: 'MARKETING' }, { name: 'Client services', type: 'GENERAL' }, { name: 'Operations', type: 'GENERAL' }] },
+  { key: 'store', label: 'Online store', hint: 'Listings, stock and support', departments: [{ name: 'Store', type: 'ECOMMERCE' }, { name: 'Inventory', type: 'INVENTORY' }, { name: 'Customer service', type: 'CSR' }] },
+  { key: 'office', label: 'General office', hint: 'Attendance, tasks, projects and daily reports', departments: [{ name: 'Management', type: 'GENERAL' }, { name: 'Operations', type: 'GENERAL' }, { name: 'Finance', type: 'GENERAL' }] },
+]
+
 function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatus['departments']) => void }) {
   const { addToast } = useToast()
   type Pick = { name: string; type: Department; made?: boolean }
@@ -132,9 +144,30 @@ function DepartmentsStep({ s, onDone }: { s: SetupStatus; onDone: (d: SetupStatu
     }
     catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not add the departments.') }) }
   }
-  const kinds = (Object.keys(KIND_INFO) as Department[]).filter((k) => k !== 'TALKLOOP')
+  // CMR is 99 Technologies' own client flow, and Talkloop is retired: neither is offered to a new company.
+  const kinds = (Object.keys(KIND_INFO) as Department[]).filter((k) => k !== 'TALKLOOP' && k !== 'CMR')
+  const [template, setTemplate] = useState('')
+  // A template replaces the list, but never drops a department that was already made (the server keeps those).
+  const useTemplate = (t: (typeof TEMPLATES)[number]) => {
+    setTemplate(t.key)
+    setPicked((p) => {
+      const made = p.filter((x) => x.made)
+      return [...made, ...t.departments.filter((d) => !made.some((m) => m.name.toLowerCase() === d.name.toLowerCase())).map((d) => ({ ...d, type: d.type !== 'GENERAL' && made.some((m) => m.type === d.type) ? 'GENERAL' as Department : d.type }))]
+    })
+  }
   return (
-    <Card title="Departments" subtitle="Groups of people with a team lead. Pick some, or type your own, then say what kind of work each one does.">
+    <Card title="Departments" subtitle="Groups of people with a team lead. Start from the kind of company you are, or pick your own, then say what kind of work each one does.">
+      <p className="mb-2 text-body-sm font-semibold text-ink">Start from</p>
+      <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {TEMPLATES.map((t) => (
+          <button key={t.key} type="button" onClick={() => useTemplate(t)} aria-pressed={template === t.key}
+            className={cn('rounded-btn border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40', template === t.key ? 'border-primary bg-primary/5' : 'border-line bg-card hover:border-primary/40')}>
+            <span className="block text-body-md font-semibold text-ink">{t.label}</span>
+            <span className="mt-0.5 block text-body-sm text-ink-muted">{t.hint}</span>
+          </button>
+        ))}
+      </div>
+      <p className="mb-2 text-body-sm font-semibold text-ink">Or pick and add your own</p>
       <div className="flex flex-wrap gap-2">
         {[...new Set([...SUGGESTED, ...picked.map((p) => p.name)])].map((n) => {
           const on = has(n)

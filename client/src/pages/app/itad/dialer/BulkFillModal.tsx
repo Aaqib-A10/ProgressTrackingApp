@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useRef, useState } from 'react'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import { Modal } from '../../../../components/ui/Modal'
@@ -141,7 +142,7 @@ export function BulkFillModal({ leads, onClose, onDone }: { leads: DialerLead[];
               <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-ink-muted">{preview.unmatched.map((u) => <li key={u.row}>Row {u.row}{u.company ? ` · ${u.company}` : ''}: {u.reason}</li>)}</ul>
             </details>
           )}
-          <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={needsCrm} onChange={(e) => setNeedsCrm(e.target.checked)} className="h-4 w-4 accent-primary" /> Mark these leads "needs Earthzone update"</label>
+          <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={needsCrm} onChange={(e) => setNeedsCrm(e.target.checked)} className="h-4 w-4 accent-primary" /> Mark these leads "needs {crmName('Earthzone')} update"</label>
         </div>
       )}
     </Modal>

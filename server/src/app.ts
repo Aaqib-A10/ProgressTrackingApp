@@ -1,3 +1,4 @@
+import { publicApiRouter } from './routes/publicApi'
 import express, { type Express, type Router } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -45,6 +46,11 @@ import { flagsRouter } from './routes/flags'
 import { companyRouter } from './routes/company'
 import { dailyReportRouter } from './routes/dailyReport'
 import { setupRouter } from './routes/setup'
+import { approvalsRouter } from './routes/approvals'
+import { peopleRouter } from './routes/people'
+import { salesDocsRouter, reportBuilderRouter } from './routes/business'
+import { importRouter } from './routes/import'
+import { liveRouter } from './routes/live'
 import { billingRouter } from './routes/billing'
 import { metraRouter } from './routes/metra'
 
@@ -97,6 +103,12 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/company', companyRouter],
   ['/api/daily-report', dailyReportRouter],
   ['/api/setup', setupRouter],
+  ['/api/approvals', approvalsRouter],
+  ['/api/people', peopleRouter],
+  ['/api/sales-docs', salesDocsRouter],
+  ['/api/report-builder', reportBuilderRouter],
+  ['/api/import', importRouter],
+  ['/api/live', liveRouter],
   ['/api/billing', billingRouter],
 ]
 
@@ -157,6 +169,8 @@ export function createApp(): Express {
   app.use(requestMonitor)
 
   // All API routes are mounted under /api (matches the Vite dev proxy).
+  // The public API: other programs, with a company's API key instead of a sign-in (Company settings, API).
+  app.use('/api/v1', publicApiRouter)
   for (const [path, router] of API_MOUNTS) app.use(path, router)
   registerApiMounts(API_MOUNTS)
 

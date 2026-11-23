@@ -12,6 +12,10 @@ import { activeProvider, type BillingMessage, type Interval, type ProviderKey } 
  *  - a cancelled plan runs to the end of what was paid, then read-only;
  *  - read-only means everything can still be looked at and exported; nothing is deleted.
  * 99 Technologies (internal plan) is never billed.
+ *
+ * A company can also pay outside the app (a bank transfer, a local wallet): the owner records the payment in the
+ * owner console (provider "manual"). Its plan then runs to the date it paid for, with a reminder a week before and
+ * the same 7 days of grace after, then read-only until the next payment is recorded.
  */
 
 export const GRACE_DAYS = 7
@@ -19,13 +23,18 @@ export const SELLABLE: PlanKey[] = ['personal', 'starter', 'business']
 export const priceCents = (plan: string, interval: Interval) => Math.round((interval === 'year' ? planOf(plan).priceYearly : planOf(plan).priceMonthly) * 100)
 
 type CompanyLike = { id: string; plan: string; status: string; trialEndsAt: Date | null }
-type SubLike = { status: 'ACTIVE' | 'PAST_DUE' | 'CANCELED'; currentPeriodEnd: Date; pastDueSince: Date | null; cancelAtPeriodEnd?: boolean } | null
+type SubLike = { status: 'ACTIVE' | 'PAST_DUE' | 'CANCELED'; currentPeriodEnd: Date; pastDueSince: Date | null; cancelAtPeriodEnd?: boolean; provider?: string } | null
 
 export type BillingState = 'internal' | 'trial' | 'trial_ended' | 'active' | 'canceling' | 'past_due' | 'locked' | 'ended' | 'free'
 
 export function billingState(c: CompanyLike, sub: SubLike, now = new Date()): BillingState {
   if (c.id === HOME_COMPANY_ID || c.plan === 'internal') return 'internal'
   if (sub) {
+    // Paid outside the app: nothing renews by itself, so the plan ends on the date paid for (after the days of grace).
+    if (sub.provider === 'manual' && sub.status === 'ACTIVE') {
+      const over = now.getTime() - sub.currentPeriodEnd.getTime()
+      return over > GRACE_DAYS * 86400_000 ? 'ended' : over > 0 ? 'past_due' : 'active'
+    }
     if (sub.status === 'ACTIVE') return sub.cancelAtPeriodEnd ? 'canceling' : 'active'
     if (sub.status === 'PAST_DUE') return sub.pastDueSince && now.getTime() - sub.pastDueSince.getTime() > GRACE_DAYS * 86400_000 ? 'locked' : 'past_due'
     return sub.currentPeriodEnd < now ? 'ended' : 'canceling'
@@ -139,6 +148,44 @@ async function applyInvoice(provider: ProviderKey, m: Extract<BillingMessage, { 
   return true
 }
 
+/**
+ * A payment made outside the app (bank transfer, local wallet), recorded by the owner. The plan runs one more month
+ * or year: from the end of what is already paid when that is still ahead, else from the day it was paid. An invoice
+ * marked paid is kept, in the currency it was paid in.
+ */
+export async function recordManualPayment(companyId: string, p: { plan: PlanKey; interval: Interval; amountCents: number; currency: string; paidAt?: Date }): Promise<{ paidThrough: Date } | { error: string }> {
+  const c = await prisma.company.findUnique({ where: { id: companyId }, include: { subscription: true } })
+  if (!c) return { error: 'Company not found' }
+  if (c.id === HOME_COMPANY_ID || c.plan === 'internal') return { error: '99 Technologies is never billed.' }
+  if (!SELLABLE.includes(p.plan)) return { error: 'Pick a plan that is sold.' }
+  const prev = c.subscription
+  if (prev && prev.provider !== 'manual' && prev.status !== 'CANCELED') return { error: `This company pays online (${prev.provider}). Cancel that plan first, or it would be charged twice.` }
+  const fit = await cannotFit(c.id, p.plan)
+  if (fit) return { error: fit }
+  const paidAt = p.paidAt ?? new Date()
+  const from = prev?.provider === 'manual' && prev.currentPeriodEnd > paidAt ? prev.currentPeriodEnd : paidAt
+  const paidThrough = new Date(from)
+  if (p.interval === 'year') paidThrough.setUTCFullYear(paidThrough.getUTCFullYear() + 1)
+  else paidThrough.setUTCMonth(paidThrough.getUTCMonth() + 1)
+  const sub = { provider: 'manual', externalId: null, customerId: null, plan: p.plan, interval: p.interval, status: 'ACTIVE' as const, currentPeriodEnd: paidThrough, cancelAtPeriodEnd: false, pastDueSince: null }
+  await prisma.subscription.upsert({ where: { companyId: c.id }, update: sub, create: { companyId: c.id, ...sub } })
+  await prisma.invoice.create({ data: { companyId: c.id, provider: 'manual', externalId: `manual_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, plan: p.plan, interval: p.interval, currency: p.currency.toUpperCase(), amountCents: p.amountCents, status: 'PAID', periodStart: from, periodEnd: paidThrough, paidAt } })
+  await prisma.company.update({ where: { id: c.id }, data: { plan: p.plan, status: c.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE' } })
+  await billingMail(c.id, 'Thank you: your Metriq payment is recorded', [`${money(p.amountCents, p.currency.toUpperCase())} for ${c.name} is recorded. Your ${PLANS[p.plan]?.label ?? p.plan} plan is paid until ${paidThrough.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`, 'The invoice is in Billing.'], 'See invoices')
+  return { paidThrough }
+}
+
+/** Once per company and paid-through date: has this reminder gone out? (Kept as a billing event, which is unique.) */
+async function firstTime(companyId: string, what: string, periodEnd: Date): Promise<boolean> {
+  try {
+    await prisma.billingEvent.create({ data: { provider: 'manual', externalId: `${what}:${companyId}:${periodEnd.toISOString().slice(0, 10)}`, type: what, companyId, processedAt: new Date(), payload: {} } })
+    return true
+  } catch (e) {
+    if ((e as { code?: string }).code === 'P2002') return false
+    throw e
+  }
+}
+
 /** Can the company move to this plan (does it fit: people)? The reason it cannot, or null. */
 export async function cannotFit(companyId: string, plan: string): Promise<string | null> {
   const p = planOf(plan)
@@ -163,6 +210,18 @@ export async function testPayment(companyId: string, plan: string, interval: Int
 /** The daily reminders: the trial ends in 3 days, and the trial has ended (each once). */
 export async function runBillingReminders(companyId: string, now = new Date()): Promise<void> {
   const c = await prisma.company.findUnique({ where: { id: companyId }, include: { subscription: true } })
+  // Paid outside the app: say so a week before the paid-for date, and on the day it passes (each once per date).
+  if (c && c.id !== HOME_COMPANY_ID && c.subscription?.provider === 'manual' && c.subscription.status === 'ACTIVE') {
+    const end = c.subscription.currentPeriodEnd
+    const days = (end.getTime() - now.getTime()) / 86400_000
+    const date = end.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    if (days <= 0 && (await firstTime(c.id, 'manual-ended', end))) {
+      await billingMail(c.id, 'Your Metriq plan needs renewing', [`${c.name}'s plan was paid until ${date}.`, `Send the next payment within ${GRACE_DAYS} days and nothing stops. After that, Metriq becomes read-only until it is paid; nothing is deleted.`], 'Open Billing')
+    } else if (days > 0 && days <= 7 && (await firstTime(c.id, 'manual-ending', end))) {
+      await billingMail(c.id, `Your Metriq plan is paid until ${date}`, [`${c.name}'s plan runs out in ${Math.ceil(days)} day${Math.ceil(days) === 1 ? '' : 's'}.`, 'Send the next payment before then and nothing stops.'], 'Open Billing')
+    }
+    return
+  }
   if (!c || c.id === HOME_COMPANY_ID || c.status !== 'TRIAL' || !c.trialEndsAt || c.subscription) return
   // No "choose a plan" emails while online payments are coming soon: there is nothing to choose yet.
   if (!activeProvider()) return

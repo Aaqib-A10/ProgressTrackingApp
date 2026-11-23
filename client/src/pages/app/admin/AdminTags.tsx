@@ -1,3 +1,4 @@
+import { shownDepartments } from '../../../lib/departments'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Plus } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
@@ -10,12 +11,8 @@ import type { Department } from '../../../lib/types'
 import { listTags, createTag, updateTag, type AdminTag } from '../../../lib/adminApi'
 import { useAuth } from '../../../lib/auth'
 
-const TAG_DEPARTMENTS: { value: Department; label: string }[] = [
-  { value: 'LEAD_GEN', label: 'Lead Generation' },
-  { value: 'MARKETING', label: 'Marketing' },
-  { value: 'ITAD', label: 'ITAD' },
-  { value: 'ECOMMERCE', label: 'Ecommerce' },
-]
+/** The departments that use tags, under the company's own names (and only the ones it has). */
+const tagDepartments = (): { value: Department; label: string }[] => shownDepartments(['LEAD_GEN', 'MARKETING', 'ITAD', 'ECOMMERCE'])
 /** Tag kinds each department uses. */
 const CLASSIC: { value: AdminTag['type']; label: string }[] = [{ value: 'VERTICAL', label: 'Vertical' }, { value: 'PLATFORM', label: 'Platform' }, { value: 'CAMPAIGN', label: 'Campaign' }, { value: 'DATA_SOURCE', label: 'Data Source' }]
 const TYPES_FOR: Record<string, { value: AdminTag['type']; label: string }[]> = {
@@ -31,7 +28,7 @@ export default function AdminTags() {
   const { addToast } = useToast()
   const { user } = useAuth()
   // A team lead adds tags for their own department only; the Super Admin picks any.
-  const depts = user?.role === 'SUPER_ADMIN' ? TAG_DEPARTMENTS : TAG_DEPARTMENTS.filter((d) => d.value === user?.department)
+  const depts = user?.role === 'SUPER_ADMIN' ? tagDepartments() : tagDepartments().filter((d) => d.value === user?.department)
   const [tags, setTags] = useState<AdminTag[]>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')

@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useMemo, useRef, useState } from 'react'
 import { AlertTriangle, FileSpreadsheet, Upload } from 'lucide-react'
 import { Modal } from '../../../../components/ui/Modal'
@@ -122,7 +123,7 @@ export function ImportModal({ saved, onClose, onImported, onOpenLead, lists, nee
   if (result) {
     return (
       <Modal open onClose={onClose} title="Import done" size="xl" footer={<Button onClick={onClose}>Back to dashboard</Button>}>
-        {needsCrm > 0 && <p className="mb-3 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm text-ink">Reminder: <b>{needsCrm}</b> lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an Earthzone update (see Leads, "Needs Earthzone update").</p>}
+        {needsCrm > 0 && <p className="mb-3 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm text-ink">Reminder: <b>{needsCrm}</b> lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an {crmName('Earthzone')} update (see Leads, "Needs {crmName('Earthzone')} update").</p>}
         <ImportSummaryView s={result.summary} importId={result.id} onOpenLead={onOpenLead ? (id) => { onClose(); onOpenLead(id) } : undefined} />
       </Modal>
     )
@@ -170,7 +171,7 @@ export function ImportModal({ saved, onClose, onImported, onOpenLead, lists, nee
             {list === '__new' && <input value={newList} onChange={(e) => setNewList(e.target.value)} maxLength={40} placeholder="Name it, e.g. Vendors" className="h-8 w-44 rounded-btn border border-line bg-card px-2 text-body-sm text-ink" />}
             <span className="text-ink-muted">Lists are kept apart: importing one never hides leads from another.</span>
           </div>
-          {needsCrm > 0 && <p className="text-body-sm text-warning-ink">{needsCrm} lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an Earthzone update. Update Earthzone before exporting, so this import brings it back.</p>}
+          {needsCrm > 0 && <p className="text-body-sm text-warning-ink">{needsCrm} lead{needsCrm === 1 ? '' : 's'} still need{needsCrm === 1 ? 's' : ''} an {crmName('Earthzone')} update. Update {crmName('Earthzone')} before exporting, so this import brings it back.</p>}
           {columnsChanged && (
             <div className="flex items-start gap-2 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm text-ink">
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning-ink" />

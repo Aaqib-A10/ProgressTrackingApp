@@ -41,7 +41,7 @@ export function ConversationList({ activeId, onSelect, compact, refreshKey }: { 
   const placed = useRef(false)
   const load = () => chatApi.conversations().then((r) => setList((cur) => (cur && JSON.stringify(cur) === JSON.stringify(r.conversations) ? cur : r.conversations))).catch(() => undefined)
   useEffect(() => { load() }, [refreshKey])
-  useEffect(() => visiblePoll(load, 8000), [])
+  useEffect(() => visiblePoll(load, 8000, (p) => p.topic === 'chat'), [])
   function setTab(t: Tab) { setTabState(t); try { localStorage.setItem('chat.tab', t) } catch { /* ignore */ } }
 
   // Opened straight into a chat (a link, a notification): show the tab it lives in.

@@ -1,3 +1,4 @@
+import { deptName } from '../../../lib/departments'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, ClipboardCheck, Upload, AlertTriangle } from 'lucide-react'
@@ -48,7 +49,7 @@ export default function QaEvaluate() {
             onClick={() => setDept(d)}
             className={'rounded-full px-4 py-1.5 text-body-md font-medium transition-colors ' + (dept === d ? 'bg-primary text-primary-on' : 'bg-slate-100 text-ink-muted hover:bg-slate-200')}
           >
-            {d}
+            {deptName(d)}
           </button>
         ))}
       </div>
@@ -57,7 +58,7 @@ export default function QaEvaluate() {
         {agents === null ? (
           <div className="p-5 text-body-md text-ink-muted">Loading…</div>
         ) : agents.length === 0 ? (
-          <div className="p-8 text-center text-body-md text-ink-muted">No active agents in {dept}.</div>
+          <div className="p-8 text-center text-body-md text-ink-muted">No active agents in {deptName(dept)}.</div>
         ) : (
           <ul className="divide-y divide-line">
             {agents.map((a) => (
@@ -298,7 +299,7 @@ function CallActivity({ agentId }: { agentId: string }) {
     { key: 'rfqs', label: 'RFQs' },
   ]
   return (
-    <Card title="Call activity" subtitle="From the agent's ITAD daily logs">
+    <Card title="Call activity" subtitle={`From the agent's ${deptName('ITAD', 'ITAD')} daily logs`}>
       <div className="grid gap-4 sm:grid-cols-2">
         {data.periods.map((p) => (
           <div key={p.key} className="rounded-card border border-line p-4">

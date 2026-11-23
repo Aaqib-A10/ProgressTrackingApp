@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon'
+import { companyTz, tzLabel, tzWords } from '../time'
 import type { Role } from '@prisma/client'
 import { apiAs, apiError } from './api'
 import { LEADS_GUIDE, WORK_GUIDE } from './workTools'
@@ -34,7 +35,8 @@ export interface DeptTool {
 const text = (t: string): ToolResult => ({ content: [{ type: 'text', text: t }] })
 const fail = (t: string): ToolResult => ({ content: [{ type: 'text', text: t }], isError: true })
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
-const PKT_ZONE = 'Asia/Karachi'
+/** The clock times are read and written on: the company's own (Karachi for 99 Technologies). */
+const repZone = (): string => companyTz()
 
 // ------------------------------------------------------------------ reading any screen's data
 
@@ -85,7 +87,7 @@ export function compact(v: unknown, max = 40_000): string {
  * "yesterday"... (live, 13 Nov: range=year on the ITAD numbers failed). Those are turned into the custom range they
  * mean; the returned note says which dates were read.
  */
-export function fixRange(query: Record<string, string>, now: DateTime = DateTime.now().setZone(PKT_ZONE)): string | null {
+export function fixRange(query: Record<string, string>, now: DateTime = DateTime.now().setZone(repZone())): string | null {
   const raw = query.range
   if (!raw) return null
   const r = raw.toLowerCase().replace(/[\s_-]+/g, '')
@@ -249,8 +251,8 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
   const ymd = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(str(v)) ? str(v) : '')
   // "Overdue" already means "due before now": a from/to (often today's date) would hide them, so it is ignored.
   const from = a.overdue === true ? '' : ymd(a.from), to = a.overdue === true ? '' : ymd(a.to)
-  const pkDay = (iso: string) => DateTime.fromISO(iso).setZone(PKT_ZONE).toISODate()!
-  const fmtDay = (iso: string) => DateTime.fromISO(iso).setZone(PKT_ZONE).toFormat('ccc d LLL yyyy, h:mm a')
+  const pkDay = (iso: string) => DateTime.fromISO(iso).setZone(repZone()).toISODate()!
+  const fmtDay = (iso: string) => DateTime.fromISO(iso).setZone(repZone()).toFormat('ccc d LLL yyyy, h:mm a')
   const open = (b: DealRow) => b.status === 'ACTIVE' || b.status === 'SUBMITTED'
   const byStatus = (b: DealRow) => {
     if (status === 'open' && !open(b)) return false
@@ -328,7 +330,7 @@ export function dealTrackerText(d: DealTrackerData, a: Record<string, unknown>, 
       b.contractStart || b.contractEnd ? `contract${b.contractStart ? ` from ${b.contractStart}` : ''}${b.contractEnd ? ` until ${b.contractEnd}` : ''}` : null,
       b.submissionType ? `sent by ${b.submissionType.toLowerCase()}` : null,
       b.bidBond ? `bid bond${b.bidBondAmount != null ? ` ${dealMoney(b.bidBondAmount)}` : ''}` : null,
-      b.closedDate ? `closed ${DateTime.fromISO(b.closedDate).setZone(PKT_ZONE).toFormat('d LLL yyyy')}` : null,
+      b.closedDate ? `closed ${DateTime.fromISO(b.closedDate).setZone(repZone()).toFormat('d LLL yyyy')}` : null,
     ].filter(Boolean).join(' | ')),
   ].filter(Boolean).join('\n')
 }
@@ -424,7 +426,7 @@ function leadLine(l: DialerLead, now: Date, s: DialerSettings, extra?: string): 
   const local = r ? `${clock(REGION_META[r].zone, now)} ${r}` : 'no region'
   const open = r ? regionWindow(r, s, now) : null
   const callable = isDialable(l, s, now) && !!open?.open
-  const back = l.callLaterAt ? ` | call back ${DateTime.fromISO(l.callLaterAt).setZone(PKT_ZONE).toFormat('d LLL h:mm a')} PKT` : ''
+  const back = l.callLaterAt ? ` | call back ${DateTime.fromISO(l.callLaterAt).setZone(repZone()).toFormat('d LLL h:mm a')} ${tzLabel()}` : ''
   const quiet = daysSince(lastActivity(l), now)
   return [
     l.company,
@@ -484,7 +486,7 @@ async function findLead(u: User, given: unknown, rep: unknown): Promise<{ lead?:
   return { error: `No lead "${g}" in your Lead Dialer.` }
 }
 
-/** "2026-10-30 15:00" on the Pakistan clock (default) or the lead's own clock → ISO. */
+/** "2026-10-30 15:00" on the company's clock (default) or the lead's own clock → ISO. */
 function parseWhen(v: unknown, zone: string): { iso?: string; error?: string } {
   const s = str(v)
   const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/)
@@ -518,7 +520,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
   {
     name: 'metriq_read',
     title: 'Read data from Metriq',
-    description: 'Reads any Metriq screen\'s data as the person (GET only), e.g. /api/ecommerce/board or /api/attendance/history?range=month. Use metriq_guide first for the paths that fit this person. Returns JSON; dates are in Pakistan time unless marked.',
+    description: 'Reads any Metriq screen\'s data as the person (GET only), e.g. /api/ecommerce/board or /api/attendance/history?range=month. Use metriq_guide first for the paths that fit this person. Returns JSON; dates are on the company\'s own clock (Pakistan time for 99 Technologies) unless marked.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -588,7 +590,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
       const live = data.leads.filter((l) => !l.duplicate)
       const f = funnelOf(live)
       const t = followUpTabs(data.leads, s, now, new Date(data.dayStart), latestActedToday(data.actedToday), data.followUpByOwner)
-      const pkt = DateTime.now().setZone(PKT_ZONE).toFormat('ccc d LLL, h:mm a')
+      const pkt = DateTime.now().setZone(repZone()).toFormat('ccc d LLL, h:mm a')
       const regions = REGIONS.map((r: RegionCode) => {
         const w = regionWindow(r, s, now)
         const n = live.filter((l) => leadRegion(l, now) === r && isDialable(l, s, now)).length
@@ -596,7 +598,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
         return `- ${REGION_META[r].name} (${r}): ${w.localTime} there, ${state}; ${n} leads to dial`
       })
       return text([
-        `Lead Dialer for ${data.me.name}${who ? ` (showing ${who})` : ''}, ${pkt} Pakistan time.`,
+        `Lead Dialer for ${data.me.name}${who ? ` (showing ${who})` : ''}, ${pkt} ${tzWords()}.`,
         note ?? '',
         `Leads: ${f.total}. Attempted ${f.attempted} (${pct(f.attemptRate)}), connected ${f.connected} (${pct(f.connectRate)} of attempted), positive ${f.positive} (${pct(f.winRate)} win).`,
         `Leads by status: ${statusCounts(live)}.`,
@@ -692,7 +694,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
       const hint = PRESET_VIEWS.find((p) => (view === 'hot' && p.id === 'pipeline') || (view === 'never_attempted' && p.id === 'never') || p.id === view)?.hint
       return text([
         ...head,
-        `${rows.length.toLocaleString('en-US')} lead${rows.length === 1 ? '' : 's'} match${applied ? ` (${applied}${hint ? `: ${hint}` : ''})` : ' (all leads)'}${rows.length > limit ? `; the first ${limit} are listed, the count is exact` : ''}. Times are now, ${DateTime.now().setZone(PKT_ZONE).toFormat('h:mm a')} Pakistan time.`,
+        `${rows.length.toLocaleString('en-US')} lead${rows.length === 1 ? '' : 's'} match${applied ? ` (${applied}${hint ? `: ${hint}` : ''})` : ' (all leads)'}${rows.length > limit ? `; the first ${limit} are listed, the count is exact` : ''}. Times are now, ${DateTime.now().setZone(repZone()).toFormat('h:mm a')} Pakistan time.`,
         ...rows.slice(0, limit).map((l) => leadLine(l, now, data.settings, why.get(l.id))),
       ].join('\n'))
     },
@@ -714,7 +716,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
   {
     name: 'dialer_update_lead',
     title: 'Log on a lead',
-    description: 'On a Lead Dialer lead, as the person: add a note (optionally pinned, with a next-action date that brings it back in follow-ups), set a call back time, snooze it, mark it called now, or clear a call back/snooze. Times are Pakistan time unless clock is "lead".',
+    description: 'On a Lead Dialer lead, as the person: add a note (optionally pinned, with a next-action date that brings it back in follow-ups), set a call back time, snooze it, mark it called now, or clear a call back/snooze. Times are on the company\'s own clock (Pakistan time for 99 Technologies) unless clock is "lead".',
     inputSchema: {
       type: 'object',
       properties: {
@@ -734,7 +736,7 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
       const action = str(a.action)
       const note = str(a.text)
       const r0 = leadRegion(lead, new Date())
-      const zone = str(a.clock) === 'lead' && r0 ? REGION_META[r0].zone : PKT_ZONE
+      const zone = str(a.clock) === 'lead' && r0 ? REGION_META[r0].zone : repZone()
       let at: string | undefined
       if (str(a.when)) { const w = parseWhen(a.when, zone); if (!w.iso) return fail(w.error!); at = w.iso }
       const id = encodeURIComponent(lead.id)
@@ -742,14 +744,14 @@ export const DEPARTMENT_TOOLS: DeptTool[] = [
         if (!note) return fail('Write the note text.')
         const r = await apiAs(u, 'POST', `/api/dialer/leads/${id}/notes`, { body: { text: note.slice(0, 4000), pinned: !!a.pinned, nextActionAt: at ?? null } })
         if (r.status >= 400) return fail(apiError(r))
-        return text(`Note added to ${lead.company}${a.pinned ? ' (pinned)' : ''}${at ? `; it comes back in follow-ups on ${DateTime.fromISO(at).setZone(PKT_ZONE).toFormat('d LLL h:mm a')} PKT` : ''}.`)
+        return text(`Note added to ${lead.company}${a.pinned ? ' (pinned)' : ''}${at ? `; it comes back in follow-ups on ${DateTime.fromISO(at).setZone(repZone()).toFormat('d LLL h:mm a')} ${tzLabel()}` : ''}.`)
       }
       const kind = action === 'call_later' ? 'CALL_LATER' : action === 'snooze' ? 'SNOOZE' : action === 'called_now' ? 'CALL_NOW' : action === 'clear' ? 'CLEAR' : null
       if (!kind) return fail('Pick an action: note, call_later, snooze, called_now or clear.')
       if ((kind === 'CALL_LATER' || kind === 'SNOOZE') && !at) return fail('Say when: YYYY-MM-DD HH:MM.')
       const r = await apiAs(u, 'POST', `/api/dialer/leads/${id}/actions`, { body: { kind, ...(at ? { at } : {}), ...(note ? { note: note.slice(0, 2000) } : {}) } })
       if (r.status >= 400) return fail(apiError(r))
-      const whenTxt = at ? ` ${DateTime.fromISO(at).setZone(PKT_ZONE).toFormat('d LLL h:mm a')} PKT` : ''
+      const whenTxt = at ? ` ${DateTime.fromISO(at).setZone(repZone()).toFormat('d LLL h:mm a')} ${tzLabel()}` : ''
       return text(kind === 'CALL_LATER' ? `${lead.company}: call back set for${whenTxt}.` : kind === 'SNOOZE' ? `${lead.company}: snoozed until${whenTxt}.` : kind === 'CALL_NOW' ? `${lead.company}: marked as called now.` : `${lead.company}: call back and snooze cleared.`)
     },
   },

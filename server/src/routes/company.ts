@@ -4,6 +4,8 @@ import { asyncHandler } from '../lib/asyncHandler'
 import * as C from '../controllers/companyController'
 import { invite } from '../controllers/setupController'
 import * as B from '../controllers/customBlockController'
+import * as I from '../controllers/integrationsController'
+import * as Sso from '../controllers/ssoController'
 
 // /api/company — Company settings (Phase 1, step 4): name, time zone, departments, roles.
 export const companyRouter = Router()
@@ -11,6 +13,21 @@ companyRouter.use(requireAuth)
 companyRouter.get('/', asyncHandler(C.getCompany))
 companyRouter.patch('/', asyncHandler(C.updateCompany))
 companyRouter.post('/support-access', asyncHandler(C.setSupportAccess))
+// Your data: take all of it as one file, or remove the company for good.
+companyRouter.get('/export', asyncHandler(C.exportData))
+// Single sign-on (SAML) settings.
+companyRouter.get('/sso', asyncHandler(Sso.getSettings))
+companyRouter.put('/sso', asyncHandler(Sso.saveSettings))
+// API keys (for the public API, /api/v1) and webhooks.
+companyRouter.get('/api', asyncHandler(I.overview))
+companyRouter.post('/api/keys', asyncHandler(I.createKey))
+companyRouter.delete('/api/keys/:id', asyncHandler(I.removeKey))
+companyRouter.post('/api/webhooks', asyncHandler(I.createWebhook))
+companyRouter.patch('/api/webhooks/:id', asyncHandler(I.updateWebhook))
+companyRouter.delete('/api/webhooks/:id', asyncHandler(I.removeWebhook))
+companyRouter.post('/api/webhooks/:id/test', asyncHandler(I.testWebhook))
+companyRouter.get('/api/webhooks/:id/deliveries', asyncHandler(I.deliveries))
+companyRouter.post('/remove', asyncHandler(C.deleteOwnCompany))
 companyRouter.post('/invites', asyncHandler(invite))
 companyRouter.get('/departments', asyncHandler(C.listDepartments))
 companyRouter.post('/departments', asyncHandler(C.createDepartment))

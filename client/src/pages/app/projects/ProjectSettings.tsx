@@ -12,14 +12,17 @@ import { LabelChip } from '../../../components/projects/Pickers'
 import { errMsg, projectsApi, type BoardColumn, type BoardData, type ColumnCategory, type PickUser, type PmRole } from '../../../lib/projectsApi'
 import { PictureEditor, ProjectPicture } from '../../../components/ui/Pictures'
 import { cn } from '../../../lib/cn'
+import { Recurrences } from '../../../components/projects/Recurrences'
+import { flagOn } from '../../../lib/flags'
 
-type Tab = 'general' | 'members' | 'columns' | 'labels' | 'notifications'
+type Tab = 'general' | 'members' | 'columns' | 'labels' | 'notifications' | 'repeating'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'members', label: 'Members' },
   { id: 'columns', label: 'Columns' },
   { id: 'labels', label: 'Labels' },
   { id: 'notifications', label: 'Alerts' },
+  { id: 'repeating', label: 'Repeating tasks' },
 ]
 
 /** /app/projects/:key/settings — project admins only (server enforces it too). */
@@ -43,7 +46,7 @@ export default function ProjectSettings() {
         <h1 className="text-headline-lg text-ink">{data.project.name} settings</h1>
       </div>
       <div className="flex gap-1 overflow-x-auto border-b border-line max-md:flex-wrap">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.id !== 'repeating' || flagOn('project-extras')).map((t) => (
           <button key={t.id} type="button" onClick={() => setParams({ tab: t.id })} className={cn('-mb-px whitespace-nowrap border-b-2 px-4 py-2 text-body-md font-medium', tab === t.id ? 'border-primary text-ink' : 'border-transparent text-ink-muted hover:text-ink')}>{t.label}</button>
         ))}
       </div>
@@ -52,6 +55,7 @@ export default function ProjectSettings() {
       {tab === 'columns' && <Columns data={data} onChanged={load} />}
       {tab === 'labels' && <Labels data={data} onChanged={load} />}
       {tab === 'notifications' && <Alerts data={data} onSaved={load} />}
+      {tab === 'repeating' && <Recurrences projectKey={data.project.key} members={data.members} />}
     </div>
   )
 }

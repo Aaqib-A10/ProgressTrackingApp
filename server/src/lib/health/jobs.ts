@@ -19,6 +19,7 @@ export const JOBS: { name: string; label: string; everyMs: number | null }[] = [
   { name: 'note-reminders', label: 'Note reminders', everyMs: MIN },
   { name: 'dialer-reminders', label: 'Lead Dialer task reminders and follow-up tasks', everyMs: MIN },
   { name: 'pm-deadlines', label: 'Project due and overdue alerts', everyMs: 5 * MIN },
+  { name: 'pm-recurrences', label: 'Repeating tasks', everyMs: 15 * MIN },
   { name: 'lead-sla', label: 'Lead alerts (not assigned, not contacted)', everyMs: 5 * MIN },
   { name: 'lead-inbox', label: 'Lead email inboxes', everyMs: 2 * MIN },
   { name: 'cleanup', label: 'Daily cleanup', everyMs: 24 * 60 * MIN },
@@ -26,7 +27,7 @@ export const JOBS: { name: string; label: string; everyMs: number | null }[] = [
   { name: 'monthly-report', label: 'Monthly report email (1st and 2nd of the month)', everyMs: null },
   { name: 'billing-reminders', label: 'Trial ending emails', everyMs: 60 * MIN },
   { name: 'metra-index', label: 'Metra search index (full check)', everyMs: 6 * 60 * MIN },
-  { name: 'metra-insights', label: 'Metra next steps and shift briefs', everyMs: 60 * MIN },
+  { name: 'metra-insights', label: 'Metra next steps, briefs, alerts and the weekly summary', everyMs: 60 * MIN },
 ]
 
 /** Run one tick of a job and record how it went. Errors are logged and passed on as before. */

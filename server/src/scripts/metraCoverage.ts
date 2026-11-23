@@ -33,6 +33,7 @@ if (flag('--erp')) process.env.DATABASE_URL = url.replace(/\/[^/?]+(\?|$)/, '/pu
 
 /** Screens of the menu that hold settings, not data a person asks about. Where each is, Metra knows from its list of screens. */
 const NOT_A_DATA_SCREEN: Record<string, string> = {
+  'data-import': 'a form that brings people and tasks in from a file: it holds no data of its own',
   connectors: 'a settings screen: the keys that connect Claude and other assistants',
 }
 
@@ -60,6 +61,7 @@ const OWN_TOOL: Record<string, string> = {
 /** Read routes that are not data to ask about: files, pickers, settings and the app's own machinery. Each with its reason. */
 const NOT_DATA: Record<string, string> = {
   '/api/health': 'a ping that says the server is up',
+  '/api/live': 'the quiet connection of an open tab (it carries only "something is new", never a record)',
   '/api/dialer/settings': 'settings of the Lead Dialer',
   '/api/dialer/prefs': "a person's own Lead Dialer settings",
   '/api/dialer/integration': 'the Earth Zone connection (it holds a key)',
@@ -77,6 +79,30 @@ const NOT_DATA: Record<string, string> = {
   '/api/feedback/unread-count': 'a badge count',
   '/api/worklog/people': 'the people picker of the to-do screen',
   '/api/notes/people': 'the people picker of Notes (share a note, @mention)',
+  '/api/auth/me/two-step': "whether the person's own two-step sign-in is on (a setting, in Settings)",
+  '/api/auth/sso/:slug/metadata': 'the single sign-on description a company gives its identity provider (public XML, no records)',
+  '/api/auth/sso/:slug/start': 'sends the browser to the identity provider to sign in',
+  '/api/company/sso': "the company's single sign-on settings (Company settings, Single sign-on)",
+  '/api/company/export': "the company's whole data as one file (Company settings, Your data); never read by the assistant",
+  '/api/company/api': 'the API keys and webhooks of the company (Company settings, API): settings, and nothing in them is shown twice',
+  '/api/company/api/webhooks/:id/deliveries': 'the messages sent to one webhook (Company settings, API)',
+  '/api/approvals/:id': 'one request opened on its own (the same requests are read by requests.list)',
+  '/api/v1/company': 'the public API (read with a company API key, not by a person): the same data other entries read',
+  '/api/v1/people': 'the public API (a company API key)',
+  '/api/v1/departments': 'the public API (a company API key)',
+  '/api/v1/attendance': 'the public API (a company API key)',
+  '/api/v1/tasks': 'the public API (a company API key)',
+  '/api/v1/leads': 'the public API (a company API key)',
+  '/api/v1/deals': 'the public API (a company API key)',
+  '/api/people/:id': "one person's record opened on its own (people.records reads the directory; leave.balance the asker's leave)",
+  '/api/people/leave-defaults': "the company's leave days per year (a setting; leave.balance gives each person's numbers)",
+  '/api/sales-docs/:id': 'one quote or invoice opened on its own (the same documents are read by sales.docs)',
+  '/api/report-builder/sources': 'the choices of the report builder (a form helper)',
+  '/api/report-builder/saved/:id/run': 'a saved report run again (its numbers come from the tables other entries read)',
+  '/api/import/template/:what': 'an example file to download',
+  '/api/projects/tasks/:code/dependencies': 'what one ticket waits on (shown in the task window)',
+  '/api/projects/tasks/:code/time': "one ticket's time entries (projects.time reads the asker's own time)",
+  '/api/projects/:key/recurrences': "a project's repeating tasks (a setting; the tasks they make are ordinary tickets)",
   '/api/notes/:id': 'one note opened on its own (the same notes are read by the notes.mine entry)',
   '/api/worklog/note-sources': 'a helper of the to-do notes form',
   '/api/chat/unread': 'a badge count',
@@ -139,10 +165,12 @@ const LEFT_OUT: Record<string, string> = {
 }
 
 /** Tables Metra must never read or index (docs/metra/DESIGN.md §6): secrets, logins, billing, its own records, machinery. */
-const NEVER = new Set(['AppSecret', 'ClaudeKey', 'LoginEvent', 'AuditLog', 'PushSubscription', 'PushDevice', 'SalaryRecord', 'Subscription', 'Invoice', 'BillingEvent', 'PlatformOwner', 'OwnerAuditLog', 'PlatformSetting', 'FeatureFlag', 'FeatureFlagCompany', 'CompanyUsage', 'ErrorGroup', 'ErrorEvent', 'AuditRun', 'AuditCheck', 'JobHeartbeat', 'UptimeEvent', 'AiChunk', 'AiConversation', 'AiMessage', 'AiInsight', 'AiIndexState', 'Notification', 'BlockedCheckIn', 'OfficeNetwork', 'DialerIntegration', 'CallRecording', 'EntryAttachment', 'PmAttachment', 'SentMonthlyReport', 'AttendanceReminder', 'PmDispatchLog', 'PmNotifyPref', 'DialerUserPrefs', 'Company', 'SupportTicket', 'SupportMessage'])
+const NEVER = new Set(['AppSecret', 'ClaudeKey', 'LoginEvent', 'AuditLog', 'PushSubscription', 'PushDevice', 'SalaryRecord', 'Subscription', 'Invoice', 'BillingEvent', 'SignupInvite', 'ApiKey', 'Webhook', 'WebhookDelivery', 'PlatformOwner', 'OwnerAuditLog', 'PlatformSetting', 'FeatureFlag', 'FeatureFlagCompany', 'CompanyUsage', 'ErrorGroup', 'ErrorEvent', 'AuditRun', 'AuditCheck', 'JobHeartbeat', 'UptimeEvent', 'AiChunk', 'AiConversation', 'AiMessage', 'AiInsight', 'AiIndexState', 'Notification', 'BlockedCheckIn', 'OfficeNetwork', 'DialerIntegration', 'CallRecording', 'EntryAttachment', 'PmAttachment', 'SentMonthlyReport', 'AttendanceReminder', 'PmDispatchLog', 'PmNotifyPref', 'DialerUserPrefs', 'Company', 'SupportTicket', 'SupportMessage'])
 
 /** Tables that are neither shown nor searched, each with the reason. A table in no list fails the gate. */
 const TABLE_NOTES: Record<string, string> = {
+  PmRecurrence: 'a repeating task of a project (Project settings): the tasks it makes are ordinary tickets',
+  PmTaskDependency: '"this task waits on that one": shown in the task window',
   PmChecklistItem: "a ticket's checklist: get_ticket gives it",
   PmLabel: "the labels of a project: get_ticket gives a ticket's labels",
   PmTaskLabel: "a ticket's labels: get_ticket gives them",

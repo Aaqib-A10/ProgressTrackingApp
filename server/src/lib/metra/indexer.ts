@@ -53,7 +53,7 @@ export async function indexSource(companyId: string, source: Source, ids: string
   const saved: { chunk: StoredChunk; vec: Float32Array }[] = []
   for (let i = 0; i < todo.length; i++) {
     const { sourceId, d, hash } = todo[i]
-    const data = { title: d.title, text: d.text, hash, labels: d.labels, occurredAt: d.occurredAt, link: d.link, meta: (d.meta ?? undefined) as Prisma.InputJsonValue | undefined, embedding: toBytes(vecs[i]), model }
+    const data = { title: d.title, text: d.text, hash, labels: d.labels, occurredAt: d.occurredAt, link: d.link, meta: (d.meta ?? undefined) as Prisma.InputJsonValue | undefined, embedding: toBytes(vecs[i]), vec: Array.from(vecs[i]), model }
     const row = await prisma.aiChunk.upsert({
       where: { sourceType_sourceId_part: { sourceType: source.type, sourceId, part: d.part } },
       create: { sourceType: source.type, sourceId, part: d.part, ...data },

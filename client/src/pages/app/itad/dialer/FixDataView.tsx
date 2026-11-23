@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useState } from 'react'
 import { Check, Undo2 } from 'lucide-react'
 import { useToast } from '../../../../components/ui/Toast'
@@ -75,7 +76,7 @@ export function FixDataView({ leads, onOpenLead, onChanged, showOwner }: { leads
             <Pager p={po} />
           </div>
         )}
-        <p className="mt-3 text-[11px] text-ink-muted">A state set here is kept until the CRM sends one itself, and the lead is marked "needs Earthzone update" so the CRM gets it too.</p>
+        <p className="mt-3 text-[11px] text-ink-muted">A state set here is kept until the CRM sends one itself, and the lead is marked "needs {crmName('Earthzone')} update" so the CRM gets it too.</p>
       </Panel>
 
       {sent.length > 0 && (

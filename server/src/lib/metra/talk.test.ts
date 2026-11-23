@@ -16,6 +16,19 @@ describe('every number in an answer has a source', () => {
     expect(checkNumbers('Spend: 4502.', data)).toEqual([])
   })
 
+  it('a month and year is a date, not a day and a number ("September 2026" is not "September 20" and 26)', () => {
+    expect(checkNumbers('They were published in September 2026 for the brand.', ['Blogs | 2026-09-14'])).toEqual([])
+    expect(checkNumbers('Due on September 20, 2026.', [])).toEqual([])
+    expect(checkNumbers('Sales in Sep 2026 were 31.', [])).toEqual(['31'])
+  })
+
+  it('a thousand written with a special space is one number ("2 400" from a model), an ordinary space is not', () => {
+    expect(numbersIn('Total: 2 400 USD').map((n) => n.value)).toEqual([2400])
+    expect(numbersIn('12 500 and 1 250').map((n) => n.value)).toEqual([12500, 1250])
+    expect(numbersIn('page 2 400 results').map((n) => n.value)).toEqual([2, 400])
+    expect(checkNumbers('Total value of unanswered quotes: 2 400 USD.', ['- Quote Q-9001 | total: 2400'])).toEqual([])
+  })
+
   it('a number that is nowhere in the data is caught', () => {
     expect(checkNumbers('There are 31 stock requests and 12 are open.', data)).toEqual(['31', '12'])
     expect(checkNumbers('The close rate is 22.5%.', data)).toEqual(['22.5%'])

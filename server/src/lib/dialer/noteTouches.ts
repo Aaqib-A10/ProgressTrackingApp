@@ -14,21 +14,22 @@
  *      for a lead with no notes, new activity from Earth Zone (a re-attempt the import found: assignment batches
  *      and bulk date changes are already left out there).
  */
+import { DateTime } from 'luxon'
+import { companyTz } from '../time'
 
 export interface ContactNote { userId: string | null; at: Date; source: string }
 export interface ContactTouch { userId: string | null; at: Date; source: string; kind: string }
 export interface Contact { at: Date; day: string; what: 'NOTE' | 'CALL'; source: string }
 
-const PKT_MS = 5 * 3600_000
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 
 /**
  * The work day of a contact. An Earth Zone note only has a date, which is taken as written. Anything logged in
- * Metriq belongs to the agent's shift day, which starts at noon Pakistan time, so a night shift is one day.
+ * Metriq belongs to the agent's shift day, which starts at noon on the company's clock, so a night shift is one day.
  */
 export function contactDay(at: Date, source: string): string {
   if (source === 'EARTHZONE') return iso(at)
-  return iso(new Date(at.getTime() + PKT_MS - 12 * 3600_000))
+  return DateTime.fromJSDate(at).setZone(companyTz()).minus({ hours: 12 }).toISODate()!
 }
 
 /** The agent's own contacts on a lead, oldest first. */

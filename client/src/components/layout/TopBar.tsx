@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { t, useLang } from '../../lib/i18n'
+import { onLive } from '../../lib/live'
 import { useNavigate } from 'react-router-dom'
 import { Bell, MessagesSquare, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing, BellOff, ChevronUp } from 'lucide-react'
 import { ROLE_LABEL, type CurrentUser } from '../../lib/types'
@@ -48,6 +50,7 @@ const BELL_TAB_LABEL: Record<NotifyCategory, string> = { tasks: 'Follow ups', im
 type BellTab = 'all' | NotifyCategory
 
 export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMenu }: TopBarProps) {
+  useLang()
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -109,8 +112,11 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
     document.addEventListener('visibilitychange', onVis)
     // Pull to refresh (phones) reloads the bell too.
     window.addEventListener('pt:refresh', load)
+    // Live updates: the server says a notification arrived, so the bell shows it now and not at its next check.
+    const offLive = onLive((p) => p.topic === 'notifications', load)
     return () => {
       active = false
+      offLive()
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('pt:refresh', load)
@@ -269,7 +275,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
             <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-80 animate-scale-in overflow-hidden rounded-xl border border-line bg-card shadow-overlay">
               <div className="border-b border-line px-4 pb-2.5 pt-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-body-md font-semibold text-ink">Notifications</span>
+                  <span className="text-body-md font-semibold text-ink">{t('Notifications')}</span>
                   <div className="flex items-center gap-2">
                     {tabItems.some((n) => n.persistent) && (
                       <button onClick={markTabRead} className="text-body-sm font-medium text-primary-ink hover:underline">
@@ -372,12 +378,12 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
               <div className="p-1">
                 <MenuItem icon={<Settings size={16} />} label="Settings" onClick={() => { setMenuOpen(false); navigate('/app/settings') }} />
                 <div className="flex items-center justify-between gap-2 px-3 py-1.5">
-                  <span className="text-body-md text-ink">Theme</span>
+                  <span className="text-body-md text-ink">{t('Theme')}</span>
                   <ThemeSwitch />
                 </div>
               </div>
               <div className="border-t border-line p-1">
-                <MenuItem icon={<LogOut size={16} />} label="Log out" danger onClick={handleLogout} />
+                <MenuItem icon={<LogOut size={16} />} label={t('Log out')} danger onClick={handleLogout} />
               </div>
             </div>
           )}

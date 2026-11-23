@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Minus, X } from 'lucide-react'
 import { dialerApi, type FunnelNumbers, type ImportActivity, type ImportDrillKind, type ImportDrillRow, type ImportSummary } from '../../../../lib/dialerApi'
@@ -112,7 +113,7 @@ export function ImportSummaryView({ s, importId, onOpenLead }: { s: ImportSummar
           {s.changedFields && s.changedFields.length > 0 && s.changed > 0 && s.changed >= Math.max(50, total * 0.8) && (
             <p className="text-warning-ink">Nearly every lead counts as changed. What differed: {s.changedFields.slice(0, 4).map((f) => `${FIELD_LABEL[f.field] ?? f.field} (${num(f.count)})`).join(', ')}. If one field explains it, the export changed its format for that column.</p>
           )}
-          {!!s.keptChangedHere && <p className="text-ink">{s.keptChangedHere} lead{s.keptChangedHere === 1 ? '' : 's'} kept the status set in Metriq, because Earthzone still shows the old one. Update {s.keptChangedHere === 1 ? 'it' : 'them'} in Earthzone (Leads, Needs Earthzone update).</p>}
+          {!!s.keptChangedHere && <p className="text-ink">{s.keptChangedHere} lead{s.keptChangedHere === 1 ? '' : 's'} kept the status set in Metriq, because {crmName('Earthzone')} still shows the old one. Update {s.keptChangedHere === 1 ? 'it' : 'them'} in {crmName('Earthzone')} (Leads, Needs {crmName('Earthzone')} update).</p>}
           {s.notInFile > 0 && <p className="text-ink">{s.notInFile} lead{s.notInFile === 1 ? '' : 's'} from the last import {s.notInFile === 1 ? 'is' : 'are'} not in this file, so {s.notInFile === 1 ? 'it is' : 'they are'} hidden (history kept).</p>}
           {s.skipped > 0 && (
             <div className="text-ink-muted">

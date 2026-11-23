@@ -1,3 +1,4 @@
+import { deptName } from '../../../lib/departments'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Phone, PhoneCall, Heart, CheckCircle2, Trophy, Download, CalendarOff, Plane } from 'lucide-react'
@@ -104,7 +105,7 @@ export default function ItadTeamView() {
     <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-headline-lg text-ink">ITAD Team View</h1>
+          <h1 className="text-headline-lg text-ink">{deptName('ITAD', 'ITAD')} Team View</h1>
           <p className="mt-0.5 text-body-md text-ink-muted">
             Real-time performance tracking · {range === 'custom' && data ? rangePhrase(data.range) : RANGE_LABEL[range] ?? 'This Month'}
           </p>
@@ -134,7 +135,7 @@ export default function ItadTeamView() {
             </div>
             <h2 className="text-headline-sm text-ink">No activity logged for {rangePhrase(data.range)}</h2>
             <p className="max-w-md text-body-md text-ink-muted">
-              No ITAD daily entries fall in this period. Try a different date or range — the team's logged
+              No {deptName('ITAD', 'ITAD')} daily entries fall in this period. Try a different date or range — the team's logged
               activity will appear here.
             </p>
           </div>

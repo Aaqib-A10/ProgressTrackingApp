@@ -39,11 +39,19 @@ export interface CurrentUser {
   memberships?: Membership[]
   avatarUrl?: string | null
   /** The company (or personal workspace) they are in (Phase 1). */
-  company?: { id: string; name: string; slug?: string; kind: 'TEAM' | 'PERSONAL'; plan: string; status: string; timeZone: string; trialEndsAt?: string | null; setupDone?: boolean; paymentsOpen?: boolean; sectionsOff?: string[]; departmentKinds?: string[] ; theme?: string | null; brandColor?: string | null } | null
+  company?: { id: string; name: string; slug?: string; kind: 'TEAM' | 'PERSONAL'; plan: string; status: string; timeZone: string; trialEndsAt?: string | null; setupDone?: boolean; paymentsOpen?: boolean; sectionsOff?: string[]; departmentKinds?: string[]; /** Its own name for the department of each kind ("ITAD" kind → "Sales"). */ departmentNames?: Record<string, string>; theme?: string | null; brandColor?: string | null } | null
   /** Signed up on their own and has not confirmed the email yet (step 7). */
   emailCheckPending?: boolean
   /** The colour theme this person picked (src/theme/themes); null: the company's (company.theme). */
   uiTheme?: string | null
+  /** The person's language for Metriq's menus (lib/i18n): en, ur or ar. */
+  language?: string | null
+  /** "My menu": sidebar items this person hid for themselves (a path, "g:<section>" or "s:<section> › <sub>"). */
+  navHidden?: string[]
+  /** WhatsApp notifications: the person's number, whether they turned it on, and whether this Metriq can send at all. */
+  whatsapp?: { number: string; on: boolean; ready: boolean }
+  /** Two-step sign-in: is this person's on, and does their company require it. */
+  twoStep?: { on: boolean; required: boolean }
   /** A role the company made itself, on top of `role`. */
   customRole?: { id: string; name: string } | null
   /** Extra powers: 'finance', 'company.settings', 'holidays.manage'. */

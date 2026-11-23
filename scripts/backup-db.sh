@@ -21,4 +21,22 @@ if [ -d "$APP/server/uploads" ]; then
 fi
 install -m 600 "$APP/server/.env" "$OUT/env.backup"
 
-echo "$(date '+%F %T') backup ok: database, uploads, settings"
+# A copy OFF this server, so a lost or broken server does not take the backups with it.
+# Only when BACKUP_REMOTE is set in server/.env, to an rclone destination such as "offsite:metriq-backups"
+# (set up once with `rclone config`; an encrypted "crypt" remote is best). Database files older than
+# BACKUP_REMOTE_KEEP_DAYS (default 30) are removed there; uploaded files are only ever added.
+# The settings file (.env) is NOT sent: it holds keys. Keep a copy of it yourself, somewhere safe.
+OFFSITE="not set up (BACKUP_REMOTE is empty)"
+if [ -n "${BACKUP_REMOTE:-}" ]; then
+  if command -v rclone >/dev/null 2>&1; then
+    rclone copy "$OUT/pulsetrack_$STAMP.dump" "$BACKUP_REMOTE/db" --quiet
+    rclone delete "$BACKUP_REMOTE/db" --min-age "${BACKUP_REMOTE_KEEP_DAYS:-30}d" --quiet || true
+    if [ -d "$OUT/uploads-mirror" ]; then rclone copy "$OUT/uploads-mirror" "$BACKUP_REMOTE/uploads" --quiet; fi
+    OFFSITE="copied"
+  else
+    OFFSITE="FAILED (rclone is not installed)"
+  fi
+fi
+
+echo "$(date '+%F %T') backup ok: database, uploads, settings; off-server copy: $OFFSITE"
+case "$OFFSITE" in FAILED*) exit 1 ;; esac

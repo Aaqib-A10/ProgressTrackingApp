@@ -42,7 +42,9 @@ describe("99 Technologies' menus", () => {
     const now: Record<string, string[]> = {}
     // As 99 Technologies has its switches: the Company settings page starts off for them.
     // Notes (Nov 2026) is new for everyone: the frozen menus are the ones from before it.
-    setFlags({ 'company-settings': false, 'daily-report': false, 'lead-management': false, cmr: false, notes: false })
+    // Requests, People, Quotes and invoices, Report builder and Import (plan 2026-11) start switched off for
+    // 99 Technologies (migration 20261122130000_business_switches), so their menus stay as they were.
+    setFlags({ 'company-settings': false, 'daily-report': false, 'lead-management': false, cmr: false, notes: false, requests: false, 'people-records': false, 'sales-docs': false, 'report-builder': false, 'data-import': false, 'project-extras': false, 'metra-proactive': false, 'live-updates': false })
     for (const u of people()) now[key(u)] = menu(filterNav({ ...u, permissions: powers(u) }))
     if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(now, null, 1))
     const before = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, string[]>
@@ -139,7 +141,11 @@ describe("another company's menu", () => {
     expect(titles).not.toContain('Marketing')
     expect(titles).toContain('Daily Report')
     const withSales = filterNav({ ...sa, company: { ...sa.company, departmentKinds: ['GENERAL', 'ITAD'] } } as unknown as U).map((g) => (g as { title?: string }).title)
-    expect(withSales).toEqual(expect.arrayContaining(['ITAD', 'Quality Assurance']))
+    // The section is there under a name of its own, not 99 Technologies' "ITAD".
+    expect(withSales).toEqual(expect.arrayContaining(['Sales calling', 'Quality Assurance']))
+    expect(withSales).not.toContain('ITAD')
+    const named = filterNav({ ...sa, company: { ...sa.company, departmentKinds: ['GENERAL', 'ITAD'], departmentNames: { ITAD: 'Outbound' } } } as unknown as U).map((g) => (g as { title?: string }).title)
+    expect(named).toContain('Outbound')
     const solo = menu(filterNav({ ...sa, company: { id: 'co-y', kind: 'PERSONAL', departmentKinds: [] } } as unknown as U))
     expect(solo).not.toContain('/app/admin/users')
     expect(solo).not.toContain('/app/daily-report/team')

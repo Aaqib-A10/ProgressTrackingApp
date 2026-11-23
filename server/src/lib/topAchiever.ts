@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 import type { DepartmentType } from '@prisma/client'
 import { prisma } from './prisma'
+import { HOME_COMPANY_ID } from './company'
 import { dbDateFromString } from './time'
 import { timeIn } from './deptDashboards'
 
@@ -108,7 +109,8 @@ export async function topAchievers(month: string, all: DepartmentType[]): Promis
   const depts = await prisma.department.findMany({ where: { type: { in: types } } })
   const one = async (type: DepartmentType): Promise<TopAchiever | null> => {
     const dept = depts.find((d) => d.type === type)
-    const label = LABEL[type]
+    // 99 Technologies keeps the names its people know; any other company sees its own department's name.
+    const label = dept && dept.companyId !== HOME_COMPANY_ID ? dept.name : LABEL[type]
     if (!dept) return null
     if (type === 'ITAD' || type === 'CSR') {
       return { department: type, label, basis: `by QA score · ${QA_MIN_SCORE}%+ benchmark`, ...(await qaWinner(dept.id, month)) }

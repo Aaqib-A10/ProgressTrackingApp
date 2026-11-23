@@ -1,3 +1,4 @@
+import { deptName } from '../../../lib/departments'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Plus, Trash2, Pencil, TriangleAlert, Bell, BellOff, Search, ShieldCheck, Users, User } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
@@ -276,7 +277,7 @@ export default function BidTracker() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-headline-lg text-ink">Deal Tracker</h1>
-          <p className="mt-0.5 text-body-md text-ink-muted">Track ITAD deals from opportunity to close. Won deals feed the financial report.</p>
+          <p className="mt-0.5 text-body-md text-ink-muted">Track {deptName('ITAD', 'ITAD')} deals from opportunity to close. Won deals feed the financial report.</p>
         </div>
         <Button leadingIcon={<Plus size={16} />} onClick={() => setAddOpen(true)}>New deal</Button>
       </div>
@@ -815,7 +816,7 @@ function TeamDeals({ deals }: { deals: TeamDeal[] | null }) {
           <option value="">Everyone</option>
           {agents.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
-        <span className="text-body-sm text-ink-muted">Active and submitted deals of the whole ITAD team</span>
+        <span className="text-body-sm text-ink-muted">Active and submitted deals of the whole {deptName('ITAD', 'ITAD')} team</span>
       </div>
       {!deals ? <p className="px-4 py-8 text-center text-body-md text-ink-muted">Loading…</p>
         : <DataTable columns={cols} rows={rows} getRowId={(d) => d.id} emptyMessage={q || agent ? 'Nobody is working on a deal like that.' : 'No open deals in the team.'} />}

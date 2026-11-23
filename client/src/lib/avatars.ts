@@ -10,8 +10,8 @@ import { api } from './api'
 import { apiBase } from './session'
 const BASE = apiBase()
 
-interface Index { users: Record<string, number>; projects: Record<string, number>; chats: Record<string, number> }
-let index: Index = { users: {}, projects: {}, chats: {} }
+interface Index { users: Record<string, number>; projects: Record<string, number>; chats: Record<string, number>; companies?: Record<string, number> }
+let index: Index = { users: {}, projects: {}, chats: {}, companies: {} }
 let loaded = false
 const subs = new Set<() => void>()
 let timer: number | undefined
@@ -39,11 +39,11 @@ export function useAvatarIndex(): Index {
   return useSyncExternalStore(subscribe, () => index, () => index)
 }
 
-export type AvatarKind = 'user' | 'project' | 'chat'
+export type AvatarKind = 'user' | 'project' | 'chat' | 'company'
 
 export function avatarUrl(idx: Index, kind: AvatarKind, id: string | null | undefined): string | null {
   if (!id) return null
-  const v = kind === 'user' ? idx.users[id] : kind === 'project' ? idx.projects[id] : idx.chats[id]
+  const v = kind === 'user' ? idx.users[id] : kind === 'project' ? idx.projects[id] : kind === 'company' ? idx.companies?.[id] : idx.chats[id]
   return v ? `${BASE}/avatars/${kind}/${encodeURIComponent(id)}?v=${v}` : null
 }
 

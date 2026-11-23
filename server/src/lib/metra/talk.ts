@@ -61,7 +61,7 @@ export function followUp(question: string, history: { role: 'user' | 'assistant'
 
 // ------------------------------------------------------------------ does the person want something changed?
 
-const DO = /\b(add|create|make|log|record|request|apply|book|schedule|set|mark|update|change|move|assign|reassign|remind|save|note down|write down|put|send|submit|enter|raise|close|complete|finish|snooze|call back|callback|reschedule|cancel|approve|comment|reply|karo|kar do|kardo|kar dein|kar dijiye|bana do|banao|laga do|lagao|daal do|dal do|likh do|likho|bhej do|bhejo|rakh do)\b/i
+const DO = /\b(add|create|make|log|record|request|apply|book|schedule|set|mark|update|change|move|assign|reassign|remind|save|note down|write down|put|send|submit|enter|raise|close|complete|finish|snooze|call back|callback|reschedule|cancel|approve|decline|reject|draft|comment|reply|karo|kar do|kardo|kar dein|kar dijiye|bana do|banao|laga do|lagao|daal do|dal do|likh do|likho|bhej do|bhejo|rakh do)\b/i
 const YES = /^\s*(yes|yeah|yep|ok|okay|sure|please do|do it|go ahead|confirm|haan|han|ji|theek hai|kar do|kardo)\b/i
 
 /**
@@ -117,8 +117,9 @@ function withoutNonClaims(text: string): string {
     .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?\b/gi, ' ')
     .replace(/\b\d{1,2}\s*(?:am|pm)\b/gi, ' ')
     .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH}\\b\\.?(?:,?\\s+\\d{4})?`, 'gi'), ' ')
-    .replace(new RegExp(`\\b${MONTH}\\b\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?`, 'gi'), ' ')
-    .replace(new RegExp(`\\b${MONTH}\\b\\.?,?\\s+\\d{4}`, 'gi'), ' ')
+    // Month and year first: "September 2026" was read as the day "September 20" and a number "26" (metra:check, 23 Nov 2026).
+    .replace(new RegExp(`\\b${MONTH}\\b\\.?,?\\s+\\d{4}\\b`, 'gi'), ' ')
+    .replace(new RegExp(`\\b${MONTH}\\b\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?!\\d)(?:,?\\s+\\d{4})?`, 'gi'), ' ')
     .replace(/\b(?:19|20)\d{2}\b/g, ' ') // years
     .replace(/\b[A-Z][A-Z0-9]{1,7}-\d+\b/g, ' ') // ticket and item codes: MCHK-2
     .replace(/#\d+\b/g, ' ') // deal and row numbers
@@ -130,6 +131,9 @@ function withoutNonClaims(text: string): string {
 /** The numbers in a text: "$4,502", "34.37", "14.8%", "1 250". */
 export function numbersIn(text: string): { raw: string; value: number; decimals: number; pct: boolean }[] {
   const out: { raw: string; value: number; decimals: number; pct: boolean }[] = []
+  // A thousand written with a special space ("2 400" with a no-break, thin or narrow space, as some models write it) is
+  // one number, not "2" and "400". An ordinary space is left alone: "page 2 400 results" is two numbers.
+  text = text.replace(/(\d)[   ](?=\d{3}(?!\d))/g, '$1')
   for (const m of text.matchAll(/(?<![A-Za-z\d.,])[$€£]?\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s?(%)?(?![\d])/g)) {
     const whole = m[1].replace(/,/g, '')
     const value = Number(`${whole}${m[2] ?? ''}`)

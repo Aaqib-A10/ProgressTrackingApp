@@ -27,6 +27,20 @@ export function companyTz(): string {
   return contextTimeZone() ?? COMPANY_TZ
 }
 
+/**
+ * A short name for a time zone, to print after a time: "PKT" for Karachi (what 99 Technologies' people know), else
+ * what the zone calls itself ("EST", "GMT+4"). The company's own zone unless one is given.
+ */
+export function tzLabel(zone: string = companyTz(), at: Date = new Date()): string {
+  if (zone === 'Asia/Karachi') return 'PKT'
+  return DateTime.fromJSDate(at).setZone(zone).setLocale('en-US').toFormat('ZZZZ')
+}
+
+/** The same in words, for sentences: "Pakistan time", or "America/New_York time". */
+export function tzWords(zone: string = companyTz()): string {
+  return zone === 'Asia/Karachi' ? 'Pakistan time' : `${zone} time`
+}
+
 /** A pure calendar date in ISO form, 'YYYY-MM-DD'. */
 export type DateString = string
 

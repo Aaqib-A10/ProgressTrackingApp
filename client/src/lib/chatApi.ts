@@ -1,4 +1,5 @@
 import { api, ApiError } from './api'
+import { onLive, type LivePoke } from './live'
 import { holdUpdates } from './silentUpdate'
 
 export type Presence = 'online' | 'away' | 'offline' | 'busy'
@@ -163,8 +164,13 @@ async function smallPieces(conversationId: string, file: File, caption: string, 
   return (await api.post<{ message: ChatMessage }>(`/chat/uploads/${start.uploadId}/finish`, { caption })).message
 }
 
-/** Fire a callback on an interval while the tab is visible (and once on focus). */
-export function visiblePoll(fn: () => void, ms: number): () => void {
+/**
+ * Fire a callback on an interval while the tab is visible (and once on focus).
+ *
+ * `live` (lib/live): which nudges from the server mean "run now", on top of the timer. The timer itself is not
+ * slowed: the chat's check also carries "typing" and read marks, which no nudge announces yet.
+ */
+export function visiblePoll(fn: () => void, ms: number, live?: (p: LivePoke) => boolean): () => void {
   let timer: number | undefined
   const start = () => {
     stop()
@@ -173,6 +179,7 @@ export function visiblePoll(fn: () => void, ms: number): () => void {
   const stop = () => { if (timer) window.clearInterval(timer) }
   const onVis = () => { if (document.visibilityState === 'visible') fn() }
   document.addEventListener('visibilitychange', onVis)
+  const offLive = live ? onLive(live, () => { if (document.visibilityState === 'visible') fn() }) : null
   start()
-  return () => { stop(); document.removeEventListener('visibilitychange', onVis) }
+  return () => { stop(); document.removeEventListener('visibilitychange', onVis); offLive?.() }
 }

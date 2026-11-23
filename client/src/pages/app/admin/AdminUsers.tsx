@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Plus, Check, X, Trash2, Eye, EyeOff, Copy, RotateCcw, Building2 } from 'lucide-react'
+import { Plus, Check, X, Trash2, Eye, EyeOff, Copy, RotateCcw, Building2, ShieldOff } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
@@ -12,7 +12,7 @@ import { apiErrorText } from '../../../lib/api'
 import { ROLE_LABEL, type Role, type Department, type UserStatus } from '../../../lib/types'
 import { DEPARTMENTS } from '../../../lib/departments'
 import { useDeptOptions, type DeptOption } from '../../../lib/companyApi'
-import { listUsers, createUser, updateUser, setUserDepartments, deleteUser, resetUserPassword, type AdminUser, type MembershipInput } from '../../../lib/adminApi'
+import { listUsers, createUser, updateUser, setUserDepartments, deleteUser, resetUserPassword, turnOffTwoStep, type AdminUser, type MembershipInput } from '../../../lib/adminApi'
 
 const STATUS_META: Record<UserStatus, { label: string; tone: BadgeTone }> = {
   ACTIVE: { label: 'Active', tone: 'success' },
@@ -67,6 +67,17 @@ export default function AdminUsers() {
       addToast({ type: 'success', message: `New temp password for ${u.name}: ${tempPassword}`, duration: 12000 })
     } catch (e) {
       addToast({ type: 'error', message: (e as { message?: string })?.message || 'Could not reset password.' })
+    }
+  }
+
+  async function twoStepOff(u: AdminUser) {
+    if (!window.confirm(`Turn off two-step sign-in for ${u.name}?\n\nUse this when they lost their phone. They sign in with their password alone until they set it up again.`)) return
+    try {
+      await turnOffTwoStep(u.id)
+      setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, twoStep: false } : x)))
+      addToast({ type: 'success', message: `Two-step sign-in is off for ${u.name}.` })
+    } catch (e) {
+      addToast({ type: 'error', message: (e as { message?: string })?.message || 'Could not turn it off.' })
     }
   }
 
@@ -174,6 +185,11 @@ export default function AdminUsers() {
           <button onClick={() => resetPw(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink" aria-label={`Reset password for ${u.name}`} title="Reset password">
             <RotateCcw size={15} />
           </button>
+          {u.twoStep && (
+            <button onClick={() => twoStepOff(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-slate-100 hover:text-primary-ink" aria-label={`Turn off two-step sign-in for ${u.name}`} title="Two-step sign-in is on. Click to turn it off (lost phone)">
+              <ShieldOff size={15} />
+            </button>
+          )}
           <button onClick={() => remove(u)} className="flex h-8 w-8 items-center justify-center rounded-btn text-ink-muted hover:bg-danger/10 hover:text-danger-ink" aria-label={`Delete ${u.name}`} title="Delete user">
             <Trash2 size={16} />
           </button>

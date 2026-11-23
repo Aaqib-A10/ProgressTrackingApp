@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Copy, Link2, Plus, Power, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
@@ -112,7 +113,7 @@ export function PredictiveDialer() {
 
       {it && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Panel title="Dispositions" info="Each disposition becomes an outcome. No answer and Busy: Contact Attempted. Voicemail: Voicemail Sent. Connected: Connected. Interested: Interested. Callback: Connected plus a call back (it shows in Follow-ups at that time; tomorrow if the dialer sends no time). Not interested: Not Interested. Wrong number: out of dialing until the CRM sends a new phone. DNC: status DNC and never dialed again. A status only moves forward, except Not interested and DNC. Changes are marked for Earthzone.">
+          <Panel title="Dispositions" info={`Each disposition becomes an outcome. No answer and Busy: Contact Attempted. Voicemail: Voicemail Sent. Connected: Connected. Interested: Interested. Callback: Connected plus a call back (it shows in Follow-ups at that time; tomorrow if the dialer sends no time). Not interested: Not Interested. Wrong number: out of dialing until the CRM sends a new phone. DNC: status DNC and never dialed again. A status only moves forward, except Not interested and DNC. Changes are marked for ${crmName('Earthzone')}.`}>
             <div className="space-y-2 text-body-sm">
               <p className="text-ink-muted">Metriq already knows the common codes (NA, N, B, A, AM, VM, NI, DNC, DC, CALLBK, SALE, XFER and the plain words). Add your dialer's own codes here.</p>
               {codes.map(([k, v], i) => (

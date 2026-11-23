@@ -31,6 +31,8 @@ export const NOTIFY_TYPE_CATEGORY: Record<string, NotifyCategory> = {
   NOTE_SHARED: 'tasks',
   NOTE_MENTION: 'tasks',
   NOTE_REMINDER: 'tasks',
+  APPROVAL_REQUESTED: 'tasks',
+  APPROVAL_DECIDED: 'tasks',
   TASK_DUE_CHANGED: 'tasks',
   TASK_OVERDUE: 'tasks',
   TASK_REVIEW: 'tasks',

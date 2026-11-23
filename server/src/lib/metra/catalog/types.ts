@@ -58,6 +58,12 @@ export interface Ctx {
   today: string
   zone: string
   now: Date
+  /**
+   * The person's own words for this question (Roman Urdu also put in English, a follow-up with the question it
+   * continues). Set when the model reads for a question: a condition the model added that is not in these words is
+   * not applied (renderTable). Unset (tests, the coverage gate): every condition is applied as given.
+   */
+  asked?: string
 }
 
 /** What the model may pass to `metriq_data`. Every one is optional and cleaned before use. */

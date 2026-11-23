@@ -1,3 +1,4 @@
+import { shownDepartments } from '../../../lib/departments'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
@@ -9,11 +10,8 @@ import { listTargets, upsertTarget, deleteTarget, type AdminTarget } from '../..
 import { listBrands, type Brand } from '../../../lib/marketingApi'
 import { useAuth } from '../../../lib/auth'
 
-const ALL_DEPARTMENTS: { value: Department; label: string }[] = [
-  { value: 'ITAD', label: 'ITAD' },
-  { value: 'LEAD_GEN', label: 'Lead Generation' },
-  { value: 'MARKETING', label: 'Marketing' },
-]
+/** The departments that have targets, under the company's own names (and only the ones it has). */
+const allDepartments = (): { value: Department; label: string }[] => shownDepartments(['ITAD', 'LEAD_GEN', 'MARKETING'])
 const METRICS: Record<string, { key: string; label: string }[]> = {
   ITAD: [
     { key: 'callsDialed', label: 'Calls Dialed' },
@@ -37,7 +35,7 @@ export default function AdminTargets() {
   const { addToast } = useToast()
   const { user } = useAuth()
   // A team lead sets targets for their own department only; the Super Admin picks any.
-  const DEPARTMENTS = user?.role === 'SUPER_ADMIN' ? ALL_DEPARTMENTS : ALL_DEPARTMENTS.filter((d) => d.value === user?.department)
+  const DEPARTMENTS = user?.role === 'SUPER_ADMIN' ? allDepartments() : allDepartments().filter((d) => d.value === user?.department)
   const first = DEPARTMENTS[0]?.value ?? 'ITAD'
   const [targets, setTargets] = useState<AdminTarget[]>([])
   const [department, setDepartment] = useState<Department>(first)

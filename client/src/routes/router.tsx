@@ -95,6 +95,11 @@ const MyAttendance = lazy(pageModule(() => import('../pages/app/attendance/MyAtt
 const TeamAttendance = lazy(pageModule(() => import('../pages/app/attendance/TeamAttendance')))
 const MyTodo = lazy(pageModule(() => import('../pages/app/MyTodo')))
 const Notes = lazy(pageModule(() => import('../pages/app/Notes')))
+const Requests = lazy(pageModule(() => import('../pages/app/Requests')))
+const People = lazy(pageModule(() => import('../pages/app/People')))
+const SalesDocs = lazy(pageModule(() => import('../pages/app/SalesDocs')))
+const ReportBuilder = lazy(pageModule(() => import('../pages/app/ReportBuilder')))
+const ImportData = lazy(pageModule(() => import('../pages/app/ImportData')))
 const MyTasks = lazy(pageModule(() => import('../pages/app/MyTasks')))
 const MeetingNotes = lazy(pageModule(() => import('../pages/app/ecommerce/MeetingNotes')))
 const AdminUsers = lazy(pageModule(() => import('../pages/app/admin/AdminUsers')))
@@ -178,6 +183,11 @@ export const router = createBrowserRouter([
       { path: 'analytics', element: <MyPerformance /> },
       { path: 'todo', element: <MyTodo /> },
       { path: 'notes', element: <Notes /> },
+      { path: 'requests', element: <RequireFlag flag="requests"><Requests /></RequireFlag> },
+      { path: 'people', element: <RequireFlag flag="people-records"><People /></RequireFlag> },
+      { path: 'sales', element: <RequireFlag flag="sales-docs"><SalesDocs /></RequireFlag> },
+      { path: 'report-builder', element: <RequireFlag flag="report-builder"><ReportBuilder /></RequireFlag> },
+      { path: 'import', element: <RequireFlag flag="data-import"><ImportData /></RequireFlag> },
       { path: 'setup', element: <RequirePower power="company.settings"><Setup /></RequirePower> },
       { path: 'billing', element: <RequirePower power="company.settings"><Billing /></RequirePower> },
       { path: 'billing/test-checkout', element: <RequirePower power="company.settings"><TestCheckout /></RequirePower> },

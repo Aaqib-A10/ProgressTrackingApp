@@ -20,6 +20,8 @@ import { setNativeNavigator, takeWaitingPlace } from '../../mobile/native'
 import { QuickLogWidget } from '../itad/QuickLogWidget'
 import { DockTab } from './DockTab'
 import { useDock } from '../../lib/dock'
+import { startLive, stopLive } from '../../lib/live'
+import { refreshFlags } from '../../lib/flags'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -66,6 +68,8 @@ export function AppShell({ user, children }: AppShellProps) {
   // Inside the Metriq phone app: a tapped notification or an outside link opens its place here.
   const goTo = useNavigate()
   useEffect(() => { setNativeNavigator((to) => goTo(to)); return () => setNativeNavigator(null) }, [goTo])
+  // Live updates: one quiet line to the server while the app is open (lib/live). Needs the switches first.
+  useEffect(() => { let on = true; void refreshFlags().then(() => { if (on) startLive() }); return () => { on = false; stopLive() } }, [])
   // A notification tapped while the app was closed: go there once the app has settled on its first page (not on bare /app, which moves on by itself).
   useEffect(() => {
     if (location.pathname.replace(/\/$/, '') === '/app') return
@@ -134,8 +138,8 @@ export function AppShell({ user, children }: AppShellProps) {
           {/* Sidebar — static on lg+, off-canvas drawer below lg */}
           <div
             className={cn(
-              'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0',
-              navOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+              'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out rtl:left-auto rtl:right-0 lg:static lg:z-auto lg:translate-x-0',
+              navOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full lg:translate-x-0 lg:rtl:translate-x-0',
               collapsed && 'lg:hidden',
             )}
           >

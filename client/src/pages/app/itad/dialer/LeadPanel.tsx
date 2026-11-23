@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Maximize2, Minimize2, Pencil, Pin, PinOff, Trash2, UserPlus, X } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
@@ -21,7 +22,7 @@ import { downloadNotes } from './exports'
  * Earthzone shows it.
  */
 
-const KIND_LABEL: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', CRM_DONE: 'Done in Earthzone', BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups', EZ_SYNC: 'Earth Zone sync', NOTE_DELETED: 'Note deleted', CONTACT: 'Contact' }
+const KIND_LABEL: Record<string, string> = { DIALER_CALL: 'Dialer call', CALL_NOW: 'Called', CALL_LATER: 'Call back set', SNOOZE: 'Snoozed', CLEAR: 'Snooze cleared', STATE_FIX: 'State corrected', ZONE: 'Zone set', BACK_TO_LEADGEN: 'Back to lead gen', DUPLICATE: 'Duplicate', EDIT: 'Edited', get CRM_DONE() { return `Done in ${crmName('Earthzone')}` }, BULK_FILL: 'Bulk fill', KEEP: 'Kept (backlog)', DROP: 'Dropped from follow-ups', UNDROP: 'Back in follow-ups', get EZ_SYNC() { return `${crmName('Earth Zone')} sync` }, NOTE_DELETED: 'Note deleted', CONTACT: 'Contact' }
 const fmt = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavigate, onClose, onChanged }: {
@@ -110,8 +111,8 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
             <div className="space-y-3">
               {l.needsCrmUpdate && (
                 <div className="flex items-center justify-between gap-3 rounded-btn border border-warning/40 bg-warning/5 px-3 py-2 text-body-sm">
-                  <span className="text-ink"><b>Update Earthzone:</b> {l.crmUpdateWhat || 'details added here'}</span>
-                  <Button size="sm" variant="secondary" onClick={() => edit({ crmDone: true }, 'Marked as done in Earthzone.')}>Done in Earthzone</Button>
+                  <span className="text-ink"><b>Update {crmName('Earthzone')}:</b> {l.crmUpdateWhat || 'details added here'}</span>
+                  <Button size="sm" variant="secondary" onClick={() => edit({ crmDone: true }, `Marked as done in ${crmName('Earthzone')}.`)}>Done in {crmName('Earthzone')}</Button>
                 </div>
               )}
 
@@ -140,7 +141,7 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
                     </div>
                   </div>
                 )}
-                <p className="pt-1 text-[11px] text-ink-muted">Change these in Earthzone; the next import brings them here.</p>
+                <p className="pt-1 text-[11px] text-ink-muted">Change these in {crmName('Earthzone')}; the next import brings them here.</p>
               </Group>
 
               <Group name="company2" title="Company" tag="from CRM">
@@ -149,7 +150,7 @@ export function LeadPanel({ id, ids, lookup, leads, now, settings, meId, onNavig
                 <Field k="Source" v={l.source} />
                 <Field k="List" v={l.listName === 'CRM' ? 'CRM (SMB leads)' : l.listName} />
                 <Field k="CRM lead ID" v={l.externalId} copy />
-                {l.ezLeadId && l.ezLeadId !== l.externalId && <Field k="Earth Zone ID" v={l.ezLeadId} copy />}
+                {l.ezLeadId && l.ezLeadId !== l.externalId && <Field k={`${crmName('Earth Zone')} ID`} v={l.ezLeadId} copy />}
                 {(l.ezLinks ?? []).filter((x) => /^https?:\/\//i.test(x.url)).map((x, i) => <Field key={x.url} k={i === 0 ? 'Links' : ''} v={x.label || x.url} link={x.url} />)}
                 {l.description && <div className="flex gap-2 py-1"><span className="w-28 shrink-0 text-ink-muted">Description</span><p className="min-w-0 whitespace-pre-wrap break-words text-ink">{l.description}</p></div>}
               </Group>
@@ -285,7 +286,7 @@ function AddedHere({ lead, settings, onSave }: { lead: DialerLead; settings: Dia
         </label>
         {dirty && (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            {settings.earthzoneTick ? <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={crm} onChange={(e) => setCrm(e.target.checked)} className="h-4 w-4 accent-primary" /> Also needs adding in Earthzone</label> : <span />}
+            {settings.earthzoneTick ? <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={crm} onChange={(e) => setCrm(e.target.checked)} className="h-4 w-4 accent-primary" /> Also needs adding in {crmName('Earthzone')}</label> : <span />}
             <Button size="sm" disabled={busy} onClick={save}>Save</Button>
           </div>
         )}
@@ -296,7 +297,7 @@ function AddedHere({ lead, settings, onSave }: { lead: DialerLead; settings: Dia
 }
 
 const SOURCE: Record<NoteSource, { label: string; cls: string }> = {
-  EARTHZONE: { label: 'Earth Zone', cls: 'bg-warning/15 text-warning-ink' },
+  EARTHZONE: { get label() { return crmName('Earth Zone') }, cls: 'bg-warning/15 text-warning-ink' },
   METRIQ: { label: 'Metriq', cls: 'bg-primary/10 text-primary-ink' },
   CLAUDE: { label: 'Claude', cls: 'bg-accent/15 text-highlight-ink' },
 }
@@ -311,8 +312,8 @@ function EzMarker({ ezText }: { ezText: string }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button type="button" onClick={() => setOpen((o) => !o)} title={`In Earth Zone: ${ezText}`} className="rounded-full border border-dashed border-warning/60 px-1.5 text-[10.5px] font-semibold text-warning-ink">edited here, differs from Earth Zone</button>
-      {open && <span className="basis-full whitespace-pre-wrap rounded-btn bg-warning/5 px-2 py-1 text-[12px] text-ink"><b>In Earth Zone:</b> {ezText}</span>}
+      <button type="button" onClick={() => setOpen((o) => !o)} title={`In ${crmName('Earth Zone')}: ${ezText}`} className="rounded-full border border-dashed border-warning/60 px-1.5 text-[10.5px] font-semibold text-warning-ink">edited here, differs from {crmName('Earth Zone')}</button>
+      {open && <span className="basis-full whitespace-pre-wrap rounded-btn bg-warning/5 px-2 py-1 text-[12px] text-ink"><b>In {crmName('Earth Zone')}:</b> {ezText}</span>}
     </>
   )
 }
@@ -349,7 +350,7 @@ function NotesGroup({ lead, notes, meId, canEdit, deletedEz, settings, focusKey,
       <div className="space-y-2 py-1">
         <NoteFields key={focusKey} text={text} setText={setText} next={next} setNext={setNext} pinned={pinned} setPinned={setPinned} autoFocus={focusKey > 0} />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {settings.earthzoneTick ? <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={crm} onChange={(e) => setCrm(e.target.checked)} className="h-4 w-4 accent-primary" /> Also needs adding in Earthzone</label> : <span />}
+          {settings.earthzoneTick ? <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={crm} onChange={(e) => setCrm(e.target.checked)} className="h-4 w-4 accent-primary" /> Also needs adding in {crmName('Earthzone')}</label> : <span />}
           <Button size="sm" disabled={busy || !text.trim()} onClick={add}>Save note</Button>
         </div>
         <ul className="space-y-2 pt-1">
@@ -374,7 +375,7 @@ function NotesGroup({ lead, notes, meId, canEdit, deletedEz, settings, focusKey,
                       {(n.authorId === meId || canEdit) && <button type="button" onClick={() => setEditing({ id: n.id, text: n.text })} className="rounded p-1 hover:text-ink" title="Edit (shows as edited)" aria-label="Edit note"><Pencil size={12} /></button>}
                       {(n.authorId === meId || canEdit) && (deleting === n.id
                         ? <span className="flex items-center gap-1.5"><span>Delete?</span><button type="button" onClick={() => remove(n.id)} className="font-semibold text-danger-ink">Yes</button><button type="button" onClick={() => setDeleting(null)} className="font-semibold hover:text-ink">No</button></span>
-                        : <button type="button" onClick={() => setDeleting(n.id)} className="rounded p-1 hover:text-danger-ink" title={n.source === 'EARTHZONE' ? 'Delete (stays deleted after any Earth Zone sync)' : 'Delete'} aria-label="Delete note"><Trash2 size={12} /></button>)}
+                        : <button type="button" onClick={() => setDeleting(n.id)} className="rounded p-1 hover:text-danger-ink" title={n.source === 'EARTHZONE' ? `Delete (stays deleted after any ${crmName('Earth Zone')} sync)` : 'Delete'} aria-label="Delete note"><Trash2 size={12} /></button>)}
                     </span>
                     {n.ezText && <EzMarker ezText={n.ezText} />}
                   </div>
@@ -384,7 +385,7 @@ function NotesGroup({ lead, notes, meId, canEdit, deletedEz, settings, focusKey,
           ))}
           {notes.length === 0 && <li className="text-ink-muted">No notes yet.</li>}
         </ul>
-        {deletedEz > 0 && <p className="text-[12px] text-ink-muted">{deletedEz} Earth Zone note{deletedEz === 1 ? '' : 's'} deleted here (a later sync does not bring {deletedEz === 1 ? 'it' : 'them'} back).</p>}
+        {deletedEz > 0 && <p className="text-[12px] text-ink-muted">{deletedEz} {crmName('Earth Zone')} note{deletedEz === 1 ? '' : 's'} deleted here (a later sync does not bring {deletedEz === 1 ? 'it' : 'them'} back).</p>}
       </div>
     </Group>
   )
@@ -491,7 +492,7 @@ function StatusChanger({ lead, statusHere, statusHereFrom, settings, onDone }: {
     setBusy(true)
     try {
       await dialerApi.setStatus(lead.id, status, note.trim() || undefined)
-      addToast({ type: 'success', message: `Status changed to ${status}.${settings.earthzoneTick && status !== (statusHereFrom ?? lead.status) ? ' Update it in Earthzone too.' : ''}` })
+      addToast({ type: 'success', message: `Status changed to ${status}.${settings.earthzoneTick && status !== (statusHereFrom ?? lead.status) ? ` Update it in ${crmName('Earthzone')} too.` : ''}` })
       setOpen(false); setStatus(''); setNote('')
       onDone()
     } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not change the status') }) } finally { setBusy(false) }
@@ -499,7 +500,7 @@ function StatusChanger({ lead, statusHere, statusHereFrom, settings, onDone }: {
   return (
     <div className="py-1">
       {statusHere && statusHereFrom && statusHere === lead.status && (
-        <p className="mb-1.5 rounded-btn bg-primary/5 px-2.5 py-1.5 text-[12px] text-ink">Changed in Metriq. Earthzone still shows <b>{statusHereFrom}</b>; imports keep <b>{statusHere}</b> until Earthzone shows it.</p>
+        <p className="mb-1.5 rounded-btn bg-primary/5 px-2.5 py-1.5 text-[12px] text-ink">Changed in Metriq. {crmName('Earthzone')} still shows <b>{statusHereFrom}</b>; imports keep <b>{statusHere}</b> until {crmName('Earthzone')} shows it.</p>
       )}
       {!open ? (
         <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary-ink"><Pencil size={13} /> Change status</button>

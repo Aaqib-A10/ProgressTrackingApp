@@ -1,3 +1,4 @@
+import { crmName } from '../../../../lib/departments'
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, Search, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
@@ -54,7 +55,7 @@ export function ClaudeLogView({ rep, leads, showOwner, refreshKey, onOpenLead, o
       <div className="flex flex-wrap items-center gap-2 text-body-sm">
         <label className="relative"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Lead" aria-label="Lead" className={cn(field, 'w-44 pl-8')} /></label>
         <select value={source} onChange={(e) => setSource(e.target.value as LogSource)} className={field} aria-label="Source">
-          <option value="CLAUDE">Claude</option><option value="EARTHZONE">Earth Zone</option><option value="METRIQ">Metriq</option><option value="ALL">Every source</option>
+          <option value="CLAUDE">Claude</option><option value="EARTHZONE">{crmName('Earth Zone')}</option><option value="METRIQ">Metriq</option><option value="ALL">Every source</option>
         </select>
         <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={field} aria-label="Kind">
           <option value="all">Notes and values</option><option value="notes">Notes only</option><option value="values">Values only</option>

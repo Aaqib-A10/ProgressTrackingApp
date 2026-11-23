@@ -51,6 +51,10 @@ export function span(a: Args, ctx: Ctx, days: number, back = 0): { from: string;
   else if (!to) to = DateTime.fromISO(from, { zone: ctx.zone }).plus({ days }).toISODate()!
   else if (!from) from = today.toISODate()! <= to ? today.toISODate()! : to
   if (from > to) [from, to] = [to, from]
+  // One day with a week asked for (range "week", or "next 7 days" / "this week" in the person's words): the model put
+  // today in `date` and the week was lost ("next 7 days" answered with today only; metra:check, 23 Nov 2026).
+  const weekly = /^(week|7 ?days?|next week|this week)$/i.test(String(a.range ?? '').trim()) || /\b(next|coming) (7|seven) days\b|\b(this|next|coming) week\b|\bhafte\b|\b7 din\b/i.test(ctx.asked ?? '')
+  if (from === to && weekly && days >= 7) to = DateTime.fromISO(from, { zone: ctx.zone }).plus({ days: 6 }).toISODate()!
   return { from, to, asked }
 }
 

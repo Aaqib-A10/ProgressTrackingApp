@@ -1,9 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { isLang, setLang } from './i18n'
 import { api, setShownUser, setUnauthorizedHandler } from './api'
 import { disablePush } from './push'
 import { isNativeApp } from '../mobile/native'
 import type { CurrentUser, Department } from './types'
 import { applyAppearance } from './theme'
+import { setCompanyDepartmentNames } from './departments'
+import { inHomeCompany } from './types'
 
 /** Set by the 401 handler so the login screen can explain the bounce. */
 export const SESSION_EXPIRED_KEY = 'pt.sessionExpired'
@@ -24,7 +27,10 @@ export interface SignupResult {
 interface AuthContextValue {
   user: CurrentUser | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  /** Signs in. When the account has two-step sign-in it returns a ticket instead: finish with loginTwoStep. */
+  login: (email: string, password: string) => Promise<{ ticket?: string }>
+  /** The second step: the 6-digit code (or a recovery code). Returns how many recovery codes are left when one was used. */
+  loginTwoStep: (ticket: string, code: string) => Promise<{ recoveryLeft?: number }>
   signup: (input: SignupInput) => Promise<SignupResult>
   logout: () => Promise<void>
   refresh: () => Promise<void>
@@ -32,6 +38,10 @@ interface AuthContextValue {
   /** Switch which department the user is acting as (updates role + nav). */
   switchDepartment: (departmentId: string) => Promise<void>
 }
+
+// The Lead Dialer works on the rep's own clock: their company's time zone (lib/dialer reads it through this hook).
+let repZoneNow = 'Asia/Karachi'
+;(globalThis as { __ptRepZone?: () => string }).__ptRepZone = () => repZoneNow
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -45,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   // The account on screen is told to the API client at once: it checks every answer against it (lib/api.ts).
-  const setUser = useCallback((u: CurrentUser | null) => { setShownUser(u?.id ?? null); setUserState(u) }, [])
+  const setUser = useCallback((u: CurrentUser | null) => { if (u && isLang(u.language)) setLang(u.language); setShownUser(u?.id ?? null); repZoneNow = u?.company?.timeZone || 'Asia/Karachi'; setCompanyDepartmentNames(!u || inHomeCompany(u) ? null : u.company?.departmentNames ?? {}); setUserState(u) }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -81,9 +91,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const { user } = await api.post<{ user: CurrentUser }>('/auth/login', { email, password })
+    const r = await api.post<{ user?: CurrentUser; twoStep?: boolean; ticket?: string }>('/auth/login', { email, password })
+    if (r.twoStep && r.ticket) return { ticket: r.ticket }
     try { sessionStorage.removeItem(SESSION_EXPIRED_KEY) } catch { /* ignore */ }
-    setUser(user)
+    setUser(r.user ?? null)
+    return {}
+  }, [])
+
+  const loginTwoStep = useCallback(async (ticket: string, code: string) => {
+    const r = await api.post<{ user: CurrentUser; recoveryLeft?: number }>('/auth/login/two-step', { ticket, code })
+    try { sessionStorage.removeItem(SESSION_EXPIRED_KEY) } catch { /* ignore */ }
+    setUser(r.user)
+    return { recoveryLeft: r.recoveryLeft }
   }, [])
 
   // Team Lead self-registration creates a PENDING account — it does NOT log in.
@@ -117,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, refresh, updateProfile, switchDepartment }}>
+    <AuthContext.Provider value={{ user, loading, login, loginTwoStep, signup, logout, refresh, updateProfile, switchDepartment }}>
       {children}
     </AuthContext.Provider>
   )

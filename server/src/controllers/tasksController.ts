@@ -37,6 +37,20 @@ const MKT_STATUS_LABEL: Record<string, string> = {
 /** Where each kind of marketing task is worked on (the same places MarketingTaskRedirect sends old board links to). */
 const MKT_HOME: Record<string, string> = { SOCIAL: '/app/marketing/planner', CONTENT: '/app/marketing/content', SEO: '/app/marketing/seo' }
 
+/**
+ * DELETE /api/tasks/mine/marketing/:id — delete a Marketing task from My Tasks. Only a task assigned to the caller
+ * (the same right the Marketing screens already give an assignee); it is gone for everyone. The Marketing Board was
+ * retired, so this is where a leftover board task is cleared.
+ */
+export async function deleteMyMarketingTask(req: AuthedRequest, res: Response): Promise<void> {
+  const done = await prisma.marketingTask.deleteMany({ where: { id: req.params.id, assigneeId: req.user!.id } })
+  if (!done.count) {
+    res.status(404).json({ error: 'That task is not on your list' })
+    return
+  }
+  res.status(204).end()
+}
+
 export async function getMyTasks(req: AuthedRequest, res: Response): Promise<void> {
   const userId = req.user!.id
   const today = companyToday()

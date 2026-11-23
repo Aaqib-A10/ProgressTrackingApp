@@ -53,7 +53,13 @@ function one<T>(list: T[], name: (x: T) => string, given: string | undefined, wh
   const all = list.map(name).filter(Boolean).map((x) => (x.length > 70 ? `${x.slice(0, 67)}...` : x))
   if (!g) return list.length === 1 ? { hit: list[0] } : { error: `Say which ${what} (pass item with its name). There ${all.length === 1 ? 'is' : 'are'}: ${all.slice(0, 30).join('; ') || 'none'}${all.length > 30 ? `; and ${all.length - 30} more` : ''}.` }
   const exact = list.filter((x) => (cut ? norm(name(x)).startsWith(g) : norm(name(x)) === g))
-  const hits = exact.length ? exact : list.filter((x) => norm(name(x)).includes(g) || sameName(given ?? '', name(x)))
+  let hits = exact.length ? exact : list.filter((x) => norm(name(x)).includes(g) || sameName(given ?? '', name(x)))
+  if (!hits.length) {
+    // The words of the name that say what it is, not what kind of thing it is: "Freight Business" finds "Freight".
+    const KIND = new Set(['business', 'businesses', 'company', 'the', 'our', 'my', 'team', 'board', 'deal', 'deals', 'block', 'form', 'list', what.toLowerCase()])
+    const words = g.split(' ').filter((w) => w.length >= 3 && !KIND.has(w))
+    if (words.length) hits = list.filter((x) => { const n = ` ${norm(name(x))} `; return words.every((w) => n.includes(` ${w}`)) })
+  }
   if (hits.length === 1) return { hit: hits[0] }
   return { error: hits.length ? `"${given}" fits ${hits.length} ${what}s: ${hits.slice(0, 15).map(name).join('; ')}. Ask which one.` : `Nothing here: no ${what} is called "${given}". There ${all.length === 1 ? 'is' : 'are'}: ${all.slice(0, 50).join('; ') || 'none'}.` }
 }
@@ -561,7 +567,7 @@ export const MORE: Entry[] = [
   {
     key: 'qa.evaluation', label: 'One QA evaluation in full', area: 'Quality', app: '/app/qa/evaluations',
     about: "ONE call-quality evaluation in full: the score, the band and the pass mark, each category's score, each question and how it was marked, the evaluator's comments and the agent's reply. For an agent, their own newest one; for QA and team leads, the newest of the agent named in item.",
-    says: ['why did i lose points', 'where did i lose marks', 'evaluation details', 'what did qa say', 'qa comments', 'qa feedback on my call', 'breakdown of my score', 'category scores', 'which questions did i fail', 'my last evaluation', 'latest evaluation of'],
+    says: ['why did i lose points', 'where did i lose marks', 'evaluation details', 'what did qa say', 'qa comments', 'qa comment', 'did qa leave a comment', 'evaluator comment', 'comment on my evaluation','qa feedback on my call', 'breakdown of my score', 'category scores', 'which questions did i fail', 'my last evaluation', 'latest evaluation of'],
     who: everyone, takes: ['item'],
     blocks: ['my-qa'], apis: ['/api/qa/my-evaluations', '/api/qa/evaluations', '/api/qa/evaluations/:id'], models: ['QaEvaluation', 'QaEvaluationCategory', 'QaAnswer', 'QaCategory', 'QaQuestion'],
     async load(ctx, a) {

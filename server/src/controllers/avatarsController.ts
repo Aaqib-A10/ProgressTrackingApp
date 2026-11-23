@@ -5,6 +5,8 @@ import { prisma } from '../lib/prisma'
 import type { AuthedRequest } from '../middleware/auth'
 import { HttpError } from '../lib/pm/access'
 import { viewer } from '../lib/pm/http'
+import { currentCompanyId } from '../lib/tenancy'
+import { loadPowers } from '../lib/permissions'
 import { announcePicture, canChangeGroupPicture, canChangeProjectPicture } from '../lib/pm/pictures'
 
 /**
@@ -15,12 +17,12 @@ import { announcePicture, canChangeGroupPicture, canChangeProjectPicture } from 
 
 const DIR = path.resolve('uploads', 'avatars')
 const MAX_BYTES = 1024 * 1024
-type Kind = 'user' | 'project' | 'chat'
+type Kind = 'user' | 'project' | 'chat' | 'company'
 
 const fileFor = (kind: Kind, dbId: string) => path.join(DIR, `${kind}-${dbId}.jpg`)
 
 function kindOf(raw: string): Kind {
-  if (raw === 'user' || raw === 'project' || raw === 'chat') return raw
+  if (raw === 'user' || raw === 'project' || raw === 'chat' || raw === 'company') return raw
   throw new HttpError(404, 'Unknown picture type')
 }
 
@@ -30,6 +32,14 @@ async function target(kind: Kind, idOrKey: string, me: { id: string; role: strin
     const u = await prisma.user.findUnique({ where: { id: idOrKey }, select: { id: true, avatarAt: true } })
     if (!u) throw new HttpError(404, 'Person not found')
     return { dbId: u.id, avatarAt: u.avatarAt, canEdit: u.id === me.id || me.role === 'SUPER_ADMIN', chatId: null as string | null }
+  }
+  if (kind === 'company') {
+    // A company's logo: only its own (the id in the address is ignored for anything else), changed by people with Company settings.
+    const companyId = currentCompanyId()
+    if (idOrKey !== companyId) throw new HttpError(404, 'Company not found')
+    const c = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, logoAt: true } })
+    if (!c) throw new HttpError(404, 'Company not found')
+    return { dbId: c.id, avatarAt: c.logoAt, canEdit: (await loadPowers(me.id)).includes('company.settings'), chatId: null as string | null }
   }
   if (kind === 'project') {
     const p = await prisma.pmProject.findFirst({ where: { key: idOrKey.toUpperCase() }, select: { id: true, avatarAt: true } })
@@ -55,11 +65,14 @@ export async function avatarIndex(_req: AuthedRequest, res: Response): Promise<v
   const exists = async (kind: Kind, dbId: string) => fs.access(fileFor(kind, dbId)).then(() => true, () => false)
   const keep = async <T>(rows: T[], kind: Kind, id: (r: T) => string) => (await Promise.all(rows.map(async (r) => ((await exists(kind, id(r))) ? r : null)))).filter((r): r is Awaited<T> => r !== null)
   const [u, p, c] = await Promise.all([keep(users, 'user', (r) => r.id), keep(projects, 'project', (r) => r.id), keep(chats, 'chat', (r) => r.id)])
+  const company = await prisma.company.findUnique({ where: { id: currentCompanyId() }, select: { id: true, logoAt: true } })
+  const logo = company?.logoAt && (await exists('company', company.id)) ? { [company.id]: company.logoAt.getTime() } : {}
   res.setHeader('Cache-Control', 'private, no-cache')
   res.json({
     users: Object.fromEntries(u.map((x) => [x.id, x.avatarAt!.getTime()])),
     projects: Object.fromEntries(p.map((x) => [x.key, x.avatarAt!.getTime()])),
     chats: Object.fromEntries(c.map((x) => [x.id, x.avatarAt!.getTime()])),
+    companies: logo,
   })
 }
 
@@ -91,9 +104,10 @@ export async function uploadAvatar(req: AuthedRequest, res: Response): Promise<v
   await fs.writeFile(fileFor(kind, t.dbId), buf)
   const avatarAt = new Date()
   if (kind === 'user') await prisma.user.update({ where: { id: t.dbId }, data: { avatarAt } })
+  else if (kind === 'company') await prisma.company.update({ where: { id: t.dbId }, data: { logoAt: avatarAt } })
   else if (kind === 'project') await prisma.pmProject.update({ where: { id: t.dbId }, data: { avatarAt, avatarById: me.id } })
   else await prisma.chatConversation.update({ where: { id: t.dbId }, data: { avatarAt, avatarById: me.id } })
-  if (kind !== 'user') await announcePicture(t.chatId, me.id, kind, false)
+  if (kind === 'project' || kind === 'chat') await announcePicture(t.chatId, me.id, kind, false)
   res.json({ version: avatarAt.getTime() })
 }
 
@@ -105,8 +119,9 @@ export async function deleteAvatar(req: AuthedRequest, res: Response): Promise<v
   if (!t.canEdit) throw new HttpError(403, 'You cannot change this picture')
   await fs.rm(fileFor(kind, t.dbId), { force: true })
   if (kind === 'user') await prisma.user.update({ where: { id: t.dbId }, data: { avatarAt: null } })
+  else if (kind === 'company') await prisma.company.update({ where: { id: t.dbId }, data: { logoAt: null } })
   else if (kind === 'project') await prisma.pmProject.update({ where: { id: t.dbId }, data: { avatarAt: null, avatarById: me.id } })
   else await prisma.chatConversation.update({ where: { id: t.dbId }, data: { avatarAt: null, avatarById: me.id } })
-  if (kind !== 'user' && t.avatarAt) await announcePicture(t.chatId, me.id, kind, true)
+  if ((kind === 'project' || kind === 'chat') && t.avatarAt) await announcePicture(t.chatId, me.id, kind, true)
   res.status(204).end()
 }

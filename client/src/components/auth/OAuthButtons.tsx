@@ -7,11 +7,11 @@ import { api } from '../../lib/api'
  */
 const ALL = [{ key: 'google', label: 'Google' }, { key: 'microsoft', label: 'Microsoft' }]
 
-export function OAuthButtons({ intent, mode, company, label }: { intent: 'signin' | 'signup'; mode?: 'team' | 'solo'; company?: string; label: string }) {
+export function OAuthButtons({ intent, mode, company, label, invite }: { intent: 'signin' | 'signup'; mode?: 'team' | 'solo'; company?: string; label: string; /** The code of a sign-up invite link, carried along. */ invite?: string }) {
   const [state, setState] = useState<{ open: boolean; providers: { key: string; label: string }[] } | null>(null)
   useEffect(() => { api.get<{ open?: boolean; providers: { key: string; label: string }[] }>('/auth/oauth/providers').then((r) => setState({ open: !!r.open, providers: r.providers })).catch(() => setState({ open: false, providers: [] })) }, [])
   if (!state) return null
-  const href = (key: string) => `/api/auth/oauth/${key}/start?${new URLSearchParams({ intent, ...(mode ? { mode } : {}), ...(company ? { company } : {}) })}`
+  const href = (key: string) => `/api/auth/oauth/${key}/start?${new URLSearchParams({ intent, ...(mode ? { mode } : {}), ...(company ? { company } : {}), ...(invite ? { invite } : {}) })}`
   const live = state.open && state.providers.length > 0
   const list = live ? state.providers : ALL
   return (

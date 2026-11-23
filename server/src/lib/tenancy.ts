@@ -92,7 +92,7 @@ type RelField = { name: string; target: string; isList: boolean; from: string[];
 type ModelInfo = { tenant: boolean; rels: Map<string, RelField> }
 
 /** Tables that have a companyId but are run by the owner, not by a company. */
-export const NOT_WALLED = new Set(['FeatureFlagCompany', 'OwnerAuditLog', 'Company', 'CompanyUsage', 'BillingEvent'])
+export const NOT_WALLED = new Set(['FeatureFlagCompany', 'OwnerAuditLog', 'Company', 'CompanyUsage', 'BillingEvent', 'SignupInvite'])
 
 const MODELS = new Map<string, ModelInfo>()
 for (const m of Prisma.dmmf.datamodel.models) {

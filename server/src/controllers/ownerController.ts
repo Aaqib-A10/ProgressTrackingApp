@@ -10,7 +10,10 @@ import { companyToday, dbDateFromString } from '../lib/time'
 import { OWNER_COOKIE, type OwnerRequest } from '../middleware/owner'
 import { FLAGS, FLAG_KEYS, allFlags, companyFlags, isOn, setCompanyFlag, setFlag, type FlagKey } from '../lib/flags'
 import { PLANS, PLAN_KEYS, companyAreasOff, planOf, usageOf } from '../lib/plans'
-import { billingState } from '../lib/billing/billing'
+import { billingState, recordManualPayment, SELLABLE } from '../lib/billing/billing'
+import { newInviteCode } from '../lib/signupInvites'
+import { removeCompany, streamCompanyExport } from '../lib/companyData'
+import { appUrl } from '../lib/mail'
 import { AREAS, AREA_KEYS } from '../lib/permissions'
 import { signSupportToken } from '../lib/auth'
 import { walledTables } from '../scripts/companyWallsSql'
@@ -207,6 +210,63 @@ const companyPatch = z.object({
   module: z.object({ key: z.enum(AREA_KEYS as [string, ...string[]]), on: z.boolean().nullable() }).optional(),
 })
 
+// ------------------------------------------------------------------ sign-up invites
+
+const inviteView = (i: { id: string; code: string; note: string; maxUses: number; uses: number; expiresAt: Date | null; revokedAt: Date | null; createdAt: Date }) => ({
+  id: i.id, code: i.code, note: i.note, maxUses: i.maxUses, uses: i.uses, expiresAt: i.expiresAt, revokedAt: i.revokedAt, createdAt: i.createdAt,
+  link: `${appUrl()}/start?invite=${encodeURIComponent(i.code)}`,
+  state: i.revokedAt ? 'withdrawn' : i.expiresAt && i.expiresAt < new Date() ? 'expired' : i.uses >= i.maxUses ? 'used' : 'open',
+})
+
+/** GET /api/owner/invites — every sign-up invite, newest first, and whether sign-up is open to everyone anyway. */
+export async function listInvites(_req: OwnerRequest, res: Response): Promise<void> {
+  const rows = await prisma.signupInvite.findMany({ orderBy: { createdAt: 'desc' }, take: 300 })
+  res.json({ invites: rows.map(inviteView), openToAll: await isOn('new-companies') })
+}
+
+/** POST /api/owner/invites { note, maxUses?, days? } — a new invite link. */
+export async function createInvite(req: OwnerRequest, res: Response): Promise<void> {
+  const p = z.object({ note: z.string().trim().min(2, 'Say who it is for').max(120), maxUses: z.number().int().min(1).max(500).optional(), days: z.number().int().min(1).max(365).nullable().optional() }).safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Invalid input' }); return }
+  const inv = await prisma.signupInvite.create({ data: { code: newInviteCode(), note: p.data.note, maxUses: p.data.maxUses ?? 1, expiresAt: p.data.days ? new Date(Date.now() + p.data.days * 86400_000) : null } })
+  await audit(req, req.owner!.id, 'INVITE_CREATED', { target: inv.note, detail: { maxUses: inv.maxUses, expiresAt: inv.expiresAt?.toISOString() ?? null } })
+  res.status(201).json({ invite: inviteView(inv) })
+}
+
+/** POST /api/owner/invites/:id/withdraw — the link stops working (companies already started with it stay). */
+export async function withdrawInvite(req: OwnerRequest, res: Response): Promise<void> {
+  const inv = await prisma.signupInvite.findUnique({ where: { id: req.params.id } })
+  if (!inv) { res.status(404).json({ error: 'Invite not found' }); return }
+  const next = inv.revokedAt ? inv : await prisma.signupInvite.update({ where: { id: inv.id }, data: { revokedAt: new Date() } })
+  if (!inv.revokedAt) await audit(req, req.owner!.id, 'INVITE_WITHDRAWN', { target: inv.note })
+  res.json({ invite: inviteView(next) })
+}
+
+const paymentSchema = z.object({
+  plan: z.enum(SELLABLE as [string, ...string[]]),
+  interval: z.enum(['month', 'year']),
+  /** What was paid, in the currency's own units (29 or 8000.50), and the currency's 3-letter code (USD, PKR). */
+  amount: z.number().positive().max(100_000_000),
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/, 'A 3-letter currency code, like USD or PKR'),
+  paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+})
+
+/**
+ * POST /api/owner/companies/:id/payment — a company paid outside the app (bank transfer, local wallet): record it.
+ * Their plan runs a month or a year further, an invoice marked paid is kept, and their admins get a thank-you email.
+ */
+export async function recordPayment(req: OwnerRequest, res: Response): Promise<void> {
+  const p = paymentSchema.safeParse(req.body)
+  if (!p.success) { res.status(400).json({ error: p.error.issues[0]?.message ?? 'Invalid input' }); return }
+  const paidAt = p.data.paidOn ? new Date(`${p.data.paidOn}T12:00:00Z`) : undefined
+  if (paidAt && (paidAt.getTime() > Date.now() + 86400_000 || paidAt.getTime() < Date.now() - 366 * 86400_000)) { res.status(400).json({ error: 'The payment date must be within the last year.' }); return }
+  const r = await recordManualPayment(req.params.id, { plan: p.data.plan as never, interval: p.data.interval, amountCents: Math.round(p.data.amount * 100), currency: p.data.currency, paidAt })
+  if ('error' in r) { res.status(r.error === 'Company not found' ? 404 : 409).json({ error: r.error }); return }
+  const c = await prisma.company.findUniqueOrThrow({ where: { id: req.params.id } })
+  await audit(req, req.owner!.id, 'PAYMENT_RECORDED', { companyId: c.id, target: c.name, detail: { plan: p.data.plan, interval: p.data.interval, amount: p.data.amount, currency: p.data.currency.toUpperCase(), paidThrough: r.paidThrough.toISOString() } })
+  res.json({ paidThrough: r.paidThrough.toISOString() })
+}
+
 /** PATCH /api/owner/companies/:id — rename, suspend or reactivate, turn the Help button on or off. */
 export async function updateCompany(req: OwnerRequest, res: Response): Promise<void> {
   const c = await prisma.company.findUnique({ where: { id: req.params.id } })
@@ -402,29 +462,7 @@ export async function exportCompany(req: OwnerRequest, res: Response): Promise<v
   const c = await prisma.company.findUnique({ where: { id: req.params.id } })
   if (!c) { res.status(404).json({ error: 'Company not found' }); return }
   await audit(req, req.owner!.id, 'COMPANY_EXPORT', { companyId: c.id, target: c.name })
-  res.setHeader('Content-Type', 'application/json; charset=utf-8')
-  res.setHeader('Content-Disposition', `attachment; filename="metriq-${c.slug}-${new Date().toISOString().slice(0, 10)}.json"`)
-  res.write(`{"exportedAt":${JSON.stringify(new Date().toISOString())},"company":${JSON.stringify(c)},"tables":{`)
-  let first = true
-  for (const t of walledTables()) {
-    const delegate = (prisma as unknown as Record<string, { findMany: (a: unknown) => Promise<Record<string, unknown>[]> }>)[t.table[0].toLowerCase() + t.table.slice(1)]
-    res.write(`${first ? '' : ','}${JSON.stringify(t.table)}:[`)
-    first = false
-    // Page through the table so a big company does not fill the server's memory.
-    let skip = 0
-    for (;;) {
-      const rows = await delegate.findMany({ where: { companyId: c.id }, take: 1000, skip })
-      rows.forEach((r, i) => {
-        // Never hand out password hashes or keys.
-        const { passwordHash: _p, tokenHash: _t, ...safe } = r as Record<string, unknown>
-        res.write(`${skip + i ? ',' : ''}${JSON.stringify(safe)}`)
-      })
-      if (rows.length < 1000) break
-      skip += rows.length
-    }
-    res.write(']')
-  }
-  res.end('}}')
+  await streamCompanyExport(res, c)
 }
 
 /**
@@ -436,8 +474,7 @@ export async function deleteCompany(req: OwnerRequest, res: Response): Promise<v
   if (!c) { res.status(404).json({ error: 'Company not found' }); return }
   if (c.id === HOME_COMPANY_ID) { res.status(400).json({ error: '99 Technologies is company 1 and can never be removed.' }); return }
   if (String(req.body?.confirm ?? '').trim() !== c.name) { res.status(400).json({ error: `Type the company's name (${c.name}) to remove it.` }); return }
-  await prisma.company.delete({ where: { id: c.id } })
-  for (const area of ['', 'chat', 'projects', 'docs']) await fs.rm(path.resolve('uploads', area, c.id), { recursive: true, force: true }).catch(() => undefined)
+  await removeCompany(c.id)
   await audit(req, req.owner!.id, 'COMPANY_DELETE', { companyId: c.id, target: c.name, detail: { slug: c.slug, plan: c.plan } })
   res.status(204).end()
 }

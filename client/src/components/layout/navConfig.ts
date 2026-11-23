@@ -1,5 +1,9 @@
 import {
   LayoutDashboard,
+  ClipboardSignature,
+  Contact,
+  Receipt,
+  FileUp,
   Flag,
   FileBarChart,
   MessageSquare,
@@ -117,6 +121,11 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'My Tasks', to: '/app/tasks', icon: ListChecks },
       { label: 'My To-Do', to: '/app/todo', icon: ListTodo },
       { label: 'Notes', to: '/app/notes', icon: StickyNote, flag: 'notes' },
+      { label: 'Requests', to: '/app/requests', icon: ClipboardSignature, flag: 'requests' },
+      { label: 'People', to: '/app/people', icon: Contact, flag: 'people-records' },
+      { label: 'Quotes and invoices', to: '/app/sales', icon: Receipt, flag: 'sales-docs' },
+      { label: 'Report builder', to: '/app/report-builder', icon: BarChart3, flag: 'report-builder' },
+      { label: 'Import', to: '/app/import', icon: FileUp, flag: 'data-import' },
       { label: 'My Team', to: '/app/team/members', icon: Users, hideFor: HIDE_FROM_SA },
       { label: 'Monthly Reports', to: '/app/reports/monthly', icon: FileBarChart },
       { label: 'My QA Scores', to: '/app/qa/my', icon: ClipboardCheck, hideFor: HIDE_FROM_SA },
@@ -327,7 +336,7 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
 }
 
 /** Screens about other people: left out of a personal workspace ("Just me", Phase 1 step 7). */
-const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/admin/users', '/app/admin/targets', '/app/admin/tags', '/app/admin/leave', '/app/admin/activity', '/app/admin/networks', '/app/daily-report/team', '/app/reports/monthly', '/app/projects/dashboard', '/app/feedback'])
+const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/admin/users', '/app/admin/targets', '/app/admin/tags', '/app/admin/leave', '/app/admin/activity', '/app/admin/networks', '/app/daily-report/team', '/app/reports/monthly', '/app/projects/dashboard', '/app/feedback', '/app/requests', '/app/people', '/app/report-builder'])
 
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
 /** The head of a business who works no leads (Jesse): one inbox, nothing else to learn. */
@@ -338,8 +347,12 @@ const HEAD_ITEMS = new Set(['/app/leads/inbox'])
  * a deal board, contacts, tasks, calls). 99 Technologies keeps the names its people already know.
  */
 const CRM_LABELS: Record<string, string> = { '/app/leads/dashboard': 'CRM Dashboard', '/app/leads/tasks': 'Tasks', '/app/leads/settings': 'CRM Settings' }
+/** Which kind of department each section belongs to: a new company sees its own name for it ("Sales", not "ITAD"). */
+const SECTION_KIND: Record<string, Department> = { ITAD: 'ITAD', 'Lead Generation': 'LEAD_GEN', Ecommerce: 'ECOMMERCE', Inventory: 'INVENTORY', Marketing: 'MARKETING' }
 function crmNames(groups: NavGroup[], u: NavUser): NavGroup[] {
   if (inHomeCompany(u)) return groups
+  const names = (u as { company?: { departmentNames?: Record<string, string> } | null }).company?.departmentNames ?? {}
+  groups = groups.map((g) => (g.title && SECTION_KIND[g.title] ? { ...g, title: names[SECTION_KIND[g.title]] ?? (g.title === 'ITAD' ? 'Sales calling' : g.title) } : g))
   return groups.map((g) => (g.title === 'Leads' ? { ...g, title: 'CRM', items: g.items.map((i) => (CRM_LABELS[i.to] ? { ...i, label: CRM_LABELS[i.to] } : i)) } : g))
 }
 
@@ -479,6 +492,28 @@ export function templateBlocks(kind: Department, role: 'MEMBER' | 'TEAM_LEAD'): 
  * The side menu's order: Chat sits in the main group, right above Ask Metra (the floating chat bubble is gone).
  * Only the drawing moves it; filterNav (and the menus the server checks) keep Chat where it was.
  */
+// "My menu": each person can take items, sub-sections or whole sections off their own sidebar (User.navHidden).
+// An item is known by its path, a section by "g:<title>", a sub-section by "s:<section> › <title>".
+export const navGroupKey = (title: string) => `g:${title}`
+export const navSubKey = (group: string, sub: string) => `s:${group} › ${sub}`
+
+/** The sidebar without what this person hid. A section left with nothing goes too. Search and links still reach every screen. */
+export function hideNav(groups: NavGroup[], hidden: string[] | null | undefined): NavGroup[] {
+  if (!hidden?.length) return groups
+  const off = new Set(hidden)
+  return groups
+    .filter((g) => !g.title || !off.has(navGroupKey(g.title)))
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => !off.has(i.to)),
+      subgroups: g.subgroups
+        ?.filter((sg) => !off.has(navSubKey(g.title ?? '', sg.title)))
+        .map((sg) => ({ ...sg, items: sg.items.filter((i) => !off.has(i.to)) }))
+        .filter((sg) => sg.items.length > 0),
+    }))
+    .filter((g) => g.items.length > 0 || (g.subgroups?.length ?? 0) > 0)
+}
+
 export function sidebarNav(groups: NavGroup[]): NavGroup[] {
   const main = groups.findIndex((g) => !g.title)
   if (main < 0) return groups

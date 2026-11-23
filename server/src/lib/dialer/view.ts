@@ -1,4 +1,7 @@
 /* eslint-disable */
+import { companyTz } from '../time'
+// The copied code below reads the rep's clock through this hook: on the server it is the company's own time zone.
+;(globalThis as { __ptRepZone?: () => string }).__ptRepZone = () => companyTz()
 // GENERATED COPY of client/src/lib/dialer.ts (and the types it uses from client/src/lib/dialerApi.ts),
 // so the AI connectors see exactly what the Lead Dialer screens show: who can be called now,
 // follow-ups, regions, the funnel. Keep the two in step: test/dialerView.test.ts fails when they differ.
@@ -116,6 +119,17 @@ export interface FunnelNumbers {
  */
 
 export const PKT = 'Asia/Karachi'
+/**
+ * The rep's clock: the time zone of the company (Karachi for 99 Technologies, so nothing changes there). The app
+ * and the server each say where to read it from, through a hook on globalThis, so this file is the same in both.
+ */
+export const repZone = (): string => (globalThis as { __ptRepZone?: () => string }).__ptRepZone?.() ?? PKT
+/** The short name of the rep's zone, to print after a time: "PKT" for Karachi, else what the zone calls itself (EST, GMT+4). */
+export function repZoneLabel(now: Date = new Date()): string {
+  const zone = repZone()
+  if (zone === PKT) return 'PKT'
+  try { return new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' }).formatToParts(now).find((p) => p.type === 'timeZoneName')?.value ?? zone } catch { return zone }
+}
 export const REGIONS: RegionCode[] = ['ET', 'CT', 'MT', 'PT']
 export const REGION_META: Record<RegionCode, { name: string; zone: string; tone: string; soft: string }> = {
   ET: { name: 'Eastern', zone: 'America/New_York', tone: 'bg-blue-vivid text-blue-on', soft: 'bg-blue-muted text-blue-ink' },
@@ -196,12 +210,12 @@ export interface RegionWindow {
 export function regionWindow(region: RegionCode, s: DialerSettings, now: Date): RegionWindow {
   const zone = REGION_META[region].zone
   const slot = s.slots[region]
-  const diff = offsetMinutes(PKT, now) - offsetMinutes(zone, now) // PKT is this many minutes ahead
+  const diff = offsetMinutes(repZone(), now) - offsetMinutes(zone, now) // PKT is this many minutes ahead
   let start: number, end: number, cur: number
   if (s.clockMode === 'FIXED_LOCAL') {
     start = toMin(slot.localStart); end = toMin(slot.localEnd); cur = parts(zone, now).minutes
   } else {
-    start = toMin(slot.pktStart); end = toMin(slot.pktEnd); cur = parts(PKT, now).minutes
+    start = toMin(slot.pktStart); end = toMin(slot.pktEnd); cur = parts(repZone(), now).minutes
   }
   const len = ((end - start + 1440) % 1440) || 1440
   const since = (cur - start + 1440) % 1440
@@ -486,7 +500,7 @@ export interface LeadFilters { preset?: string; q?: string; state?: string; regi
 
 /** The next moment (from now, within 24 hours) the Pakistan clock shows HH:MM. */
 export function nextPktTime(hhmm: string, now: Date): Date {
-  const delta = (toMin(hhmm) - parts(PKT, now).minutes + 1440) % 1440
+  const delta = (toMin(hhmm) - parts(repZone(), now).minutes + 1440) % 1440
   const d = new Date(now.getTime() + delta * 60_000)
   d.setSeconds(0, 0)
   return d

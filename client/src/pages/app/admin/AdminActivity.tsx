@@ -1,3 +1,4 @@
+import { deptName } from '../../../lib/departments'
 import { useEffect, useMemo, useState } from 'react'
 import { Monitor, Smartphone, Tablet, LogIn, LogOut, Coffee, Play } from 'lucide-react'
 import { Card } from '../../../components/ui/Card'
@@ -18,7 +19,24 @@ function when(iso: string): string {
 const DEVICE_ICON: Record<string, React.ReactNode> = {
   Mobile: <Smartphone size={13} />, Tablet: <Tablet size={13} />, Desktop: <Monitor size={13} />,
 }
-const ACTION_TONE: Record<string, BadgeTone> = { CREATE: 'success', UPDATE: 'primary', DELETE: 'danger' }
+const ACTION_TONE: Record<string, BadgeTone> = {
+  CREATE: 'success', UPDATE: 'primary', DELETE: 'danger',
+  PASSWORD_RESET: 'warning', TWO_STEP_ON: 'success', TWO_STEP_OFF: 'warning', TWO_STEP_OFF_BY_ADMIN: 'warning', TWO_STEP_RECOVERY_RENEWED: 'primary',
+  TWO_STEP_REQUIRED_ON: 'success', TWO_STEP_REQUIRED_OFF: 'warning', COMPANY_EXPORT: 'warning',
+  PLAN_CHANGED: 'primary', PLAN_CHECKOUT: 'primary', PLAN_CANCELLED: 'danger', PLAN_KEPT: 'success',
+  SUPPORT_ACCESS_ON: 'warning', SUPPORT_ACCESS_OFF: 'primary', SUPPORT_SIGN_IN: 'warning',
+  APPROVE: 'success', REJECT: 'danger',
+}
+// What each named action is called on screen (the plain create / update / delete show as they are).
+const ACTION_LABEL: Record<string, string> = {
+  CREATE: 'added', UPDATE: 'changed', DELETE: 'deleted',
+  PASSWORD_RESET: 'password reset', TWO_STEP_ON: 'two-step on', TWO_STEP_OFF: 'two-step off', TWO_STEP_OFF_BY_ADMIN: 'two-step off by admin', TWO_STEP_RECOVERY_RENEWED: 'new recovery codes',
+  TWO_STEP_REQUIRED_ON: 'two-step required', TWO_STEP_REQUIRED_OFF: 'two-step optional', COMPANY_EXPORT: 'data downloaded',
+  PLAN_CHANGED: 'plan changed', PLAN_CHECKOUT: 'went to pay', PLAN_CANCELLED: 'plan cancelled', PLAN_KEPT: 'plan kept',
+  SUPPORT_ACCESS_ON: 'help sign-in allowed', SUPPORT_ACCESS_OFF: 'help sign-in ended', SUPPORT_SIGN_IN: 'Metriq support signed in',
+  APPROVE: 'approved', REJECT: 'not approved',
+}
+const actionLabel = (a: string) => ACTION_LABEL[a] ?? a.toLowerCase().replace(/_/g, ' ')
 // Friendly labels for the data-change audit entities.
 const ENTITY_LABEL: Record<string, string> = {
   ItadDailyEntry: 'ITAD daily log',
@@ -28,8 +46,23 @@ const ENTITY_LABEL: Record<string, string> = {
   AttendanceDay: 'Attendance day',
   StockRequest: 'Stock request',
   Target: 'Target',
+  User: 'Person',
+  Company: 'Company',
+  CompanyRole: 'Company role',
+  Department: 'Department',
+  Billing: 'Billing',
+  AttendanceFixRequest: 'Attendance fix request',
+  ApiKey: 'API key',
+  Webhook: 'Webhook',
+  ApprovalRequest: 'Request',
+  ApprovalRule: 'Approval rules',
+  PersonRecord: 'Person record',
+  LeaveAllowance: 'Leave days',
+  SalesDoc: 'Quote or invoice',
+  PmTask: 'Task',
+  BreakEntry: 'Break',
 }
-const entityLabel = (t: string) => ENTITY_LABEL[t] ?? t
+const entityLabel = (t: string) => (t === 'ItadDailyEntry' ? `${deptName('ITAD', 'ITAD')} daily log` : t === 'LeadGenDailyEntry' ? `${deptName('LEAD_GEN', 'Lead Gen')} daily log` : ENTITY_LABEL[t] ?? t)
 
 // Attendance timeline event → label, icon, badge tone.
 const ATT_EVENT: Record<AttendanceEvent['kind'], { label: string; icon: React.ReactNode; tone: BadgeTone }> = {
@@ -100,8 +133,9 @@ export default function AdminActivity() {
   const activityCols: Column<AuditEntry>[] = [
     { key: 'user', header: 'Member', render: (a) => <span className="font-medium text-ink">{a.userName}</span> },
     { key: 'when', header: 'When', render: (a) => when(a.createdAt) },
-    { key: 'action', header: 'Action', render: (a) => <Badge tone={ACTION_TONE[a.action] ?? 'neutral'}>{a.action.toLowerCase()}</Badge> },
+    { key: 'action', header: 'Action', render: (a) => <Badge tone={ACTION_TONE[a.action] ?? 'neutral'}>{actionLabel(a.action)}</Badge> },
     { key: 'what', header: 'What', render: (a) => entityLabel(a.entityType) },
+    { key: 'detail', header: 'Detail', wrap: true, render: (a) => a.summary ? <span className="text-body-sm text-ink">{a.summary}</span> : <span className="text-ink-faint">—</span> },
   ]
 
   const attendanceCols: Column<AttendanceEvent>[] = [

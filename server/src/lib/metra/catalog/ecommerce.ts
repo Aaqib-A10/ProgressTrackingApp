@@ -69,7 +69,7 @@ export const ECOMMERCE: Entry[] = [
   {
     key: 'ecommerce.my_day', label: 'My daily log', area: 'E-commerce', app: '/app/ecommerce/log',
     about: "The asker's own e-commerce daily log for ONE day: listings per type of work and marketplace, the notes and the pricing notes they wrote.",
-    says: ['my daily log', 'my log', 'what did i log', 'my entry', 'todays log', 'yesterday log', 'pricing notes', 'my notes for the day', 'did i submit', 'did i log', 'aaj ka log', 'mera log'],
+    says: ['my daily log', 'my log', 'daily log', 'fill in my daily log', 'days did i log', 'days logged', 'what did i log', 'my entry', 'todays log', 'yesterday log', 'pricing notes', 'my notes for the day', 'did i submit', 'did i log', 'aaj ka log', 'mera log'],
     who: inTeam, pin: own, takes: ['date'],
     blocks: ['ecom-log'], apis: ['/api/ecommerce/entries'], models: ['EcommerceDailyEntry', 'EcommerceListingLine', 'Tag'],
     async load(ctx, a) {

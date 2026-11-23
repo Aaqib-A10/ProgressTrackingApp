@@ -1,10 +1,11 @@
+import { crmName } from '../../../../lib/departments'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, FileUp, PhoneCall, RefreshCcw } from 'lucide-react'
 import { Button } from '../../../../components/ui/Button'
 import { useToast } from '../../../../components/ui/Toast'
 import { dialerApi, type DialerData, type DialerLead } from '../../../../lib/dialerApi'
-import { PKT, REGIONS, applyFilters, clock, leadState, multiLabel, taskBucket, toggleMulti } from '../../../../lib/dialer'
+import { REGIONS, applyFilters, clock, repZone, repZoneLabel, leadState, multiLabel, taskBucket, toggleMulti } from '../../../../lib/dialer'
 import { FilterBar, useSharedFilters, type FilterDef } from './filters'
 import { cn } from '../../../../lib/cn'
 import { DashboardView } from './DashboardView'
@@ -120,10 +121,10 @@ export default function LeadDialer() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h1 className="flex items-center gap-2 text-headline-lg text-ink"><PhoneCall size={22} className="text-ink-muted" />Lead Dialer</h1>
-          <InfoTip side="bottom">Who to call next, and when. {showOwner ? 'Team view.' : 'Your own leads only.'} Numbers are as fresh as the last import: export from Earthzone and import at the start of each shift.</InfoTip>
+          <InfoTip side="bottom">Who to call next, and when. {showOwner ? 'Team view.' : 'Your own leads only.'} Numbers are as fresh as the last import: export from {crmName('Earthzone')} and import at the start of each shift.</InfoTip>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-line bg-card px-3 py-1 text-body-sm text-ink"><b>{clock(PKT, now)}</b> PKT</span>
+          <span className="rounded-full border border-line bg-card px-3 py-1 text-body-sm text-ink"><b>{clock(repZone(), now)}</b> {repZoneLabel(now)}</span>
           {data && <span className="rounded-full border border-line bg-card px-3 py-1 text-body-sm text-ink" title="Duplicates waiting for a manager are not counted"><b className="tabular-nums">{data.counts.counted.toLocaleString()}</b> leads</span>}
           {isManager && data && (
             <select value={rep} onChange={(e) => setParam('rep', e.target.value === 'me' ? null : e.target.value)} className="h-9 rounded-btn border border-line bg-card px-2 text-body-sm font-semibold text-ink" aria-label="Whose leads">
@@ -132,7 +133,7 @@ export default function LeadDialer() {
               {data.reps.filter((r) => r.id !== data.me.id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           )}
-          {rep === 'me' && leads.length > 0 && <Button variant="secondary" leadingIcon={<RefreshCcw size={15} />} onClick={() => setSyncing(true)} title="Fill alternative numbers, emails, job titles and the notes timeline from your Earth Zone pull">Earth Zone sync</Button>}
+          {rep === 'me' && leads.length > 0 && <Button variant="secondary" leadingIcon={<RefreshCcw size={15} />} onClick={() => setSyncing(true)} title={`Fill alternative numbers, emails, job titles and the notes timeline from your ${crmName('Earth Zone')} pull`}>{crmName('Earth Zone')} sync</Button>}
           <Button leadingIcon={<FileUp size={15} />} onClick={() => setImporting(true)}>Import my leads</Button>
         </div>
       </div>
@@ -160,7 +161,7 @@ export default function LeadDialer() {
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-card px-6 py-16 text-center">
           <FileUp size={32} className="text-primary-ink" />
           <p className="text-body-lg font-semibold text-ink">{rep === 'me' ? 'Import your leads to start' : 'No leads imported yet for this view'}</p>
-          <p className="max-w-lg text-body-md text-ink-muted">Export your own leads from Earthzone (CSV or Excel) and import the file.</p>
+          <p className="max-w-lg text-body-md text-ink-muted">Export your own leads from {crmName('Earthzone')} (CSV or Excel) and import the file.</p>
           {rep === 'me' && <Button leadingIcon={<FileUp size={15} />} onClick={() => setImporting(true)}>Import my leads</Button>}
         </div>
       ) : (
