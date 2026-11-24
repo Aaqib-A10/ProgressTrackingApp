@@ -45,6 +45,18 @@ function value(field: Prisma.DMMF.Field, marker: string, model: string): unknown
 
 export async function fillEveryTable(companyId: string, marker: string, existing: Record<string, string[]>): Promise<Map<string, string>> {
   const ids = new Map<string, string>(Object.entries(existing).map(([k, v]) => [k, v[0]]))
+  // A parent table that belongs to no company (shared by all, e.g. OAuthClient: the same Claude for every company):
+  // one made-up row of it, so the company tables that point at it can be filled.
+  const shared = async (type: string): Promise<string | null> => {
+    const m = models.get(type)
+    if (!m || m.fields.some((f) => f.name === 'companyId')) return null
+    if (ids.has(type)) return ids.get(type)!
+    const data: Record<string, unknown> = {}
+    for (const f of m.fields) if (f.kind !== 'object' && f.isRequired && !f.isList && !f.hasDefaultValue && !f.isUpdatedAt) data[f.name] = value(f, marker, type)
+    const row = await delegate(type).create({ data })
+    ids.set(type, row.id!)
+    return row.id!
+  }
   const todo = walledTables().map((t) => t.table).filter((t) => !ids.has(t))
   const failures: string[] = []
   for (let pass = 0; pass < 8 && todo.length; pass++) {
@@ -56,7 +68,7 @@ export async function fillEveryTable(companyId: string, marker: string, existing
         if (f.kind === 'object') {
           const from = f.relationFromFields?.[0]
           if (!from || f.type === 'Company') continue
-          const parent = ids.get(f.type)
+          const parent = ids.get(f.type) ?? (f.isRequired ? await shared(f.type) : null)
           if (parent) data[from] = parent
           else if (f.isRequired) ready = false
           continue

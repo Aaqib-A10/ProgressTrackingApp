@@ -87,4 +87,4 @@ export function nameOf(p: Profile, email: string): string {
 }
 
 /** Where to go after signing in: only an address inside the app. */
-export const safeNext = (v: unknown): string => (typeof v === 'string' && /^\/app(\/[\w\-./?=&%]*)?$/.test(v) && !v.includes('//') ? v : '/app/dashboard')
+export const safeNext = (v: unknown): string => (typeof v === 'string' && /^\/app(\/[\w\-./?=&%+~]*)?$/.test(v) && !v.includes('//') ? v : '/app/dashboard')

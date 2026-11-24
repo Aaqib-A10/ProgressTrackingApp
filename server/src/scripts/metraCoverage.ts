@@ -83,6 +83,8 @@ const NOT_DATA: Record<string, string> = {
   '/api/auth/sso/:slug/metadata': 'the single sign-on description a company gives its identity provider (public XML, no records)',
   '/api/auth/sso/:slug/start': 'sends the browser to the identity provider to sign in',
   '/api/company/sso': "the company's single sign-on settings (Company settings, Single sign-on)",
+  '/api/oauth/connections': 'the apps a person signed in to from Claude or ChatGPT (Connectors page), and the connector address',
+  '/api/oauth/protected-resource': 'how apps find out how to sign in to the connector (public, no records)',
   '/api/company/export': "the company's whole data as one file (Company settings, Your data); never read by the assistant",
   '/api/company/api': 'the API keys and webhooks of the company (Company settings, API): settings, and nothing in them is shown twice',
   '/api/company/api/webhooks/:id/deliveries': 'the messages sent to one webhook (Company settings, API)',
@@ -165,7 +167,7 @@ const LEFT_OUT: Record<string, string> = {
 }
 
 /** Tables Metra must never read or index (docs/metra/DESIGN.md §6): secrets, logins, billing, its own records, machinery. */
-const NEVER = new Set(['AppSecret', 'ClaudeKey', 'LoginEvent', 'AuditLog', 'PushSubscription', 'PushDevice', 'SalaryRecord', 'Subscription', 'Invoice', 'BillingEvent', 'SignupInvite', 'ApiKey', 'Webhook', 'WebhookDelivery', 'PlatformOwner', 'OwnerAuditLog', 'PlatformSetting', 'FeatureFlag', 'FeatureFlagCompany', 'CompanyUsage', 'ErrorGroup', 'ErrorEvent', 'AuditRun', 'AuditCheck', 'JobHeartbeat', 'UptimeEvent', 'AiChunk', 'AiConversation', 'AiMessage', 'AiInsight', 'AiIndexState', 'Notification', 'BlockedCheckIn', 'OfficeNetwork', 'DialerIntegration', 'CallRecording', 'EntryAttachment', 'PmAttachment', 'SentMonthlyReport', 'AttendanceReminder', 'PmDispatchLog', 'PmNotifyPref', 'DialerUserPrefs', 'Company', 'SupportTicket', 'SupportMessage'])
+const NEVER = new Set(['AppSecret', 'ClaudeKey', 'OAuthClient', 'OAuthCode', 'OAuthGrant', 'OAuthToken', 'LoginEvent', 'AuditLog', 'PushSubscription', 'PushDevice', 'SalaryRecord', 'Subscription', 'Invoice', 'BillingEvent', 'SignupInvite', 'ApiKey', 'Webhook', 'WebhookDelivery', 'PlatformOwner', 'OwnerAuditLog', 'PlatformSetting', 'FeatureFlag', 'FeatureFlagCompany', 'CompanyUsage', 'ErrorGroup', 'ErrorEvent', 'AuditRun', 'AuditCheck', 'JobHeartbeat', 'UptimeEvent', 'AiChunk', 'AiConversation', 'AiMessage', 'AiInsight', 'AiIndexState', 'Notification', 'BlockedCheckIn', 'OfficeNetwork', 'DialerIntegration', 'CallRecording', 'EntryAttachment', 'PmAttachment', 'SentMonthlyReport', 'AttendanceReminder', 'PmDispatchLog', 'PmNotifyPref', 'DialerUserPrefs', 'Company', 'SupportTicket', 'SupportMessage'])
 
 /** Tables that are neither shown nor searched, each with the reason. A table in no list fails the gate. */
 const TABLE_NOTES: Record<string, string> = {

@@ -33,5 +33,35 @@ export function onPreloadError(e: Pick<Event, 'preventDefault'>, env: Env): bool
  * deploy), wait for the reload instead of handing React nothing.
  */
 export function pageModule<T>(load: () => Promise<T>): () => Promise<T> {
+  PAGES.push(load)
   return () => load().then((m) => (m == null ? new Promise<T>(() => { /* the reload replaces this page */ }) : m))
+}
+
+/** Every page's loader, so the pages can be fetched ahead of time (warmPages). */
+const PAGES: (() => Promise<unknown>)[] = []
+let warming = false
+
+/**
+ * Fetch every page's file in the background once the app has loaded (24 Nov 2026). Each request to the server takes
+ * 0.5 to 8 seconds on the network (the server itself answers in a millisecond), and every deploy gives the page files
+ * new names, so the first time a page was opened after a deploy it waited seconds for its file before it could even ask
+ * for its data. Fetched ahead (about 1 MB in all, two at a time, only when the browser is idle), every page then opens
+ * at once, and Cloudflare keeps the files close to everyone else too. Skipped when the person asked to save data.
+ */
+export function warmPages(): void {
+  if (warming || typeof window === 'undefined') return
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
+  if (conn?.saveData || conn?.effectiveType === '2g' || conn?.effectiveType === 'slow-2g') return
+  warming = true
+  const ric = (window as Window & { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number }).requestIdleCallback
+  const idle = (fn: () => void) => { if (ric) ric.call(window, fn, { timeout: 3000 }); else setTimeout(fn, 200) }
+  const queue = [...PAGES]
+  const next = (): void => {
+    const load = queue.shift()
+    if (!load) return
+    // A page that fails to load here is simply loaded when it is opened (and reloads after a deploy, as above).
+    idle(() => { load().catch(() => undefined).finally(next) })
+  }
+  // Let the page the person opened finish first; then two at a time.
+  window.setTimeout(() => { next(); next() }, 2500)
 }

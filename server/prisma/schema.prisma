@@ -354,6 +354,8 @@ model User {
   blockedCheckIns        BlockedCheckIn[]
   workLogNotes           WorkLogNote[]          @relation("WorkLogNoteAuthor")
   claudeKeys             ClaudeKey[]
+  oauthCodes             OAuthCode[]
+  oauthGrants            OAuthGrant[]
   reportForms            ReportForm[]           @relation("ReportFormCreator")
   reportEntries          ReportEntry[]          @relation("ReportEntries")
   customBlocks           CustomBlock[]          @relation("CustomBlockCreator")
@@ -3912,6 +3914,9 @@ model Company {
   workLogNoteRows          WorkLogNote[]
   workLogReviewRows        WorkLogReview[]
   claudeKeyRows            ClaudeKey[]
+  oauthCodeRows            OAuthCode[]
+  oauthGrantRows           OAuthGrant[]
+  oauthTokenRows           OAuthToken[]
   supportMessageRows       SupportMessage[]
   companyRoles             CompanyRole[]
   reportForms              ReportForm[]
@@ -5181,5 +5186,99 @@ model PmTimeEntry {
 
   @@index([taskId])
   @@index([userId, endedAt])
+  @@index([companyId])
+}
+
+/// An app that connects to Metriq by signing in (OAuth 2.1, the way MCP connectors do): Claude, ChatGPT, Cursor...
+/// It registers itself (dynamic client registration) or uses its own https address as its id (a client ID metadata
+/// document). Not a company's: the company is decided by the person who signs in (lib/mcpAuth.ts).
+model OAuthClient {
+  id           String    @id @default(cuid())
+  /// What the app sends as client_id: an id Metriq gave it, or its own https address.
+  clientId     String    @unique
+  /// Only for apps that sign in with a secret (client_secret_post / client_secret_basic); public apps use PKCE alone.
+  secretHash   String?
+  name         String
+  /// Where a sign-in may send the code back to: exact, except the port of this computer's own address (loopback).
+  redirectUris String[]
+  authMethod   String    @default("none")
+  /// The app's own metadata address (client ID metadata document), read again at most once a day.
+  metadataUrl  String?
+  website      String?
+  fetchedAt    DateTime?
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  codes  OAuthCode[]
+  grants OAuthGrant[]
+}
+
+/// One "Allow" by a person: swapped once, within 10 minutes, for the app's first tokens (PKCE S256 required).
+model OAuthCode {
+  id            String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId     String      @default("")
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  codeHash      String      @unique
+  clientRef     String
+  client        OAuthClient @relation(fields: [clientRef], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redirectUri   String
+  codeChallenge String
+  scope         String
+  resource      String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  /// The connection made from it: a second use of the same code ends that connection.
+  grantId       String?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+/// A connected app: one person allowed one app. Ending it (Connectors page), or the person's password change,
+/// deactivation or a paused company, stops every token it has.
+model OAuthGrant {
+  id         String      @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId  String      @default("")
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientRef  String
+  client     OAuthClient @relation(fields: [clientRef], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope      String
+  resource   String?
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime    @default(now())
+
+  tokens OAuthToken[]
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+/// A connected app's tokens: an access token (1 hour) and a refresh token (90 days) swapped for a new pair on every
+/// use. Only their hashes are kept.
+model OAuthToken {
+  id               String     @id @default(cuid())
+  /// The company this belongs to (Phase 1, step 2). Filled in by lib/tenancy.
+  companyId        String     @default("")
+  company          Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  grantId          String
+  grant            OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  accessHash       String     @unique
+  accessExpiresAt  DateTime
+  refreshHash      String?    @unique
+  refreshExpiresAt DateTime?
+  /// When the refresh token was swapped for a new pair. It must never come back: if it does, the connection ends.
+  rotatedAt        DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime   @default(now())
+
+  @@index([grantId])
   @@index([companyId])
 }

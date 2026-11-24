@@ -130,6 +130,15 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d app.yourdomain.com     # issues + wires HTTPS, auto-renews
 ```
 
+Let apps (Claude, ChatGPT, Cursor...) sign in to Metriq's connector (`https://<site>/api/mcp`). They find out how to
+sign in at `/.well-known/oauth-…` and `/.well-known/openid-configuration`, which must reach the app like `/api/`
+(server/src/routes/mcpAuth.ts). Once per server; it backs up the site file and checks it with `nginx -t`:
+```bash
+sudo bash ~/pulsetrack/scripts/nginx-oauth.sh
+```
+`APP_URL` in `server/.env` must be the site's own address (for example `https://pulsetrack.online`): the connector
+address people paste and every sign-in address are made from it.
+
 ## 7. Turn on the office-IP restriction
 Log in as the admin → **Admin → Office Networks** → add your office WAN IP(s)
 (e.g. `119.156.230.29`, `110.93.226.217`). The banner will switch to

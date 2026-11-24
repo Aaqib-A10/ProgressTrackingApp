@@ -15,7 +15,8 @@ import { billingState, readOnlyReason } from '../lib/billing/billing'
 const TRIAL_OPEN = /^\/api\/(auth\/|billing|support)/
 
 /** Closed to a help sign-in: money, passwords, keys and the people's powers. */
-const SUPPORT_CLOSED = /^\/api\/(financials|claude|company\/people|auth\/(change-password|password))/
+// Help sign-in never reaches money, passwords, or connecting apps as the person (keys: claude; signing in: oauth).
+const SUPPORT_CLOSED = /^\/api\/(financials|claude|oauth|company\/people|auth\/(change-password|password))/
 
 export interface AuthUser {
   id: string

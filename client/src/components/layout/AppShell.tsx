@@ -22,6 +22,7 @@ import { DockTab } from './DockTab'
 import { useDock } from '../../lib/dock'
 import { startLive, stopLive } from '../../lib/live'
 import { refreshFlags } from '../../lib/flags'
+import { warmPages } from '../../lib/staleChunks'
 
 // The selected date range is shared with every dashboard under the shell.
 interface RangeContextValue {
@@ -70,6 +71,8 @@ export function AppShell({ user, children }: AppShellProps) {
   useEffect(() => { setNativeNavigator((to) => goTo(to)); return () => setNativeNavigator(null) }, [goTo])
   // Live updates: one quiet line to the server while the app is open (lib/live). Needs the switches first.
   useEffect(() => { let on = true; void refreshFlags().then(() => { if (on) startLive() }); return () => { on = false; stopLive() } }, [])
+  // Every page's file fetched quietly in the background, so opening any page never waits on the network (lib/staleChunks).
+  useEffect(() => { warmPages() }, [])
   // A notification tapped while the app was closed: go there once the app has settled on its first page (not on bare /app, which moves on by itself).
   useEffect(() => {
     if (location.pathname.replace(/\/$/, '') === '/app') return

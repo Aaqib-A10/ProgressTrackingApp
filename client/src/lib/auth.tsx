@@ -6,6 +6,19 @@ import type { CurrentUser, Department } from './types'
 import { applyAppearance } from './theme'
 import { setCompanyDepartmentNames } from './departments'
 import { inHomeCompany } from './types'
+import { inAppShell } from './session'
+
+/**
+ * The "who is signed in" answer index.html asked for before the app's files had loaded (window.__ptMe), used once.
+ * Not in the phone app, which signs in with its own token (lib/session.ts).
+ */
+type EarlyMe = Promise<{ status: number; body: { user?: CurrentUser } | null } | null>
+function takeEarlyMe(): EarlyMe | null {
+  const w = window as Window & { __ptMe?: EarlyMe }
+  const early = w.__ptMe ?? null
+  delete w.__ptMe
+  return early && !inAppShell() ? early : null
+}
 
 /** Set by the 401 handler so the login screen can explain the bounce. */
 export const SESSION_EXPIRED_KEY = 'pt.sessionExpired'
@@ -58,6 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
+      // The first time: index.html already asked, while the app's files were loading (one network trip less).
+      const early = takeEarlyMe()
+      const first = early ? await early : null
+      if (first?.status === 401) { setUser(null); return }
+      if (first?.status === 200 && first.body?.user) { setUser(first.body.user); return }
       const { user } = await api.get<{ user: CurrentUser }>('/auth/me')
       setUser(user)
     } catch {

@@ -47,6 +47,15 @@
           document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0E0F11')
         }
       } catch (e) {}
+      // Ask who is signed in right away, while the app's files load: one network trip less on every load
+      // (lib/auth.tsx takes the answer once). Not on the website or the sign-in pages.
+      try {
+        if (app && !/^\/(?:login|signup|start|forgot-password|reset-password|reset-success|verify-email|c\/)/.test(location.pathname)) {
+          window.__ptMe = fetch('/api/auth/me', { credentials: 'include', headers: { Accept: 'application/json' } })
+            .then(function (r) { return r.status === 200 ? r.json().then(function (b) { return { status: 200, body: b } }) : { status: r.status, body: null } })
+            .catch(function () { return null })
+        }
+      } catch (e) {}
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

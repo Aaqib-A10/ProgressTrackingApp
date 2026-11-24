@@ -13,6 +13,11 @@
 # back if anything is wrong. Running it twice changes nothing.
 set -euo pipefail
 
+# Replaced on 24 Nov 2026: apps now sign in to Metriq, and these addresses must reach the app. Running this would turn
+# sign-in off again, so it stops here. Use scripts/nginx-oauth.sh instead.
+echo "This script is replaced. Run instead: sudo bash ~/pulsetrack/scripts/nginx-oauth.sh"
+exit 1
+
 if [[ $EUID -ne 0 ]]; then echo "Run it with sudo: sudo bash $0"; exit 1; fi
 
 SITE=$(grep -lE "root[[:space:]]+/var/www/pulsetrack" /etc/nginx/sites-enabled/* 2>/dev/null | head -1 || true)

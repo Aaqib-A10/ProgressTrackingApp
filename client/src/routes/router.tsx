@@ -108,6 +108,7 @@ const AdminTags = lazy(pageModule(() => import('../pages/app/admin/AdminTags')))
 const AdminLeave = lazy(pageModule(() => import('../pages/app/admin/AdminLeave')))
 const AdminNetworks = lazy(pageModule(() => import('../pages/app/admin/AdminNetworks')))
 const Start = lazy(pageModule(() => import('../pages/auth/Start')))
+const OAuthAuthorize = lazy(pageModule(() => import('../pages/auth/OAuthAuthorize')))
 const Setup = lazy(pageModule(() => import('../pages/app/Setup')))
 const Billing = lazy(pageModule(() => import('../pages/app/billing/Billing')))
 const TestCheckout = lazy(pageModule(() => import('../pages/app/billing/TestCheckout')))
@@ -163,6 +164,9 @@ export const router = createBrowserRouter([
 
   // People outside Metriq joining a call by link (no login)
   { path: '/join/:token', element: <Suspense fallback={null}><GuestJoin /></Suspense> },
+
+  // An app (Claude, ChatGPT...) asks to sign in to Metriq: the Allow page (signed in, no shell; server/src/lib/mcpAuth.ts)
+  { path: '/app/oauth/authorize', errorElement: <RouteError />, element: <RequireAuth><Suspense fallback={null}><OAuthAuthorize /></Suspense></RequireAuth> },
 
   // The ITAD Quick Log in its own small window (signed in, no shell)
   { path: '/quicklog', errorElement: <RouteError />, element: <RequireAuth><Suspense fallback={null}><QuickLogWindow /></Suspense></RequireAuth> },

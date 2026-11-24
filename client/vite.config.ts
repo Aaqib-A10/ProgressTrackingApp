@@ -66,6 +66,9 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
+      // How MCP apps find out how to sign in (server/src/routes/mcpAuth.ts); nginx does the same on the server.
+      '/.well-known/oauth-': { target: 'http://localhost:4000', changeOrigin: true },
+      '/.well-known/openid-configuration': { target: 'http://localhost:4000', changeOrigin: true },
     },
   },
 })

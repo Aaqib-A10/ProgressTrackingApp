@@ -37,6 +37,7 @@ import { meetingsRouter } from './routes/meetings'
 import { avatarsRouter } from './routes/avatars'
 import { leadInRouter, leadsRouter } from './routes/leads'
 import { claudeRouter, mcpRouter } from './routes/claude'
+import { isOpenCors, oauthRouter, openCors, wellKnownRouter } from './routes/mcpAuth'
 import { systemHealthRouter } from './routes/systemHealth'
 import { auditProbeMiddleware, errorHandler, requestMonitor } from './lib/health/monitor'
 import { registerApiMounts } from './lib/health/audit'
@@ -93,6 +94,7 @@ export const API_MOUNTS: [string, Router][] = [
   ['/api/docs', docsRouter],
   ['/api/claude', claudeRouter],
   ['/api/mcp', mcpRouter],
+  ['/api/oauth', oauthRouter],
   ['/api/metra', metraRouter],
   ['/api/dialer-hook', dialerHookRouter],
   ['/api/leads', leadsRouter],
@@ -142,15 +144,18 @@ export function createApp(): Express {
   // Website forms send leads from other sites: its own CORS rule, before the app's.
   app.use('/api/lead-in', leadInRouter)
 
+  // What MCP apps call with a bearer token (sign-in discovery, registration, tokens, the connector): open CORS, no
+  // cookies (routes/mcpAuth.ts). Everything else keeps the app's own rule below.
+  app.use(openCors)
+
   // CLIENT_ORIGIN takes a comma-separated list: the website, and later the phone app's own
   // origins (capacitor://localhost on iPhone, http://localhost on Android).
-  app.use(
-    cors({
-      origin: (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim()).filter(Boolean),
-      credentials: true,
-      exposedHeaders: ['X-PT-User'], // whose answer it is (see middleware/auth.ts); a page on another origin may read it
-    }),
-  )
+  const appCors = cors({
+    origin: (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173').split(',').map((o) => o.trim()).filter(Boolean),
+    credentials: true,
+    exposedHeaders: ['X-PT-User'], // whose answer it is (see middleware/auth.ts); a page on another origin may read it
+  })
+  app.use((req, res, next) => (isOpenCors(req.path) ? next() : appCors(req, res, next)))
   // Cap JSON bodies to blunt memory-pressure DoS from oversized payloads.
   // Lead Dialer imports carry a whole CRM export (a few thousand rows), so they get a bigger limit.
   app.use('/api/dialer/imports', express.json({ limit: '25mb' }))
@@ -173,6 +178,8 @@ export function createApp(): Express {
   app.use('/api/v1', publicApiRouter)
   for (const [path, router] of API_MOUNTS) app.use(path, router)
   registerApiMounts(API_MOUNTS)
+  // How MCP apps find out how to sign in (RFC 9728, RFC 8414); nginx passes these on to here (scripts/nginx-oauth.sh).
+  app.use('/.well-known', wellKnownRouter)
 
   // Fallback 404 for unknown API paths.
   app.use((_req, res) => {

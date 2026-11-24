@@ -28,7 +28,9 @@ export default function Login() {
   useEffect(() => { api.get<{ newCompanies: boolean }>('/auth/open').then((r) => setOpen(r.newCompanies)).catch(() => setOpen(false)) }, [])
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/app/dashboard'
+  // Back where the person was, with its ?query (an app's sign-in request lives in it: /app/oauth/authorize?client_id=...).
+  const fromLoc = (location.state as { from?: { pathname: string; search?: string } } | null)?.from
+  const from = fromLoc?.pathname ? `${fromLoc.pathname}${fromLoc.search ?? ''}` : '/app/dashboard'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

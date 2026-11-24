@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, ChevronRight, Copy, KeyRound, Plug, Power, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, Copy, KeyRound, LogIn, Plug, Power, ShieldCheck, Unplug } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { useToast } from '../../components/ui/Toast'
@@ -32,6 +32,34 @@ function useKeys() {
   return { keys, load }
 }
 
+/** Apps the person signed in to (OAuth, server/src/lib/mcpAuth.ts), and the one address an app is given. */
+interface Connection { id: string; app: string; from: string | null; connectedAt: string; lastUsedAt: string | null }
+function useConnections() {
+  const [data, setData] = useState<{ connectorUrl: string; connections: Connection[] } | null>(null)
+  const load = () => api.get<{ connectorUrl: string; connections: Connection[] }>('/oauth/connections').then(setData).catch(() => setData({ connectorUrl: '', connections: [] }))
+  useEffect(() => { void load() }, [])
+  return { data, load }
+}
+
+/** The easy way: paste one address into the app, sign in to Metriq, press Allow. No key to copy or keep. */
+function SignInWay({ appName, url, steps }: { appName: string; url: string; steps?: string[] }) {
+  const { addToast } = useToast()
+  return (
+    <Card className="tone-indigo g-wash g-ring" title={<span className="inline-flex items-center gap-2"><LogIn size={16} className="text-primary-ink" />Sign in from {appName} (recommended)</span>} subtitle="Paste one address, then sign in to Metriq and press Allow. No key to copy or keep safe; disconnect it here any time.">
+      <div className="space-y-3 text-body-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="min-w-0 flex-1 break-all rounded-btn border border-line bg-card px-3 py-2 font-mono text-[12.5px] text-ink">{url || '…'}</code>
+          <Button size="sm" leadingIcon={<Copy size={14} />} disabled={!url} onClick={async () => { await copyText(url); addToast({ type: 'success', message: 'Address copied' }) }}>Copy address</Button>
+        </div>
+        <ol className="list-decimal space-y-1 pl-5 text-ink">
+          {(steps ?? [`In ${appName}, add a custom connector (or MCP server) and paste this address. Choose sign-in (OAuth) if it asks; leave client ID and secret empty.`, 'Press Connect. Metriq opens in your browser: sign in if asked, check it is your account, and press Allow.', `You are sent back to ${appName}, connected as you.`]).map((t) => <li key={t}>{t}</li>)}
+        </ol>
+        <p className="text-ink-muted">A connector added earlier "without sign-in" cannot switch: remove it in {appName} and add it again with this address.</p>
+      </div>
+    </Card>
+  )
+}
+
 function Mark({ c, size = 'md' }: { c: Connector; size?: 'md' | 'lg' }) {
   return <span className={cn('inline-flex shrink-0 items-center justify-center rounded-[10px] font-bold', c.tone, size === 'lg' ? 'h-12 w-12 text-[17px]' : 'h-10 w-10 text-[14px]')} aria-hidden>{c.mark}</span>
 }
@@ -47,13 +75,43 @@ export default function Connectors() {
 
 function ConnectorList() {
   const { keys } = useKeys()
+  const { data, load } = useConnections()
+  const { addToast } = useToast()
+  const [ending, setEnding] = useState<string | null>(null)
   const on = (c: Connector) => (keys ?? []).filter((k) => k.client === c.id).length
+  async function disconnect(x: Connection) {
+    try { await api.del(`/oauth/connections/${x.id}`); setEnding(null); addToast({ type: 'success', message: `${x.app} is disconnected. It can no longer use Metriq.` }); void load() } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not disconnect it') }) }
+  }
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-headline-lg text-ink"><Plug size={22} className="text-ink-muted" /> Connectors</h1>
         <p className="mt-0.5 text-body-md text-ink-muted">Connect your AI assistant or coding tool to Metriq. It can then work your leads, tickets, to-dos and meetings, as you.</p>
       </div>
+      <SignInWay appName="your app" url={data?.connectorUrl ?? ''} steps={['In Claude, ChatGPT, Cursor or another app, add a custom connector (or MCP server) and paste this address.', 'Press Connect. Metriq opens in your browser: sign in if asked, check it is your account, and press Allow.', 'You are sent back to the app, connected as you. Pick your app below for its exact steps.']} />
+      {(data?.connections.length ?? 0) > 0 && (
+        <Card title="Apps you signed in to" subtitle="Each works as you, until you disconnect it or change your password." flush>
+          <ul className="divide-y divide-line">
+            {data!.connections.map((x) => (
+              <li key={x.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-body-sm">
+                <span className="g-fill flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold">{x.app.slice(0, 1).toUpperCase()}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-ink">{x.app}{x.from && <span className="ml-1.5 font-normal text-ink-muted">{x.from}</span>}</p>
+                  <p className="text-ink-muted">Connected {when(x.connectedAt)} · {x.lastUsedAt ? `last used ${when(x.lastUsedAt)}` : 'not used yet'}</p>
+                </div>
+                {ending === x.id ? (
+                  <span className="flex items-center gap-1">
+                    <button type="button" onClick={() => void disconnect(x)} className="rounded px-2 py-1 font-semibold text-danger-ink hover:bg-danger/10">Disconnect</button>
+                    <button type="button" onClick={() => setEnding(null)} className="rounded px-2 py-1 text-ink-muted hover:bg-slate-100">Keep</button>
+                  </span>
+                ) : (
+                  <button type="button" onClick={() => setEnding(x.id)} className="inline-flex items-center gap-1 rounded-btn border border-line px-2.5 py-1 font-semibold text-ink-muted hover:border-danger/40 hover:text-danger-ink"><Unplug size={13} /> Disconnect</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {([['AI assistants', CONNECTORS.filter((c) => !c.developer)], ['For developers', CONNECTORS.filter((c) => c.developer)]] as const).map(([title, list]) => (
         <section key={title} className="space-y-2.5">
           <h2 className="text-label-md uppercase text-ink-faint">{title}</h2>
@@ -83,7 +141,7 @@ function ConnectorList() {
       <Card>
         <div className="flex gap-3 text-body-sm text-ink-muted">
           <ShieldCheck size={18} className="mt-0.5 shrink-0 text-success-ink" />
-          <p>Every connector sees only what you can see in Metriq, and everything it does shows under your name, through the same checks and notifications as the app. Each key works until you switch it off; switching it off stops that app at once.</p>
+          <p>Every connector sees only what you can see in Metriq, and everything it does shows under your name, through the same checks and notifications as the app. A signed-in app works until you disconnect it or change your password; a key works until you switch it off. Either way it stops at once.</p>
         </div>
       </Card>
     </div>
@@ -94,6 +152,7 @@ function ConnectorDetail({ c }: { c: Connector }) {
   const { addToast } = useToast()
   const { user } = useAuth()
   const { keys: all, load } = useKeys()
+  const { data: signIn } = useConnections()
   const keys = (all ?? []).filter((k) => k.client === c.id)
   const [name, setName] = useState(c.keyName)
   const [busy, setBusy] = useState(false)
@@ -128,8 +187,11 @@ function ConnectorDetail({ c }: { c: Connector }) {
         {keys.length > 0 && <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-body-sm font-semibold text-success-ink"><Check size={14} /> Connected</span>}
       </div>
 
-      {/* 1. The key */}
-      <Card title={`1. Make a key for ${c.name}`} subtitle="The key goes inside a private link. Anyone with the link can act as you, so keep it like a password.">
+      {/* The easy way: sign in */}
+      <SignInWay appName={c.name} url={signIn?.connectorUrl ?? ''} />
+
+      {/* The other way: a key in the link */}
+      <Card title={`Or: 1. Make a key for ${c.name}`} subtitle="For an app that cannot sign in. The key goes inside a private link: anyone with the link can act as you, so keep it like a password.">
         <div className="space-y-4 text-body-sm">
           {link ? (
             <div className="space-y-3 rounded-card border border-success/40 bg-success/5 p-4">
@@ -174,7 +236,7 @@ function ConnectorDetail({ c }: { c: Connector }) {
       </Card>
 
       {/* 2. How to add it */}
-      <Card title={`2. Add Metriq to ${c.name}`} subtitle={c.ways.length > 1 ? 'Two ways: pick the one you use.' : undefined}>
+      <Card title={`Or: 2. Add the key's link to ${c.name}`} subtitle={c.ways.length > 1 ? 'Two ways: pick the one you use.' : undefined}>
         <div className="space-y-5">
           {c.ways.map((w) => (
             <div key={w.title} className="space-y-2">

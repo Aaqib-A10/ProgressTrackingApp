@@ -17,6 +17,7 @@ import { DEPARTMENT_TOOLS } from './mcp/departmentTools'
 import { WORK_TOOLS } from './mcp/workTools'
 import { apiAs } from './mcp/api'
 import { runAsCompany } from './tenancy'
+import { ACCESS_PREFIX, userForAccessToken, wwwAuthenticate } from './mcpAuth'
 
 /**
  * Metriq as a connector for Claude, ChatGPT and Gemini (Model Context Protocol, "streamable
@@ -694,12 +695,34 @@ async function userForKey(key: string): Promise<User | null> {
   return { id: k.user.id, role: k.user.role, name: k.user.name, companyId: k.user.companyId }
 }
 
-/** POST /api/mcp/:key — every MCP message. GET / DELETE answer 405 (no server-sent stream, no sessions). */
+/**
+ * Who is calling: a person signed in through the app (OAuth access token, lib/mcpAuth.ts), or a private key, in the
+ * link (/api/mcp/<key>, the older way) or sent as a bearer token. `tried`: something was sent, and it did not work.
+ */
+async function caller(req: Request): Promise<{ user: User | null; tried: boolean }> {
+  const key = String(req.params.key ?? '')
+  if (key) { const u = await userForKey(key); if (u) return { user: u, tried: true } }
+  const h = String(req.headers.authorization ?? '')
+  const bearer = /^Bearer\s+/i.test(h) ? h.replace(/^Bearer\s+/i, '').trim() : ''
+  if (bearer.startsWith(ACCESS_PREFIX)) return { user: await userForAccessToken(bearer), tried: true }
+  if (bearer.startsWith(KEY_PREFIX)) return { user: await userForKey(bearer), tried: true }
+  return { user: null, tried: !!key || !!bearer }
+}
+
+/**
+ * POST /api/mcp (signed in through the app) and /api/mcp/:key (a private key in the link) — every MCP message.
+ * Without a working sign-in: 401 with WWW-Authenticate saying how to sign in (RFC 9728), which is what lets Claude,
+ * ChatGPT and others show "Connect" and open Metriq's sign-in. GET / DELETE answer 405 (no stream, no sessions).
+ */
 export async function mcpEndpoint(req: Request, res: Response): Promise<void> {
   res.setHeader('Cache-Control', 'no-store')
+  const { user: u, tried } = await caller(req)
+  if (!u) {
+    res.setHeader('WWW-Authenticate', wwwAuthenticate(tried))
+    res.status(401).json(rpcError(null, -32001, tried ? 'This sign-in or key is not valid any more. Connect Metriq again (sign in), or make a new key in Metriq under Connectors.' : 'Sign in to Metriq to use this connector.'))
+    return
+  }
   if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); res.status(405).json({ error: 'Use POST' }); return }
-  const u = await userForKey(String(req.params.key ?? ''))
-  if (!u) { res.status(401).json(rpcError(null, -32001, 'This Metriq key is not valid or was switched off. Make a new one in Metriq, under Connectors.')); return }
   const body = req.body as Rpc | Rpc[]
   // Company walls: the connector only ever sees the person's own company.
   if (Array.isArray(body)) {

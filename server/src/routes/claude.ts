@@ -12,6 +12,10 @@ claudeRouter.get('/keys', asyncHandler(listClaudeKeys))
 claudeRouter.post('/keys', asyncHandler(createClaudeKey))
 claudeRouter.delete('/keys/:id', asyncHandler(revokeClaudeKey))
 
-/** The Metriq connector itself (Claude calls it with the key in the link; no login cookie). */
+/**
+ * The Metriq connector itself, never with a login cookie: /api/mcp with a token from signing in through the app
+ * (lib/mcpAuth.ts), or /api/mcp/<key> with a private key in the link (the older way).
+ */
 export const mcpRouter = Router()
+mcpRouter.all('/', mcpLimiter, asyncHandler(mcpEndpoint))
 mcpRouter.all('/:key', mcpLimiter, asyncHandler(mcpEndpoint))
