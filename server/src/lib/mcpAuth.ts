@@ -4,6 +4,7 @@ import net from 'node:net'
 import type { Role } from '@prisma/client'
 import { prisma } from './prisma'
 import { appUrl } from './mail'
+import { captureError } from './health/errors'
 
 /**
  * Signing in to Metriq from Claude, ChatGPT, Cursor and other MCP apps (OAuth 2.1, as the MCP authorization spec asks).
@@ -76,7 +77,10 @@ export function authorizationServerMetadata() {
     token_endpoint_auth_methods_supported: auth,
     revocation_endpoint_auth_methods_supported: auth,
     code_challenge_methods_supported: ['S256'],
-    client_id_metadata_document_supported: true,
+    // Not offered: reading an app's own address from the server can fail (Claude's site turned the server away on
+    // 24 Nov 2026, "This app is not known to Metriq"). Apps register instead (always works); a known app that still
+    // sends its address is recognised without reading it (KNOWN_DOCUMENTS).
+    client_id_metadata_document_supported: false,
     authorization_response_iss_parameter_supported: true,
     service_documentation: `${base()}/app/connectors`,
   }
@@ -169,8 +173,8 @@ async function fetchClientDocument(url: string): Promise<{ name: string; redirec
   try { u = new URL(url) } catch { return null }
   if (u.protocol !== 'https:' || u.hash || u.username || u.pathname === '/' || !(await publicHost(u.hostname))) return null
   try {
-    const r = await fetch(u, { redirect: 'error', signal: AbortSignal.timeout(5000), headers: { Accept: 'application/json' } })
-    if (!r.ok) return null
+    const r = await fetch(u, { redirect: 'error', signal: AbortSignal.timeout(8000), headers: { Accept: 'application/json', 'User-Agent': 'Metriq/1.0 (MCP client metadata; +https://pulsetrack.online)' } })
+    if (!r.ok) { captureError({ source: 'JOB', message: `Could not read the app's metadata at ${u.host}${u.pathname}: HTTP ${r.status}`, route: 'oauth:client-metadata' }); return null }
     const raw = await r.text()
     if (raw.length > 32_768) return null
     const doc = JSON.parse(raw) as Record<string, unknown>
@@ -181,9 +185,18 @@ async function fetchClientDocument(url: string): Promise<{ name: string; redirec
     if (doc.token_endpoint_auth_method && doc.token_endpoint_auth_method !== 'none') return null
     const site = text(doc.client_uri, 300)
     return { name: text(doc.client_name, 80) || u.hostname, redirectUris: uris, website: /^https:\/\//.test(site) ? site : null }
-  } catch {
+  } catch (e) {
+    captureError({ source: 'JOB', message: `Could not read the app's metadata at ${u.host}${u.pathname}: ${(e as Error).message.slice(0, 200)}`, route: 'oauth:client-metadata' })
     return null
   }
+}
+
+/**
+ * Well-known apps' client ID metadata documents, exactly as they publish them (claude.ai checked 24 Nov 2026): used
+ * when the app sends its address as its id and reading it fails. Exact id, exact redirect addresses only.
+ */
+const KNOWN_DOCUMENTS: Record<string, { name: string; redirectUris: string[]; website: string | null }> = {
+  'https://claude.ai/oauth/mcp-oauth-client-metadata': { name: 'Claude', redirectUris: ['https://claude.ai/api/mcp/auth_callback'], website: 'https://claude.ai' },
 }
 
 /** The app behind a client_id: one that registered, or one whose id is its own address (read again once a day). */
@@ -192,7 +205,7 @@ export async function clientFor(clientId: string): Promise<Client | null> {
   const known = await prisma.oAuthClient.findUnique({ where: { clientId } })
   if (!clientId.startsWith('https://')) return known
   if (known && known.fetchedAt && Date.now() - known.fetchedAt.getTime() < 86_400_000) return known
-  const doc = await fetchClientDocument(clientId)
+  const doc = (await fetchClientDocument(clientId)) ?? KNOWN_DOCUMENTS[clientId] ?? null
   if (!doc) return known && known.fetchedAt && Date.now() - known.fetchedAt.getTime() < 7 * 86_400_000 ? known : null
   return prisma.oAuthClient.upsert({
     where: { clientId },
@@ -229,8 +242,12 @@ function resourceOk(r: string | undefined): string | null | false {
 }
 
 export async function checkAuthorize(q: AuthorizeAsk): Promise<Checked> {
-  const client = await clientFor(text(q.client_id, 500))
-  if (!client) return { ok: false, page: 'This app is not known to Metriq. Remove the connector in the app and add it again.' }
+  const id = text(q.client_id, 500)
+  const client = await clientFor(id)
+  if (!client) {
+    const from = /^https:\/\//.test(id) ? (() => { try { return ` (${new URL(id).host})` } catch { return '' } })() : ''
+    return { ok: false, page: `This app${from} is not known to Metriq. Remove the connector in the app and add it again.` }
+  }
   const asked = text(q.redirect_uri, 500)
   const redirectUri = asked || (client.redirectUris.length === 1 ? client.redirectUris[0] : '')
   if (!redirectUri || !redirectMatches(client.redirectUris, redirectUri)) return { ok: false, page: 'The app asked to be sent back to an address it did not register. Nothing was shared.' }

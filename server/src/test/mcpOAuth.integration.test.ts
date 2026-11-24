@@ -59,7 +59,7 @@ describe('Finding out how to sign in', () => {
     expect((await request(app).get('/.well-known/oauth-protected-resource').expect(200)).body.resource).toBe(prm.resource)
     for (const path of ['/.well-known/oauth-authorization-server', '/.well-known/openid-configuration']) {
       const md = (await request(app).get(path).expect(200)).body
-      expect(md).toMatchObject({ issuer: 'http://localhost:5173', authorization_endpoint: 'http://localhost:5173/app/oauth/authorize', token_endpoint: 'http://localhost:5173/api/oauth/token', registration_endpoint: 'http://localhost:5173/api/oauth/register', code_challenge_methods_supported: ['S256'], client_id_metadata_document_supported: true })
+      expect(md).toMatchObject({ issuer: 'http://localhost:5173', authorization_endpoint: 'http://localhost:5173/app/oauth/authorize', token_endpoint: 'http://localhost:5173/api/oauth/token', registration_endpoint: 'http://localhost:5173/api/oauth/register', code_challenge_methods_supported: ['S256'], client_id_metadata_document_supported: false })
     }
   })
 
@@ -256,6 +256,22 @@ describe('An app that names its own address as its id (client ID metadata docume
     expect(r.body).toMatchObject({ ok: true, app: { name: 'Docs App', backTo: 'docs-app.example', verified: true } })
     const bad = await request(app).post('/api/oauth/authorize/check').set(...auth(w.itadMember)).send({ response_type: 'code', client_id: id, redirect_uri: 'https://evil.example/cb', code_challenge: challenge, code_challenge_method: 'S256' }).expect(200)
     expect(bad.body.ok).toBe(false)
+    vi.restoreAllMocks()
+  })
+
+  it("Claude's own address works even when Metriq cannot read it (24 Nov 2026: \"This app is not known to Metriq\")", async () => {
+    const id = 'https://claude.ai/oauth/mcp-oauth-client-metadata'
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new Error('blocked') })
+    const { verifier, challenge } = pkce()
+    const ask = { response_type: 'code', client_id: id, redirect_uri: REDIRECT, state: 'cl', code_challenge: challenge, code_challenge_method: 'S256' }
+    const r = await request(app).post('/api/oauth/authorize/check').set(...auth(w.itadMember)).send(ask).expect(200)
+    expect(r.body).toMatchObject({ ok: true, app: { name: 'Claude', backTo: 'claude.ai', verified: true } })
+    // Only Claude's own callback, never another address.
+    expect((await request(app).post('/api/oauth/authorize/check').set(...auth(w.itadMember)).send({ ...ask, redirect_uri: 'https://evil.example/cb' }).expect(200)).body.ok).toBe(false)
+    // The whole sign-in, as Claude does it.
+    const back = new URL((await request(app).post('/api/oauth/authorize').set(...auth(w.itadMember)).send({ ...ask, allow: true }).expect(200)).body.redirect)
+    const t = (await request(app).post('/api/oauth/token').type('form').send(form({ grant_type: 'authorization_code', code: back.searchParams.get('code')!, code_verifier: verifier, client_id: id, redirect_uri: REDIRECT })).expect(200)).body
+    await mcp(t.access_token).expect(200)
     vi.restoreAllMocks()
   })
 
