@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { t, useLang } from '../../lib/i18n'
 import { onLive } from '../../lib/live'
 import { useNavigate } from 'react-router-dom'
 import { Bell, MessagesSquare, ChevronDown, Settings, LogOut, AlertTriangle, Clock, Info, CheckCircle2, ChevronRight, ArrowLeft, Menu, Building2, Check, BellRing, BellOff, ChevronUp } from 'lucide-react'
@@ -50,7 +49,6 @@ const BELL_TAB_LABEL: Record<NotifyCategory, string> = { tasks: 'Follow ups', im
 type BellTab = 'all' | NotifyCategory
 
 export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMenu }: TopBarProps) {
-  useLang()
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -275,7 +273,7 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
             <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-80 animate-scale-in overflow-hidden rounded-xl border border-line bg-card shadow-overlay">
               <div className="border-b border-line px-4 pb-2.5 pt-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-body-md font-semibold text-ink">{t('Notifications')}</span>
+                  <span className="text-body-md font-semibold text-ink">Notifications</span>
                   <div className="flex items-center gap-2">
                     {tabItems.some((n) => n.persistent) && (
                       <button onClick={markTabRead} className="text-body-sm font-medium text-primary-ink hover:underline">
@@ -378,12 +376,12 @@ export function TopBar({ user, range, custom, onRangeChange, onApplyCustom, onMe
               <div className="p-1">
                 <MenuItem icon={<Settings size={16} />} label="Settings" onClick={() => { setMenuOpen(false); navigate('/app/settings') }} />
                 <div className="flex items-center justify-between gap-2 px-3 py-1.5">
-                  <span className="text-body-md text-ink">{t('Theme')}</span>
+                  <span className="text-body-md text-ink">Theme</span>
                   <ThemeSwitch />
                 </div>
               </div>
               <div className="border-t border-line p-1">
-                <MenuItem icon={<LogOut size={16} />} label={t('Log out')} danger onClick={handleLogout} />
+                <MenuItem icon={<LogOut size={16} />} label="Log out" danger onClick={handleLogout} />
               </div>
             </div>
           )}

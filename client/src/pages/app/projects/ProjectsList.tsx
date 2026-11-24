@@ -130,13 +130,16 @@ export default function ProjectsList() {
   )
 }
 
+/** The colour tones (index.css), taken in turn like every other card in the app. */
+const TONES = ['tone-indigo', 'tone-sky', 'tone-emerald', 'tone-amber', 'tone-rose', 'tone-violet'] as const
+
 const pct = (p: ProjectListItem) => (p.totalCount ? Math.round((p.doneCount / p.totalCount) * 100) : 0)
 
 function Progress({ p, className }: { p: ProjectListItem; className?: string }) {
   const v = pct(p)
   return (
-    <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-slate-100', className)} role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100} aria-label={`${v}% done`}>
-      <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${v}%`, backgroundColor: p.color ?? 'rgb(var(--primary))' }} />
+    <div className={cn('h-2 w-full overflow-hidden rounded-full bg-ink/[0.07]', className)} role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100} aria-label={`${v}% done`}>
+      <div className="g-fill h-full rounded-full transition-[width] duration-500" style={{ width: `${v}%` }} />
     </div>
   )
 }
@@ -159,7 +162,7 @@ function ProjectCard({ p, pinned, onPin, onOpen, index }: { p: ProjectListItem; 
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen() }}
       style={{ animationDelay: `${Math.min(index, 8) * 25}ms`, animationFillMode: 'backwards' }}
-      className="group relative flex animate-rise-in cursor-pointer flex-col rounded-card border border-line bg-card p-4 shadow-card transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-line-strong hover:shadow-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      className={cn(TONES[index % TONES.length], 'g-wash g-ring g-bar g-lift group relative flex animate-rise-in cursor-pointer flex-col rounded-card border bg-card p-4 shadow-card focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40')}
     >
       <div className="flex items-start gap-3">
         <ProjectPicture project={p} size={36} className="rounded-lg" />
@@ -177,13 +180,13 @@ function ProjectCard({ p, pinned, onPin, onOpen, index }: { p: ProjectListItem; 
 
       <div className="mt-auto pt-4">
         <div className="mb-1.5 flex items-baseline justify-between text-[12px]">
-          <span className="text-ink-muted"><b className="font-semibold tabular-nums text-ink">{pct(p)}%</b> done</span>
+          <span className="text-ink-muted"><b className="g-text text-[15px] font-bold tabular-nums">{pct(p)}%</b> done</span>
           <span className="tabular-nums text-ink-faint">{p.doneCount}/{p.totalCount} tasks</span>
         </div>
         <Progress p={p} />
       </div>
 
-      <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-line pt-3">
+      <div className="mt-3.5 flex items-center justify-between gap-2 border-t border-ink/[0.07] pt-3">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px]">
           <Chip>{p.openCount} open</Chip>
           {p.myOpenCount > 0 && <Chip tone="primary">{p.myOpenCount} mine</Chip>}
@@ -197,7 +200,7 @@ function ProjectCard({ p, pinned, onPin, onOpen, index }: { p: ProjectListItem; 
 }
 
 function Chip({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'primary' | 'danger' | 'warning' }) {
-  const cls = { neutral: 'bg-slate-100 text-ink-muted', primary: 'bg-primary/10 text-primary-ink', danger: 'bg-danger/10 text-danger-ink', warning: 'bg-warning/[0.12] text-warning-ink' }[tone]
+  const cls = { neutral: 'bg-card/70 text-ink-muted ring-1 ring-line', primary: 'bg-primary/10 text-primary-ink', danger: 'bg-danger/10 text-danger-ink', warning: 'bg-warning/[0.12] text-warning-ink' }[tone]
   return <span className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-px font-medium tabular-nums', cls)}>{children}</span>
 }
 

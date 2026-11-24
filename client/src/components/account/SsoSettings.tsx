@@ -44,7 +44,7 @@ export function SsoSettings() {
     </div>
   )
   return (
-    <Card title={<span className="flex items-center gap-2"><KeyRound size={16} className="text-primary" />Single sign-on (SAML)</span>} subtitle="Your people sign in through your company's own login (Okta, Microsoft Entra ID, Google Workspace and others).">
+    <Card title={<span className="flex items-center gap-2"><KeyRound size={16} className="text-primary-ink" />Single sign-on (SAML)</span>} subtitle="Your people sign in through your company's own login (Okta, Microsoft Entra ID, Google Workspace and others).">
       <div className="space-y-5">
         <div className="space-y-2">
           <p className="text-body-sm font-semibold text-ink">1. In your identity provider, add Metriq as an app with these details</p>

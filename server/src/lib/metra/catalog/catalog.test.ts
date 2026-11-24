@@ -185,7 +185,7 @@ describe('the catalog', () => {
   it('a person only gets the data sets of the screens they can open', () => {
     const keys = (a: Asker) => readable(a).map((e) => e.key)
     // Everyone: their own calendar, attendance, numbers, notifications, QA scores, feedback, chats and the people list.
-    const personal = ['calendar.my', 'attendance.mine', 'people.directory', 'people.teams', 'people.top', 'notifications.mine', 'notifications.history', 'reports.mine', 'qa.mine', 'qa.evaluations', 'qa.evaluation', 'feedback.threads', 'wfh.requests', 'attendance.fixes', 'notes.mine', 'chat.list', 'projects.overview', 'projects.reviews', 'projects.ticket_history']
+    const personal = ['calendar.my', 'attendance.mine', 'people.directory', 'people.teams', 'people.top', 'notifications.mine', 'notifications.history', 'reports.mine', 'qa.mine', 'qa.evaluations', 'qa.evaluation', 'feedback.threads', 'wfh.requests', 'attendance.fixes', 'notes.mine', 'chat.list', 'projects.overview', 'projects.reviews', 'projects.ticket_history', 'work.people']
     expect(keys(itad).sort()).toEqual([...personal, 'itad.docs', 'itad.my_day'].sort())
     // A member never gets a team lead's data sets, another team's, the remote desktops, Lead Management or the admin lists.
     for (const k of keys(itad)) expect(k, k).not.toMatch(/^(attendance\.(now|team|register)|leave\.team|itad\.(team|trend)|leadgen\.|reports\.(missing|today|monthly)|todo\.team|targets\.|ecommerce\.|inventory\.|marketing\.|qa\.(team|scorecards?$|people)|people\.profile|leads\.|admin\.|daily_report\.entries|dialer\.)/)

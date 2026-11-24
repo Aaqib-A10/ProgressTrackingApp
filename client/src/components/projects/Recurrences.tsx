@@ -53,7 +53,7 @@ export function Recurrences({ projectKey, members }: { projectKey: string; membe
                   <p className="text-body-sm text-ink-muted">{when(r)}{r.assigneeIds.length ? `, for ${r.assigneeIds.map(name).join(', ')}` : ''}. Due {r.dueInDays === 0 ? 'the same day' : `${r.dueInDays} day${r.dueInDays === 1 ? '' : 's'} later`}. {r.active ? `Next: ${dayLabel(r.nextOn)}.` : 'Paused.'}</p>
                 </div>
                 <Toggle checked={r.active} onChange={(v) => api.patch(`/projects/recurrences/${r.id}`, { active: v }).then(load).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not change it.') }))} label={r.active ? 'On' : 'Paused'} />
-                <button type="button" onClick={() => { if (window.confirm(`Remove the repeating task "${r.title}"? The tasks it already made stay.`)) api.del(`/projects/recurrences/${r.id}`).then(load).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not remove it.') })) }} className="rounded-btn p-2 text-ink-faint hover:bg-slate-100 hover:text-danger" aria-label={`Remove ${r.title}`}><Trash2 size={16} /></button>
+                <button type="button" onClick={() => { if (window.confirm(`Remove the repeating task "${r.title}"? The tasks it already made stay.`)) api.del(`/projects/recurrences/${r.id}`).then(load).catch((e) => addToast({ type: 'error', message: errMsg(e, 'Could not remove it.') })) }} className="rounded-btn p-2 text-ink-faint hover:bg-slate-100 hover:text-danger-ink" aria-label={`Remove ${r.title}`}><Trash2 size={16} /></button>
               </li>
             ))}
           </ul>

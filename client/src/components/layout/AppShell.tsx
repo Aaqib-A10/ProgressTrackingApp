@@ -138,8 +138,8 @@ export function AppShell({ user, children }: AppShellProps) {
           {/* Sidebar — static on lg+, off-canvas drawer below lg */}
           <div
             className={cn(
-              'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out rtl:left-auto rtl:right-0 lg:static lg:z-auto lg:translate-x-0',
-              navOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full lg:translate-x-0 lg:rtl:translate-x-0',
+              'fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0',
+              navOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
               collapsed && 'lg:hidden',
             )}
           >

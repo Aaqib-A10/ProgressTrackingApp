@@ -1,5 +1,6 @@
 import type { Role } from '@prisma/client'
 import type { Asker } from '../access'
+import type { AskedPeriod } from './period'
 
 /**
  * The Metriq catalog (docs/metra/ROADMAP.md §2): one entry per screen or data set. Everything Metra knows about a
@@ -64,6 +65,8 @@ export interface Ctx {
    * not applied (renderTable). Unset (tests, the coverage gate): every condition is applied as given.
    */
   asked?: string
+  /** The period the person named in their own words ("last week"), worked out in code (period.ts). It replaces the dates the model sent. */
+  period?: AskedPeriod
 }
 
 /** What the model may pass to `metriq_data`. Every one is optional and cleaned before use. */
@@ -118,6 +121,12 @@ export interface Entry {
   table?: Table
   /** Advice printed after the data (what the numbers mean, where related data is). */
   tip?: string
+  /**
+   * The asker's own version of this data set (attendance.team -> attendance.mine). A question about the asker
+   * themself ("my attendance") is read from it, even when the model picked the team's (24 Nov 2026: a team lead's
+   * "my attendance last week" was answered with the whole team's table).
+   */
+  personal?: string
   /** A starter question shown under a new chat to the people whose own screen this is. */
   suggest?: string
   /** One line for the person's "Your day" brief from this data set's rows, or null when there is nothing to say. */

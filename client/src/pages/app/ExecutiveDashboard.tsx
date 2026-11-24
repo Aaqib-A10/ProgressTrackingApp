@@ -14,6 +14,7 @@ import { formatNumber, formatPercent, formatSignedPercent } from '../../lib/form
 import { getExecutiveDashboard, type ExecutiveDashboardData, type ExecBenchmarkRow, type DashKpi, type ExecSummary } from '../../lib/dashboardApi'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { TeamWork } from '../../components/dashboard/TeamWork'
 
 function Delta({ value }: { value: number }) {
   const pos = value >= 0
@@ -115,6 +116,9 @@ export default function ExecutiveDashboard() {
       )}
 
       {data && <ActionCenter summary={data.summary} />}
+
+      {/* What everyone is working on, across every department (projects, to-dos, the marketing board). */}
+      {data && <TeamWork />}
 
       {kinds && <GettingStarted />}
 
@@ -227,9 +231,9 @@ export default function ExecutiveDashboard() {
           </div>
 
           {/* Executive insights */}
-          <Card className="border-primary/20 bg-primary/5">
+          <Card className="tone-indigo g-wash g-ring">
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink">
+              <span className="g-fill g-glow mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
                 <Sparkles size={18} />
               </span>
               <div>

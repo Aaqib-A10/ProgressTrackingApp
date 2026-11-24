@@ -112,7 +112,6 @@ async function publicUser(userId: string) {
     emailCheckPending: user.emailCheckPending,
     // The colour theme this person picked (null: the company's).
     uiTheme: user.uiTheme,
-    language: user.language,
     // "My menu": the sidebar items this person hid for themselves.
     navHidden: user.navHidden,
     whatsapp: { number: user.whatsappNumber ?? '', on: user.whatsappOn, ready: whatsappReady() },
@@ -423,13 +422,6 @@ export async function saveNav(req: AuthedRequest, res: Response): Promise<void> 
   res.json({ navHidden })
 }
 
-/** PUT /api/auth/me/language { language }: the language of the person's menus (en, ur or ar). */
-export async function saveLanguage(req: AuthedRequest, res: Response): Promise<void> {
-  const parsed = z.object({ language: z.enum(['en', 'ur', 'ar']) }).safeParse(req.body)
-  if (!parsed.success) { res.status(400).json({ error: 'Pick English, Urdu or Arabic.' }); return }
-  await prisma.user.update({ where: { id: req.user!.id }, data: { language: parsed.data.language === 'en' ? null : parsed.data.language } })
-  res.json({ language: parsed.data.language })
-}
 
 /** PUT /api/auth/me/whatsapp { number, on }: my WhatsApp number, and whether my notifications go there too. */
 export async function saveWhatsapp(req: AuthedRequest, res: Response): Promise<void> {

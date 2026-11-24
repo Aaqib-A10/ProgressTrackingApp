@@ -1,5 +1,4 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { t } from '../../lib/i18n'
 import { Link, useNavigate, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { OAuthButtons } from '../../components/auth/OAuthButtons'
 import { SsoSignIn } from '../../components/auth/SsoSignIn'
@@ -149,7 +148,7 @@ export default function Login() {
           />
           <div className="mt-1.5 flex justify-end">
             <Link to="/forgot-password" className="text-body-sm font-medium text-primary-ink hover:underline">
-              {t('Forgot password?')}
+              Forgot password?
             </Link>
           </div>
         </div>
@@ -159,7 +158,7 @@ export default function Login() {
         )}
 
         <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting ? t('Logging in…') : t('Log In')}
+          {submitting ? 'Logging in…' : 'Log In'}
         </Button>
       </form>
 

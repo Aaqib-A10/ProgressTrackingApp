@@ -5,11 +5,12 @@ Every colour in the app comes from here. Screens never use a fixed colour; `npm 
 ## How it fits together
 
 - `roles.ts`: the colour **roles** every theme fills in: page, card, sidebar, text, border, accent, the five statuses (success, warning, error, info, highlight), 8 named hues, a grey scale and 6 chart colours.
-- `themes/`: the themes. `metriq.ts` is the original look (the default). The others come from Meta's Astryx themes (MIT, `palettes/astryx.generated.ts`), turned into Metriq roles by `palettes/fromAstryx.ts`. Astryx's y2k theme is left out.
+- `themes/`: the theme. `metriq.ts` is Metriq's look, in light and dark. The role names follow Meta's Astryx design system (MIT); the Astryx colour themes that were offered until 24 Nov 2026 were taken out.
 - `build.ts`: turns a theme into CSS. It also makes every theme readable (WCAG AA). Text reaches 4.5:1 on what it sits on, button text reads on the button and on its hover colour, and pale surfaces stay pale.
 - `theme.css`: **generated**. Run `npm run theme:build -w client` after changing a theme; never edit it by hand.
 - `brand.ts`: a company's own brand colour in place of the accent (buttons, links, selection, focus), worked out per theme so it always reads.
-- `lib/theme.ts`: what shows. Light or dark is per device. The colour theme is the person's own pick (Settings), else their company's (Company Settings → Look), else Metriq. The public website always shows Metriq.
+- `lib/theme.ts`: what shows. Light or dark is per device (Settings → Appearance). There is one theme, Metriq (the six extra colour themes were taken out on 24 Nov 2026); a company can still set its brand colour (Company Settings → Look). The public website always shows Metriq.
+- `index.css` (end of the file): the gradient tones (`tone-*`) and their pieces (`g-fill`, `g-wash`, `g-ring`, `g-bar`, `g-glow`, `g-text`, `g-lift`), made only from the theme's own colours. Number cards take the tones in turn by their place; other cards name one.
 
 ## Using colours in a screen
 

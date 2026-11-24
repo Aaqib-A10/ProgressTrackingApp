@@ -44,8 +44,6 @@ export interface CurrentUser {
   emailCheckPending?: boolean
   /** The colour theme this person picked (src/theme/themes); null: the company's (company.theme). */
   uiTheme?: string | null
-  /** The person's language for Metriq's menus (lib/i18n): en, ur or ar. */
-  language?: string | null
   /** "My menu": sidebar items this person hid for themselves (a path, "g:<section>" or "s:<section> › <sub>"). */
   navHidden?: string[]
   /** WhatsApp notifications: the person's number, whether they turned it on, and whether this Metriq can send at all. */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { PieChart, Sparkles } from 'lucide-react'
+import { AlertTriangle, BarChart3, CheckCircle2, FileText, Heart, PieChart, Phone, PhoneCall, Share2, ShoppingBag, Sparkles, Trophy, Users, type LucideIcon } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatCard } from '../../components/StatCard'
 import { SubmissionBadge } from '../../components/ui/Badge'
@@ -15,6 +15,15 @@ import { getTeamDashboard, type TeamDashboard, type DashSubmission } from '../..
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 import { DEPARTMENT_LABEL } from '../../lib/departments'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { TeamWork } from '../../components/dashboard/TeamWork'
+
+/** An icon for a team KPI by its words (the department dashboards send labels, not icons). */
+const KPI_ICONS: [RegExp, LucideIcon][] = [
+  [/overdue|late|missed|fail/i, AlertTriangle], [/blog|content|article|post(?!s published)/i, FileText], [/social|share/i, Share2],
+  [/connect/i, PhoneCall], [/dial|call/i, Phone], [/interest/i, Heart], [/closed|won|deal|achiev/i, Trophy],
+  [/lead|people|member|agent|staff/i, Users], [/listing|order|stock|item|product/i, ShoppingBag], [/task|done|publish|complete/i, CheckCircle2],
+]
+const kpiIcon = (label: string) => { const I = KPI_ICONS.find(([re]) => re.test(label))?.[1] ?? BarChart3; return <I /> }
 
 const RANGE_LABEL: Record<string, string> = {
   today: 'Today',
@@ -81,9 +90,12 @@ export default function TeamLeadDashboard() {
           {/* KPI cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {data.kpis.map((k) => (
-              <StatCard key={k.label} label={k.label} value={fmt(k)} delta={k.now ? undefined : k.delta} caption={k.caption} />
+              <StatCard key={k.label} label={k.label} value={fmt(k)} delta={k.now ? undefined : k.delta} caption={k.caption} icon={kpiIcon(k.label)} />
             ))}
           </div>
+
+          {/* What each person is actually doing: projects, to-dos and the marketing board, whatever their role. */}
+          <TeamWork />
 
           {/* Trend + breakdown */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -107,9 +119,9 @@ export default function TeamLeadDashboard() {
           </div>
 
           {/* Improvement summary */}
-          <Card className="border-primary/20 bg-primary/5">
+          <Card className="tone-indigo g-wash g-ring">
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-btn bg-primary/10 text-primary-ink">
+              <span className="g-fill g-glow mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
                 <Sparkles size={18} />
               </span>
               <div>

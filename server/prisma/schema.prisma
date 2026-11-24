@@ -203,8 +203,6 @@ model User {
   /// Menu items this person took off their own sidebar ("My menu"): a screen's path, "g:<section>" or "s:<section> › <sub>".
   /// Only the sidebar: the screens stay reachable through search and links, and access rules are unchanged.
   navHidden         String[]     @default([])
-  /// The person's language for Metriq's menus: en, ur or ar (null: English).
-  language          String?
   /// WhatsApp number (with country code) and whether the person wants their notifications there too.
   whatsappNumber    String?
   whatsappOn        Boolean      @default(false)

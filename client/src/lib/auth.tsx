@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { isLang, setLang } from './i18n'
 import { api, setShownUser, setUnauthorizedHandler } from './api'
 import { disablePush } from './push'
 import { isNativeApp } from '../mobile/native'
@@ -55,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   // The account on screen is told to the API client at once: it checks every answer against it (lib/api.ts).
-  const setUser = useCallback((u: CurrentUser | null) => { if (u && isLang(u.language)) setLang(u.language); setShownUser(u?.id ?? null); repZoneNow = u?.company?.timeZone || 'Asia/Karachi'; setCompanyDepartmentNames(!u || inHomeCompany(u) ? null : u.company?.departmentNames ?? {}); setUserState(u) }, [])
+  const setUser = useCallback((u: CurrentUser | null) => { setShownUser(u?.id ?? null); repZoneNow = u?.company?.timeZone || 'Asia/Karachi'; setCompanyDepartmentNames(!u || inHomeCompany(u) ? null : u.company?.departmentNames ?? {}); setUserState(u) }, [])
 
   const refresh = useCallback(async () => {
     try {

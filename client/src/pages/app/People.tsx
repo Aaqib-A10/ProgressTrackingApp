@@ -65,7 +65,7 @@ export default function People() {
               <tbody className="divide-y divide-line">
                 {shown.map((p) => (
                   <tr key={p.id} onClick={() => setOpenId(p.id)} className="cursor-pointer hover:bg-slate-50">
-                    <td className="px-4 py-2.5"><button type="button" className="text-left font-medium text-ink hover:text-primary">{p.name}</button><p className="text-body-sm text-ink-muted">{p.email}</p></td>
+                    <td className="px-4 py-2.5"><button type="button" className="text-left font-medium text-ink hover:text-primary-ink">{p.name}</button><p className="text-body-sm text-ink-muted">{p.email}</p></td>
                     <td className="px-4 py-2.5 text-ink">{p.jobTitle ?? <span className="text-ink-faint">{ROLE[p.role] ?? p.role}</span>}</td>
                     <td className="px-4 py-2.5 text-ink-muted">{p.department ?? ''}</td>
                     <td className="px-4 py-2.5 text-ink-muted">{p.manager?.name ?? ''}</td>

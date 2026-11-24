@@ -66,14 +66,14 @@ export const MetraChat = forwardRef<MetraChatHandle, MetraChatProps>(function Me
           <div className={cn('mx-auto flex max-w-xl flex-col items-center gap-4 text-center', compact ? 'pt-2' : 'pt-6')}>
             <MetraMark size={compact ? 40 : 52} />
             <div>
-              <p className="text-headline-md text-ink">{firstName ? `Hi ${firstName}, I'm Metra.` : "Hi, I'm Metra."}</p>
+              <p className="tone-indigo text-headline-md text-ink">{firstName ? `Hi ${firstName}, I'm ` : "Hi, I'm "}<span className="g-text font-bold">Metra</span>.</p>
               <p className="mt-1 text-body-md text-ink-muted">Ask about your leads, tasks, notes, meetings and team logs. I answer only from what you can see in Metriq, and show where it came from.</p>
             </div>
             <MetraInsights onAsk={ask} focusId={focusInsight} onNavigate={onNavigate} compact={compact} />
             {llm && suggestions.length > 0 && (
               <div className="flex w-full flex-wrap justify-center gap-2" aria-label="Suggested questions">
                 {suggestions.map((s) => (
-                  <button key={s} type="button" onClick={() => ask(s)} className="rounded-full border border-line bg-card px-3 py-1.5 text-left text-body-sm text-ink shadow-xs transition-colors hover:border-primary/40 hover:bg-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                  <button key={s} type="button" onClick={() => ask(s)} className="tone-indigo g-wash g-ring g-lift rounded-full border bg-card px-3 py-1.5 text-left text-body-sm text-ink shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
                     {s}
                   </button>
                 ))}
@@ -116,7 +116,7 @@ function UserBubble({ text, onEdit, disabled }: { text: string; onEdit: (t: stri
   }
   return (
     <div className="group flex flex-col items-end gap-1">
-      <p className="max-w-[85%] cursor-text select-text whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-body-md text-primary-on selection:bg-white selection:text-primary-ink">{text}</p>
+      <p className="max-w-[85%] cursor-text select-text whitespace-pre-wrap break-words tone-indigo g-fill g-glow rounded-2xl rounded-br-md px-3.5 py-2 text-body-md selection:bg-white selection:text-primary-ink">{text}</p>
       <div className="flex gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
         <IconBtn label="Edit and ask again" onClick={() => onEdit(text)} disabled={disabled}><Pencil size={14} /></IconBtn>
         <IconBtn label={copied ? 'Copied' : 'Copy question'} pressed={copied} tone="ok" onClick={() => void copy()}>{copied ? <Check size={14} strokeWidth={2.6} /> : <Copy size={14} />}</IconBtn>
@@ -144,8 +144,9 @@ function Answer({ m, chat, onNavigate, selected, onSelect }: { m: ChatMessage; c
       className={cn('flex gap-2.5', onSelect && 'cursor-default')}
       onClick={onSelect && !m.pending ? () => onSelect(m.key) : undefined}
     >
-      <MetraMark size={24} className="mt-0.5" />
-      <div className={cn('min-w-0 flex-1', selected && 'rounded-card')}>
+      <MetraMark size={26} className="mt-0.5" />
+      {/* Metra's answer sits in its own card with a soft wash of Metra's colours. */}
+      <div className={cn('tone-indigo g-wash min-w-0 flex-1 rounded-2xl rounded-tl-md border border-line bg-card px-4 py-3 shadow-card', selected && 'ring-2 ring-primary/30')}>
         {thinking && (m.queue ? <QueuePill queue={m.queue} /> : (
           <p role="status" aria-live="polite" className="flex items-center gap-2 py-0.5 text-body-md text-ink-muted">
             <Loader2 size={14} className="animate-spin" />{(m.statusText || 'Thinking').replace(/[.…]+$/, '')}…
@@ -285,7 +286,7 @@ const Composer = forwardRef<ComposerHandle, { disabled: boolean; streaming: bool
       onSubmit={(e) => { e.preventDefault(); submit() }}
       className={cn('shrink-0 border-t border-line bg-card', compact ? 'p-2.5 max-md:pb-[calc(0.625rem+env(safe-area-inset-bottom))]' : 'p-3')}
     >
-      <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-card border border-line bg-bg px-2.5 py-1.5 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10">
+      <div className="tone-indigo g-ring mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card px-2.5 py-1.5 shadow-card focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10">
         <textarea
           ref={area}
           rows={1}

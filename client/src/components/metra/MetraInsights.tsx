@@ -62,7 +62,7 @@ export function MetraInsights({ onAsk, focusId, onNavigate, compact }: { onAsk: 
       {weekly && (
         <section aria-label="Your week" className={cn('rounded-card border bg-card p-3.5 shadow-card', weekly.id === focusId ? 'border-primary/40 ring-2 ring-primary/15' : 'border-line')}>
           <div className="flex items-start gap-2">
-            <CalendarRange size={16} className="mt-0.5 shrink-0 text-primary" />
+            <CalendarRange size={16} className="mt-0.5 shrink-0 text-primary-ink" />
             <p className="min-w-0 flex-1 text-body-md font-semibold text-ink">{weekly.title || 'Your week'}</p>
             <button type="button" disabled={busy === weekly.id} onClick={() => void setState(weekly.id, 'DISMISSED')} className="rounded p-0.5 text-ink-faint hover:bg-slate-100 hover:text-ink disabled:opacity-50" aria-label="Dismiss the weekly summary" title="Dismiss"><X size={15} /></button>
           </div>

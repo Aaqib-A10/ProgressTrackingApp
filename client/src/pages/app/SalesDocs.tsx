@@ -37,9 +37,9 @@ function printDoc(d: Doc, from: string) {
   const m = (n: number) => money(n, d.currency)
   const rows = d.lines.map((l) => `<tr><td>${esc(l.description)}</td><td class="n">${l.quantity}</td><td class="n">${m(l.unitPrice)}</td><td class="n">${m(l.amount ?? l.quantity * l.unitPrice)}</td></tr>`).join('')
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(WORD[d.kind])} ${esc(d.number)}</title><style>
-    body{font-family:Inter,Arial,sans-serif;color:#0F172A;margin:40px;font-size:13px}h1{font-size:22px;margin:0}.top{display:flex;justify-content:space-between;gap:24px;margin-bottom:24px}
-    .muted{color:#64748B}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:8px;border-bottom:1px solid #E2E8F0;text-align:left;vertical-align:top}.n{text-align:right;white-space:nowrap}
-    .sum{margin-top:16px;margin-left:auto;width:280px}.sum div{display:flex;justify-content:space-between;padding:4px 0}.sum .t{font-weight:700;border-top:2px solid #0F172A;margin-top:4px;padding-top:8px;font-size:15px}pre{white-space:pre-wrap;font-family:inherit}
+    body{font-family:Inter,Arial,sans-serif;color:black;margin:40px;font-size:13px}h1{font-size:22px;margin:0}.top{display:flex;justify-content:space-between;gap:24px;margin-bottom:24px}
+    .muted{color:dimgray}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:8px;border-bottom:1px solid gainsboro;text-align:left;vertical-align:top}.n{text-align:right;white-space:nowrap}
+    .sum{margin-top:16px;margin-left:auto;width:280px}.sum div{display:flex;justify-content:space-between;padding:4px 0}.sum .t{font-weight:700;border-top:2px solid black;margin-top:4px;padding-top:8px;font-size:15px}pre{white-space:pre-wrap;font-family:inherit}
   </style></head><body>
     <div class="top"><div><h1>${esc(WORD[d.kind])} ${esc(d.number)}</h1><p class="muted">From ${esc(from)}</p></div><div style="text-align:right"><p>Date: ${esc(dayLabel(d.issueDate))}</p>${d.dueDate ? `<p>${d.kind === 'INVOICE' ? 'Due' : 'Valid until'}: ${esc(dayLabel(d.dueDate))}</p>` : ''}${d.status === 'PAID' ? '<p><strong>PAID</strong></p>' : ''}</div></div>
     <p><strong>${esc(d.customerName)}</strong></p>${d.customerAddress ? `<pre class="muted">${esc(d.customerAddress)}</pre>` : ''}
@@ -216,7 +216,7 @@ function Editor({ kind, doc, onClose, onSaved }: { kind: Kind; doc: Doc | null; 
                 <input aria-label={`Line ${i + 1}: quantity`} type="number" min="0" step="any" value={l.quantity} onChange={(e) => line(i, 'quantity', e.target.value)} className={`${inputCls} w-20`} />
                 <input aria-label={`Line ${i + 1}: price each`} type="number" min="0" step="0.01" value={l.unitPrice} onChange={(e) => line(i, 'unitPrice', e.target.value)} placeholder="Price" className={`${inputCls} w-28`} />
                 <span className="w-28 text-right text-body-md tabular-nums text-ink">{money(round((Number(l.quantity) || 0) * (Number(l.unitPrice) || 0)), f.currency || 'USD')}</span>
-                <button type="button" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} className="rounded-btn p-2 text-ink-faint hover:bg-slate-100 hover:text-danger disabled:opacity-40" aria-label={`Remove line ${i + 1}`}><Trash2 size={15} /></button>
+                <button type="button" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} className="rounded-btn p-2 text-ink-faint hover:bg-slate-100 hover:text-danger-ink disabled:opacity-40" aria-label={`Remove line ${i + 1}`}><Trash2 size={15} /></button>
               </div>
             ))}
           </div>

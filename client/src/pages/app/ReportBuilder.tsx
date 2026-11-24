@@ -87,9 +87,9 @@ export default function ReportBuilder() {
           <div className="flex flex-wrap gap-2">
             {saved.map((s) => (
               <span key={s.id} className="inline-flex items-center gap-1 rounded-btn border border-line bg-card pl-3 pr-1 text-body-sm">
-                <button type="button" className="py-1.5 font-medium text-ink hover:text-primary" onClick={() => { setSpec({ source: s.spec.source, measure: s.spec.measure, groupBy: s.spec.groupBy, range: s.spec.range }); if (s.spec.chart) setChart(s.spec.chart) }}>{s.name}</button>
+                <button type="button" className="py-1.5 font-medium text-ink hover:text-primary-ink" onClick={() => { setSpec({ source: s.spec.source, measure: s.spec.measure, groupBy: s.spec.groupBy, range: s.spec.range }); if (s.spec.chart) setChart(s.spec.chart) }}>{s.name}</button>
                 {!s.mine && <span className="text-ink-faint">by {s.owner}</span>}
-                {s.mine && <button type="button" aria-label={`Delete the saved report ${s.name}`} className="rounded p-1 text-ink-faint hover:text-danger" onClick={() => { if (window.confirm(`Delete the saved report "${s.name}"?`)) api.del(`/report-builder/saved/${s.id}`).then(loadSaved).catch(() => addToast({ type: 'error', message: 'Could not delete it.' })) }}><Trash2 size={13} /></button>}
+                {s.mine && <button type="button" aria-label={`Delete the saved report ${s.name}`} className="rounded p-1 text-ink-faint hover:text-danger-ink" onClick={() => { if (window.confirm(`Delete the saved report "${s.name}"?`)) api.del(`/report-builder/saved/${s.id}`).then(loadSaved).catch(() => addToast({ type: 'error', message: 'Could not delete it.' })) }}><Trash2 size={13} /></button>}
               </span>
             ))}
           </div>

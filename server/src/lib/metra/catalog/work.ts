@@ -30,7 +30,34 @@ const EVALS: Table = {
   },
 }
 
+/** The dashboard's "What everyone is working on" (server/src/lib/teamWork.ts). */
+interface WorkItem { kind: string; title: string; where: string | null }
+interface PersonWork { id: string; name: string; department: string | null; doing: WorkItem[]; done: { total: number; tasks: number; todos: number; marketing: number; recent: WorkItem[] }; open: number; overdue: number; minutes: number; lastActive: string | null }
+const items = (l: WorkItem[]) => l.map((i) => `${i.title}${i.where ? ` (${i.where})` : ''}`).join('; ')
+
 export const WORK: Entry[] = [
+  {
+    key: 'work.people', label: 'What everyone is working on', area: 'Dashboard', app: '/app/dashboard',
+    about: "Each person's real work, whatever their department: what they have in progress now (project tasks, to-dos, marketing items) and what they finished in the period, with open and overdue task counts and time logged. A member reads themself; a team lead the team; a Super Admin everyone.",
+    says: ['what is everyone working on', 'what is the team working on', 'who is working on what', 'what is he working on', 'what is she working on', 'what are they working on', 'what am i working on', 'what did i finish', 'what did i do this week', 'what did the team finish', 'who finished the most', 'who did the most work', 'work done this week', 'kaun kya kar raha hai', 'kya kar raha hai', 'kis pe kaam'],
+    who: everyone, takes: ['range'],
+    blocks: [], apis: ['/api/dashboard/work'], models: ['PmTask', 'WorkLogEntry', 'MarketingTask', 'PmTimeEntry'],
+    load: reader<{ range: { startDate: string; endDate: string }; scope: string; people: PersonWork[] }>('/api/dashboard/work', {
+      query: (a, c) => period(a, c, 'week'),
+      rows: (b) => b.people.map((p) => ({ id: p.id, name: p.name, department: p.department, finished: p.done.total, tasksDone: p.done.tasks, todosDone: p.done.todos, marketingDone: p.done.marketing, doing: items(p.doing), doingCount: p.doing.length, recent: items(p.done.recent), open: p.open, overdue: p.overdue, hours: p.minutes ? Math.round((p.minutes / 60) * 10) / 10 : 0, lastActive: p.lastActive })),
+      head: (b) => [`Period read: ${b.range.startDate} to ${b.range.endDate}. ${b.scope === 'me' ? 'Only the asker themself.' : b.scope === 'team' ? "The asker's team." : 'Everyone in the company.'} "Finished" counts project tasks completed, to-dos done and marketing items published in the period; "in progress" is right now.`],
+      dated: true,
+    }),
+    table: {
+      unit: ['person', 'people'],
+      columns: [{ key: 'id', label: 'id', hidden: true }, { key: 'name', label: 'person' }, { key: 'department', label: 'team' }, { key: 'finished', label: 'finished', kind: 'number' }, { key: 'tasksDone', label: 'project tasks done', kind: 'number' }, { key: 'todosDone', label: 'to-dos done', kind: 'number' }, { key: 'marketingDone', label: 'marketing published', kind: 'number' }, { key: 'doing', label: 'working on now', kind: 'long' }, { key: 'doingCount', label: 'in progress', kind: 'number' }, { key: 'recent', label: 'finished lately', kind: 'long' }, { key: 'open', label: 'open tasks', kind: 'number' }, { key: 'overdue', label: 'overdue', kind: 'number' }, { key: 'hours', label: 'hours logged', kind: 'number' }, { key: 'lastActive', label: 'last active', kind: 'date' }],
+      people: ['name'], mine: 'id', groups: ['department'], sums: ['finished', 'open', 'overdue'],
+      flags: {
+        overdue: { label: 'with overdue tasks', says: ['overdue', 'late tasks', 'behind'], test: (r) => Number(r.overdue) > 0 },
+        idle: { label: 'with nothing in progress and nothing finished', says: ['idle', 'doing nothing', 'not working', 'free', 'no work'], test: (r) => !Number(r.doingCount) && !Number(r.finished) },
+      },
+    },
+  },
   {
     key: 'qa.mine', label: 'My QA Scores', area: 'Quality', app: '/app/qa/my',
     about: "The asker's own call-quality evaluations: the score and band of each, pass or fail, whether coaching is needed, who evaluated it and when.",
@@ -49,7 +76,7 @@ export const WORK: Entry[] = [
     table: EVALS,
   },
   {
-    key: 'qa.evaluations', label: 'QA evaluations', area: 'Quality', app: '/app/qa/evaluations',
+    key: 'qa.evaluations', personal: 'qa.mine', label: 'QA evaluations', area: 'Quality', app: '/app/qa/evaluations',
     about: 'The call-quality evaluations the asker may see (a QA person or team lead: their agents\'): agent, score, band, pass or fail, coaching needed, scorecard, evaluator and date. The newest 100.',
     says: ['qa evaluations', 'evaluations', 'qa scores', 'quality scores', 'who failed qa', 'qa results', 'call quality', 'agents needing coaching', 'lowest qa score', 'highest qa score', 'qa score of'],
     who: everyone, // the app gives each person the evaluations they may see (an agent: none but their own screen's)
@@ -61,7 +88,7 @@ export const WORK: Entry[] = [
     table: EVALS,
   },
   {
-    key: 'qa.team', label: 'QA team dashboard', area: 'Quality', app: '/app/qa/analytics',
+    key: 'qa.team', personal: 'qa.mine', label: 'QA team dashboard', area: 'Quality', app: '/app/qa/analytics',
     about: 'For QA people and team leads, over a period: evaluations done, the average score, the pass rate, how many need coaching, the top performer, and each agent with their average, number of evaluations and passes and fails.',
     says: ['qa dashboard', 'qa average', 'average qa score', 'pass rate', 'qa this month', 'top performer', 'qa by agent', 'team qa', 'quality dashboard'],
     who: qaTeam, takes: ['range'],
@@ -108,7 +135,7 @@ export const WORK: Entry[] = [
     tip: '"me" narrows to feedback given TO the asker.',
   },
   {
-    key: 'todo.team', label: "The team's to-dos", area: 'My To-Do', app: '/app/todo',
+    key: 'todo.team', personal: 'todo.mine', label: "The team's to-dos", area: 'My To-Do', app: '/app/todo',
     about: "For team leads: each person's to-do list for a day (today unless a date is given): what they planned, what is done, in progress or blocked, and the hours and quantities they logged.",
     says: ['team to-dos', 'team todo', 'team to do', 'what is my team working on', 'what did my team do', 'what did my team log', 'who finished', 'blocked', 'who is blocked', 'team plan today', 'team ne kya kiya'],
     who: lead, pin: lead, takes: ['date'],

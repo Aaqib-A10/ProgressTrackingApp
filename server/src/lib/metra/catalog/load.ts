@@ -31,10 +31,24 @@ export const ymd = (v: unknown): string => (typeof v === 'string' && YMD.test(v.
  */
 export function period(a: Args, ctx: Ctx, fallback = 'month'): { query: Record<string, string>; notes: string[] } {
   const from = ymd(a.from), to = ymd(a.to)
+  // A period longer than a day sent together with one date (range "week" and today's date): the period wins. On
+  // 24 Nov 2026 that pair was read as the one day and answered as "last week".
+  const longer = typeof a.range === 'string' && a.range.trim() && !/^(today|day|daily|custom)$/i.test(a.range.trim())
   // One day asked for ("on 12 November"): that day alone.
-  if (!from && !to && ymd(a.date)) return { query: { range: 'custom', start: ymd(a.date), end: ymd(a.date) }, notes: [] }
+  if (!from && !to && ymd(a.date) && !longer) return { query: { range: 'custom', start: ymd(a.date), end: ymd(a.date) }, notes: [] }
+  // A week or month with a date in it: that date's week or month (Monday to Sunday), up to today.
+  const unit = longer ? (/week|7/i.test(String(a.range)) ? 'week' : /month/i.test(String(a.range)) ? 'month' : null) : null
+  if (!from && !to && ymd(a.date) && unit) {
+    const d = DateTime.fromISO(ymd(a.date), { zone: ctx.zone })
+    const start = d.startOf(unit).toISODate()!, last = d.endOf(unit).toISODate()!
+    const end = last > ctx.today && start <= ctx.today ? ctx.today : last
+    return { query: { range: 'custom', start, end }, notes: [`The ${unit} of ${ymd(a.date)} was read: ${start} to ${end}.`] }
+  }
   if (from || to) {
-    const start = from || to, end = to || (from > ctx.today ? from : ctx.today)
+    const start = from || to
+    let end = to || (from > ctx.today ? from : ctx.today)
+    // "This week" / "this month" are counted up to today: the days still ahead have nothing yet.
+    if (ctx.period?.current && end > ctx.today && start <= ctx.today) end = ctx.today
     return { query: { range: 'custom', start: start <= end ? start : end, end: start <= end ? end : start }, notes: [] }
   }
   const query: Record<string, string> = { range: (typeof a.range === 'string' && a.range.trim()) || fallback }
@@ -51,10 +65,11 @@ export function span(a: Args, ctx: Ctx, days: number, back = 0): { from: string;
   else if (!to) to = DateTime.fromISO(from, { zone: ctx.zone }).plus({ days }).toISODate()!
   else if (!from) from = today.toISODate()! <= to ? today.toISODate()! : to
   if (from > to) [from, to] = [to, from]
-  // One day with a week asked for (range "week", or "next 7 days" / "this week" in the person's words): the model put
-  // today in `date` and the week was lost ("next 7 days" answered with today only; metra:check, 23 Nov 2026).
-  const weekly = /^(week|7 ?days?|next week|this week)$/i.test(String(a.range ?? '').trim()) || /\b(next|coming) (7|seven) days\b|\b(this|next|coming) week\b|\bhafte\b|\b7 din\b/i.test(ctx.asked ?? '')
-  if (from === to && weekly && days >= 7) to = DateTime.fromISO(from, { zone: ctx.zone }).plus({ days: 6 }).toISODate()!
+  // One day with range "week" (the model put today in `date` and the week was lost: "next 7 days" answered with today
+  // only; metra:check, 23 Nov 2026). Periods in the person's own words ("this week", "last week") are set before this
+  // by period.ts, so only the model's own range is looked at here.
+  const weekly = /^(week|7 ?days?|next week|this week)$/i.test(String(a.range ?? '').trim())
+  if (from === to && weekly && days >= 7 && !ctx.period) to = DateTime.fromISO(from, { zone: ctx.zone }).plus({ days: 6 }).toISODate()!
   return { from, to, asked }
 }
 

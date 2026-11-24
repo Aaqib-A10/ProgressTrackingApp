@@ -81,7 +81,7 @@ export function MetraPanel({ open, onClose, status, firstName, question }: { ope
         )}
       >
         {phone && <span aria-hidden className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong" />}
-        <header className="flex shrink-0 items-center gap-1 border-b border-line px-2.5 py-2">
+        <header className="tone-indigo g-wash g-bar flex shrink-0 items-center gap-1 border-b border-line px-2.5 py-2">
           {view !== 'chat' ? (
             <button type="button" onClick={() => setView('chat')} className="rounded-btn p-1.5 text-ink-muted hover:bg-slate-100 hover:text-ink" aria-label="Back to the chat"><ArrowLeft size={17} /></button>
           ) : <MetraMark size={26} className="ml-1" />}

@@ -257,7 +257,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
             <div className="flex flex-wrap items-end gap-2">
               <div className="w-40"><label className={labelCls}>Kind</label><select value={r.kind} onChange={(e) => change(i, { kind: e.target.value as Kind })} className={inputCls}>{(Object.keys(KIND_LABEL) as Kind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></div>
               <div className="w-40"><label className={labelCls}>From amount</label><input type="number" min="0" placeholder="Any" value={r.minAmount ?? ''} onChange={(e) => change(i, { minAmount: e.target.value === '' ? null : Number(e.target.value) })} className={inputCls} /></div>
-              <button type="button" onClick={() => setRules((rs) => rs!.filter((_, j) => j !== i))} className="ml-auto rounded-btn p-2 text-ink-faint hover:bg-slate-100 hover:text-danger" aria-label="Remove the rule"><Trash2 size={16} /></button>
+              <button type="button" onClick={() => setRules((rs) => rs!.filter((_, j) => j !== i))} className="ml-auto rounded-btn p-2 text-ink-faint hover:bg-slate-100 hover:text-danger-ink" aria-label="Remove the rule"><Trash2 size={16} /></button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-body-sm text-ink-muted">Approved by, in order:</span>
@@ -268,7 +268,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
                     <option value="ADMIN">An admin</option>
                     {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
-                  {r.chain.length > 1 && <button type="button" onClick={() => change(i, { chain: r.chain.filter((_, y) => y !== k) })} className="rounded p-1 text-ink-faint hover:text-danger" aria-label="Remove this approver"><X size={14} /></button>}
+                  {r.chain.length > 1 && <button type="button" onClick={() => change(i, { chain: r.chain.filter((_, y) => y !== k) })} className="rounded p-1 text-ink-faint hover:text-danger-ink" aria-label="Remove this approver"><X size={14} /></button>}
                 </span>
               ))}
               {r.chain.length < 5 && <Button size="sm" variant="ghost" onClick={() => change(i, { chain: [...r.chain, 'ADMIN'] })}>Add approver</Button>}

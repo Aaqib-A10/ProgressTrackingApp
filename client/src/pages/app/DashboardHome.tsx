@@ -12,6 +12,7 @@ import { DEPARTMENT_LABEL } from '../../lib/departments'
 import { EmployeeOfMonthCard } from '../../components/EmployeeOfMonthCard'
 import { AssignedTasksCard } from '../../components/AssignedTasksCard'
 import { TodoList } from '../../components/TodoList'
+import { TeamWork } from '../../components/dashboard/TeamWork'
 
 /** Where this user logs their daily work — Marketing routes to its sub-department page. */
 export function logPath(user: CurrentUser): string | null {
@@ -83,6 +84,9 @@ export default function DashboardHome() {
         )}
       </div>
 
+      {/* Everything I am working on and finished, from projects, to-dos and the marketing board. */}
+      <TeamWork />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <AssignedTasksCard />
         <Card title="My To-Do" subtitle="Private to you">
@@ -150,9 +154,9 @@ export function QuickAction({ to, icon, title, desc }: { to: string; icon: React
   return (
     <Link
       to={to}
-      className="group flex items-start gap-3.5 rounded-card border border-line bg-card p-4 shadow-xs transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised"
+      className="stat-card g-wash g-ring g-bar g-lift group flex items-start gap-3.5 rounded-card border bg-card p-4 shadow-card"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary-ink">{icon}</div>
+      <div className="g-fill g-glow flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{icon}</div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-[14px] font-semibold text-ink">{title}</h3>

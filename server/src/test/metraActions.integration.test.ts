@@ -147,6 +147,14 @@ describe('"Your day" brief', () => {
     expect(await prisma.aiInsight.count({ where: { userId: w.inventoryMember.id, kind: 'BRIEF' } })).toBe(1)
   })
 
+  it('an older day\'s brief no longer shows (24 Nov 2026: "Your day, Thursday 19 November" five days later)', async () => {
+    const old = await prisma.aiInsight.create({ data: { userId: w.inventoryMember.id, kind: 'BRIEF', day: '2026-01-05', title: 'Your day', payload: { text: 'Hello. Your day, Monday 5 January:' }, createdAt: new Date(Date.now() - 3 * 86400000) } })
+    const shown = await briefs(w.inventoryMember)
+    expect(shown.some((b) => b.payload.text.includes('5 January'))).toBe(false)
+    expect(shown).toHaveLength(1) // today's is still there
+    await prisma.aiInsight.delete({ where: { id: old.id } })
+  })
+
   it("the hourly self check (test mode) neither uses up a person's brief nor starts a re-index", async () => {
     // The self check signs in as a Super Admin; the rule is the same for anyone. The inventory lead has a brief to give
     // (an open request and a low item on their own screens).

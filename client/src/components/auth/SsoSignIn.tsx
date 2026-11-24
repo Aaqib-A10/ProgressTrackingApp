@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react'
-import { t } from '../../lib/i18n'
 import { Building2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button } from '../ui/Button'
@@ -32,17 +31,17 @@ export function SsoSignIn({ next }: { next?: string }) {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-btn border border-line bg-card px-3 py-2 text-body-md font-medium text-ink hover:border-line-strong">
-        <Building2 size={16} />{t('Sign in with your company (SSO)')}
+        <Building2 size={16} />Sign in with your company (SSO)
       </button>
     )
   }
   return (
     <form onSubmit={go} className="mt-3 space-y-2 rounded-btn border border-line p-3" noValidate>
-      <label htmlFor="sso-email" className="block text-body-sm font-medium text-ink">{t('Your work email')}</label>
+      <label htmlFor="sso-email" className="block text-body-sm font-medium text-ink">Your work email</label>
       <input id="sso-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com"
         className="h-10 w-full rounded-btn border border-line bg-card px-3 text-body-md text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
       {error && <p className="text-body-sm text-danger-ink" role="alert">{error}</p>}
-      <Button type="submit" className="w-full" disabled={busy || !email.trim()}>{busy ? 'Opening your company’s sign-in…' : t('Continue')}</Button>
+      <Button type="submit" className="w-full" disabled={busy || !email.trim()}>{busy ? 'Opening your company’s sign-in…' : 'Continue'}</Button>
     </form>
   )
 }

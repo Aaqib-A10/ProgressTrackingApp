@@ -8,6 +8,7 @@ import { sumLeadGen, leadGenKpis } from '../lib/leadgen'
 import { buildSeries, pctDelta, improvementLine } from '../lib/trends'
 import { ecommerceDashboard, marketingDashboard, csrDashboard, inventoryDashboard, type DashCtx, type TeamDashboardPayload } from '../lib/deptDashboards'
 import { topAchievers } from '../lib/topAchiever'
+import { teamWork } from '../lib/teamWork'
 
 type SubmissionStatus = 'SUBMITTED' | 'PENDING' | 'ON_LEAVE'
 
@@ -72,6 +73,18 @@ export async function teamDashboard(req: AuthedRequest, res: Response): Promise<
     if (!make) { res.status(404).json({ error: 'There is no team dashboard for this department.' }); return }
     res.json(await make(ctx))
   }
+}
+
+/**
+ * GET /api/dashboard/work?range=&start=&end= — what each person is working on and what they finished in the period,
+ * from projects, to-dos and the marketing board (lib/teamWork.ts): a member sees themself, a team lead their team, a
+ * Super Admin everyone.
+ */
+export async function teamWorkView(req: AuthedRequest, res: Response): Promise<void> {
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { id: true, role: true, departmentId: true, subDepartmentId: true } })
+  const rangeKey = ((req.query.range as RangeKey) || 'week') as RangeKey
+  const range = periodRange(rangeKey, { start: req.query.start as string, end: req.query.end as string })
+  res.json(await teamWork(me, range.startDate, range.endDate))
 }
 
 /** GET /api/dashboard/top-achiever?month=YYYY-MM — the best person of the month in YOUR department

@@ -326,3 +326,63 @@ select:focus-visible {
     min-width: 0;
   }
 }
+
+/*
+ * Colour (24 Nov 2026): gradient tones made only from the theme's own hues, so light, dark and a company's brand
+ * colour all keep working. Six tones; a card picks one with `tone-<name>` (StatCard does it by itself, in the same
+ * order on every page), then uses the pieces below.
+ */
+.tone-indigo { --g1: var(--c-accent); --g2: var(--c-purple-vivid); }
+.tone-sky { --g1: var(--c-blue-vivid); --g2: var(--c-accent); }
+.tone-emerald { --g1: var(--c-green-vivid); --g2: var(--c-teal-vivid); }
+.tone-amber { --g1: var(--c-yellow-vivid); --g2: var(--c-orange-vivid); }
+.tone-rose { --g1: var(--c-red-vivid); --g2: var(--c-pink-vivid); }
+.tone-violet { --g1: var(--c-purple-vivid); --g2: var(--c-pink-vivid); }
+
+/* KPI cards take the tones in turn, so every page's row of numbers looks the same. */
+.stat-card:not([data-tone]):nth-child(6n + 1) { --g1: var(--c-accent); --g2: var(--c-purple-vivid); }
+.stat-card:not([data-tone]):nth-child(6n + 2) { --g1: var(--c-blue-vivid); --g2: var(--c-accent); }
+.stat-card:not([data-tone]):nth-child(6n + 3) { --g1: var(--c-green-vivid); --g2: var(--c-teal-vivid); }
+.stat-card:not([data-tone]):nth-child(6n + 4) { --g1: var(--c-yellow-vivid); --g2: var(--c-orange-vivid); }
+.stat-card:not([data-tone]):nth-child(6n + 5) { --g1: var(--c-red-vivid); --g2: var(--c-pink-vivid); }
+.stat-card:not([data-tone]):nth-child(6n + 6) { --g1: var(--c-purple-vivid); --g2: var(--c-pink-vivid); }
+
+/* A solid gradient (icon tiles, the user's chat bubble, buttons that should stand out). */
+.g-fill { background-image: linear-gradient(135deg, rgb(var(--g1, var(--c-accent))), rgb(var(--g2, var(--c-purple-vivid)))); color: white; }
+/* A soft wash of the tone over a card, strongest at the top left. */
+.g-wash {
+  background-image:
+    radial-gradient(120% 130% at 0% 0%, rgb(var(--g1, var(--c-accent)) / 0.16), transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, rgb(var(--g2, var(--c-purple-vivid)) / 0.11), transparent 64%);
+}
+.dark .g-wash {
+  background-image:
+    radial-gradient(120% 130% at 0% 0%, rgb(var(--g1, var(--c-accent)) / 0.22), transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, rgb(var(--g2, var(--c-purple-vivid)) / 0.14), transparent 64%);
+}
+.g-ring { border-color: rgb(var(--g1, var(--c-accent)) / 0.28); }
+.dark .g-ring { border-color: rgb(var(--g1, var(--c-accent)) / 0.30); }
+/* A thin gradient line along the top of a card. */
+.g-bar { position: relative; overflow: hidden; }
+.g-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background-image: linear-gradient(90deg, rgb(var(--g1, var(--c-accent))), rgb(var(--g2, var(--c-purple-vivid))));
+  pointer-events: none;
+}
+/* A coloured glow under a gradient tile. */
+.g-glow { box-shadow: 0 6px 16px -6px rgb(var(--g1, var(--c-accent)) / 0.55); }
+/* Text in the gradient. */
+.g-text {
+  background-image: linear-gradient(90deg, rgb(var(--g1, var(--c-accent))), rgb(var(--g2, var(--c-purple-vivid))));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* The tone's own colour, for an icon or a number that should match its card. */
+.g-ink { color: color-mix(in srgb, rgb(var(--g1, var(--c-accent))) 70%, rgb(var(--c-text-primary))); }
+/* Lift on hover for cards that open something. */
+.g-lift { transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
+.g-lift:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -12px rgb(var(--g1, var(--c-accent)) / 0.45); }

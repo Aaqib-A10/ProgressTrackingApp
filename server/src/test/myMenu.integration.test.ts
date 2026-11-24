@@ -31,19 +31,6 @@ describe('My menu', () => {
   })
 })
 
-describe('My language', () => {
-  it('a person picks English, Urdu or Arabic for their own menus; it comes back with their account', async () => {
-    const me = async () => (await request(app).get('/api/auth/me').set(...auth(w.itadMember)).expect(200)).body.user.language
-    expect(await me()).toBeNull()
-    await request(app).put('/api/auth/me/language').set(...auth(w.itadMember)).send({ language: 'ur' }).expect(200)
-    expect(await me()).toBe('ur')
-    await request(app).put('/api/auth/me/language').set(...auth(w.itadMember)).send({ language: 'fr' }).expect(400)
-    await request(app).put('/api/auth/me/language').set(...auth(w.itadMember)).send({ language: 'en' }).expect(200)
-    expect(await me()).toBeNull()
-    await request(app).put('/api/auth/me/language').send({ language: 'ar' }).expect(401)
-  })
-})
-
 describe('My Tasks: delete a Marketing board task', () => {
   it('the person it is assigned to deletes it; nobody else can', async () => {
     const mine = await prisma.marketingTask.create({ data: { title: 'testing', discipline: 'SOCIAL', status: 'SCHEDULED', assigneeId: w.superAdmin.id } })

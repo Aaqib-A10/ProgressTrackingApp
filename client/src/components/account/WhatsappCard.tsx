@@ -30,7 +30,7 @@ export function WhatsappCard() {
     } catch (e) { addToast({ type: 'error', message: errMsg(e, 'Could not save.') }) } finally { setBusy(false) }
   }
   return (
-    <Card title={<span className="flex items-center gap-2"><MessageCircle size={16} className="text-success" />WhatsApp</span>} subtitle="Get your Metriq notifications on WhatsApp too. Muted kinds are not sent.">
+    <Card title={<span className="flex items-center gap-2"><MessageCircle size={16} className="text-success-ink" />WhatsApp</span>} subtitle="Get your Metriq notifications on WhatsApp too. Muted kinds are not sent.">
       <div className="space-y-3">
         <div className="max-w-sm">
           <label className={labelCls} htmlFor="wa-number">Your WhatsApp number, with the country code</label>

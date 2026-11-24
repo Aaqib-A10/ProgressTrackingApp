@@ -24,7 +24,13 @@ export function Card({ title, subtitle, action, flush, className, children, ...p
         <div className="flex items-start justify-between gap-4 px-5 pt-4 max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-2">
           {/* On a phone a wide action (a button with words) drops under the title instead of squeezing it. */}
           <div className="max-md:min-w-[55%] max-md:flex-1">
-            {title != null && <h3 className="text-[15px] font-semibold leading-6 tracking-[-0.01em] text-ink">{title}</h3>}
+            {title != null && (
+              <h3 className="flex items-center gap-2 text-[15px] font-semibold leading-6 tracking-[-0.01em] text-ink">
+                {/* The same small gradient mark before every card's title, on every page. */}
+                <span aria-hidden className="g-fill h-4 w-1 shrink-0 rounded-full" />
+                <span className="min-w-0">{title}</span>
+              </h3>
+            )}
             {subtitle != null && <p className="mt-0.5 text-body-sm text-ink-muted">{subtitle}</p>}
           </div>
           {action != null && <div className="shrink-0 max-md:max-w-full">{action}</div>}

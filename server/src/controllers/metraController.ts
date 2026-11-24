@@ -289,7 +289,11 @@ export async function listInsights(req: AuthedRequest, res: Response): Promise<v
   if (!inAudit()) await ensureDayBrief(req.user!.id).catch(() => undefined) // a brief that cannot be made is simply not there
   // Only the insight kinds: memories (MEMORY) and feedback (FEEDBACK) live in the same table and are not insights.
   const rows = await prisma.aiInsight.findMany({ where: { userId: req.user!.id, kind: { in: ['BRIEF', 'NEXT_STEP', 'ALERT', 'WEEKLY'] }, state: 'NEW', createdAt: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: [{ kind: 'asc' }, { createdAt: 'desc' }], take: 50 })
-  res.json({ insights: rows.map((r) => ({ id: r.id, kind: r.kind, day: r.day, title: r.title, payload: r.payload, createdAt: r.createdAt.toISOString() })) })
+  // A day's brief is for that day (or the night shift that started then, 18 hours): an older one is out of date. On
+  // 24 Nov 2026 "Your day, Thursday 19 November" still showed, because no newer brief had been made since.
+  const today = companyToday(), fresh = Date.now() - 18 * 3600_000
+  const current = rows.filter((r) => r.kind !== 'BRIEF' || r.day === today || r.createdAt.getTime() >= fresh)
+  res.json({ insights: current.map((r) => ({ id: r.id, kind: r.kind, day: r.day, title: r.title, payload: r.payload, createdAt: r.createdAt.toISOString() })) })
 }
 
 /** PATCH /api/metra/insights/:id { state: DONE | DISMISSED } */

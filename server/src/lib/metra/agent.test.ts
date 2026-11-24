@@ -148,6 +148,9 @@ describe('the answer as people read it', () => {
     const md = ['You have two:', '| Task | Status | ID |', '|------|--------|----|', '| Make Metra live | open | cmwdov6qi00jvvdow9j2pj30c |', 'See 【2】 (id: cmwdoxa3u004fvdn0fvx3zktp).'].join('\n')
     expect(tidyAnswer(md).split('\n')).toEqual(['You have two:', '| Task | Status |', '| ------ | -------- |', '| Make Metra live | open |', 'See [2].'])
   })
+  it('drops a citation bracket with no number in it (24 Nov 2026: "...for the week (23 Nov - 29 Nov)【...】.")', () => {
+    expect(tidyAnswer('These figures come from the Team Attendance screen【...】.')).toBe('These figures come from the Team Attendance screen.')
+  })
 })
 
 describe('a number with no source is not sent as it is', () => {

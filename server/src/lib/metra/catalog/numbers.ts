@@ -107,7 +107,7 @@ export const NUMBERS: Entry[] = [
     table: { unit: ['line', 'lines'], columns: [{ key: 'kind', label: 'by' }, { key: 'name', label: 'name' }, { key: 'leads', label: 'leads', kind: 'number' }], status: 'kind' },
   },
   {
-    key: 'reports.today', label: "Today's daily reports", area: 'Dashboard', app: '/app/dashboard',
+    key: 'reports.today', personal: 'reports.mine', label: "Today's daily reports", area: 'Dashboard', app: '/app/dashboard',
     about: "For team leads: who on the team has submitted today's daily report and their main number for today, with the team's headline numbers for the period.",
     says: ['team dashboard', 'who submitted', 'submitted today', 'todays reports', 'team today', 'dashboard', 'how is the team doing', 'team performance', 'kpis'],
     // The page is a department's: a Super Admin who belongs to no department has none to show.

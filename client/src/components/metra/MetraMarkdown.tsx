@@ -167,23 +167,23 @@ export function MetraMarkdown({ text, sources, onOpen, className }: { text: stri
       {blocks.map((b, i) => {
         const k = `b${i}`
         switch (b.t) {
-          case 'h': return <p key={k} className="font-semibold">{inline(b.text, ctx, k)}</p>
+          case 'h': return <p key={k} className="font-semibold text-primary-ink">{inline(b.text, ctx, k)}</p>
           case 'code': return <pre key={k} className="overflow-x-auto rounded-btn border border-line bg-slate-50 p-2.5 font-mono text-[12.5px] text-ink">{b.text}</pre>
-          case 'ul': return <ul key={k} className="list-disc space-y-1 pl-5 marker:text-ink-faint">{b.items.map((it, j) => <li key={j}>{inline(it, ctx, `${k}-${j}`)}</li>)}</ul>
-          case 'ol': return <ol key={k} start={b.start} className="list-decimal space-y-1 pl-5 marker:text-ink-muted">{b.items.map((it, j) => <li key={j}>{inline(it, ctx, `${k}-${j}`)}</li>)}</ol>
+          case 'ul': return <ul key={k} className="list-disc space-y-1 pl-5 marker:text-primary-ink">{b.items.map((it, j) => <li key={j}>{inline(it, ctx, `${k}-${j}`)}</li>)}</ul>
+          case 'ol': return <ol key={k} start={b.start} className="list-decimal space-y-1 pl-5 marker:font-semibold marker:text-primary-ink">{b.items.map((it, j) => <li key={j}>{inline(it, ctx, `${k}-${j}`)}</li>)}</ol>
           case 'table': return (
-            <div key={k} className="max-h-[420px] max-w-full overflow-auto overscroll-x-contain rounded-btn border border-line">
+            <div key={k} className="max-h-[420px] max-w-full overflow-auto overscroll-x-contain rounded-xl border border-primary/20 bg-card">
               <table className="min-w-full border-collapse text-body-sm">
                 <thead>
                   <tr>
                     {b.head.map((h, j) => (
-                      <th key={j} scope="col" style={{ textAlign: b.align[j] ?? 'left' }} className="sticky top-0 z-[1] whitespace-nowrap border-b border-line bg-slate-100 px-2.5 py-1.5 font-semibold text-ink">{inline(h, ctx, `${k}-h${j}`)}</th>
+                      <th key={j} scope="col" style={{ textAlign: b.align[j] ?? 'left' }} className="sticky top-0 z-[1] whitespace-nowrap border-b border-primary/20 bg-primary/10 px-2.5 py-2 font-semibold text-primary-ink">{inline(h, ctx, `${k}-h${j}`)}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {b.rows.map((r, ri) => (
-                    <tr key={ri} className={cn('border-b border-line last:border-b-0', ri % 2 === 1 ? 'bg-slate-50' : 'bg-card')}>
+                    <tr key={ri} className={cn('border-b border-line last:border-b-0', ri % 2 === 1 ? 'bg-primary/[0.04]' : 'bg-card')}>
                       {b.head.map((_, j) => (
                         <td key={j} style={{ textAlign: b.align[j] }} className="min-w-[5.5rem] max-w-[20rem] whitespace-normal break-words px-2.5 py-1.5 align-top text-ink">{inline(r[j] ?? '', ctx, `${k}-${ri}-${j}`)}</td>
                       ))}

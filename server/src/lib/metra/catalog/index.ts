@@ -3,6 +3,7 @@ import type { Role } from '@prisma/client'
 import { companyTz } from '../../time'
 import type { Asker } from '../access'
 import type { Args, Ctx, Entry } from './types'
+import { resolvePeriod, type PeriodAsk } from './period'
 import { norm, renderTable } from './table'
 import { isFollowUp, plainWords } from '../talk'
 import { CORE_PERSONAL, CORE_WORK, RANGES_LINE } from './core'
@@ -152,9 +153,19 @@ export function entryOf(a: Asker, what: unknown): Entry | null {
     ?? list.map((e) => ({ e, s: fit(e, w) })).filter((y) => y.s >= 2).sort((p, q) => q.s - p.s)[0]?.e ?? null
 }
 
-export function ctxOf(a: Asker, me: { id: string; role: Role; name: string }, now = new Date(), asked?: string): Ctx {
+export function ctxOf(a: Asker, me: { id: string; role: Role; name: string }, now = new Date(), asked?: string, ask?: PeriodAsk | null): Ctx {
   const zone = companyTz()
-  return { me, asker: a, zone, now, today: DateTime.fromJSDate(now).setZone(zone).toISODate()!, ...(asked ? { asked } : {}) }
+  const today = DateTime.fromJSDate(now).setZone(zone).toISODate()!
+  return { me, asker: a, zone, now, today, ...(asked ? { asked } : {}), ...(ask ? { period: resolvePeriod(ask, today, zone) } : {}) }
+}
+
+/** The question is about the asker themself ("my attendance", "was I late"), not their team or another person. */
+// Not "me" or "mujhe": "tell me Ali's hours" / "mujhe batao" are about someone else as often as not.
+const ABOUT_ME = /\b(my|mine|myself|i|i'm|im|meri|mera|mere|main)\b/i
+const ABOUT_OTHERS = /\b(team|team's|teams|everyone|everybody|all|who|whose|whom|people|staff|members?|employees|agents|reps|others|each|sab|sabki|kaun|kis|log|department|dept)\b/i
+export function aboutMe(asked: string, person?: string, myName?: string): boolean {
+  if (person && !/^(me|my|mine|myself|i|self)$/i.test(person.trim()) && !(myName && person.trim().toLowerCase() === myName.trim().toLowerCase())) return false
+  return ABOUT_ME.test(asked) && !ABOUT_OTHERS.test(asked)
 }
 
 /** The words a read is judged against: the question (Roman Urdu also in English) and, for a follow-up, the one it continues. */
@@ -163,8 +174,14 @@ export function askedWords(question: string, earlier = ''): string {
 }
 
 /** Read one data set as the person: filtered and counted by Metriq, as text for the model. */
-export async function readData(a: Asker, me: { id: string; role: Role; name: string }, given: Record<string, unknown>, asked?: string): Promise<{ ok: boolean; text: string }> {
-  const e = entryOf(a, given.what)
+export async function readData(a: Asker, me: { id: string; role: Role; name: string }, given: Record<string, unknown>, asked?: string, ask?: PeriodAsk | null): Promise<{ ok: boolean; text: string }> {
+  let e = entryOf(a, given.what)
+  // A question about the asker themself is read from their own data set, even when the model picked the team's.
+  const switched: string[] = []
+  if (e?.personal && asked && aboutMe(asked, str(given.person) || undefined, me.name)) {
+    const own = entryOf(a, e.personal)
+    if (own) { switched.push(`The person asked about themself, so this is ${own.label} (their own), not ${e.label}.`); e = own; given = { ...given, person: undefined } }
+  }
   if (!e) {
     const open = readable(a)
     return { ok: false, text: `There is no data set "${str(given.what)}" for this person. The ones they can read: ${open.map((x) => `"${x.key}" (${x.label}, ${x.area})`).join('; ') || 'none'}. Other screens are read with the tools named in the guide.` }
@@ -174,12 +191,22 @@ export async function readData(a: Asker, me: { id: string; role: Role; name: str
     from: str(given.from) || undefined, to: str(given.to) || undefined, range: str(given.range) || undefined, date: str(given.date) || undefined,
     item: str(given.item) || undefined, group_by: str(given.group_by) || undefined, limit: Number(given.limit) || undefined,
   }
-  const ctx = ctxOf(a, me, new Date(), asked)
+  const ctx = ctxOf(a, me, new Date(), asked, ask)
+  // The period named in the person's words wins over the dates the model sent (period.ts).
+  const p = ctx.period
+  if (p) {
+    const fromWas = args.from, toWas = args.to, dateWas = args.date, rangeWas = args.range
+    args.from = p.from; args.to = p.to; args.date = p.from === p.to ? p.from : undefined; args.range = undefined
+    if ((fromWas && fromWas !== p.from) || (toWas && toWas !== p.to) || (dateWas && dateWas !== args.date) || (rangeWas && p.from !== p.to)) switched.push(`The dates sent (${[rangeWas && `range ${rangeWas}`, dateWas && `date ${dateWas}`, fromWas && `from ${fromWas}`, toWas && `to ${toWas}`].filter(Boolean).join(', ')}) were replaced by the period the person named.`)
+  }
   // An entry that breaks on data it did not expect says so; it never takes the whole answer down.
   try {
     const got = await e.load!(ctx, args)
     // "Nothing here: ..." is an answer (there is none), not a failed lookup.
     if ('error' in got) return { ok: got.error.startsWith('Nothing here:'), text: got.error }
+    const usesDates = !!got.dated || !!(got.table ?? e.table)?.date || (e.takes ?? []).some((t) => t !== 'item')
+    const period = p && usesDates ? [`THE PERIOD ASKED: ${p.label}${p.current ? ', up to today' : ''}. Every number below is for this period. Name exactly this period in the answer; never call it anything else.`] : []
+    got.head = [...period, ...switched, ...(got.head ?? [])]
     return { ok: true, text: renderTable(e, got, args, ctx) }
   } catch (err) {
     return { ok: false, text: `${e.label} could not be read just now (${(err as Error).message.slice(0, 160)}). Say that this part of Metriq could not be read; do not guess its numbers.` }

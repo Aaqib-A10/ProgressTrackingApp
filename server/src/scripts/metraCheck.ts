@@ -132,6 +132,10 @@ const CASES: Case[] = [
   { as: 'lead', ask: 'how many dials did my team make last month according to the monthly report?', numbers: (t) => [t.x.n.dialsLastMonth], note: 'monthly report (ITAD lead)' },
   { as: 'lead', ask: "who has not submitted today's report on my team?", numbers: (t) => [t.x.n.notSubmittedTeam], note: 'missing reports, counted' },
   { as: 'leadgenlead', ask: 'how many leads did the lead gen team generate last month?', numbers: (t) => [t.x.n.lgLeadsLastMonth], note: 'monthly report (Lead Gen lead)' },
+  // 24 Nov 2026, live: a team lead's "my attendance from the last week" got one day of the whole team, called "23 to 29 Nov".
+  { as: 'lead', ask: 'tell me about my attendance from the last week', numbers: (t) => [t.x.n.leadDaysLastWeek, t.x.n.leadHoursLastWeek], note: 'own attendance last week (a team lead: their own, the whole week)' },
+  { as: 'lead', ask: 'ok what about the previous week', history: [{ role: 'user', content: 'tell me about my attendance from the last week' }, { role: 'assistant', content: 'Here is your attendance for last week, day by day.' }], numbers: (t) => [t.x.n.leadDaysWeekBefore, t.x.n.leadHoursWeekBefore], note: 'follow-up: the week before last' },
+  { as: 'lead', ask: 'pichle hafte main kitne din aaya?', numbers: (t) => [t.x.n.leadDaysLastWeek], note: 'own days present last week (Roman Urdu)' },
   { as: 'member', ask: 'was I late any day this month?', numbers: (t) => (t.x.n.myLateDays ? [t.x.n.myLateDays] : []), note: "a member's own attendance" },
   { as: 'admin', ask: 'how many people are in the company and how many departments are there?', numbers: (t) => [t.x.n.people, t.x.n.departments], note: 'people and teams (Super Admin)' },
   { as: 'member', ask: 'what is the email address of Test ITAD Lead?', names: () => ['itad.lead@test.local'], note: 'people directory (a member)' },
@@ -335,6 +339,8 @@ async function main() {
     await prisma.meeting.deleteMany({ where: { id: { in: ms.map((m) => m.id) } } })
     // Lead Management, the Daily Report form, the Lead Dialer import and the custom block (scripts/metraSeedMore.ts).
     n += await clearMore(prisma as never)
+    // Attendance days made for the "last week" questions (only those marked; the person's real days stay).
+    n += (await prisma.attendanceDay.deleteMany({ where: { note: MARK } })).count
     return n + ms.length
   }
 
@@ -418,6 +424,13 @@ async function main() {
     const at = (plus: number, hour: number) => today.plus({ days: plus }).set({ hour, minute: 0, second: 0, millisecond: 0 }).toJSDate()
     const deptOf = async (u: U) => (await prisma.user.findUniqueOrThrow({ where: { id: u.id }, select: { departmentId: true } })).departmentId
     const [ec, inv] = [await deptOf(people.ecom), await deptOf(people.inv)]
+    // The ITAD lead's own attendance: three days last week, two the week before (24 Nov 2026: "my attendance from the
+    // last week" was answered with one day of the whole team). Days the person already has are left as they are.
+    {
+      const monday = today.startOf('week')
+      const days = [[-7, 0], [-7, 1], [-7, 2], [-14, 3], [-14, 4]].map(([w, k]) => monday.plus({ days: w + k }))
+      await prisma.attendanceDay.createMany({ skipDuplicates: true, data: days.map((x) => ({ userId: people.lead.id, date: dbDateFromString(x.toISODate()!), checkInAt: x.set({ hour: 10, minute: 0 }).toJSDate(), checkOutAt: x.set({ hour: 19, minute: 0 }).toJSDate(), note: MARK })) })
+    }
     if (!ec || !inv) { console.error('The e-commerce or inventory test account has no department. Run: npx tsx prisma/test-users.ts'); process.exit(1) }
 
     await prisma.meetingNote.createMany({ data: [
@@ -511,6 +524,11 @@ async function main() {
     const monthly = async (u: U, department: string) => (await read<{ report?: { team?: Record<string, number> } }>(u, '/api/reports/monthly', { department })).report?.team ?? {}
     const missingTeam = await read<{ total: number }>(people.lead, '/api/notifications/not-submitted')
     const myAtt = await read<{ summary: { lateDays: number } }>(people.member, '/api/attendance/history', { range: 'month' })
+    const { DateTime: DT } = await import('luxon')
+    const { companyToday: cToday, companyTz: cTz } = await import('../lib/time')
+    const mon = DT.fromISO(cToday(), { zone: cTz() }).startOf('week')
+    const weekOf = async (back: number) => (await read<{ summary: { presentDays: number; totalWorkedMin: number } }>(people.lead, '/api/attendance/history', { range: 'custom', start: mon.minus({ weeks: back }).toISODate()!, end: mon.minus({ weeks: back }).plus({ days: 6 }).toISODate()! })).summary
+    const [leadLastWeek, leadWeekBefore] = [await weekOf(1), await weekOf(2)]
     const users = await read<{ users: unknown[] }>(people.admin, '/api/admin/users')
     const depts = await read<{ departments: unknown[] }>(people.admin, '/api/company/departments')
     const ads = await read<{ activeCampaigns: number; totalCampaigns: number; totalSpend: number; bestPerforming: { title: string } | null }>(people.marketing, '/api/marketing/ads/summary')
@@ -528,7 +546,8 @@ async function main() {
         leaveDays: leave.leave.length, leaveWfh: leave.leave.filter((l) => l.type === 'WFH').length,
         dialTarget: targets.targets.find((x) => x.metricKey === 'callsDialed')?.value ?? 0,
         dialsLastMonth: (await monthly(people.lead, 'ITAD')).callsDialed ?? 0, lgLeadsLastMonth: (await monthly(people.leadgenlead, 'LEAD_GEN')).leads ?? 0,
-        notSubmittedTeam: missingTeam.total, myLateDays: myAtt.summary.lateDays, people: users.users.length, departments: depts.departments.length,
+        notSubmittedTeam: missingTeam.total, myLateDays: myAtt.summary.lateDays,
+        leadDaysLastWeek: leadLastWeek.presentDays, leadHoursLastWeek: Math.round(leadLastWeek.totalWorkedMin / 60), leadDaysWeekBefore: leadWeekBefore.presentDays, leadHoursWeekBefore: Math.round(leadWeekBefore.totalWorkedMin / 60), people: users.users.length, departments: depts.departments.length,
         adsActive: ads.activeCampaigns, adsPaused: ads.totalCampaigns - ads.activeCampaigns, adsSpend: ads.totalSpend, brands: brands.brands.length, profiles: brands.brands.reduce((s, b) => s + b.profileCount, 0),
         mktBacklog: board.columns.find((c) => c.status === 'BACKLOG')?.tasks.length ?? 0,
         scorecards: cards.scorecards.length, callFormPass: cards.scorecards.find((c) => c.name === 'Call Quality Monitoring Form')?.passThreshold ?? 0, myQaScore: myQa.evaluations[0]?.totalScore ?? 0,

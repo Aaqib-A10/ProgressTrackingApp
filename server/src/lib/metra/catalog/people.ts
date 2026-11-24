@@ -28,7 +28,7 @@ const shiftLine = (b: TeamBody) => (b.shift ? `The team's shift: ${b.shift.start
 
 export const PEOPLE: Entry[] = [
   {
-    key: 'attendance.now', label: 'Team attendance now', area: 'Attendance', app: '/app/attendance/team',
+    key: 'attendance.now', personal: 'attendance.mine', label: 'Team attendance now', area: 'Attendance', app: '/app/attendance/team',
     about: 'Right now, for each person of the team: in, on a break, checked out, not in yet or on leave, when they checked in, whether they were late today, and whether they work from home.',
     says: ['who is in', 'who is late', 'who is on break', 'who is not in', 'who is absent', 'who is here', 'who came late', 'attendance today', 'present today', 'checked in', 'who is working', 'who is on leave today', 'kaun aaya', 'kaun late', 'kaun nahi aaya', 'aaj kaun'],
     who: lead, pin: lead,
@@ -54,7 +54,7 @@ export const PEOPLE: Entry[] = [
     tip: 'Late means checked in after the shift start (the "late today" column). "Not in yet" only means not checked in yet, which is NOT late: before the shift starts nobody is late. For a week or a month use what="attendance.team".',
   },
   {
-    key: 'attendance.team', label: 'Team attendance over a period', area: 'Attendance', app: '/app/attendance/team',
+    key: 'attendance.team', personal: 'attendance.mine', label: 'Team attendance over a period', area: 'Attendance', app: '/app/attendance/team',
     about: 'For each person of the team over a week, a month or any dates: days present, days late, shifts completed, leave days, hours worked, break time, overtime, average check-in time, and late days this month.',
     says: ['attendance this week', 'attendance this month', 'how many days late', 'late days', 'days present', 'hours worked', 'overtime', 'who was late most', 'attendance report', 'leave days', 'work from home days', 'kitne din late'],
     who: lead, pin: lead, takes: ['range'],
@@ -112,7 +112,7 @@ export const PEOPLE: Entry[] = [
     },
   },
   {
-    key: 'leave.team', label: 'Leave and days off', area: 'Attendance', app: '/app/admin/leave',
+    key: 'leave.team', personal: 'leave.balance', label: 'Leave and days off', area: 'Attendance', app: '/app/admin/leave',
     about: 'Every leave day, day off and work-from-home day entered for the people of the team: who, which date, which kind, and the note.',
     says: ['leave', 'on leave', 'who is on leave', 'days off', 'who is off', 'work from home', 'work from home days', 'wfh days', 'wfh', 'leave days', 'leave this week', 'leave next week', 'upcoming leave', 'chutti', 'kaun chutti par'],
     who: lead, pin: lead,

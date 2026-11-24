@@ -14,7 +14,6 @@ import {
   saveTheme,
   saveNav,
   saveWhatsapp,
-  saveLanguage,
 } from '../controllers/authController'
 import { requireAuth } from '../middleware/auth'
 import { loginLimiter, sensitiveAuthLimiter } from '../middleware/rateLimit'
@@ -57,7 +56,6 @@ authRouter.put('/me/dashboard', requireAuth, asyncHandler(saveDashboardPrefs))
 authRouter.put('/me/theme', requireAuth, asyncHandler(saveTheme))
 authRouter.put('/me/nav', requireAuth, asyncHandler(saveNav))
 authRouter.put('/me/whatsapp', requireAuth, asyncHandler(saveWhatsapp))
-authRouter.put('/me/language', requireAuth, asyncHandler(saveLanguage))
 authRouter.post('/active-department', requireAuth, asyncHandler(setActiveDepartment))
 authRouter.patch('/profile', requireAuth, asyncHandler(updateProfile))
 authRouter.post('/change-password', requireAuth, asyncHandler(changePassword))

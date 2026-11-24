@@ -424,7 +424,7 @@ export const MORE: Entry[] = [
     table: dyn(['team', 'teams']),
   },
   {
-    key: 'attendance.register', label: 'Attendance register', area: 'Attendance', app: '/app/attendance/team',
+    key: 'attendance.register', personal: 'attendance.mine', label: 'Attendance register', area: 'Attendance', app: '/app/attendance/team',
     about: 'For team leads: every person of the team against every day of a period (this week unless dates are given): present, late, absent, on leave or off on each day, with each person\'s totals and hours worked.',
     says: ['attendance register', 'register', 'was present on', 'who was absent on', 'absent yesterday', 'present yesterday', 'day by day attendance', 'attendance on', 'who came late on', 'kal kaun nahi aaya'],
     who: lead, takes: ['range', 'date'],

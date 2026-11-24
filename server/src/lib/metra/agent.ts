@@ -7,8 +7,9 @@ import { TICKET_READ_TOOLS, TICKET_WRITE_TOOLS } from '../mcp'
 import { ACTION_TOOLS, type ActionTool } from './actions'
 import { withApiCache } from '../mcp/api'
 import { cleanArgs } from './guard'
-import { checkNumbers, followUp, pageNote, wantsAction } from './talk'
-import { askedWords, clear, dataTool, entriesFor, guideFor, readData, readable } from './catalog'
+import { checkNumbers, followUp, isFollowUp, pageNote, wantsAction } from './talk'
+import { askedWords, clear, ctxOf, dataTool, entriesFor, guideFor, readData, readable } from './catalog'
+import { periodAsked } from './catalog/period'
 import { searchMetriq, type Hit } from './search'
 import { SOURCE_BY_TYPE, screenAt } from './sources'
 import { streamChat, llmModel, modelUsed, type LlmMessage, type ToolCall, type ToolSpec } from './llm'
@@ -213,10 +214,14 @@ export function withScreens(question: string): string {
 async function answerNow(a: Asker, history: { role: 'user' | 'assistant'; content: string }[], asked0: string, emit: Emit, signal: AbortSignal | undefined, ctx: AnswerContext): Promise<AnswerResult> {
   // What the person is looking at while asking, and whether this continues their last question (lib/metra/talk.ts).
   const page = pageNote(ctx.page)
-  const question = [withScreens(asked0), followUp(asked0, history), page?.note].filter(Boolean).join('\n')
   const earlier = [...history].reverse().find((m) => m.role === 'user')?.content ?? ''
   // What the person actually asked: a condition the model adds on its own is checked against these words (catalog/table.ts).
   const askedFor = askedWords(asked0, earlier)
+  // The period named in the person's words ("last week", "the week before"), worked out in code: every read uses it
+  // and the model is told it, so a period is never guessed (catalog/period.ts).
+  const askPeriod = periodAsked(asked0, earlier, isFollowUp(asked0, earlier))
+  const periodLine = askPeriod ? `[The period asked: ${ctxOf(a, { id: '', role: 'MEMBER', name: '' }, new Date(), undefined, askPeriod).period!.label}. Use exactly these dates.]` : ''
+  const question = [withScreens(asked0), followUp(asked0, history), periodLine, page?.note].filter(Boolean).join('\n')
   const messages: LlmMessage[] = [{ role: 'system', content: systemPrompt(a, ctx, asked0, earlier, page?.path) }, ...history.slice(-10).map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }) as LlmMessage), { role: 'user', content: question }]
   // The cards for tickets and each team's own actions are on offer only when the person asks for a change.
   const tools = toolSpecs(a, wantsAction(asked0, history))
@@ -319,11 +324,11 @@ async function answerNow(a: Asker, history: { role: 'user' | 'assistant'; conten
         } else if (c.function.name === 'metriq_data') {
           // One reader for every data set of the catalog: filtered and counted by Metriq, read as the person.
           if ((failed.get('metriq_data') ?? 0) >= 3) { ok = false; out = 'This lookup failed three times already in this answer. Do not call it again: say which part of Metriq could not be read.' }
-          else { const r = await readData(a, user, args, askedFor); ok = r.ok; out = cutToolText(r.text) }
+          else { const r = await readData(a, user, args, askedFor, askPeriod); ok = r.ok; out = cutToolText(r.text) }
         } else if (dataSetCalled(a, c.function.name)) {
           // The model called a data set by its own name ("leave.balance") instead of metriq_data with `what`: it plainly
           // means that data set, so it is read (as the person, with the same checks) instead of being refused.
-          const r = await readData(a, user, { ...args, what: dataSetCalled(a, c.function.name) }, askedFor); ok = r.ok; out = cutToolText(r.text)
+          const r = await readData(a, user, { ...args, what: dataSetCalled(a, c.function.name) }, askedFor, askPeriod); ok = r.ok; out = cutToolText(r.text)
         } else {
           const tool = readToolsFor(a).find((t) => t.name === c.function.name)
           if (!tool) { ok = false; out = 'That tool is not available.' }
@@ -385,7 +390,7 @@ async function answerNow(a: Asker, history: { role: 'user' | 'assistant'; conten
     if (fits) {
       emit('status', `Reading ${fits.label}`)
       const began = Date.now()
-      const r = await readData(a, user, { what: fits.key }, askedFor)
+      const r = await readData(a, user, { what: fits.key }, askedFor, askPeriod)
       used.push({ name: 'metriq_data', args: { what: fits.key }, ok: r.ok, ms: Date.now() - began, ...(r.ok ? {} : { error: r.text.slice(0, 300) }) })
       if (r.ok) {
         looked.push({ name: 'metriq_data', args: { what: fits.key }, out: r.text })
@@ -449,7 +454,8 @@ export function tidyAnswer(text: string, sourceCount = Infinity): string {
   // A local model (gpt-oss on Ollama) sometimes leaks a few planning words in front of the answer
   // ("We have list. Need tasks in review. Provide titles.**Tasks…"): drop them when glued to the first heading/table.
   const unplanned = text.trim().replace(/^(?:(?:We|Need|Let's|Let me|User|The user|Now|So|Ok|Okay)\b[^\n*|#]{0,240}?[.!:]\s*)+(?=\*\*|#|\|)/, '')
-  const lines = unplanned.replace(/【(\d+)(?:†[^】]*)?】/g, '[$1]').split('\n')
+  // 【2】 becomes [2]; anything else in those brackets ("【...】", 24 Nov 2026) is the model's noise and is dropped.
+  const lines = unplanned.replace(/【(\d+)(?:†[^】]*)?】/g, '[$1]').replace(/\s*【[^】]*】/g, '').split('\n')
   const row = (l: string) => /^\s*\|.*\|\s*$/.test(l)
   const cells = (l: string) => l.trim().replace(/^\||\|$/g, '').split('|')
   for (let i = 0; i + 1 < lines.length; i++) {

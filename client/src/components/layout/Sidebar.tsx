@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react'
-import { t, useLang } from '../../lib/i18n'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Settings, ChevronRight, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -57,7 +56,6 @@ function useIsProjectAdmin(user: CurrentUser): boolean {
 
 export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: () => void }) {
   useFlags() // the menu re-draws once the owner's switches are in
-  useLang() // and in the person's language
   const isProjectAdmin = useIsProjectAdmin(user)
   const chatUnread = useChatUnread().total
   // Everything this person may see, then without what they took off their own menu ("My menu", the button by Settings).
@@ -169,7 +167,8 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                 cn(
                   'group relative flex h-[30px] items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                   isActive
-                    ? 'bg-primary-50 font-medium text-primary-ink shadow-[inset_0_0_0_1px_rgb(var(--c-accent)/0.14)]'
+                    // The page you are on: a soft wash of the brand colour and a gradient line at the left.
+                    ? 'tone-indigo g-wash bg-primary-50 font-semibold text-primary-ink shadow-[inset_0_0_0_1px_rgb(var(--c-accent)/0.16)] before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-primary before:to-accent'
                     : 'text-ink-muted hover:bg-slate-200/45 hover:text-ink',
                 )
               }
@@ -177,7 +176,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
               {({ isActive }) => (
                 <>
                   <Icon size={16} strokeWidth={isActive ? 2 : 1.75} className={cn('shrink-0', isActive ? 'text-primary-ink' : 'text-ink-faint group-hover:text-ink-muted')} />
-                  <span className="flex-1 truncate">{t(item.label)}</span>
+                  <span className="flex-1 truncate">{item.label}</span>
                   {item.to === '/app/feedback' && unreadFeedback > 0 && (
                     <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10.5px] font-semibold tabular-nums text-primary-on">
                       {unreadFeedback > 9 ? '9+' : unreadFeedback}
@@ -243,7 +242,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
       <nav className="flex-1 overflow-y-auto px-2.5 pb-3">
         {pins.length > 0 && !q && (
           <div className="mb-3">
-            <p className="flex h-6 items-center px-2 text-[11.5px] font-medium text-ink-faint">{t('Pinned')}</p>
+            <p className="flex h-6 items-center px-2 text-[11.5px] font-medium text-ink-faint">Pinned</p>
             <ul className="space-y-px">
               {pins.map((p) => (
                 <li key={p.key}>
@@ -288,7 +287,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                       <GroupIcon size={12} strokeWidth={2.2} />
                     </span>
                   )}
-                  <span className="truncate">{t(group.title)}</span>
+                  <span className="truncate">{group.title}</span>
                 </span>
                 <ChevronRight
                   size={13}
@@ -310,7 +309,7 @@ export function Sidebar({ user, onNavigate }: { user: CurrentUser; onNavigate?: 
                         className="group/sub ml-[17px] flex h-[28px] w-[calc(100%-17px)] items-center justify-between rounded-md px-2 text-[12px] font-medium text-ink-faint transition-colors hover:bg-slate-200/45 hover:text-ink"
                         aria-expanded={subOpen}
                       >
-                        <span>{t(sg.title)}</span>
+                        <span>{sg.title}</span>
                         <ChevronRight
                           size={12}
                           className={cn('shrink-0 text-ink-faint transition-transform duration-200', subOpen && 'rotate-90')}

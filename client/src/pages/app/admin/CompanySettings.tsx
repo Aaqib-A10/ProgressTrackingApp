@@ -20,8 +20,6 @@ import {
 } from '../../../lib/companyApi'
 import { kindFromName } from '../../../lib/sections'
 import { MetraAdmin } from '../../../components/metra/MetraAdmin'
-import { ThemePicker } from '../../../components/ui/ThemePicker'
-import { themeById } from '../../../theme/themes'
 import { useFlags } from '../../../lib/flags'
 
 /**
@@ -300,15 +298,9 @@ function CompanyLook({ company, canEdit, onSaved }: { company: CompanyInfo; canE
   }
   const brandChanged = (brand || null) !== (company.brandColor ?? null)
   return (
-    <Card title="Look" subtitle={canEdit ? "The colour theme your people see, unless they pick their own in Settings, and your brand colour for buttons and links." : "Set by your company's admins. You can pick your own theme in Settings."}>
+    <Card title="Look" subtitle={canEdit ? 'Your logo, and your brand colour for buttons and links.' : "Set by your company's admins."}>
       <div className="space-y-6">
         <CompanyLogo company={company} canEdit={canEdit} />
-        <ThemePicker
-          value={company.theme ?? themeById(null).id}
-          allowCompany={false}
-          busy={saving || !canEdit}
-          onPick={(id) => { if (id && id !== (company.theme ?? themeById(null).id)) void save({ theme: id === themeById(null).id ? null : id }, `Theme set to ${themeById(id).label} for everyone who has not picked their own.`) }}
-        />
         <div className="border-t border-line pt-5">
           <span className="mb-1 block text-body-sm font-semibold text-ink">Brand colour</span>
           <p className="mb-3 text-body-sm text-ink-muted">Buttons, links, the selected menu item and focus rings. Metriq adjusts it a little where needed so text on it always reads.</p>

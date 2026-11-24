@@ -88,7 +88,7 @@ export default function ImportData() {
             {fileName && <span className="text-body-sm text-ink-muted">{fileName}</span>}
           </div>
           {what === 'people' && <p className="text-body-sm text-ink-muted">Each new person gets an email with a link to choose their own password.</p>}
-          <p className="text-body-sm text-ink-muted">Contacts and leads come in through <Link to="/app/leads" className="font-medium text-primary hover:underline">Lead Management</Link>, which has its own import.</p>
+          <p className="text-body-sm text-ink-muted">Contacts and leads come in through <Link to="/app/leads" className="font-medium text-primary-ink hover:underline">Lead Management</Link>, which has its own import.</p>
         </div>
       </Card>
 
@@ -101,7 +101,7 @@ export default function ImportData() {
             <ul className="max-h-[420px] divide-y divide-line overflow-auto rounded-btn border border-line">
               {outcome.rows.map((r) => (
                 <li key={r.line} className="flex items-start gap-2 px-3 py-2 text-body-sm">
-                  {r.ok ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success" /> : <XCircle size={15} className="mt-0.5 shrink-0 text-danger" />}
+                  {r.ok ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-success-ink" /> : <XCircle size={15} className="mt-0.5 shrink-0 text-danger-ink" />}
                   <span className="w-14 shrink-0 tabular-nums text-ink-faint">Line {r.line}</span>
                   <span className={r.ok ? 'text-ink' : 'text-danger-ink'}>{r.text}</span>
                 </li>

@@ -126,3 +126,25 @@ export interface ExecutiveDashboardData {
 export function getExecutiveDashboard(range: RangeKey, custom?: CustomRange | null) {
   return api.get<ExecutiveDashboardData>(`/dashboard/executive?${rangeQuery(range, custom)}`)
 }
+
+// --- What everyone is working on (GET /api/dashboard/work; server/src/lib/teamWork.ts) ---
+export type WorkKind = 'task' | 'todo' | 'marketing'
+export interface WorkItem { kind: WorkKind; title: string; where: string | null; at: string; link: string | null; overdue?: boolean }
+export interface PersonWork {
+  id: string
+  name: string
+  role: string
+  department: string | null
+  avatarAt: string | null
+  doing: WorkItem[]
+  done: { total: number; tasks: number; todos: number; marketing: number; recent: WorkItem[] }
+  open: number
+  overdue: number
+  minutes: number
+  lastActive: string | null
+}
+export interface TeamWork { range: { startDate: string; endDate: string }; scope: 'me' | 'team' | 'company'; people: PersonWork[] }
+
+export function getTeamWork(range: RangeKey, custom?: CustomRange | null) {
+  return api.get<TeamWork>(`/dashboard/work?${rangeQuery(range, custom)}`)
+}

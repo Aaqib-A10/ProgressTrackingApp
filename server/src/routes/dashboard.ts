@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { teamDashboard, topAchiever } from '../controllers/dashboardController'
+import { teamDashboard, teamWorkView, topAchiever } from '../controllers/dashboardController'
 import { executiveDashboard } from '../controllers/executiveController'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../lib/asyncHandler'
@@ -10,3 +10,4 @@ dashboardRouter.use(requireAuth)
 dashboardRouter.get('/team', asyncHandler(teamDashboard))
 dashboardRouter.get('/executive', asyncHandler(executiveDashboard))
 dashboardRouter.get('/top-achiever', asyncHandler(topAchiever))
+dashboardRouter.get('/work', asyncHandler(teamWorkView))
