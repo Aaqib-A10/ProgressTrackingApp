@@ -15,7 +15,7 @@ import { sameTag, TAG_COLORS, TagChip } from './Tags'
 import { Label, Select, Tile, useCrmWords, useLeadsMeta } from './shared'
 import { useAuth } from '../../../lib/auth'
 import { readFile } from '../itad/dialer/ImportModal'
-import { CreateBusinessWizard, SetupChecklist, SetupSteps, WhoSeesWhat, type SetupPerson } from './SetupGuide'
+import { CreateBusinessWizard, SetupChecklist, SetupSteps, type SetupPerson } from './SetupGuide'
 import { dataTint } from '../../../theme/css'
 import { role } from '../../../theme/css'
 
@@ -47,16 +47,23 @@ export default function LeadSettings() {
   const sync = () => { reloadMeta(); void refreshMe() }
   const put = (b: BusinessRow) => { setList((l) => (l ?? []).map((x) => (x.id === b.id ? { ...x, ...b } : x))); sync() }
   const biz = list?.find((b) => b.id === sel) ?? null
+  // The tab stays the same when another business is picked (People of one, then People of the next).
+  const [tab, setTab] = useState<EditorTab>('general')
+  /** The company-wide phone settings (Call buttons, TalkLoop), the last item of the list on the left. */
+  const [calling, setCalling] = useState(false)
+  const memberIds = useMemo(() => new Set((list ?? []).flatMap((b) => b.members.map((m) => m.id))), [list])
+  const many = plain && !cmrOn ? 'Pipelines' : 'Businesses'
 
   if (err) return <div className="mx-auto max-w-xl py-16"><EmptyState icon={<Inbox />} title="Lead Settings are not available" hint={err} /></div>
 
+  const item = (on: boolean) => cn('flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-left transition-colors', on ? 'border-primary bg-primary/[0.04]' : 'border-line bg-card hover:border-line-strong')
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link to="/app/leads" className="inline-flex items-center gap-1 text-body-sm text-ink-muted hover:text-ink"><ArrowLeft size={14} />Leads</Link>
           <h1 className="mt-1 text-headline-lg text-ink">{words.settings}</h1>
-          <p className="mt-0.5 text-body-md text-ink-muted">{plain && !cmrOn ? 'Each pipeline has its own stages, people, website form and inbox.' : 'Each business gets its own pipeline, people, website form and inbox. A CMR business adds Jesse, the five facts and the flow.'}</p>
+          <p className="mt-0.5 text-body-md text-ink-muted">Your {many.toLowerCase()}, who works them, and where their leads come from.</p>
         </div>
         <Button size="sm" leadingIcon={<Plus size={16} />} onClick={() => setCreating(true)}>{plain && !cmrOn ? 'Add pipeline' : 'Add business'}</Button>
       </div>
@@ -64,23 +71,29 @@ export default function LeadSettings() {
       {list && !list.length ? (
         <SetupSteps cmrOn={cmrOn} plain={plain} onCreate={() => setCreating(true)} />
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <nav className="space-y-1.5">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <nav className="space-y-1.5 lg:sticky lg:top-4 lg:self-start" aria-label={many}>
+            <p className="px-1 pb-0.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">{many}</p>
             {(list ?? []).map((b) => (
-              <button key={b.id} type="button" onClick={() => setSel(b.id)} className={cn('flex w-full items-center gap-3 rounded-card border px-3.5 py-3 text-left transition-colors', sel === b.id ? 'border-primary bg-primary/[0.04]' : 'border-line bg-card hover:border-line-strong')}>
+              <button key={b.id} type="button" onClick={() => { setSel(b.id); setCalling(false) }} aria-current={!calling && sel === b.id ? 'page' : undefined} className={item(!calling && sel === b.id)}>
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: b.color }} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-semibold text-ink">{b.name}</span><span className="block text-body-sm text-ink-muted">{b.members.length} people · {b.openLeads} open</span></span>
                 {b.kind === 'CMR' && <Badge tone="accent">CMR</Badge>}{!b.isActive && <Badge>Off</Badge>}
               </button>
             ))}
+            <p className="px-1 pb-0.5 pt-4 text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">For everyone</p>
+            <button type="button" onClick={() => setCalling(true)} aria-current={calling ? 'page' : undefined} className={item(calling)}>
+              <PhoneCall size={16} className="shrink-0 text-ink-faint" />
+              <span className="min-w-0 flex-1"><span className="block text-body-md font-semibold text-ink">Phone and calls</span><span className="block text-body-sm text-ink-muted">How the Call buttons dial</span></span>
+            </button>
           </nav>
-          {biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} plain={plain} onSaved={put} onDeleted={() => { setSel(null); void load(); sync() }} toast={addToast} />}
+          {calling
+            ? <TalkLoopSection toast={addToast} memberIds={memberIds} />
+            : biz && <BusinessEditor key={biz.id} biz={biz} people={people} cmrOn={cmrOn} plain={plain} tab={tab} setTab={setTab} onSaved={put} onDeleted={() => { setSel(null); void load(); sync() }} toast={addToast} />}
         </div>
       )}
 
-      {list && <TalkLoopSection toast={addToast} />}
-
-      {creating && <CreateBusinessWizard cmrOn={cmrOn} plain={plain} people={people} onClose={() => setCreating(false)} onCreated={(b, note) => { setCreating(false); setList((l) => [...(l ?? []).filter((x) => x.id !== b.id), { ...b, openLeads: 0, leadCount: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id); sync(); addToast({ type: 'success', message: note }) }} />}
+      {creating && <CreateBusinessWizard cmrOn={cmrOn} plain={plain} people={people} onClose={() => setCreating(false)} onCreated={(b, note) => { setCreating(false); setCalling(false); setList((l) => [...(l ?? []).filter((x) => x.id !== b.id), { ...b, openLeads: 0, leadCount: 0 }].sort((x, y) => x.name.localeCompare(y.name))); setSel(b.id); sync(); addToast({ type: 'success', message: note }) }} />}
     </div>
   )
 }
@@ -102,7 +115,9 @@ function Section({ icon, title, hint, children, action }: { icon: React.ReactNod
   )
 }
 
-function BusinessEditor({ biz, people, cmrOn, plain, onSaved, onDeleted, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; plain: boolean; onSaved: (b: BusinessRow) => void; onDeleted: () => void; toast: Toast }) {
+type EditorTab = 'general' | 'people' | 'pipeline' | 'sources' | 'lists' | 'cmr'
+
+function BusinessEditor({ biz, people, cmrOn, plain, tab, setTab, onSaved, onDeleted, toast }: { biz: BusinessRow; people: (Person & { department: string | null })[]; cmrOn: boolean; plain: boolean; tab: EditorTab; setTab: (t: EditorTab) => void; onSaved: (b: BusinessRow) => void; onDeleted: () => void; toast: Toast }) {
   const [f, setF] = useState({ name: biz.name, website: biz.website ?? '', color: biz.color, slaAssignMins: biz.slaAssignMins, slaContactMins: biz.slaContactMins })
   const [busy, setBusy] = useState(false)
   const dirty = f.name !== biz.name || f.website !== (biz.website ?? '') || f.color !== biz.color || f.slaAssignMins !== biz.slaAssignMins || f.slaContactMins !== biz.slaContactMins
@@ -110,43 +125,65 @@ function BusinessEditor({ biz, people, cmrOn, plain, onSaved, onDeleted, toast }
     setBusy(true)
     try { const r = await fn() as { business?: BusinessRow }; if (r?.business) onSaved(r.business); if (ok) toast({ type: 'success', message: ok }) } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) }
   }
-  const [who, setWho] = useState(false)
+  const cmr = biz.kind === 'CMR'
+  const one = plain && !cmr ? 'pipeline' : 'business'
+  const tabs: { key: EditorTab; label: string; count?: number }[] = [
+    { key: 'general', label: 'General' },
+    { key: 'people', label: 'People', count: biz.members.length },
+    { key: 'pipeline', label: 'Stages and tags' },
+    { key: 'sources', label: 'Lead sources' },
+    { key: 'lists', label: 'Prohibited & customers' },
+    ...(cmr ? [{ key: 'cmr' as const, label: 'CMR flow' }] : []),
+  ]
+  const cur = tabs.some((t) => t.key === tab) ? tab : 'general'
+  const sla = (v: number, on: (n: number) => void) => <select value={v} onChange={(e) => on(Number(e.target.value))} className="h-9 w-full rounded-btn border border-line bg-card px-2.5 text-body-md">{SLA_CHOICES.map((m) => <option key={m} value={m}>{slaText(m)}</option>)}</select>
   return (
-    <div className="space-y-5">
-      <SetupChecklist biz={biz} cmrOn={cmrOn} plain={plain} />
-      <div className="rounded-card border border-line bg-card">
-        <button type="button" onClick={() => setWho((v) => !v)} className="flex w-full items-center justify-between px-5 py-3 text-left text-body-sm font-semibold text-ink"><span>Who sees what in {biz.name}</span><span className="text-ink-faint">{who ? 'Hide' : 'Show'}</span></button>
-        {who && <div className="border-t border-line p-4"><WhoSeesWhat compact plain={plain && biz.kind !== 'CMR'} /></div>}
+    <div className="min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-card px-5 py-4 shadow-xs">
+        <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: biz.color }} />
+        <div className="min-w-0 flex-1">
+          <h2 className="flex items-center gap-2 text-[17px] font-semibold text-ink"><span className="truncate">{biz.name}</span>{cmr && <Badge tone="accent">CMR</Badge>}</h2>
+          <p className="text-body-sm text-ink-muted">{biz.members.length} {biz.members.length === 1 ? 'person' : 'people'} · {biz.openLeads} open lead{biz.openLeads === 1 ? '' : 's'} · {biz.leadCount} in all</p>
+        </div>
+        <Toggle checked={biz.isActive} onChange={(v) => run(() => leadsApi.updateBusiness(biz.id, { isActive: v }), v ? 'Switched on' : 'Switched off: its form and inbox stop')} label={biz.isActive ? 'On' : 'Off'} />
       </div>
-      <Section icon={<Globe size={17} />} title={plain ? 'Details' : 'Business'} action={<div className="flex items-center gap-3"><Toggle checked={biz.isActive} onChange={(v) => run(() => leadsApi.updateBusiness(biz.id, { isActive: v }), v ? 'Switched on' : 'Switched off: its form and inbox stop')} label={biz.isActive ? 'On' : 'Off'} /></div>}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-          <TextField label="Website" placeholder="https://example.com" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} />
-          <label><span className="mb-1.5 block text-body-sm font-medium text-ink">Alert managers if a lead is not assigned within</span>
-            <select value={f.slaAssignMins} onChange={(e) => setF({ ...f, slaAssignMins: Number(e.target.value) })} className="h-9 w-full rounded-btn border border-line bg-card px-2.5 text-body-md">{SLA_CHOICES.map((m) => <option key={m} value={m}>{slaText(m)}</option>)}</select>
-          </label>
-          <label><span className="mb-1.5 block text-body-sm font-medium text-ink">Alert the rep if nobody gets in touch within</span>
-            <select value={f.slaContactMins} onChange={(e) => setF({ ...f, slaContactMins: Number(e.target.value) })} className="h-9 w-full rounded-btn border border-line bg-card px-2.5 text-body-md">{SLA_CHOICES.map((m) => <option key={m} value={m}>{slaText(m)}</option>)}</select>
-          </label>
-          <div className="sm:col-span-2">
-            <span className="mb-1.5 block text-body-sm font-medium text-ink">Colour</span>
-            <div className="flex flex-wrap gap-2">{COLORS.map((c) => <button key={c} type="button" aria-label={c} onClick={() => setF({ ...f, color: c })} className={cn('flex h-7 w-7 items-center justify-center rounded-full text-white', f.color === c && 'ring-2 ring-offset-2 ring-offset-card')} style={{ background: c, ['--tw-ring-color' as string]: c }}>{f.color === c && <Check size={14} />}</button>)}</div>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <button type="button" className="inline-flex items-center gap-1.5 text-body-sm text-danger-ink hover:underline" onClick={() => { if (window.confirm(`Delete ${biz.name}? Only a business with no leads can be deleted.`)) void leadsApi.deleteBusiness(biz.id).then(onDeleted).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not delete') })) }}><Trash2 size={14} />{plain ? 'Delete pipeline' : 'Delete business'}</button>
-          <Button size="sm" disabled={!dirty || busy || !f.name.trim()} onClick={() => run(() => leadsApi.updateBusiness(biz.id, { name: f.name.trim(), website: f.website.trim() || null, color: f.color, slaAssignMins: f.slaAssignMins, slaContactMins: f.slaContactMins }), 'Saved')}>Save changes</Button>
-        </div>
-      </Section>
+      <SetupChecklist biz={biz} cmrOn={cmrOn} plain={plain} />
+      <div role="tablist" aria-label={`${biz.name} settings`} className="flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {tabs.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={cur === t.key} onClick={() => setTab(t.key)}
+            className={cn('-mb-px inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-body-sm font-semibold transition-colors', cur === t.key ? 'border-primary text-primary-ink' : 'border-transparent text-ink-muted hover:text-ink')}>
+            {t.label}{t.count != null && <span className="rounded-full bg-slate-100 px-1.5 text-[11px] tabular-nums text-ink-muted dark:bg-white/10">{t.count}</span>}
+          </button>
+        ))}
+      </div>
 
-      <KindSection biz={biz} people={people} cmrOn={cmrOn} plain={plain} onSaved={onSaved} toast={toast} />
-      <PeopleSection biz={biz} people={people} onSaved={onSaved} toast={toast} />
-      <PipelineSection biz={biz} onSaved={onSaved} toast={toast} />
-      <TagsSection biz={biz} onSaved={onSaved} toast={toast} />
-      {biz.kind === 'CMR' && <CmrSection biz={biz} onSaved={onSaved} toast={toast} />}
-      <ListsSection biz={biz} toast={toast} />
-      <FormSection biz={biz} onSaved={onSaved} toast={toast} />
-      <InboxSection biz={biz} onSaved={onSaved} toast={toast} />
+      {cur === 'general' && (
+        <>
+          <Section icon={<Globe size={17} />} title="Details">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+              <TextField label="Website" placeholder="https://example.com" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} />
+              <label><span className="mb-1.5 block text-body-sm font-medium text-ink">Alert managers if a lead is not assigned within</span>{sla(f.slaAssignMins, (n) => setF({ ...f, slaAssignMins: n }))}</label>
+              <label><span className="mb-1.5 block text-body-sm font-medium text-ink">Alert the rep if a lead is not contacted within</span>{sla(f.slaContactMins, (n) => setF({ ...f, slaContactMins: n }))}</label>
+              <div className="sm:col-span-2">
+                <span className="mb-1.5 block text-body-sm font-medium text-ink">Colour</span>
+                <div className="flex flex-wrap gap-2">{COLORS.map((c) => <button key={c} type="button" aria-label={c} onClick={() => setF({ ...f, color: c })} className={cn('flex h-7 w-7 items-center justify-center rounded-full text-white', f.color === c && 'ring-2 ring-offset-2 ring-offset-card')} style={{ background: c, ['--tw-ring-color' as string]: c }}>{f.color === c && <Check size={14} />}</button>)}</div>
+              </div>
+            </div>
+            {dirty && <div className="mt-4 flex justify-end gap-2"><Button size="sm" variant="ghost" onClick={() => setF({ name: biz.name, website: biz.website ?? '', color: biz.color, slaAssignMins: biz.slaAssignMins, slaContactMins: biz.slaContactMins })}>Cancel</Button><Button size="sm" disabled={busy || !f.name.trim()} onClick={() => run(() => leadsApi.updateBusiness(biz.id, { name: f.name.trim(), website: f.website.trim() || null, color: f.color, slaAssignMins: f.slaAssignMins, slaContactMins: f.slaContactMins }), 'Saved')}>Save changes</Button></div>}
+          </Section>
+          <KindSection biz={biz} people={people} cmrOn={cmrOn} plain={plain} onSaved={onSaved} toast={toast} />
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line px-5 py-3">
+            <span className="text-body-sm text-ink-muted">Only a {one} with no leads can be deleted. To pause it, switch it off at the top.</span>
+            <button type="button" className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-danger-ink hover:underline" onClick={() => { if (window.confirm(`Delete ${biz.name}? Only a ${one} with no leads can be deleted.`)) void leadsApi.deleteBusiness(biz.id).then(onDeleted).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not delete') })) }}><Trash2 size={14} />Delete {one}</button>
+          </div>
+        </>
+      )}
+      {cur === 'people' && <PeopleSection biz={biz} people={people} onSaved={onSaved} toast={toast} />}
+      {cur === 'pipeline' && <><PipelineSection biz={biz} onSaved={onSaved} toast={toast} /><TagsSection biz={biz} onSaved={onSaved} toast={toast} /></>}
+      {cur === 'sources' && <><FormSection biz={biz} onSaved={onSaved} toast={toast} /><InboxSection biz={biz} onSaved={onSaved} toast={toast} /></>}
+      {cur === 'lists' && <ListsSection biz={biz} toast={toast} />}
+      {cur === 'cmr' && cmr && <CmrSection biz={biz} onSaved={onSaved} toast={toast} />}
     </div>
   )
 }
@@ -157,7 +194,7 @@ function PeopleSection({ biz, people, onSaved, toast }: { biz: BusinessRow; peop
   const others = useMemo(() => people.filter((p) => !biz.members.some((m) => m.id === p.id)), [people, biz.members])
   const act = (fn: () => Promise<{ business: BusinessRow; returned?: number }>, ok: (r: { returned?: number }) => string) => fn().then((r) => { onSaved(r.business); toast({ type: 'success', message: ok(r) }) }).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
   return (
-    <Section icon={<Users size={17} />} title="People" hint="Managers see every lead of this business and give them out. Reps see the leads given to them.">
+    <Section icon={<Users size={17} />} title="People" hint="Managers see every lead and give them out. Reps see only the leads given to them.">
       {biz.members.length ? (
         <ul className="divide-y divide-line rounded-card border border-line">
           {biz.members.map((m) => (
@@ -196,6 +233,7 @@ function CopyBox({ text, label }: { text: string; label?: string }) {
 
 function FormSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: BusinessRow) => void; toast: Toast }) {
   const [tab, setTab] = useState<'html' | 'js' | 'wp'>('html')
+  const [code, setCode] = useState(false)
   const site = biz.website ? biz.website.replace(/\/+$/, '') : 'https://your-site.com'
   const html = `<form action="${biz.formUrl}" method="POST">
   <input name="name" placeholder="Your name" required>
@@ -227,19 +265,24 @@ ${biz.formUrl}
 Or, with no plugin: in the form's email settings, also send the notification email to this business's
 lead inbox (below). Emails that list fields as "Name: ...", "Phone: ..." become leads with those fields.`
   return (
-    <Section icon={<Globe size={17} />} title="Website form" hint="Every website form that posts here becomes a lead of this business. Any field names work."
-      action={<div className="flex gap-2">
+    <Section icon={<Globe size={17} />} title="Website form" hint="Forms on your website that send to this address become leads here."
+      action={<div className="flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" leadingIcon={<Send size={14} />} onClick={() => leadsApi.testLead(biz.id).then(() => toast({ type: 'success', message: 'Test lead sent. Find it under Leads, then mark it Spam.' })).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not send') }))}>Send a test lead</Button>
         <Button size="sm" variant="ghost" leadingIcon={<RefreshCw size={14} />} onClick={() => { if (window.confirm('Make a new form address? The old one stops working, so every form on the site must be updated.')) void leadsApi.newFormKey(biz.id).then((r) => { onSaved(r.business); toast({ type: 'success', message: 'New address made' }) }) }}>New address</Button>
       </div>}>
-      <CopyBox label="Form address" text={biz.formUrl} />
-      <div className="mt-4 flex gap-1">
-        {([['html', 'HTML form'], ['js', 'Your own form (JavaScript)'], ['wp', 'WordPress and form plugins']] as const).map(([k, l]) => (
-          <button key={k} type="button" onClick={() => setTab(k)} className={cn('h-8 rounded-full px-3 text-body-sm font-medium', tab === k ? 'bg-ink text-card' : 'text-ink-muted hover:bg-slate-100')}>{l}</button>
-        ))}
-      </div>
-      <div className="mt-3"><CopyBox text={tab === 'html' ? html : tab === 'js' ? js : wp} /></div>
-      <p className="mt-3 text-body-sm text-ink-muted">The same person sending again while their lead is open is added to that lead (not a new one). Bots that fill the hidden <code>_hp</code> field are ignored.</p>
+      <CopyBox text={biz.formUrl} />
+      <button type="button" aria-expanded={code} onClick={() => setCode((v) => !v)} className="mt-3 text-body-sm font-semibold text-primary-ink hover:underline">{code ? 'Hide the setup code' : 'How to connect your website'}</button>
+      {code && (
+        <div className="mt-3">
+          <div className="flex flex-wrap gap-1">
+            {([['html', 'HTML form'], ['js', 'Your own form (JavaScript)'], ['wp', 'WordPress and form plugins']] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setTab(k)} className={cn('h-8 rounded-full px-3 text-body-sm font-medium', tab === k ? 'bg-ink text-card' : 'text-ink-muted hover:bg-slate-100 dark:hover:bg-white/5')}>{l}</button>
+            ))}
+          </div>
+          <div className="mt-3"><CopyBox text={tab === 'html' ? html : tab === 'js' ? js : wp} /></div>
+          <p className="mt-2 text-[11.5px] text-ink-muted">Any field names work. The same person sending again while their lead is open is added to that lead. Bots that fill the hidden <code>_hp</code> field are ignored.</p>
+        </div>
+      )}
     </Section>
   )
 }
@@ -253,6 +296,7 @@ const PRESETS: { label: string; host: string; port: number; hint: string }[] = [
 function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: BusinessRow) => void; toast: Toast }) {
   const [f, setF] = useState<InboxInput>({ inboxOn: biz.inboxOn, inboxHost: biz.inboxHost, inboxPort: biz.inboxPort, inboxSecure: biz.inboxSecure, inboxUser: biz.inboxUser, inboxFolder: biz.inboxFolder, password: '' })
   const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(!!(biz.inboxOn && biz.inboxError))
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null)
   const preset = PRESETS.find((p) => p.host && p.host === f.inboxHost) ?? (f.inboxHost ? PRESETS[2] : null)
   const save = async (on = f.inboxOn) => {
@@ -263,88 +307,108 @@ function InboxSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: 
     setBusy(true); setTest(null)
     try { const r = await leadsApi.testInbox(biz.id, { ...f, password: f.password || undefined }); setTest(r.ok ? { ok: true, text: `Connected. ${r.messages ?? 0} emails in ${f.inboxFolder}.` } : { ok: false, text: r.error ?? 'Could not connect' }) } catch (e) { setTest({ ok: false, text: apiErrorText(e, 'Could not connect') }) } finally { setBusy(false) }
   }
+  // Switching on with no mailbox yet opens the form instead.
+  const toggle = (v: boolean) => { if (v && !biz.inboxHost) { setOpen(true); toast({ type: 'info', message: 'Fill in the mailbox first, then save it and switch it on.' }) } else void save(v) }
+  const status = biz.inboxOn
+    ? biz.inboxError ? <span className="text-danger-ink">Last check failed: {biz.inboxError}</span> : <>On · {biz.inboxUser ?? biz.inboxHost} · {biz.inboxCheckedAt ? `last checked ${ago(biz.inboxCheckedAt)}` : 'first check within 2 minutes'}</>
+    : biz.inboxHost ? <>Off · {biz.inboxUser ?? biz.inboxHost}</> : <>Not set up. Emails sent to a sales mailbox can become leads by themselves.</>
   return (
-    <Section icon={<Mail size={17} />} title="Email inbox" hint="New emails to this mailbox become leads (checked every 2 minutes). Only emails that arrive after it is switched on; nothing in the mailbox is changed."
-      action={<Toggle checked={biz.inboxOn} onChange={(v) => void save(v)} label={biz.inboxOn ? 'On' : 'Off'} />}>
-      <div className="pt-tabs mb-3 flex flex-wrap gap-1.5">
-        {PRESETS.map((p) => <button key={p.label} type="button" onClick={() => setF({ ...f, inboxHost: p.host || f.inboxHost, inboxPort: p.port, inboxSecure: true })} className={cn('h-8 rounded-full border px-3 text-body-sm', preset?.label === p.label ? 'border-primary bg-primary/[0.06] text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{p.label}</button>)}
+    <Section icon={<Mail size={17} />} title="Email inbox" hint="New emails to this mailbox become leads, checked every 2 minutes. Nothing in the mailbox is changed."
+      action={<Toggle checked={biz.inboxOn} onChange={toggle} label={biz.inboxOn ? 'On' : 'Off'} />}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="min-w-0 text-body-sm text-ink-muted">{status}</p>
+        <Button size="sm" variant="secondary" onClick={() => setOpen((v) => !v)}>{open ? 'Close' : biz.inboxHost ? 'Edit' : 'Set up'}</Button>
       </div>
-      {preset && <p className="mb-3 text-body-sm text-ink-muted">{preset.hint}</p>}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TextField label="Mail server (IMAP)" placeholder="imap.gmail.com" value={f.inboxHost ?? ''} onChange={(e) => setF({ ...f, inboxHost: e.target.value })} />
-        <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-          <TextField label="Port" inputMode="numeric" value={String(f.inboxPort)} onChange={(e) => setF({ ...f, inboxPort: Number(e.target.value.replace(/\D/g, '')) || 993 })} />
-          <label className="flex h-9 items-center gap-2 text-body-sm text-ink"><input type="checkbox" checked={f.inboxSecure} onChange={(e) => setF({ ...f, inboxSecure: e.target.checked })} />SSL</label>
+      {open && (
+        <div className="mt-4 border-t border-line pt-4">
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {PRESETS.map((p) => <button key={p.label} type="button" onClick={() => setF({ ...f, inboxHost: p.host || f.inboxHost, inboxPort: p.port, inboxSecure: true })} className={cn('h-8 rounded-full border px-3 text-body-sm', preset?.label === p.label ? 'border-primary bg-primary/[0.06] text-primary-ink' : 'border-line text-ink-muted hover:text-ink')}>{p.label}</button>)}
+          </div>
+          {preset && <p className="mb-3 text-body-sm text-ink-muted">{preset.hint}</p>}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField label="Mail server (IMAP)" placeholder="imap.gmail.com" value={f.inboxHost ?? ''} onChange={(e) => setF({ ...f, inboxHost: e.target.value })} />
+            <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+              <TextField label="Port" inputMode="numeric" value={String(f.inboxPort)} onChange={(e) => setF({ ...f, inboxPort: Number(e.target.value.replace(/\D/g, '')) || 993 })} />
+              <label className="flex h-9 items-center gap-2 text-body-sm text-ink"><input type="checkbox" checked={f.inboxSecure} onChange={(e) => setF({ ...f, inboxSecure: e.target.checked })} />SSL</label>
+            </div>
+            <TextField label="Email / user name" placeholder="sales@your-domain.com" value={f.inboxUser ?? ''} onChange={(e) => setF({ ...f, inboxUser: e.target.value })} />
+            <TextField label={biz.inboxHasPassword ? 'Password (saved; type to change)' : 'Password'} type="password" autoComplete="new-password" placeholder={biz.inboxHasPassword ? '••••••••' : ''} value={f.password ?? ''} onChange={(e) => setF({ ...f, password: e.target.value })} />
+            <TextField label="Folder" value={f.inboxFolder} onChange={(e) => setF({ ...f, inboxFolder: e.target.value })} />
+          </div>
+          {test && <p className={cn('mt-3 rounded-btn px-3 py-2 text-body-sm', test.ok ? 'bg-success/10 text-success-ink' : 'bg-danger/10 text-danger-ink')}>{test.text}</p>}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button size="sm" variant="secondary" disabled={busy || !f.inboxHost || !f.inboxUser} onClick={tryIt}>Test connection</Button>
+            <Button size="sm" disabled={busy || !f.inboxHost || !f.inboxUser} onClick={() => save()}>Save inbox</Button>
+          </div>
         </div>
-        <TextField label="Email / user name" placeholder="sales@your-domain.com" value={f.inboxUser ?? ''} onChange={(e) => setF({ ...f, inboxUser: e.target.value })} />
-        <TextField label={biz.inboxHasPassword ? 'Password (saved; type to change)' : 'Password'} type="password" autoComplete="new-password" placeholder={biz.inboxHasPassword ? '••••••••' : ''} value={f.password ?? ''} onChange={(e) => setF({ ...f, password: e.target.value })} />
-        <TextField label="Folder" value={f.inboxFolder} onChange={(e) => setF({ ...f, inboxFolder: e.target.value })} />
-      </div>
-      {test && <p className={cn('mt-3 rounded-btn px-3 py-2 text-body-sm', test.ok ? 'bg-success/10 text-success-ink' : 'bg-danger/10 text-danger-ink')}>{test.text}</p>}
-      {biz.inboxOn && (biz.inboxError ? <p className="mt-3 rounded-btn bg-danger/10 px-3 py-2 text-body-sm text-danger-ink">Last check failed: {biz.inboxError}</p> : biz.inboxCheckedAt ? <p className="mt-3 text-body-sm text-ink-muted">Last checked {ago(biz.inboxCheckedAt)}.</p> : <p className="mt-3 text-body-sm text-ink-muted">First check within 2 minutes.</p>)}
-      <div className="mt-4 flex justify-end gap-2">
-        <Button size="sm" variant="secondary" disabled={busy || !f.inboxHost || !f.inboxUser} onClick={tryIt}>Test connection</Button>
-        <Button size="sm" disabled={busy} onClick={() => save()}>Save inbox</Button>
-      </div>
+      )}
     </Section>
   )
 }
 
 // ------------------------------------------------------------------ TalkLoop (the phone system)
 
-function TalkLoopSection({ toast }: { toast: Toast }) {
+function TalkLoopSection({ toast, memberIds }: { toast: Toast; memberIds: Set<string> }) {
   const { reload: reloadMeta } = useLeadsMeta()
   const [info, setInfo] = useState<TalkLoopInfo | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [everyone, setEveryone] = useState(false)
   const load = () => leadsApi.talkloop().then((r) => { setInfo(r); setErr('') }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
   useEffect(() => { void load() }, [])
   const run = async (fn: () => Promise<unknown>, ok: (r: unknown) => string) => { setBusy(true); try { const r = await fn(); toast({ type: 'success', message: ok(r) }); await load() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not do that') }) } finally { setBusy(false) } }
   const when = (iso: string | null) => (iso ? ago(iso) : 'never')
-  if (err) return null
-  if (!info) return <div className="h-24 animate-pulse rounded-card border border-line bg-card" />
+  if (err) return <EmptyState icon={<PhoneCall />} title="Phone settings are not available" hint={err} />
+  if (!info) return <div className="h-40 animate-pulse rounded-card border border-line bg-card" />
   const st = info.status
+  const dial = <DialCard plain={info.available === false} dial={info.dial ?? { scheme: 'tel', domain: null, template: null }} pbxDomain={info.pbxDomain ?? null} onSaved={() => { void load(); reloadMeta() }} toast={toast} />
   // A company without a phone system link: only how the Call buttons dial.
   if (info.available === false) return (
-    <Section icon={<PhoneCall size={17} />} title="Calling" hint="How the Call buttons on a lead and a contact dial. Reps call from their own phone or softphone, then log the call on the lead.">
-      <DialCard plain dial={info.dial ?? { scheme: 'tel', domain: null, template: null }} pbxDomain={null} onSaved={() => { void load(); reloadMeta() }} toast={toast} />
-    </Section>
+    <Section icon={<PhoneCall size={17} />} title="Call buttons" hint="What a Call button on a lead opens. Reps call from their own phone or softphone, then log the call on the lead.">{dial}</Section>
   )
+  // The people who work leads (and anyone already linked); everyone else on request.
+  const shown = everyone ? info.people : info.people.filter((p) => memberIds.has(p.id) || p.talkloopUserId)
   return (
-    <Section icon={<PhoneCall size={17} />} title="TalkLoop (phone system)" hint="Calls made in TalkLoop land on the matching lead by phone number: who called, how long, answered or voicemail, the recording and the transcript. The SDR only adds the summary and the facts."
-      action={info.configured ? <div className="flex items-center gap-2"><Button size="sm" variant="secondary" disabled={busy} leadingIcon={<RefreshCw size={14} />} onClick={() => run(() => leadsApi.talkloopSync(), (r) => { const s = (r as { status: TalkLoopInfo['status'] }).status; return `Synced: ${s.lastRunSynced} new call${s.lastRunSynced === 1 ? '' : 's'}${s.lastRunUnmatched ? `, ${s.lastRunUnmatched} to numbers no lead has` : ''}` })}>Sync now</Button></div> : <Badge tone="warning">Not connected</Badge>}>
-      <div className="mb-4"><DialCard dial={info.dial ?? { scheme: 'tel', domain: null, template: null }} pbxDomain={info.pbxDomain ?? null} onSaved={() => { void load(); reloadMeta() }} toast={toast} /></div>
-      {!info.configured ? (
-        <p className="text-body-md text-ink-muted">Not connected yet. The TalkLoop token goes in the server's <code>.env</code> as <code>TALKLOOP_TOKEN</code> (never in Metriq's screens or code); after a restart this section shows the account's users and starts syncing calls every 3 minutes.</p>
-      ) : (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Tile label="Connected" value={info.error ? 'No' : 'Yes'} color={info.error ? role('error') : role('success')} hint={info.error ?? `${info.talkloopUsers.length} TalkLoop user${info.talkloopUsers.length === 1 ? '' : 's'}`} />
-            <Tile label="Last sync" value={when(st.lastRunAt)} color={role('accent')} hint={st.lastError ? `Failed: ${st.lastError}` : st.lastRunAt ? `${st.lastRunSynced} new, ${st.lastRunUnmatched} unmatched` : 'runs every 3 minutes'} />
-            <Tile label="Calls on leads" value={st.synced} color={role('blue-vivid')} hint="since the start" />
-            <Tile label="No lead yet" value={st.waiting ?? st.unmatched} color={role('warning')} hint={<Link to="/app/leads/calls?view=unmatched" className="font-semibold text-primary-ink hover:underline">calls kept aside: add as lead →</Link>} />
-          </div>
-          <div>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-body-sm text-ink-muted">Who is who: each person's TalkLoop user. Only linked people's calls are filed. <button type="button" className="font-semibold text-primary-ink hover:underline" disabled={busy} onClick={() => run(() => leadsApi.talkloopLink({ auto: true }), (r) => `${(r as { linked: number }).linked} linked by email`)}>Match by email</button></p>
+    <div className="min-w-0 space-y-4">
+      <Section icon={<PhoneCall size={17} />} title="Call buttons" hint="What a Call button on a lead opens on the rep's computer.">{dial}</Section>
+      <Section icon={<PhoneCall size={17} />} title="TalkLoop" hint="Calls made in TalkLoop are filed on the lead with that phone number: who called, how long, the recording and the transcript."
+        action={info.configured ? <Button size="sm" variant="secondary" disabled={busy} leadingIcon={<RefreshCw size={14} />} onClick={() => run(() => leadsApi.talkloopSync(), (r) => { const s = (r as { status: TalkLoopInfo['status'] }).status; return `Synced: ${s.lastRunSynced} new call${s.lastRunSynced === 1 ? '' : 's'}${s.lastRunUnmatched ? `, ${s.lastRunUnmatched} to numbers no lead has` : ''}` })}>Sync now</Button> : <Badge tone="warning">Not connected</Badge>}>
+        {!info.configured ? (
+          <p className="text-body-md text-ink-muted">Not connected yet. The TalkLoop token goes in the server's <code>.env</code> as <code>TALKLOOP_TOKEN</code> (never in Metriq's screens or code). After a restart, calls sync every 3 minutes.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Tile label="Connected" value={info.error ? 'No' : 'Yes'} color={info.error ? role('error') : role('success')} hint={info.error ?? `${info.talkloopUsers.length} TalkLoop user${info.talkloopUsers.length === 1 ? '' : 's'}`} />
+              <Tile label="Last sync" value={when(st.lastRunAt)} color={role('accent')} hint={st.lastError ? `Failed: ${st.lastError}` : 'every 3 minutes'} />
+              <Tile label="Calls on leads" value={st.synced} color={role('blue-vivid')} hint="since the start" />
+              <Tile label="No lead yet" value={st.waiting ?? st.unmatched} color={role('warning')} hint={<Link to="/app/leads/calls?view=unmatched" className="font-semibold text-primary-ink hover:underline">add them as leads →</Link>} />
             </div>
-            <ul className="divide-y divide-line rounded-card border border-line">
-              {info.people.map((p) => (
-                <li key={p.id} className="flex flex-wrap items-center gap-3 px-3.5 py-2">
-                  <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{p.name}</span><span className="block truncate text-body-sm text-ink-muted">{p.email}</span></span>
-                  <Select value={p.talkloopUserId ?? ''} disabled={busy} onChange={(e) => run(() => leadsApi.talkloopLink({ userId: p.id, talkloopUserId: e.target.value ? Number(e.target.value) : null }), () => (e.target.value ? 'Linked' : 'Unlinked'))} aria-label={`TalkLoop user for ${p.name}`} className="min-w-[240px]">
-                    <option value="">Not on TalkLoop</option>
-                    {info.talkloopUsers.map((u) => <option key={u.id} value={u.id}>{u.name}{u.extension ? ` · ext ${u.extension}` : ''}{u.email ? ` · ${u.email}` : ''}</option>)}
-                  </Select>
-                  {p.talkloopExt && <Badge tone="accent">ext {p.talkloopExt}</Badge>}
-                </li>
-              ))}
-            </ul>
+            <div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-body-sm text-ink-muted">Link each person to their TalkLoop user. Only linked people's calls are filed.</p>
+                <button type="button" className="text-body-sm font-semibold text-primary-ink hover:underline" disabled={busy} onClick={() => run(() => leadsApi.talkloopLink({ auto: true }), (r) => `${(r as { linked: number }).linked} linked by email`)}>Match by email</button>
+              </div>
+              {shown.length ? (
+                <ul className="divide-y divide-line rounded-card border border-line">
+                  {shown.map((p) => (
+                    <li key={p.id} className="flex flex-wrap items-center gap-3 px-3.5 py-2">
+                      <span className="min-w-0 flex-1"><span className="block truncate text-body-md font-medium text-ink">{p.name}</span><span className="block truncate text-body-sm text-ink-muted">{p.email}</span></span>
+                      <Select value={p.talkloopUserId ?? ''} disabled={busy} onChange={(e) => run(() => leadsApi.talkloopLink({ userId: p.id, talkloopUserId: e.target.value ? Number(e.target.value) : null }), () => (e.target.value ? 'Linked' : 'Unlinked'))} aria-label={`TalkLoop user for ${p.name}`} className="min-w-[min(240px,100%)]">
+                        <option value="">Not on TalkLoop</option>
+                        {info.talkloopUsers.map((u) => <option key={u.id} value={u.id}>{u.name}{u.extension ? ` · ext ${u.extension}` : ''}{u.email ? ` · ${u.email}` : ''}</option>)}
+                      </Select>
+                      {p.talkloopExt && <Badge tone="accent">ext {p.talkloopExt}</Badge>}
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="rounded-card border border-dashed border-line px-4 py-5 text-center text-body-sm text-ink-muted">Nobody in Leads is linked yet.</p>}
+              {info.people.length > shown.length || everyone ? <button type="button" className="mt-2 text-body-sm font-semibold text-primary-ink hover:underline" onClick={() => setEveryone((v) => !v)}>{everyone ? 'Only the people in Leads' : `Show everyone in the company (${info.people.length})`}</button> : null}
+            </div>
+            <p className="text-[11.5px] text-ink-muted">Recordings play inside Metriq only. In two-party consent states a recording stays locked until the rep confirms both sides agreed. Every play is logged on the lead.</p>
           </div>
-          <p className="text-[11.5px] text-ink-muted">Recordings play inside Metriq only (never a TalkLoop link). In two-party consent states the recording stays locked until the SDR confirms both sides agreed on that call. Every play is logged on the lead.</p>
-        </div>
-      )}
-    </Section>
+        )}
+      </Section>
+    </div>
   )
 }
 
@@ -359,7 +423,7 @@ function KindSection({ biz, people, cmrOn, plain, onSaved, toast }: { biz: Busin
   const industryList = industries.split(/[\n,]/).map((x) => x.trim()).filter(Boolean)
   const industriesChanged = industryList.join('|') !== biz.settings.segments.join('|')
   return (
-    <Section icon={<Flag size={17} />} title={simple ? 'Head, currency and industries' : 'Kind and head'} hint={simple ? 'The head sees every lead of this pipeline. Deals are counted in the currency you pick.' : 'The kind decides the pipeline and the flow. The head (CMR: Jesse) sees every lead, decides on flagged ones and hears every call.'}>
+    <Section icon={<Flag size={17} />} title={simple ? 'Head, currency and industries' : 'Kind and head'} hint={simple ? 'The head sees every lead. Deal values use this currency.' : 'The kind sets the stages and the flow. The head (CMR: Jesse) sees every lead and decides on flagged ones.'}>
       <div className="grid gap-3 sm:grid-cols-2">
         {!simple && <label><Label>Kind</Label><Select value={biz.kind} onChange={(e) => { if (window.confirm(`Change ${biz.name} to the ${e.target.value === 'CMR' ? 'CMR flow' : 'usual pipeline'}? Existing leads keep their status.`)) void save({ kind: e.target.value as BusinessKind }, 'Kind changed') }} className="w-full"><option value="GENERAL">Usual pipeline</option><option value="CMR" disabled={!cmrOn}>CMR flow{cmrOn ? '' : ' (switched off for your company)'}</option></Select></label>}
         <label><Label>Head{biz.kind === 'CMR' ? ' (Jesse)' : ''}</Label><Select value={biz.headId ?? ''} onChange={(e) => void save({ headId: e.target.value || null }, e.target.value ? 'Head set' : 'Head removed')} className="w-full"><option value="">Nobody</option>{people.map((p) => <option key={p.id} value={p.id}>{p.name}{p.department ? ` · ${p.department}` : ''}</option>)}</Select></label>
@@ -384,7 +448,7 @@ function PipelineSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (
   const save = (p: PipelineStatus[] | null) => leadsApi.updateBusiness(biz.id, { pipeline: p }).then((r) => { onSaved(r.business); setEdit(false); toast({ type: 'success', message: p ? 'Pipeline saved' : 'Back to the standard pipeline' }) }).catch((e) => toast({ type: 'error', message: apiErrorText(e, 'Could not save') }))
   const keyOf = (label: string) => label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30) || 'STATUS'
   return (
-    <Section icon={<ListOrdered size={17} />} title="Pipeline" hint="The statuses leads move through, in order. Open statuses count as active; the rest close a lead." action={<div className="flex flex-wrap gap-2">{flagOn('deal-board') && biz.kind !== 'CMR' && !biz.pipeline.some((x) => x.key === 'PROPOSAL') && !edit && <Button size="sm" variant="ghost" title="New → Contacted → Qualified → Proposal → Negotiation → Won / Lost" onClick={() => { if (window.confirm('Use the sales pipeline (adds Proposal and Negotiation)? Leads keep their status.')) void save(SALES_PIPELINE) }}>Use the sales pipeline</Button>}{biz.ownPipeline && <Button size="sm" variant="ghost" onClick={() => save(null)}>Use the standard one</Button>}{edit ? <><Button size="sm" variant="ghost" onClick={() => { setRows(biz.pipeline); setEdit(false) }}>Cancel</Button><Button size="sm" onClick={() => save(rows)}>Save</Button></> : <Button size="sm" variant="secondary" onClick={() => setEdit(true)}>Edit</Button>}</div>}>
+    <Section icon={<ListOrdered size={17} />} title="Stages" hint="The stages a lead moves through, in order. Open stages are active; the rest close a lead." action={<div className="flex flex-wrap gap-2">{flagOn('deal-board') && biz.kind !== 'CMR' && !biz.pipeline.some((x) => x.key === 'PROPOSAL') && !edit && <Button size="sm" variant="ghost" title="New → Contacted → Qualified → Proposal → Negotiation → Won / Lost" onClick={() => { if (window.confirm('Use the sales pipeline (adds Proposal and Negotiation)? Leads keep their status.')) void save(SALES_PIPELINE) }}>Use the sales pipeline</Button>}{biz.ownPipeline && <Button size="sm" variant="ghost" onClick={() => save(null)}>Use the standard one</Button>}{edit ? <><Button size="sm" variant="ghost" onClick={() => { setRows(biz.pipeline); setEdit(false) }}>Cancel</Button><Button size="sm" onClick={() => save(rows)}>Save</Button></> : <Button size="sm" variant="secondary" onClick={() => setEdit(true)}>Edit</Button>}</div>}>
       {!edit ? (
         <div className="flex flex-wrap gap-2">{biz.pipeline.map((s) => <span key={s.key} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-body-sm font-semibold" style={dataTint(s.color)}><span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />{s.label}{!s.open && <span className="font-normal opacity-70">· closes</span>}</span>)}</div>
       ) : (
@@ -470,7 +534,7 @@ function CmrSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: Bu
   const parse = (s: string) => s.split(/[,\n;]/).map((x) => x.trim()).filter(Boolean)
   const save = async () => { setBusy(true); try { const r = await leadsApi.updateBusiness(biz.id, { settings: f }); onSaved(r.business); toast({ type: 'success', message: 'CMR settings saved' }) } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
   return (
-    <Section icon={<Settings2 size={17} />} title="CMR flow settings" hint="The words the SDRs pick from, the meeting copy address, consent states and the Send-info email." action={<Button size="sm" disabled={busy} onClick={save}>Save</Button>}>
+    <Section icon={<Settings2 size={17} />} title="CMR flow settings" hint="What the SDRs pick from, who gets a copy of every meeting, consent states and the Send-info email." action={<Button size="sm" disabled={busy} onClick={save}>Save</Button>}>
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField label="Copy every meeting invite to (email)" type="email" value={f.copyEmail} onChange={(e) => setF({ ...f, copyEmail: e.target.value })} placeholder="aaqib@…" />
         <TextField label="Their name" value={f.copyName} onChange={(e) => setF({ ...f, copyName: e.target.value })} />
@@ -509,7 +573,7 @@ function ListsSection({ biz, toast }: { biz: BusinessRow; toast: Toast }) {
     } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not read the file') }) }
   }
   return (
-    <Section icon={<Ban size={17} />} title="Prohibited leads and existing customers" hint="The pre-call check: a company on either list is flagged the moment it is added, and the Prohibited list blocks calls. Match by company name, phone, email or website.">
+    <Section icon={<Ban size={17} />} title="Prohibited leads and existing customers" hint="Checked before every call: a lead that matches either list is flagged, and a Prohibited one cannot be called. Matched by company, phone, email or website.">
       <div className="mb-3 inline-flex rounded-btn border border-line bg-card p-0.5">{(['PROHIBITED', 'CUSTOMER'] as const).map((k) => <button key={k} type="button" onClick={() => setKind(k)} className={cn('h-8 rounded-md px-3 text-body-sm font-semibold', kind === k ? 'bg-ink text-card' : 'text-ink-muted')}>{k === 'PROHIBITED' ? 'Prohibited Leads' : 'Existing customers'}{rows && kind === k ? ` (${rows.length})` : ''}</button>)}</div>
       <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
         <div className="max-h-72 overflow-auto rounded-card border border-line">
@@ -538,15 +602,8 @@ function DialCard({ plain, dial, pbxDomain, onSaved, toast }: { plain?: boolean;
   const example = dialHref('(602) 555-0199', f)
   const save = async () => { setBusy(true); try { await leadsApi.setDial({ scheme: f.scheme, domain: f.domain || null, template: f.template || null }); toast({ type: 'success', message: 'Call buttons updated for everyone' }); onSaved() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
   return (
-    <div className="rounded-card border border-line bg-slate-50/60 p-4 dark:bg-white/[0.03]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-[14px] font-semibold text-ink">Call buttons</h3>
-          <p className="mt-0.5 max-w-2xl text-body-sm text-ink-muted">Metriq cannot place the call itself yet, so a Call button opens the phone app on the {plain ? 'rep’s computer or phone' : 'SDR\'s PC'} with the number filled in. Pick the link that app understands; Windows must have that app set as the handler (Settings → Apps → Default apps → by link type).</p>
-        </div>
-        {changed && <Button size="sm" disabled={busy} onClick={save}>Save</Button>}
-      </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+    <div>
+      <div className="grid gap-3 sm:grid-cols-3">
         <label><Label>Link type</Label>
           <Select value={f.scheme} onChange={(e) => setF({ ...f, scheme: e.target.value as DialSetting['scheme'], domain: e.target.value === 'sip' ? f.domain || pbxDomain : f.domain })} className="w-full">
             <option value="tel">{plain ? 'tel: — phones and most softphones' : 'tel: — most softphones and the TalkLoop app'}</option>
@@ -558,9 +615,10 @@ function DialCard({ plain, dial, pbxDomain, onSaved, toast }: { plain?: boolean;
         {f.scheme === 'custom' && <div className="sm:col-span-2"><TextField label="Link with {number} (or {digits})" value={f.template ?? ''} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder={plain ? 'myphone://call?to={number}' : 'talkloop://call?to={number}'} /></div>}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-body-sm">
-        <span className="text-ink-muted">A Call button will open:</span><code className="rounded bg-card px-2 py-1 text-[12px] text-ink">{example}</code>
-        <span className="ml-auto flex items-center gap-2"><TextField value={test} onChange={(e) => setTest(e.target.value)} placeholder="Your own number to test" className="w-48" />{test && <a href={dialHref(test, f) ?? '#'} className="inline-flex h-9 items-center rounded-btn border border-line bg-card px-3 font-semibold text-primary-ink hover:border-primary">Test call</a>}</span>
+        <span className="text-ink-muted">A Call button opens</span><code className="rounded bg-slate-100 px-2 py-1 text-[12px] text-ink dark:bg-white/10">{example}</code>
+        <span className="ml-auto flex flex-wrap items-center gap-2"><TextField value={test} onChange={(e) => setTest(e.target.value)} placeholder="Your own number to test" className="w-48" aria-label="Number to test" />{test && <a href={dialHref(test, f) ?? '#'} className="inline-flex h-9 items-center rounded-btn border border-line bg-card px-3 font-semibold text-primary-ink hover:border-primary">Test call</a>}{changed && <Button size="sm" disabled={busy} onClick={save}>Save</Button>}</span>
       </div>
+      <p className="mt-2 text-[11.5px] text-ink-muted">The phone app must be the computer's default for this link type (Windows: Settings → Apps → Default apps).</p>
     </div>
   )
 }
