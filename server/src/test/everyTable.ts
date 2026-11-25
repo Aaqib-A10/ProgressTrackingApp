@@ -11,7 +11,7 @@ import { walledTables } from '../scripts/companyWallsSql'
 
 const enums = new Map(Prisma.dmmf.datamodel.enums.map((e) => [e.name, e.values.map((v) => v.name)]))
 const models = new Map(Prisma.dmmf.datamodel.models.map((m) => [m.name, m]))
-const delegate = (model: string) => (prisma as unknown as Record<string, { create: (a: unknown) => Promise<{ id?: string }> }>)[model[0].toLowerCase() + model.slice(1)]
+const delegate = (model: string) => (prisma as unknown as Record<string, { create: (a: unknown) => Promise<{ id?: string }>; findFirst: (a: unknown) => Promise<{ id?: string } | null> }>)[model[0].toLowerCase() + model.slice(1)]
 
 let n = 0
 function value(field: Prisma.DMMF.Field, marker: string, model: string): unknown {
@@ -53,7 +53,8 @@ export async function fillEveryTable(companyId: string, marker: string, existing
     if (ids.has(type)) return ids.get(type)!
     const data: Record<string, unknown> = {}
     for (const f of m.fields) if (f.kind !== 'object' && f.isRequired && !f.isList && !f.hasDefaultValue && !f.isUpdatedAt) data[f.name] = value(f, marker, type)
-    const row = await delegate(type).create({ data })
+    // Shared rows outlive the test (no company to clear them with): the one an earlier run made is used again.
+    const row = (await delegate(type).findFirst({ where: data })) ?? (await delegate(type).create({ data }))
     ids.set(type, row.id!)
     return row.id!
   }

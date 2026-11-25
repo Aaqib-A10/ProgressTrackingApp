@@ -201,7 +201,7 @@ catalog. It found that the gate of phase 1 only looked at the areas called finis
 
 | Area | Data sets added |
 |---|---|
-| Lead Management (was not covered at all beyond the two lead tools) | `leads.dashboard`, `leads.board`, `leads.contacts`, `leads.tasks`, `leads.calls`, `leads.report`, `leads.queue`, `leads.businesses` |
+| Lead Management (was not covered at all beyond the two lead tools) | `leads.dashboard`, `leads.board`, `leads.contacts`, `leads.tasks`, `leads.calls`, `leads.report`, `leads.businesses` (`leads.queue` was removed with the Jesse Queue, 25 Nov 2026) |
 | Projects | `projects.overview` (the dashboard; a person who is not a project admin gets their own numbers), `projects.reviews`, `projects.ticket_history` |
 | People and attendance | `people.profile`, `people.top` (employee of the month), `attendance.register` (each person, each day) |
 | Daily numbers | `itad.trend`, `leadgen.trend` (months side by side, rates, funnel), `itad.my_day`, `leadgen.my_day`, `marketing.my_day` (one day's own log) |

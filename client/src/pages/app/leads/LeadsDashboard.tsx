@@ -111,12 +111,12 @@ export default function LeadsDashboard() {
                 <p className="mt-3 text-body-sm text-ink-muted">{d.tasks.overdue ? 'Start with the overdue ones: each has a Call button.' : d.tasks.today ? 'Work today’s list top to bottom.' : 'Nothing due. Call the never-called leads.'}</p>
               </Link>
               {cmr && isHead && (
-                <Link to={`/app/leads/queue${q({})}`} className="group rounded-card border border-line bg-gradient-to-br from-orange-subtle to-yellow-subtle p-5 shadow-xs transition-colors hover:border-orange-ring">
+                <Link to={`/app/leads${q({ flag: '1' })}`} className="group rounded-card border border-line bg-gradient-to-br from-orange-subtle to-yellow-subtle p-5 shadow-xs transition-colors hover:border-orange-ring">
                   <div className="flex items-start justify-between">
                     <span className="flex items-center gap-2 text-[15px] font-semibold text-ink"><span className="rounded-lg bg-orange-vivid/15 p-1.5 text-orange-ink"><Flag size={16} /></span>Waiting on you</span>
                     <ArrowRight size={16} className="text-ink-faint transition-transform group-hover:translate-x-0.5" />
                   </div>
-                  <div className="mt-3 flex items-end gap-3"><span className="text-[36px] font-bold tabular-nums leading-none text-orange-ink">{c.waiting}</span><span className="pb-1 text-body-sm text-ink-muted">lead{c.waiting === 1 ? '' : 's'} flagged by the SDRs, oldest first in the queue</span></div>
+                  <div className="mt-3 flex items-end gap-3"><span className="text-[36px] font-bold tabular-nums leading-none text-orange-ink">{c.waiting}</span><span className="pb-1 text-body-sm text-ink-muted">lead{c.waiting === 1 ? '' : 's'} flagged by the SDRs, waiting for your decision</span></div>
                   <p className="mt-3 text-body-sm text-ink-muted">{c.waiting ? 'Each one shows the five facts, the last call and the recording. Decide: meeting, direction or close.' : 'Nothing to decide right now.'}</p>
                 </Link>
               )}
@@ -126,7 +126,7 @@ export default function LeadsDashboard() {
                   <ol className="mt-3 space-y-1.5 text-body-sm text-ink">
                     <li><b>1.</b> Call, log it, fill the <b>five facts</b>.</li>
                     <li><b>2.</b> <b>Send info</b> (the profile email), follow up in 2 days.</li>
-                    <li><b>3.</b> Press <b>Qualify</b> on the lead with one line on what Jesse must decide → it lands in the <Link to="/app/leads/queue" className="font-semibold text-primary-ink hover:underline">Jesse Queue</Link>.</li>
+                    <li><b>3.</b> Press <b>Qualify</b> on the lead with one line on what Jesse must decide → Jesse is notified and it shows under <b>Waiting on Jesse</b>.</li>
                     <li><b>4.</b> Jesse answers within a business day: meeting, direction or close.</li>
                   </ol>
                 </div>

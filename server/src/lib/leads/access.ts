@@ -48,7 +48,7 @@ export async function leadsRoleOf(userId: string): Promise<LeadRole | null> {
   return headed || rows.some((r) => r.role === 'MANAGER') ? 'MANAGER' : 'REP'
 }
 
-/** Head only: this person heads a business (Jesse) and works no leads themselves. Their Metriq is the queue and the summary. */
+/** Head only: this person heads a business (Jesse) and works no leads themselves (they decide on the flagged ones). */
 export async function leadsHeadOnlyOf(userId: string): Promise<boolean> {
   const [headed, rows] = await Promise.all([
     prisma.leadBusiness.count({ where: { headId: userId, isActive: true } }),

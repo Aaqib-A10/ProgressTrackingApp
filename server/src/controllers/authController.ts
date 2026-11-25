@@ -124,9 +124,9 @@ async function publicUser(userId: string) {
     // Lead Management: MANAGER or REP when the person works the leads of at least one business
     // (someone in a CMR department joins the CMR business by themselves).
     leadsRole: await (user.department?.type === 'CMR' ? syncCmrMembers().catch(() => 0) : Promise.resolve(0)).then(() => leadsRoleOf(user.id)),
-    // The CMR flow (Jesse Queue, Daily Report, Jesse Summary) when the person works a CMR business.
+    // The CMR flow (the five facts, the review by Jesse, the Daily Report) when the person works a CMR business.
     leadsCmr: await leadsCmrOf(user.id, user.role === 'SUPER_ADMIN'),
-    // The head of a business who works no leads (Jesse): the menu is just the queue and the summary.
+    // The head of a business who works no leads (Jesse): home is the Lead Dashboard; a lead opens with the Decide button.
     leadsHead: user.role !== 'SUPER_ADMIN' && (await leadsHeadOnlyOf(user.id)),
   }
 }

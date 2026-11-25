@@ -69,7 +69,7 @@ export function ImportModal({ business, onClose, onDone }: { business: MetaBusin
         <div className="space-y-3">
           <p className="rounded-btn bg-success/10 px-3 py-2 text-body-md text-success-ink">{result.text}</p>
           {result.problems.length > 0 && <div><p className="mb-1 text-body-sm font-semibold text-ink">Checked by hand, not guessed:</p><ul className="max-h-60 list-disc space-y-0.5 overflow-auto pl-5 text-body-sm text-ink-muted">{result.problems.map((p, i) => <li key={i}>{p}</li>)}</ul></div>}
-          {cmr && <p className="text-body-sm text-ink-muted">Compare the Jesse Summary page with the sheet's Jesse Summary tab before switching the sheet off.</p>}
+          {cmr && <p className="text-body-sm text-ink-muted">Compare the Lead Dashboard with the sheet before switching the sheet off.</p>}
         </div>
       ) : (
         <div className="space-y-4">

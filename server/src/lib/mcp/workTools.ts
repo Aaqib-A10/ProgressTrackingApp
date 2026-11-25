@@ -31,8 +31,8 @@ function parseAt(v: unknown, zone: string): DateTime | null {
 
 // ------------------------------------------------------------------ leads
 
-interface MetaBiz { id: string; name: string; isActive: boolean; myRole: 'MANAGER' | 'REP' | null; members: { id: string; name: string; email: string; role: string }[] }
-interface LeadRowT { id: string; businessId: string; name: string; email: string | null; phone: string | null; organization: string | null; status: string; source: string; createdAt: string; lastActivityAt: string; assignee: { id: string; name: string } | null; message: string | null; late: string | null; utmCampaign: string | null; repeats: number }
+interface MetaBiz { id: string; name: string; isActive: boolean; myRole: 'MANAGER' | 'REP' | null; members: { id: string; name: string; email: string; role: string }[]; tagList?: { label: string; color: string }[] }
+interface LeadRowT { id: string; businessId: string; name: string; email: string | null; phone: string | null; organization: string | null; status: string; source: string; createdAt: string; lastActivityAt: string; assignee: { id: string; name: string } | null; message: string | null; late: string | null; utmCampaign: string | null; repeats: number; tags?: string[] }
 
 async function leadsMeta(u: User): Promise<{ meta?: { me: { id: string; admin: boolean }; businesses: MetaBiz[] }; error?: string }> {
   const r = await apiAs(u, 'GET', '/api/leads/meta')
@@ -68,6 +68,7 @@ function leadLine(l: LeadRowT, biz: Map<string, string>): string {
     l.assignee ? `with ${l.assignee.name}` : 'not assigned',
     `${l.source.toLowerCase()} ${ago(l.createdAt)}`,
     l.utmCampaign ? `campaign ${l.utmCampaign}` : null,
+    l.tags?.length ? `tags ${l.tags.join(', ')}` : null,
     l.repeats ? `came back ${l.repeats}x` : null,
     l.message ? `"${l.message.replace(/\s+/g, ' ').slice(0, 140)}"` : null,
   ].filter(Boolean).join(' | ')
@@ -90,7 +91,7 @@ export const WORK_TOOLS: DeptTool[] = [
   {
     name: 'leads_list',
     title: 'List leads',
-    description: 'Lead Management: the leads this person can see (managers: their whole business; reps: the leads given to them). Filter by business, status, who has it, late ones, or words. Newest first, 50 at a time.',
+    description: 'Lead Management: the leads this person can see (managers: their whole business; reps: the leads given to them). Filter by business, status, who has it, a tag (each business makes its own, e.g. Wholesale or Retail), late ones, or words. Newest first, 50 at a time.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -98,6 +99,7 @@ export const WORK_TOOLS: DeptTool[] = [
         status: { type: 'string', enum: ['open', 'NEW', 'CONTACTED', 'QUALIFIED', 'WON', 'LOST', 'SPAM', 'all'], description: 'Default open' },
         assignee: { type: 'string', description: '"me", "none" (not assigned yet) or a person\'s name' },
         late: { type: 'boolean', description: 'Only leads not assigned or not contacted in time' },
+        tag: { type: 'string', description: 'Only leads with this tag (e.g. Wholesale); the tags each business has are in Lead Settings' },
         search: { type: 'string', description: 'Words in the name, email, phone, company or message' },
         page: { type: 'number' },
       },
@@ -118,6 +120,8 @@ export const WORK_TOOLS: DeptTool[] = [
       if (as === 'me' || as === 'none') query.assignee = as
       else if (as) { const p = pickPerson(meta.businesses, a.assignee); if (!p) return fail(`No one called "${str(a.assignee)}" works these leads.`); query.assignee = p.id }
       if (a.late) query.late = '1'
+      // The tag as the business spells it (the filter matches the exact label).
+      if (str(a.tag)) query.tag = meta.businesses.flatMap((b) => b.tagList ?? []).find((t) => t.label.toLowerCase() === str(a.tag).toLowerCase())?.label ?? str(a.tag)
       if (str(a.search)) query.q = str(a.search)
       if (typeof a.page === 'number' && a.page > 1) query.page = String(Math.floor(a.page))
       const r = await apiAs(u, 'GET', '/api/leads', { query })

@@ -68,13 +68,9 @@ const LeadsDashboard = lazy(pageModule(() => import('../pages/app/leads/LeadsDas
 const LeadPage = lazy(pageModule(() => import('../pages/app/leads/LeadPage')))
 const LeadTasks = lazy(pageModule(() => import('../pages/app/leads/LeadTasks')))
 const LeadCalls = lazy(pageModule(() => import('../pages/app/leads/LeadCalls')))
-const JesseQueue = lazy(pageModule(() => import('../pages/app/leads/JesseQueue')))
 const DealBoard = lazy(pageModule(() => import('../pages/app/leads/DealBoard')))
 const LeadContacts = lazy(pageModule(() => import('../pages/app/leads/Contacts')))
-const JesseInbox = lazy(pageModule(() => import('../pages/app/leads/JesseInbox')))
-const JesseReview = lazy(pageModule(() => import('../pages/app/leads/JesseReview')))
 const LeadReport = lazy(pageModule(() => import('../pages/app/leads/LeadReport')))
-const JesseSummary = lazy(pageModule(() => import('../pages/app/leads/JesseSummary')))
 const LeadSettings = lazy(pageModule(() => import('../pages/app/leads/LeadSettings')))
 const MarketingTaskRedirect = lazy(pageModule(() => import('../pages/app/marketing/MarketingTaskRedirect')))
 const MarketingTeam = lazy(pageModule(() => import('../pages/app/marketing/MarketingTeam')))
@@ -242,11 +238,7 @@ export const router = createBrowserRouter([
           { path: 'contacts', element: <LeadContacts /> },
           { path: 'tasks', element: <LeadTasks /> },
           { path: 'calls', element: <LeadCalls /> },
-          { path: 'queue', element: <RequireFlag flag="cmr"><JesseQueue /></RequireFlag> },
-          { path: 'inbox', element: <RequireFlag flag="cmr"><JesseInbox /></RequireFlag> },
-          { path: 'inbox/:id', element: <RequireFlag flag="cmr"><JesseReview /></RequireFlag> },
           { path: 'report', element: <RequireFlag flag="cmr"><LeadReport /></RequireFlag> },
-          { path: 'summary', element: <RequireFlag flag="cmr"><JesseSummary /></RequireFlag> },
           { path: 'settings', element: <RequireRole roles={['SUPER_ADMIN']}><LeadSettings /></RequireRole> },
           { path: ':id', element: <LeadPage /> },
         ],

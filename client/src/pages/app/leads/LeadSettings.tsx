@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Ban, Check, Copy, Flag, Globe, Inbox, ListOrdered, Mail, PhoneCall, Plus, RefreshCw, Send, Settings2, Trash2, Users } from 'lucide-react'
+import { ArrowLeft, Ban, Check, Copy, Flag, Globe, Inbox, ListOrdered, Mail, PhoneCall, Plus, RefreshCw, Send, Settings2, Tag, Trash2, Users } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { Toggle } from '../../../components/ui/Toggle'
@@ -11,6 +11,7 @@ import { apiErrorText } from '../../../lib/api'
 import { flagOn } from '../../../lib/flags'
 import { cn } from '../../../lib/cn'
 import { ago, CURRENCIES, dialHref, leadsApi, SALES_PIPELINE, type BusinessKind, type BusinessRow, type CmrSettings, type DialSetting, type InboxInput, type Person, type PipelineStatus, type TalkLoopInfo } from '../../../lib/leadsApi'
+import { sameTag, TAG_COLORS, TagChip } from './Tags'
 import { Label, Select, Tile, useCrmWords, useLeadsMeta } from './shared'
 import { useAuth } from '../../../lib/auth'
 import { readFile } from '../itad/dialer/ImportModal'
@@ -42,7 +43,7 @@ export default function LeadSettings() {
 
   const load = () => leadsApi.businesses().then((r) => { setList(r.businesses); setPeople(r.people); setCmrOn(r.cmrOn && (!plain || r.businesses.some((b) => b.kind === 'CMR'))); setSel((s) => s ?? r.businesses[0]?.id ?? null) }).catch((e) => setErr(apiErrorText(e, 'Could not load')))
   useEffect(() => { void load() }, [])
-  /** Every change here also refreshes the Leads screens (which business, who is in it) and the menu (Jesse Queue appears once a CMR business has me). */
+  /** Every change here also refreshes the Leads screens (which business, who is in it) and the menu (the Daily Report appears once a CMR business has me). */
   const sync = () => { reloadMeta(); void refreshMe() }
   const put = (b: BusinessRow) => { setList((l) => (l ?? []).map((x) => (x.id === b.id ? { ...x, ...b } : x))); sync() }
   const biz = list?.find((b) => b.id === sel) ?? null
@@ -141,6 +142,7 @@ function BusinessEditor({ biz, people, cmrOn, plain, onSaved, onDeleted, toast }
       <KindSection biz={biz} people={people} cmrOn={cmrOn} plain={plain} onSaved={onSaved} toast={toast} />
       <PeopleSection biz={biz} people={people} onSaved={onSaved} toast={toast} />
       <PipelineSection biz={biz} onSaved={onSaved} toast={toast} />
+      <TagsSection biz={biz} onSaved={onSaved} toast={toast} />
       {biz.kind === 'CMR' && <CmrSection biz={biz} onSaved={onSaved} toast={toast} />}
       <ListsSection biz={biz} toast={toast} />
       <FormSection biz={biz} onSaved={onSaved} toast={toast} />
@@ -398,6 +400,62 @@ function PipelineSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (
           ))}
           <Button size="sm" variant="ghost" leadingIcon={<Plus size={14} />} onClick={() => setRows([...rows, { key: `STATUS_${rows.length + 1}`, label: '', color: PIPE_COLORS[rows.length % PIPE_COLORS.length], open: true }])}>Add status</Button>
           <p className="text-[11.5px] text-ink-muted">NEW stays first (leads start there). Renaming a status keeps the leads in it.</p>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+/** The business's own lead tags (Wholesale, Retail...): names and colours, in order. A rename follows onto the leads. */
+function TagsSection({ biz, onSaved, toast }: { biz: BusinessRow; onSaved: (b: BusinessRow) => void; toast: Toast }) {
+  type TagRow = { label: string; color: string; was: string | null }
+  const fromBiz = (): TagRow[] => (biz.tagList ?? []).map((t) => ({ ...t, was: t.label }))
+  const [rows, setRows] = useState<TagRow[]>(fromBiz)
+  const [edit, setEdit] = useState(false)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => setRows(fromBiz()), [biz.tagList]) // eslint-disable-line react-hooks/exhaustive-deps
+  const use = biz.tagUse ?? {}
+  const uses = (label: string) => Object.entries(use).filter(([k]) => sameTag(k, label)).reduce((s, [, n]) => s + n, 0)
+  const set = (i: number, patch: Partial<TagRow>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)))
+  const move = (i: number, d: -1 | 1) => { const r = [...rows]; [r[i + d], r[i]] = [r[i], r[i + d]]; setRows(r) }
+  const save = async () => {
+    const clean = rows.map((r) => ({ ...r, label: r.label.trim().replace(/\s+/g, ' ') })).filter((r) => r.label)
+    const twice = clean.find((r, i) => clean.some((x, j) => j < i && sameTag(x.label, r.label)))
+    if (twice) { toast({ type: 'error', message: `"${twice.label}" is on the list twice` }); return }
+    const renames = clean.filter((r) => r.was && r.was !== r.label).map((r) => ({ from: r.was as string, to: r.label }))
+    if (renames.some((x) => renames.some((y) => y !== x && sameTag(y.from, x.to)))) { toast({ type: 'error', message: 'Two tags swap names: save one rename first, then the other.' }); return }
+    const gone = (biz.tagList ?? []).filter((t) => !clean.some((r) => r.was === t.label))
+    const onLeads = gone.filter((t) => uses(t.label) > 0 && !renames.some((r) => sameTag(r.to, t.label)))
+    const tagRemove = onLeads.length && window.confirm(`${onLeads.map((t) => `${t.label} (on ${uses(t.label)} lead${uses(t.label) === 1 ? '' : 's'})`).join(', ')}\n\nTake ${onLeads.length === 1 ? 'this tag' : 'these tags'} off those leads too?\nOK takes it off. Cancel leaves it on them, in grey.`) ? onLeads.map((t) => t.label) : []
+    setBusy(true)
+    try {
+      const r = await leadsApi.updateBusiness(biz.id, { tagList: clean.map(({ label, color }) => ({ label, color })), tagRenames: renames, tagRemove })
+      // The counts follow the renames and removals (the list of businesses is not read again).
+      const next: Record<string, number> = {}
+      for (const [k, n] of Object.entries(use)) { if (tagRemove.includes(k)) continue; const to = renames.find((x) => x.from === k)?.to ?? k; next[to] = (next[to] ?? 0) + n }
+      onSaved({ ...r.business, tagUse: next }); setEdit(false); toast({ type: 'success', message: 'Tags saved' })
+    } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) }
+  }
+  const list = biz.tagList ?? []
+  return (
+    <Section icon={<Tag size={17} />} title="Tags" hint="Your own labels for leads, such as Wholesale, Retail or Distributor. People pick them on a lead, and the Leads list filters by them."
+      action={edit ? <div className="flex gap-2"><Button size="sm" variant="ghost" onClick={() => { setRows(fromBiz()); setEdit(false) }}>Cancel</Button><Button size="sm" disabled={busy} onClick={save}>Save</Button></div> : <Button size="sm" variant="secondary" onClick={() => { if (!rows.length) setRows([{ label: '', color: TAG_COLORS[0], was: null }]); setEdit(true) }}>{list.length ? 'Edit' : 'Add tags'}</Button>}>
+      {!edit ? (
+        list.length ? (
+          <div className="flex flex-wrap gap-2">{list.map((t) => <span key={t.label} className="inline-flex items-center gap-1.5"><TagChip label={t.label} color={t.color} className="px-2.5 py-1 text-body-sm" /><span className="text-[11.5px] tabular-nums text-ink-faint" title="Leads with this tag">{uses(t.label)}</span></span>)}</div>
+        ) : <p className="text-body-sm text-ink-muted">No tags yet. Add the ones your team uses, for example Wholesale, Retail, Distributor.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((t, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <div className="min-w-[160px] flex-1"><TextField value={t.label} maxLength={40} onChange={(e) => set(i, { label: e.target.value })} aria-label="Tag name" placeholder="Tag name, e.g. Wholesale" /></div>
+              <div className="flex items-center gap-1" role="radiogroup" aria-label="Colour">{TAG_COLORS.map((c) => <button key={c} type="button" role="radio" aria-checked={t.color === c} aria-label={c} onClick={() => set(i, { color: c })} className={cn('h-5 w-5 rounded-full ring-offset-2 ring-offset-card transition-shadow', t.color === c ? 'ring-2 ring-ink/40' : 'hover:ring-2 hover:ring-line-strong')} style={{ background: c }} />)}</div>
+              <span className="flex gap-0.5"><button type="button" disabled={i === 0} className="rounded p-1 text-ink-faint hover:text-ink disabled:opacity-30" onClick={() => move(i, -1)} aria-label="Up">↑</button><button type="button" disabled={i === rows.length - 1} className="rounded p-1 text-ink-faint hover:text-ink disabled:opacity-30" onClick={() => move(i, 1)} aria-label="Down">↓</button></span>
+              <button type="button" className="rounded p-1 text-ink-faint hover:text-danger-ink" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label={`Remove ${t.label || 'tag'}`}><Trash2 size={14} /></button>
+            </div>
+          ))}
+          <Button size="sm" variant="ghost" leadingIcon={<Plus size={14} />} disabled={rows.length >= 60} onClick={() => setRows([...rows, { label: '', color: TAG_COLORS[rows.length % TAG_COLORS.length], was: null }])}>Add tag</Button>
+          <p className="text-[11.5px] text-ink-muted">Renaming a tag renames it on every lead that has it. Removing one asks whether to take it off the leads too.</p>
         </div>
       )}
     </Section>

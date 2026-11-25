@@ -78,7 +78,7 @@ export const FLAGS = {
   },
   cmr: {
     label: 'CMR flow',
-    description: "The CMR kind of lead business (99 Technologies): the five facts, Jesse's queue and decisions, the meeting handoff, the Jesse Summary, the daily report and the sheet import, inside Lead Management. Off until the owner turns it on for 99 Technologies.",
+    description: "The CMR kind of lead business (99 Technologies): the five facts, Jesse's review and decisions, the meeting handoff, the daily report and the sheet import, inside Lead Management. Off until the owner turns it on for 99 Technologies.",
     default: true,
     client: true,
     scope: 'company',

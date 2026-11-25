@@ -19,9 +19,9 @@ import { Label } from './shared'
 export type SetupPerson = Person & { role: string; department: string | null; departmentType?: string | null }
 
 const WHO_SEES: { icon: React.ReactNode; who: string; what: string }[] = [
-  { icon: <ShieldCheck size={15} />, who: 'Super Admin', what: 'Every business, every lead, every screen: Lead Dashboard, Leads, Agent Tasks, Calls, Jesse Queue, Daily Report, Jesse Summary and these settings.' },
-  { icon: <UserCog size={15} />, who: 'Team lead (Manager)', what: 'Every lead of their business. Imports the sheet, gives leads to the SDRs, reads the Daily Report and Jesse Summary.' },
-  { icon: <Crown size={15} />, who: 'Head (Jesse)', what: 'Sees every lead of the business, gets the flagged ones in Jesse Queue, decides (meeting, direction, close) and can listen to calls.' },
+  { icon: <ShieldCheck size={15} />, who: 'Super Admin', what: 'Every business, every lead, every screen: Lead Dashboard, Leads, Agent Tasks, Calls, Daily Report and these settings.' },
+  { icon: <UserCog size={15} />, who: 'Team lead (Manager)', what: 'Every lead of their business. Imports the sheet, gives leads to the SDRs, reads the Daily Report and the Lead Dashboard.' },
+  { icon: <Crown size={15} />, who: 'Head (Jesse)', what: 'Sees every lead of the business, is notified of the flagged ones (Waiting on Jesse), decides (meeting, direction, close) and can listen to calls.' },
   { icon: <Headset size={15} />, who: 'SDR (Rep)', what: 'Only the leads given to them: logs calls, sends the info email, qualifies, offers slots, writes the Daily Report.' },
 ]
 
@@ -104,7 +104,7 @@ export function SetupSteps({ cmrOn, onCreate, plain }: { cmrOn: boolean; onCreat
           Download the sheet's <em>Leads</em> tab as CSV (Google Sheets: File → Download → CSV), then on the Leads page press <strong className="font-medium text-ink">Import</strong>. One lead per company, every row becomes a call under it; the SDR column assigns the lead, "Jesse Input Needed = Yes" flags it for Jesse, Next Step + date become an Agent Task.
         </Step>
         <Step n={4} done={false} title="Work from the dashboards">
-          <strong className="font-medium text-ink">Lead Dashboard</strong> and <strong className="font-medium text-ink">Leads</strong> show everything (Super Admin and team lead) or your own (SDR). <strong className="font-medium text-ink">Jesse Queue</strong> holds what waits on Jesse, <strong className="font-medium text-ink">Jesse Summary</strong> is the sheet's summary tab, live. Later, switch the website form and inbox on so new leads arrive by themselves.
+          <strong className="font-medium text-ink">Lead Dashboard</strong> and <strong className="font-medium text-ink">Leads</strong> show everything (Super Admin and team lead) or your own (SDR). <strong className="font-medium text-ink">Waiting on Jesse</strong> (on the Lead Dashboard and in Leads) holds what waits on Jesse. Later, switch the website form and inbox on so new leads arrive by themselves.
         </Step>
       </ol>
       <section>
@@ -194,7 +194,7 @@ export function CreateBusinessWizard({ cmrOn, people, onClose, onCreated, plain 
         </div>
         {(cmrOn || !plain) && <div><Label>Kind</Label>
           <div className="grid gap-2 sm:grid-cols-2">
-            {([['GENERAL', 'Usual pipeline', 'New → Contacted → Qualified → Won / Lost. Website forms, inbox, assignment, tasks.'], ['CMR', 'CMR flow', 'The sheet\'s pipeline, five facts, Jesse\'s queue and decisions, meeting handoff, daily report.']] as const).map(([k, t, h]) => (
+            {([['GENERAL', 'Usual pipeline', 'New → Contacted → Qualified → Won / Lost. Website forms, inbox, assignment, tasks.'], ['CMR', 'CMR flow', 'The sheet\'s pipeline, five facts, Jesse\'s review and decisions, meeting handoff, daily report.']] as const).map(([k, t, h]) => (
               <button key={k} type="button" disabled={k === 'CMR' && !cmrOn} onClick={() => setKind(k)} className={cn('rounded-card border p-3 text-left disabled:opacity-50', kind === k ? 'border-primary bg-primary/[0.06]' : 'border-line')}><span className="block text-body-sm font-semibold text-ink">{t}</span><span className="block text-[11.5px] text-ink-muted">{h}{k === 'CMR' && !cmrOn ? ' Switched off for your company (owner console → Switches).' : ''}</span></button>
             ))}
           </div>

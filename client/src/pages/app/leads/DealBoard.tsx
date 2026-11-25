@@ -12,6 +12,7 @@ import { apiErrorText } from '../../../lib/api'
 import { cn } from '../../../lib/cn'
 import { CLOSE_REASONS, CLOSE_REASON_LABEL, fmtDate, leadsApi, leadTitle, money, type BoardColumn, type DealBoard as Board, type LeadRow } from '../../../lib/leadsApi'
 import { AddLeadModal } from './AddLeadModal'
+import { TagChips, useTagList } from './Tags'
 import { BusinessPicker, FactsMeter, Label, PageHeader, Select, initials, useBusiness, useLeadsMeta } from './shared'
 
 /**
@@ -179,6 +180,7 @@ function Card({ l, currency, cmr, onOpen }: { l: LeadRow; currency: string; cmr:
 }
 
 function CardBody({ l, currency, cmr }: { l: LeadRow; currency: string; cmr: boolean }) {
+  const tagList = useTagList(l.businessId)
   return (
     <>
       <div className="flex items-start justify-between gap-2">
@@ -186,6 +188,7 @@ function CardBody({ l, currency, cmr }: { l: LeadRow; currency: string; cmr: boo
         {l.value != null && l.value > 0 && <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-[12px] font-bold tabular-nums text-success-ink">{money(l.value, currency, true)}</span>}
       </div>
       <p className="mt-0.5 truncate text-[11.5px] text-ink-muted">{[l.organization ? l.name : null, l.phone].filter(Boolean).join(' · ') || l.email || 'No contact yet'}</p>
+      <TagChips tags={l.tags} list={tagList} max={3} className="mt-1.5" />
       {(l.nextStep || l.nextStepDate) && (
         <p className={cn('mt-1.5 flex items-center gap-1 text-[11.5px]', l.overdue ? 'font-semibold text-danger-ink' : 'text-ink-muted')}>{l.overdue && <AlertTriangle size={11} className="shrink-0" />}<span className="truncate">{l.nextStep ?? 'Next step'}</span>{l.nextStepDate && <span className="shrink-0">· {fmtDate(l.nextStepDate)}</span>}</p>
       )}

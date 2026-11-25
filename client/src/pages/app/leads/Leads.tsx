@@ -11,6 +11,7 @@ import { cn } from '../../../lib/cn'
 import { ago, dialHref, fmtDate, leadsApi, leadTitle, OWNER_LABEL, paysText, SOURCE_LABEL, type DialSetting, type LeadList, type LeadRow, type ListParams, type MetaBusiness } from '../../../lib/leadsApi'
 import { Avatar, BusinessPicker, FactsMeter, PageHeader, Select, StatusPill, useBusiness, useLeadsMeta } from './shared'
 import { AddLeadModal } from './AddLeadModal'
+import { sameTag, TagChips, useTagList } from './Tags'
 import { ImportModal } from './ImportModal'
 
 /**
@@ -83,6 +84,9 @@ export default function Leads() {
   const status = params.get('status') ?? 'open'
   const pipeline = business?.pipeline ?? []
   const members = business?.members ?? []
+  // The tags to filter by: the business's list (every business's, in the all-businesses view), and the one picked.
+  const tagOptions = (all ? businesses : business ? [business] : []).flatMap((b) => (b.tagList ?? []).map((t) => t.label))
+    .concat(params.get('tag') ?? []).filter((t, i, a) => a.findIndex((x) => sameTag(x, t)) === i)
   const activeFilters = ['assignee', 'industry', 'state', 'owner', 'tag', 'flag', 'overdue', 'belowMin', 'late', 'prohibited', 'source', 'from', 'to'].filter((k) => params.get(k))
 
   if (!businesses.length) {
@@ -145,6 +149,12 @@ export default function Leads() {
             <Select value={params.get('state') ?? ''} onChange={(e) => setParam({ state: e.target.value || null })} aria-label="State">
               <option value="">All states</option>
               {(business?.settings.states ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          )}
+          {tagOptions.length > 0 && (
+            <Select value={params.get('tag') ?? ''} onChange={(e) => setParam({ tag: e.target.value || null })} aria-label="Tag">
+              <option value="">All tags</option>
+              {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
             </Select>
           )}
           <Select value={params.get('active') ?? ''} onChange={(e) => setParam({ active: e.target.value || null, status: e.target.value ? 'all' : 'open' })} aria-label="Active">
@@ -262,6 +272,7 @@ const shortName = (n: string) => { const p = n.trim().split(/\s+/); return p.len
 function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, toast, dial, viaTalkLoop }: { l: LeadRow; cols: string[]; business: MetaBusiness | null; canManage: boolean; dial?: DialSetting; viaTalkLoop?: boolean; picked: boolean; onPick: (v: boolean) => void; onOpen: () => void; onChanged: () => void; toast: ReturnType<typeof useToast>['addToast'] }) {
   const [busy, setBusy] = useState(false)
   const pipeline = business?.pipeline ?? []
+  const tagList = useTagList(l.businessId)
   const run = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast({ type: 'success', message: ok }); onChanged() } catch (e) { toast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) } }
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
   const cell = (k: string) => {
@@ -273,6 +284,8 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 truncate font-semibold text-ink">{l.organization || l.name || <span className="text-ink-faint">No name</span>}{l.prohibited && <Badge tone="danger">Prohibited</Badge>}{l.existingCustomer && <Badge>Customer</Badge>}{l.jesseInputNeeded && <span title="Waiting on Jesse"><Flag size={13} className="text-orange-vivid" /></span>}</div>
             <div className="truncate text-[11.5px] text-ink-muted">{[l.organization ? l.name : null, l.phone, !l.phone ? l.email : null].filter(Boolean).join(' · ') || l.email || <span className="text-ink-faint">No contact yet</span>}</div>
+            {/* Without the Tags column, a lead's tags sit under its name. */}
+            {!cols.includes('tags') && <TagChips tags={l.tags} list={tagList} max={3} className="mt-1" />}
           </div>
         </div>)
       case 'company': return <span className="font-medium text-ink">{l.organization ?? '—'}</span>
@@ -301,7 +314,7 @@ function Row({ l, cols, business, canManage, picked, onPick, onOpen, onChanged, 
       case 'lastCall': return l.lastCallAt ? ago(l.lastCallAt) : '—'
       case 'tasks': return l.openTasks ? <Badge tone="primary">{l.openTasks}</Badge> : <span className="text-ink-faint">0</span>
       case 'source': return SOURCE_LABEL[l.source]
-      case 'tags': return l.tags.length ? <span className="flex flex-wrap gap-1">{l.tags.map((t) => <span key={t} className="rounded bg-slate-100 px-1.5 text-[11px] dark:bg-white/10">{t}</span>)}</span> : '—'
+      case 'tags': return l.tags.length ? <TagChips tags={l.tags} list={tagList} className="min-w-[120px]" /> : '—'
       case 'updated': return <span title={new Date(l.lastActivityAt).toLocaleString()}>{ago(l.lastActivityAt)}</span>
       case 'created': return fmtDate(l.createdAt)
       default: return null

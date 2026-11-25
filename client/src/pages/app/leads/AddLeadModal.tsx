@@ -8,6 +8,7 @@ import { apiErrorText } from '../../../lib/api'
 import { flagOn } from '../../../lib/flags'
 import { leadsApi, type MetaBusiness } from '../../../lib/leadsApi'
 import { Label, Select } from './shared'
+import { TagPicker } from './Tags'
 
 /** Add a lead by hand. While typing, the pre-call check runs: the same company already here, or on a list. */
 export function AddLeadModal({ business, onClose, onAdded, initial }: { business: MetaBusiness; onClose: () => void; onAdded: (id: string) => void; initial?: { phone?: string } }) {
@@ -15,6 +16,7 @@ export function AddLeadModal({ business, onClose, onAdded, initial }: { business
   const cmr = business.kind === 'CMR'
   const canManage = business.myRole === 'MANAGER'
   const [f, setF] = useState({ organization: '', name: '', contactRole: '', phone: initial?.phone ?? '', email: '', website: '', industry: '', state: '', message: '', value: '', assignTo: canManage ? '' : 'me' })
+  const [tags, setTags] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [check, setCheck] = useState<Awaited<ReturnType<typeof leadsApi.check>> | null>(null)
   const timer = useRef<number>()
@@ -29,7 +31,7 @@ export function AddLeadModal({ business, onClose, onAdded, initial }: { business
   const go = async (force = false) => {
     setBusy(true)
     try {
-      const r = await leadsApi.add({ businessId: business.id, organization: f.organization.trim() || null, name: f.name.trim(), phone: f.phone.trim() || null, email: f.email.trim() || null, website: f.website.trim() || null, industry: f.industry || null, state: f.state || null, message: f.message.trim() || null, ...(f.value.trim() && Number.isFinite(Number(f.value.replace(/[^0-9.]/g, ''))) ? { value: Number(f.value.replace(/[^0-9.]/g, '')) } : {}), ...(cmr ? { contactRole: f.contactRole.trim() || null } : {}), assignTo: f.assignTo === '' ? undefined : f.assignTo === 'none' ? null : f.assignTo, force })
+      const r = await leadsApi.add({ businessId: business.id, ...(tags.length ? { tags } : {}), organization: f.organization.trim() || null, name: f.name.trim(), phone: f.phone.trim() || null, email: f.email.trim() || null, website: f.website.trim() || null, industry: f.industry || null, state: f.state || null, message: f.message.trim() || null, ...(f.value.trim() && Number.isFinite(Number(f.value.replace(/[^0-9.]/g, ''))) ? { value: Number(f.value.replace(/[^0-9.]/g, '')) } : {}), ...(cmr ? { contactRole: f.contactRole.trim() || null } : {}), assignTo: f.assignTo === '' ? undefined : f.assignTo === 'none' ? null : f.assignTo, force })
       onAdded(r.lead.id)
     } catch (e) {
       const dupId = (() => { try { return (JSON.parse((e as Error).message) as { duplicateId?: string }).duplicateId ?? null } catch { return null } })()
@@ -60,6 +62,7 @@ export function AddLeadModal({ business, onClose, onAdded, initial }: { business
           {canManage && (
             <label className="sm:col-span-2"><Label>Give it to</Label><Select value={f.assignTo} onChange={set('assignTo')} className="w-full"><option value="">Nobody yet (I will assign it)</option><option value="me">Me</option>{business.members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></label>
           )}
+          {(business.tagList?.length ?? 0) > 0 && <div className="sm:col-span-2"><Label>Tags</Label><TagPicker value={tags} onChange={setTags} list={business.tagList ?? []} canAdd={false} /></div>}
           <div className="sm:col-span-2"><TextArea label="Notes" rows={2} value={f.message} onChange={set('message')} placeholder={cmr ? 'Anything before the discovery call' : 'What they asked for'} /></div>
         </div>
         {cmr && <p className="text-body-sm text-ink-muted">After adding, log the discovery call on the lead: the five facts, the call summary and the next step.</p>}

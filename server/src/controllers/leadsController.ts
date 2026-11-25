@@ -11,7 +11,7 @@ import { runAsCompany } from '../lib/tenancy'
 import { canManage, isMemberOf, leadScope, requireLeadAdmin, type LeadScope, type LeadViewer } from '../lib/leads/access'
 import { cleanInput, fromFields, hasSubstance, receiveLead, type LeadInput } from '../lib/leads/intake'
 import { syncCmrMembers } from '../lib/leads/members'
-import { CURRENCIES, KINDS, openStatusesOf, PROMISE_WORDS, pipelineOf, settingsOf, shownSettings, type CmrSettings } from '../lib/leads/pipeline'
+import { CURRENCIES, KINDS, openStatusesOf, PROMISE_WORDS, pipelineOf, settingsOf, shownSettings, tagsOf, type CmrSettings } from '../lib/leads/pipeline'
 import { leadManagers, tellAboutLead } from '../lib/leads/notify'
 import { encryptSecret, decryptSecret, testInbox } from '../lib/leads/inbox'
 
@@ -119,6 +119,12 @@ const bizSchema = z.object({
   /** The business's own statuses; null = the ones its kind comes with. */
   pipeline: z.array(z.object({ key: z.string().regex(/^[A-Z][A-Z0-9_]{1,30}$/), label: z.string().trim().min(1).max(40), color: z.string().regex(/^#[0-9a-fA-F]{6}$/), open: z.boolean() })).min(2).max(20).nullable().optional(),
   settings: settingsSchema.optional(),
+  /** The business's own lead tags, in order (Wholesale, Retail...). */
+  tagList: z.array(z.object({ label: z.string().trim().min(1).max(40), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) })).max(60).optional(),
+  /** Renamed tags: the leads that have the old name get the new one. */
+  tagRenames: z.array(z.object({ from: z.string().trim().min(1).max(40), to: z.string().trim().min(1).max(40) })).max(60).optional(),
+  /** Removed tags that also come off the leads that have them. */
+  tagRemove: z.array(z.string().trim().min(1).max(40)).max(60).optional(),
 })
 
 async function checkBiz(b: Partial<z.infer<typeof bizSchema>>, companyId: string, cur?: { settings: Prisma.JsonValue; kind: string }): Promise<{ settings?: Prisma.InputJsonValue }> {
@@ -132,6 +138,7 @@ async function checkBiz(b: Partial<z.infer<typeof bizSchema>>, companyId: string
     if (new Set(b.pipeline.map((x) => x.key)).size !== b.pipeline.length) throw new HttpError(422, 'Two statuses have the same key')
     if (!b.pipeline.some((x) => x.open) || !b.pipeline.some((x) => !x.open)) throw new HttpError(422, 'The pipeline needs at least one open and one closed status')
   }
+  if (b.tagList && new Set(b.tagList.map((t) => t.label.toLowerCase())).size !== b.tagList.length) throw new HttpError(422, 'Two tags have the same name')
   if (!b.settings) return {}
   const merged: CmrSettings = { ...settingsOf({ settings: cur?.settings ?? null }), ...b.settings }
   if (merged.copyEmail && !/^[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]{2,}$/.test(merged.copyEmail)) throw new HttpError(422, 'That copy email address does not look right')
@@ -141,7 +148,7 @@ async function checkBiz(b: Partial<z.infer<typeof bizSchema>>, companyId: string
 
 function bizOut(b: Prisma.LeadBusinessGetPayload<{ include: { members: { include: { user: { select: { id: true; name: true; email: true; isActive: true } } } }; head: { select: { id: true; name: true; email: true } } } }> & { _open?: number }) {
   const { inboxPassEnc, members, settings: _s, ...rest } = b
-  return { ...rest, settings: shownSettings(b, b.companyId), pipeline: pipelineOf(b), ownPipeline: !!b.pipeline, inboxHasPassword: !!inboxPassEnc, formUrl: formUrl(b.formKey), members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, isActive: x.user.isActive, role: x.role })) }
+  return { ...rest, settings: shownSettings(b, b.companyId), pipeline: pipelineOf(b), tagList: tagsOf(b), ownPipeline: !!b.pipeline, inboxHasPassword: !!inboxPassEnc, formUrl: formUrl(b.formKey), members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, isActive: x.user.isActive, role: x.role })) }
 }
 const BIZ_INCLUDE = { members: { include: { user: { select: { id: true, name: true, email: true, isActive: true } } }, orderBy: { createdAt: 'asc' as const } }, head: { select: { id: true, name: true, email: true } } }
 
@@ -156,8 +163,12 @@ export async function listBusinesses(req: AuthedRequest, res: Response): Promise
   const openOf = (b: (typeof list)[number]) => { const open = new Set(openStatusesOf(b)); return byStage.filter((x) => x.businessId === b.id && open.has(x.status)).reduce((n, x) => n + x._count._all, 0) }
   const every = await prisma.lead.groupBy({ by: ['businessId'], _count: { _all: true } })
   const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, role: true, department: { select: { name: true, type: true } } }, orderBy: { name: 'asc' } })
+  // How many leads carry each tag (Lead Settings shows it, and asks before taking a tag off them).
+  const ids = list.map((b) => b.id)
+  const tagUse = ids.length ? await prisma.$queryRaw<{ businessId: string; tag: string; n: bigint }[]>`SELECT "businessId", unnest("tags") AS tag, count(*) AS n FROM "Lead" WHERE "businessId" = ANY(${ids}) GROUP BY 1, 2` : []
+  const usesOf = (id: string) => Object.fromEntries(tagUse.filter((x) => x.businessId === id).map((x) => [x.tag, Number(x.n)]))
   res.json({
-    businesses: list.map((b) => ({ ...bizOut(b), openLeads: openOf(b), leadCount: every.find((o) => o.businessId === b.id)?._count._all ?? 0 })),
+    businesses: list.map((b) => ({ ...bizOut(b), openLeads: openOf(b), leadCount: every.find((o) => o.businessId === b.id)?._count._all ?? 0, tagUse: usesOf(b.id) })),
     people: people.map((p) => ({ id: p.id, name: p.name, email: p.email, role: p.role, department: p.department?.name ?? null, departmentType: p.department?.type ?? null })),
     cmrOn: await isOn('cmr', m.companyId),
   })
@@ -186,13 +197,17 @@ export async function updateBusiness(req: AuthedRequest, res: Response): Promise
   const b = parse(bizSchema.partial(), req.body)
   if (!s.admin) {
     if (!canManage(s, cur.id)) throw new HttpError(403, 'Only the Super Admin or a manager of this business can change it.')
-    const allowed = new Set(['settings', 'headId', 'pipeline'])
+    const allowed = new Set(['settings', 'headId', 'pipeline', 'tagList', 'tagRenames', 'tagRemove'])
     const bad = Object.keys(b).filter((k) => !allowed.has(k))
     if (bad.length) throw new HttpError(403, 'Only the Super Admin changes the name, kind, people, form link or inbox of a business.')
   }
   const extra = await checkBiz(b, m.companyId, cur)
-  const { settings: _st, pipeline, ...rest } = b
-  const saved = await prisma.leadBusiness.update({ where: { id: cur.id }, data: { ...rest, ...extra, ...(pipeline === undefined ? {} : { pipeline: pipeline === null ? Prisma.DbNull : pipeline }), ...(b.website !== undefined ? { website: b.website || null } : {}) }, include: BIZ_INCLUDE })
+  const { settings: _st, pipeline, tagList, tagRenames, tagRemove, ...rest } = b
+  // A renamed tag follows onto every lead that has it; a removed one comes off them when asked.
+  for (const r of tagRenames ?? []) await prisma.$executeRaw`UPDATE "Lead" SET "tags" = array_replace("tags", ${r.from}, ${r.to}) WHERE "businessId" = ${cur.id} AND ${r.from} = ANY("tags")`
+  for (const t of tagRemove ?? []) await prisma.$executeRaw`UPDATE "Lead" SET "tags" = array_remove("tags", ${t}) WHERE "businessId" = ${cur.id} AND ${t} = ANY("tags")`
+  if (tagRenames?.length) await prisma.$executeRaw`UPDATE "Lead" SET "tags" = ARRAY(SELECT DISTINCT x FROM unnest("tags") AS x) WHERE "businessId" = ${cur.id} AND cardinality("tags") <> (SELECT count(DISTINCT x) FROM unnest("tags") AS x)`
+  const saved = await prisma.leadBusiness.update({ where: { id: cur.id }, data: { ...rest, ...extra, ...(tagList === undefined ? {} : { tagList }), ...(pipeline === undefined ? {} : { pipeline: pipeline === null ? Prisma.DbNull : pipeline }), ...(b.website !== undefined ? { website: b.website || null } : {}) }, include: BIZ_INCLUDE })
   res.json({ business: bizOut(saved) })
 }
 

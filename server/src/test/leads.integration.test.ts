@@ -226,6 +226,13 @@ describe('Lead Management', () => {
     const list = await call('leads_list', { status: 'all' })
     expect(list.text).toContain('Ada Lovelace')
     expect(list.text).not.toContain('Alan Turing') // not given to this rep
+    // Lead tags (25 Nov 2026): the business makes its own list; the tool filters by one in any spelling and shows them.
+    await api(admin).patch(`/businesses/${bizId}`, { tagList: [{ label: 'Wholesale', color: '#4F46E5' }] }).expect(200)
+    await prisma.lead.updateMany({ where: { businessId: bizId, email: 'ada@example.com' }, data: { tags: ['Wholesale'] } })
+    const tagged = await call('leads_list', { status: 'all', tag: 'wholesale' })
+    expect(tagged.text).toContain('Ada Lovelace')
+    expect(tagged.text).toContain('tags Wholesale')
+    expect((await call('leads_list', { status: 'all', tag: 'Retail' })).text).not.toContain('Ada Lovelace')
     expect((await call('lead_get', { lead: 'alan@example.com' })).isError).toBe(true)
     const note = await call('lead_update', { lead: 'ada@example.com', action: 'note', text: 'Sent the certificate' })
     expect(note.isError).toBe(false)

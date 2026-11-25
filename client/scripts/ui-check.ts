@@ -44,6 +44,7 @@ const DATA_COLOURS: Record<string, { why: string; hex: string[] }> = {
   'pages/app/leads/SetupGuide.tsx': { why: 'colour swatches for a new business', hex: ['*'] },
   'lib/customApi.ts': { why: 'colour swatches for custom blocks', hex: ['*'] },
   'lib/leadsApi.ts': { why: 'the stage colours stored with a new pipeline', hex: ['*'] },
+  'pages/app/leads/Tags.tsx': { why: 'colour swatches for lead tags (people pick these), and grey for a tag not on the list', hex: ['*'] },
   'pages/app/projects/ProjectSettings.tsx': { why: 'the starting value of a colour picker', hex: ['#94A3B8'] },
   'components/ui/Pictures.tsx': { why: 'the stand-in colour of a project with no colour of its own (white initials on it)', hex: ['#64748B'] },
   'pages/app/marketing/SocialPlanner.tsx': { why: "each social network's own brand colour", hex: ['*'] },

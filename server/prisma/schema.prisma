@@ -4391,6 +4391,8 @@ model LeadBusiness {
   kind           String               @default("GENERAL")
   /// The business's own statuses, in order: [{ key, label, color, open }]. Empty = the ones its kind comes with.
   pipeline       Json?
+  /// The business's own lead tags, in order: [{ label, color }] (Wholesale, Retail...). Leads keep the labels in `tags`.
+  tagList        Json?
   /// Settings of the kind (CMR: the copy address, consent states, segments, states, the Send-info email, rates…).
   settings       Json?
   /// The head of the business (CMR: Jesse). Sees everything, decides on flagged leads, hears every call.

@@ -15,10 +15,10 @@ import { flagsLoaded, useFlags } from '../lib/flags'
 
 /** Which screens make a tab, in order of preference. Each slot takes the first one the person has. */
 const SLOTS: string[][] = [
-  // Home: the head's queue, the lead dashboard for lead people, the company dashboard for the rest.
-  ['/app/leads/inbox', '/app/leads/dashboard', '/app/dashboard', '/app/projects'],
+  // Home: the lead dashboard for lead people, the company dashboard for the rest.
+  ['/app/leads/dashboard', '/app/dashboard', '/app/projects'],
   // Work: leads, the ITAD dialer, the daily log, tasks.
-  ['/app/leads', '/app/leads/summary', '/app/itad/dialer', '/app/daily-report', '/app/leadgen/log', '/app/ecommerce/log', '/app/tasks'],
+  ['/app/leads', '/app/itad/dialer', '/app/daily-report', '/app/leadgen/log', '/app/ecommerce/log', '/app/tasks'],
   // Tasks or attendance.
   ['/app/leads/tasks', '/app/tasks', '/app/todo', '/app/attendance/me'],
   // Chat.
@@ -27,7 +27,7 @@ const SLOTS: string[][] = [
 
 /** Short names that fit under an icon. */
 const SHORT: Record<string, string> = {
-  '/app/leads/inbox': 'Inbox', '/app/leads/queue': 'Queue', '/app/leads/dashboard': 'Home', '/app/dashboard': 'Home', '/app/leads': 'Leads', '/app/leads/summary': 'Summary',
+  '/app/leads/dashboard': 'Home', '/app/dashboard': 'Home', '/app/leads': 'Leads',
   '/app/leads/tasks': 'Tasks', '/app/tasks': 'Tasks', '/app/todo': 'To-Do', '/app/attendance/me': 'Attendance', '/app/chat': 'Chat',
   '/app/itad/dialer': 'Dialer', '/app/daily-report': 'Report', '/app/leadgen/log': 'Log', '/app/ecommerce/log': 'Log', '/app/projects': 'Projects', '/app/calendar': 'Calendar',
 }
@@ -39,8 +39,8 @@ export function tabsFor(user: CurrentUser): Tab[] {
   const items = new Map<string, NavItem>()
   for (const g of filterNav(user)) for (const i of [...g.items, ...(g.subgroups ?? []).flatMap((s) => s.items)]) items.set(i.to, i)
   const out: Tab[] = []
-  // Home is where the person lands (DashboardIndex): the head's queue, the lead dashboard for CMR people, else the company dashboard.
-  const home = user.leadsHead && user.role !== 'SUPER_ADMIN' ? '/app/leads/inbox' : user.department === 'CMR' && user.role !== 'SUPER_ADMIN' ? '/app/leads/dashboard' : '/app/dashboard'
+  // Home is where the person lands (DashboardIndex): the lead dashboard for the head and CMR people, else the company dashboard.
+  const home = (user.leadsHead || user.department === 'CMR') && user.role !== 'SUPER_ADMIN' ? '/app/leads/dashboard' : '/app/dashboard'
   const slots = [[home, ...SLOTS[0].filter((p) => p !== home)], ...SLOTS.slice(1)]
   for (const slot of slots) {
     const to = slot.find((p) => items.has(p) && !out.some((t) => t.to === p))

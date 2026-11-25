@@ -274,35 +274,6 @@ export const MORE: Entry[] = [
     table: dyn(['rep', 'reps']),
   },
   {
-    key: 'leads.queue', label: 'Review queue and summary', area: 'Lead Management', app: '/app/leads/queue',
-    about: 'The leads waiting for the head of the business to decide (the review queue): each lead, who flagged it and how many working days it has waited; with how many were decided and closed lately. For managers, also the business summary: key numbers, leads per stage, calls per rep and how many leads each rep qualified.',
-    says: ['jesse queue', 'jesse summary', 'review queue', 'leads waiting for review', 'waiting for decision', 'head summary', 'calls per rep', 'qualify rate', 'leads waiting'],
-    who: inLeads,
-    blocks: [], apis: ['/api/leads/queue', '/api/leads/summary'], models: ['Lead', 'LeadCmr'],
-    async load(ctx) {
-      type Q = { queue?: Record<string, unknown>[]; decided?: unknown[]; closed?: unknown[] }
-      type S = { business?: unknown; keyNumbers?: { total: number; waiting: number; qualified: number; overdue: number; callsWeek: number; calls30: number; avgWaitDays: number; avgDecideDays: number; meetingsMonth: number }; pipeline?: { label: string; count: number }[]; callsBySdr?: { name: string; calls: number }[]; bySegment?: { segment: string; count: number }[]; qualifyRate?: { name: string; leads: number; qualified: number; rate: number }[] }
-      const [queue, sum] = await Promise.all([get<Q>(ctx, '/api/leads/queue'), get<S>(ctx, '/api/leads/summary')])
-      if (queue.error !== undefined) return { error: queue.error }
-      const b = sum.body, k = b?.keyNumbers
-      return {
-        ...loose((queue.body.queue ?? []).map((l) => leadRow(l, { flaggedBy: nameOf(l.flaggedBy), waitingDays: typeof l.waitingDays === 'number' ? l.waitingDays : null, askedOfTheHead: typeof l.jesseAsk === 'string' ? l.jesseAsk : '' })), ['lead waiting', 'leads waiting'], { people: ['assignee', 'flaggedBy'], groups: ['business'] }),
-        head: [
-          `Decided by the head in the last 30 days: ${(queue.body.decided ?? []).length}. Leads closed in the last 90 days: ${(queue.body.closed ?? []).length}.`,
-          // The summary is for the managers of the business; a rep gets the queue alone.
-          ...(b && k ? [
-            `Summary of ${nameOf(b.business) || 'the business'}: ${k.total} leads in all, ${k.waiting} waiting for the head, ${k.qualified} qualified, ${k.overdue} open with an overdue next step. Calls: ${k.callsWeek} this week, ${k.calls30} in the last 30 days. Meetings set up this month: ${k.meetingsMonth}. A lead waits ${k.avgWaitDays} working days for the head on average; decided ones took ${k.avgDecideDays}.`,
-            (b.pipeline ?? []).length ? `Leads per stage: ${(b.pipeline ?? []).map((x) => `${x.label} ${x.count}`).join(', ')}.` : '',
-            (b.callsBySdr ?? []).length ? `Calls per rep in the last 30 days: ${(b.callsBySdr ?? []).map((x) => `${x.name} ${x.calls}`).join(', ')}.` : '',
-            (b.qualifyRate ?? []).length ? `Per rep: ${(b.qualifyRate ?? []).map((x) => `${x.name} has ${x.leads} leads, ${x.qualified} of them qualified or won (${x.rate}%)`).join('; ')}.` : '',
-            (b.bySegment ?? []).length ? `Leads per segment: ${(b.bySegment ?? []).map((x) => `${x.segment} ${x.count}`).join(', ')}.` : '',
-          ] : []),
-        ].filter(Boolean),
-      }
-    },
-    table: dyn(['lead waiting', 'leads waiting']),
-  },
-  {
     key: 'leads.businesses', label: 'Lead businesses', area: 'Lead Management', app: '/app/leads',
     about: "The businesses leads come in for, as far as this person works them: each one, whether it is active, its head, its managers and reps, and this person's own role in it.",
     says: ['lead businesses', 'which businesses', 'who manages the business', 'reps of the business', 'business head', 'who works the leads of', 'my businesses'],

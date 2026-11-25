@@ -115,11 +115,13 @@ export const SALES_PIPELINE: PipelineStatus[] = [
   { key: 'WON', label: 'Won', color: '#059669', open: false }, { key: 'LOST', label: 'Lost', color: '#EF4444', open: false }, { key: 'SPAM', label: 'Spam', color: '#94A3B8', open: false },
 ]
 export interface LeadFull extends LeadRow { calls: LeadCall[]; comments: LeadComment[]; tasks: LeadTask[]; events: LeadEvent[]; contacts: LeadContact[]; assignedBy: Person | null; createdBy: Person | null; raw: Record<string, unknown> | null }
-export interface LeadDetail { lead: LeadFull; listHits: { kind: string; name: string; on: string }[]; can: { manage: boolean; decide: boolean; approve: boolean; edit: boolean; cmr: boolean; /** The deal board and contacts are on for this company. */ crm?: boolean; headOnly?: boolean }; /** The industries this business picks from. */ industries?: string[]; head: Person | null; mentionable: (Person & { role: string })[]; pipeline: PipelineStatus[]; settings: CmrSettings | null; currency: string }
+export interface LeadDetail { lead: LeadFull; listHits: { kind: string; name: string; on: string }[]; can: { manage: boolean; decide: boolean; approve: boolean; edit: boolean; cmr: boolean; /** The deal board and contacts are on for this company. */ crm?: boolean; headOnly?: boolean }; /** The industries this business picks from. */ industries?: string[]; head: Person | null; mentionable: (Person & { role: string })[]; pipeline: PipelineStatus[]; /** The business's own lead tags. */ tagList?: LeadTag[]; settings: CmrSettings | null; currency: string }
 
+/** A lead tag the business made (Wholesale, Retail...), with its colour. Leads keep the label in `tags`. */
+export interface LeadTag { label: string; color: string }
 export interface CmrSettings { currency: string; copyEmail: string; copyName: string; consentStates: string[]; segments: string[]; states: string[]; infoSubject: string; infoBody: string; publishedRate: number; minLoadLbs: number; connectedSecs: number }
 export interface MetaBusiness {
-  id: string; name: string; color: string; kind: BusinessKind; pipeline: PipelineStatus[]; headId: string | null; head: Person | null; isActive: boolean; slaAssignMins: number; slaContactMins: number
+  id: string; name: string; color: string; kind: BusinessKind; pipeline: PipelineStatus[]; tagList?: LeadTag[]; headId: string | null; head: Person | null; isActive: boolean; slaAssignMins: number; slaContactMins: number
   myRole: 'MANAGER' | 'REP' | null; isHead: boolean
   members: (Person & { role: 'MANAGER' | 'REP' })[]
   settings: Pick<CmrSettings, 'segments' | 'states' | 'consentStates' | 'minLoadLbs' | 'publishedRate' | 'copyName' | 'connectedSecs' | 'currency'>
@@ -143,6 +145,8 @@ export function dialHref(phone: string | null | undefined, dial?: DialSetting | 
 export interface BusinessRow {
   id: string; name: string; website: string | null; color: string; isActive: boolean; formKey: string; formUrl: string; kind: BusinessKind; headId: string | null; head: Person | null
   pipeline: PipelineStatus[]; ownPipeline: boolean; settings: CmrSettings
+  /** The business's own lead tags, in order, and how many leads carry each (Lead Settings → Tags). */
+  tagList?: LeadTag[]; tagUse?: Record<string, number>
   slaAssignMins: number; slaContactMins: number
   inboxOn: boolean; inboxHost: string | null; inboxPort: number; inboxSecure: boolean; inboxUser: string | null; inboxFolder: string; inboxHasPassword: boolean
   inboxCheckedAt: string | null; inboxError: string | null
@@ -174,14 +178,6 @@ export interface Dashboard {
   openValue?: number
   currency?: string | null
 }
-export interface Summary {
-  business: { id: string; name: string }
-  keyNumbers: { total: number; waiting: number; qualified: number; overdue: number; callsWeek: number; calls30: number; avgWaitDays: number; avgDecideDays: number; meetingsMonth: number }
-  pipeline: { status: string; label: string; color: string; count: number }[]
-  callsBySdr: { userId: string | null; name: string; calls: number }[]
-  bySegment: { segment: string; count: number }[]
-  qualifyRate: { userId: string | null; name: string; leads: number; qualified: number; rate: number }[]
-}
 export interface DayCounts { dials: number; connected: number; voicemails: number; emails: number; interested: number; shortConnected: number }
 export interface DailyReport { id: string; userId: string; date: string; dials: number; connected: number; voicemails: number; emails: number; interested: number; note: string; submittedAt: string }
 
@@ -203,7 +199,6 @@ export const LEAD_IMPORT_FIELDS: { key: string; label: string; synonyms: string[
 export const leadsApi = {
   meta: () => api.get<LeadsMeta>('/leads/meta'),
   dashboard: (p: { business?: string; range?: string; from?: string; to?: string }) => api.get<Dashboard>(`/leads/dashboard${qs(p)}`),
-  summary: (business?: string) => api.get<Summary>(`/leads/summary${qs({ business })}`),
   list: (p: ListParams) => api.get<LeadList>(`/leads${qs(p)}`),
   exportUrl: (p: ListParams) => `/api/leads/export.csv${qs(p)}`,
   check: (p: { business: string; organization?: string; phone?: string; email?: string; website?: string; except?: string }) => api.get<{ duplicates: { id: string; name: string; organization: string | null; status: string; statusLabel: string; assignee: Person | null; lastActivityAt: string }[]; prohibited: boolean; existingCustomer: boolean; hits: { kind: string; name: string; on: string }[] }>(`/leads/check${qs(p)}`),
@@ -242,7 +237,6 @@ export const leadsApi = {
   outcome: (id: string, b: { outcome: string; note?: string; nextStepDate?: string | null }) => api.post<{ lead: LeadRow }>(`/leads/${id}/outcome`, b),
   close: (id: string, b: { status: string; reason?: string; note?: string }) => api.post<{ lead: LeadRow }>(`/leads/${id}/close`, b),
   reopen: (id: string) => api.post<{ lead: LeadRow }>(`/leads/${id}/reopen`),
-  queue: (business?: string) => api.get<{ queue: (LeadRow & { lastCall: LeadCall | null; comments: LeadComment[]; flaggedBy: Person | null })[]; decided: LeadRow[]; closed: LeadRow[]; canDecide: boolean }>(`/leads/queue${qs({ business })}`),
   tasks: (p: { tab?: string; assignee?: string; business?: string; lead?: string }) => api.get<{ tasks: LeadTask[]; counts: { today: number; overdue: number; upcoming: number } }>(`/leads/tasks${qs(p)}`),
   addTask: (b: { leadId: string; title: string; notes?: string; dueAt: string; assigneeId?: string | null; kind?: 'CALL' | 'CUSTOM' }) => api.post<{ task: LeadTask }>('/leads/tasks', b),
   updateTask: (id: string, b: { dueAt?: string; notes?: string; title?: string; assigneeId?: string | null }) => api.patch<{ task: LeadTask }>(`/leads/tasks/${id}`, b),
@@ -256,7 +250,7 @@ export const leadsApi = {
   importSheet: (b: { businessId: string; fileName?: string; headers: string[]; mapping?: Record<string, string | null>; rows: (string | number | null)[][]; source?: 'SHEET' | 'LEADWISE' }) => api.post<{ companies: number; calls: number; skipped: number; alreadyThere?: number; problems: string[]; totalCompanies: number }>('/leads/import-sheet', b),
   businesses: () => api.get<{ businesses: BusinessRow[]; people: (Person & { role: string; department: string | null; departmentType: string | null })[]; cmrOn: boolean }>('/leads/businesses'),
   createBusiness: (b: { name: string; website?: string | null; color?: string; kind?: BusinessKind; headId?: string | null }) => api.post<{ business: BusinessRow }>('/leads/businesses', b),
-  updateBusiness: (id: string, b: Partial<{ name: string; website: string | null; color: string; isActive: boolean; slaAssignMins: number; slaContactMins: number; kind: BusinessKind; headId: string | null; pipeline: PipelineStatus[] | null; settings: Partial<CmrSettings> }>) => api.patch<{ business: BusinessRow }>(`/leads/businesses/${id}`, b),
+  updateBusiness: (id: string, b: Partial<{ name: string; website: string | null; color: string; isActive: boolean; slaAssignMins: number; slaContactMins: number; kind: BusinessKind; headId: string | null; pipeline: PipelineStatus[] | null; settings: Partial<CmrSettings>; tagList: LeadTag[]; tagRenames: { from: string; to: string }[]; tagRemove: string[] }>) => api.patch<{ business: BusinessRow }>(`/leads/businesses/${id}`, b),
   deleteBusiness: (id: string) => api.del(`/leads/businesses/${id}`),
   setMember: (id: string, userId: string, role: 'MANAGER' | 'REP') => api.post<{ business: BusinessRow }>(`/leads/businesses/${id}/members`, { userId, role }),
   removeMember: (id: string, userId: string) => api.del<{ business: BusinessRow; returned: number }>(`/leads/businesses/${id}/members/${userId}`),

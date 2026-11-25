@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Flag, Mail, MapPin, MessageSquare, Package, Pencil, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, Plus, Send, ShieldCheck, Sparkles, Star, Tag, Trash2, UserCheck, Users, Wallet, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
@@ -12,10 +12,11 @@ import { cn } from '../../../lib/cn'
 import { useAuth } from '../../../lib/auth'
 import {
   CLOSE_REASON_LABEL, CLOSE_REASONS, DISPOSITION_LABEL, DISPOSITIONS, fmtDate, fmtDur, fmtWhen, FREIGHT, FREIGHT_LABEL, inZone, leadsApi, leadTitle, MATERIAL_FORMS, MATERIAL_LABEL, MATERIALS, MEETING_OUTCOMES, money$, OUTCOME_LABEL, OWNER_LABEL, PAYS_LABEL, PAYS_UNITS, paysText, plusBusinessDays, SOURCE_LABEL, TASK_KIND_LABEL, toYmd, YES_NO_LABEL,
-  type Disposition, type LeadCall, type LeadContact, type LeadDetail, type LeadFull, type LeadInput, type Owner, type YesNo,
+  type Disposition, type LeadCall, type LeadContact, type LeadDetail, type LeadFull, type LeadInput, type LeadTag, type Owner, type YesNo,
   dialHref, money,
 } from '../../../lib/leadsApi'
 import { Avatar, Done, FactsMeter, Label, PaysAmount, Select, StatusPill, WarningList, useLeadsMeta, useOwners } from './shared'
+import { sameTag, TAG_COLORS, TagChips, TagPicker } from './Tags'
 
 /**
  * One lead: the details (contact, address, product), the five facts and the flow for a CMR
@@ -33,14 +34,12 @@ export default function LeadPage() {
   const [modal, setModal] = useState<'call' | 'close' | 'qualify' | 'decide' | 'invite' | 'slots' | 'reconfirm' | 'outcome' | 'task' | 'info' | 'edit' | null>(null)
   const load = useCallback(() => leadsApi.get(id).then((r) => { setD(r); setErr('') }).catch((e) => setErr(apiErrorText(e, 'Lead not found'))), [id])
   useEffect(() => { void load() }, [load])
-  // "?qualify=1" (from the Jesse Queue's ready list) opens the Qualify step straight away.
+  // "?qualify=1" (from the deal board) opens the Qualify step straight away.
   useEffect(() => { if (d && new URLSearchParams(window.location.search).get('qualify') === '1' && d.can.edit && d.can.cmr && d.lead.open && !d.lead.jesseInputNeeded) { setModal('qualify'); window.history.replaceState(null, '', window.location.pathname) } }, [d])
   const run = async (fn: () => Promise<unknown>, ok?: string) => { try { await fn(); if (ok) addToast({ type: 'success', message: ok }); await load() } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } }
 
   if (err) return <div className="mx-auto max-w-xl py-16 text-center"><p className="text-body-md text-ink-muted">{err}</p><Link to="/app/leads" className="mt-3 inline-block text-primary-ink">Back to leads</Link></div>
   if (!d) return <div className="h-64 animate-pulse rounded-card border border-line bg-card" />
-  // Jesse's desk: a lead opens as the submission to review (form + chat), never the working page.
-  if (d.can.headOnly) return <Navigate to={`/app/leads/inbox/${id}`} replace />
   const { lead: l, can, pipeline, head, mentionable } = d
   const cmr = can.cmr
   const title = leadTitle(l)
@@ -110,7 +109,7 @@ export default function LeadPage() {
         <div className="space-y-4">
           <TasksCard l={l} canEdit={can.edit} onAdd={() => setModal('task')} onChanged={load} />
           {(can.crm || l.contacts.length > 0) && <ContactsCard l={l} cmr={cmr} canEdit={!!can.crm && can.edit && !can.headOnly} onChanged={load} />}
-          <DetailsCard l={l} cmr={cmr} onEdit={can.edit && !can.headOnly ? () => setModal('edit') : null} />
+          <DetailsCard l={l} cmr={cmr} tagList={d.tagList} onEdit={can.edit && !can.headOnly ? () => setModal('edit') : null} />
           <TimelineCard l={l} canNote={can.edit} onNoted={load} />
         </div>
       </div>
@@ -519,7 +518,7 @@ function ContactModal({ leadId, contact, onClose, onDone }: { leadId: string; co
   )
 }
 
-export function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onEdit: (() => void) | null }) {
+export function DetailsCard({ l, cmr, tagList, onEdit }: { l: LeadFull; cmr: boolean; tagList?: LeadTag[]; onEdit: (() => void) | null }) {
   const [open, setOpen] = useState<Record<string, boolean>>({ contact: true, address: false, product: false })
   const Row = ({ k, v }: { k: string; v: ReactNode }) => v ? <div className="flex justify-between gap-3 py-1 text-body-sm"><dt className="text-ink-muted">{k}</dt><dd className="text-right text-ink">{v}</dd></div> : null
   const Sec = ({ id, icon, title, children }: { id: string; icon: ReactNode; title: string; children: ReactNode }) => (
@@ -533,7 +532,7 @@ export function DetailsCard({ l, cmr, onEdit }: { l: LeadFull; cmr: boolean; onE
       <Sec id="contact" icon={<UserCheck size={14} />} title="Contact information">
         <Row k="Contact" v={l.name} /><Row k={cmr ? 'Role' : 'Job title'} v={cmr ? l.contactRole : l.jobTitle} /><Row k="No. of employees" v={l.employees} /><Row k={cmr ? 'Segment' : 'Industry'} v={l.industry} />
         <Row k="Phone" v={l.phone} /><Row k="Ext" v={l.ext} /><Row k="Mobile" v={l.mobile} /><Row k="Email" v={l.email} /><Row k="Secondary email" v={l.secondaryEmail} /><Row k="Secondary contact" v={l.secondaryContact} />
-        <Row k="Recipient name" v={l.recipientName} /><Row k="Recipient email" v={l.recipientEmail} /><Row k="Tags" v={l.tags.length ? l.tags.join(', ') : null} />
+        <Row k="Recipient name" v={l.recipientName} /><Row k="Recipient email" v={l.recipientEmail} /><Row k="Tags" v={l.tags.length ? <TagChips tags={l.tags} list={tagList} className="justify-end" /> : null} />
         {cmr && <Row k="Decision maker" v={YES_NO_LABEL[l.decisionMaker ?? 'UNKNOWN']} />}
       </Sec>
       <Sec id="address" icon={<MapPin size={14} />} title="Address information">
@@ -838,7 +837,9 @@ function EditModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void;
   const cmr = can.cmr
   const keys = ['organization', 'name', 'contactRole', 'jobTitle', 'employees', 'industry', 'phone', 'ext', 'mobile', 'email', 'secondaryEmail', 'secondaryContact', 'website', 'recipientName', 'recipientEmail', 'street', 'city', 'state', 'zip', 'country', 'productInfo', 'message'] as const
   const [f, setF] = useState<Record<string, string>>(() => Object.fromEntries(keys.map((k) => [k, String((l as unknown as Record<string, unknown>)[k] ?? '')])))
-  const [tags, setTags] = useState(l.tags.join(', '))
+  const [tags, setTags] = useState<string[]>(l.tags)
+  const { reload: reloadMeta } = useLeadsMeta()
+  const tagList = d.tagList ?? []
   const [value, setValue] = useState(l.value != null ? String(l.value) : '')
   const [decisionMaker, setDecisionMaker] = useState<YesNo>(l.decisionMaker ?? 'UNKNOWN')
   const [busy, setBusy] = useState(false)
@@ -848,10 +849,16 @@ function EditModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void;
     setBusy(true)
     try {
       const v = value.trim() === '' ? null : Number(value.replace(/[^0-9.]/g, ''))
-      const body: LeadInput = { tags: tags.split(/[,;]/).map((t) => t.trim()).filter(Boolean), value: v != null && Number.isFinite(v) ? v : null }
+      const body: LeadInput = { tags, value: v != null && Number.isFinite(v) ? v : null }
       for (const k of keys) { if (k === 'contactRole' && !cmr) continue; (body as Record<string, unknown>)[k] = k === 'name' ? f[k] : f[k].trim() || null }
       if (cmr) body.decisionMaker = decisionMaker
-      await leadsApi.update(l.id, body); onDone()
+      await leadsApi.update(l.id, body)
+      // A manager's new tag joins the business's list (Lead Settings → Tags), so everyone can pick it.
+      const fresh = d.can.manage && tagList.length ? tags.filter((t) => !tagList.some((x) => sameTag(x.label, t)) && !l.tags.some((o) => sameTag(o, t))) : []
+      if (fresh.length) {
+        try { await leadsApi.updateBusiness(l.businessId, { tagList: [...tagList, ...fresh.map((label, i) => ({ label, color: TAG_COLORS[(tagList.length + i) % TAG_COLORS.length] }))].slice(0, 60) }); reloadMeta() } catch { addToast({ type: 'info', message: 'Saved. The new tag is on this lead; add it to the list under Lead Settings → Tags.' }) }
+      }
+      onDone()
     } catch (e) { addToast({ type: 'error', message: apiErrorText(e, 'Could not save') }) } finally { setBusy(false) }
   }
   const T = (k: typeof keys[number], label: string, extra: Record<string, unknown> = {}) => <TextField label={label} value={f[k]} onChange={set(k)} {...extra} />
@@ -863,9 +870,10 @@ function EditModal({ d, onClose, onDone }: { d: LeadDetail; onClose: () => void;
             {T('organization', 'Company')}{T('name', 'Contact name')}{cmr ? T('contactRole', 'Role') : T('jobTitle', 'Job title')}{T('employees', 'No. of employees')}
             <label><Label>{cmr ? 'Segment' : 'Industry'}</Label><Select value={f.industry} onChange={set('industry')} className="w-full"><option value="">—</option>{[...new Set([...(settings?.segments ?? d.industries ?? []), ...(f.industry ? [f.industry] : [])])].map((s) => <option key={s} value={s}>{s}</option>)}</Select></label>
             {T('phone', 'Phone')}{T('ext', 'Ext')}{T('mobile', 'Mobile')}{T('email', 'Email', { type: 'email' })}{T('secondaryEmail', 'Secondary email', { type: 'email' })}{T('secondaryContact', 'Secondary contact')}{T('website', 'Website')}{T('recipientName', 'Recipient name')}{T('recipientEmail', 'Recipient email', { type: 'email' })}
-            <TextField label="Tags (comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
             {d.can.crm && <TextField label={`Deal value (${d.currency})`} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="What this deal is worth" />}
             {cmr && <label><Label>Decision maker</Label>{yesNoSel(decisionMaker, setDecisionMaker)}</label>}
+            <div className="sm:col-span-3"><Label>Tags</Label><TagPicker value={tags} onChange={setTags} list={tagList} canAdd={d.can.manage || !tagList.length}
+              hint={tagList.length ? (d.can.manage ? 'Click to put a tag on or take it off. A new tag you add here joins the list for everyone.' : 'Click to put a tag on or take it off. Your manager keeps the list (Lead Settings → Tags).') : undefined} /></div>
           </div></div>
         <div><p className="mb-2 text-body-sm font-semibold text-ink">Address information</p>
           <div className="grid gap-3 sm:grid-cols-3">{T('street', 'Street')}{T('city', 'City')}

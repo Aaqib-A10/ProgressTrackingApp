@@ -163,7 +163,6 @@ const CASES: Case[] = [
   // The rest of the app (the full audit of 15 Nov): Lead Management, the Daily Report, the Lead Dialer's imports, one
   // evaluation in full, a custom block, and the screens outside the menu. Rows from scripts/metraSeedMore.ts.
   { as: 'leadgenlead', ask: 'how many leads do we have in Lead Management in all, and how many open ones are not assigned to anyone?', numbers: () => [M.leads.length + M.review.length, M.leads.filter((l) => !l.mine).length], note: 'Lead Dashboard: all leads of both businesses and the unassigned ones' },
-  { as: 'leadgenlead', ask: 'which leads are waiting for the head to decide, and what was asked?', names: () => [M.review[0].name, 'published rate'], absent: [M.review[1].name], note: 'the review queue, with the question put to the head' },
   { as: 'leadgen', ask: 'how many dials and connected calls are in my lead daily report today?', numbers: () => [M.leadReport.dials, M.leadReport.connected], names: () => ['one connect'], note: 'the lead daily report of a rep' },
   { as: 'leadgen', ask: 'which follow up tasks on my leads are overdue?', names: () => ['Send the rate sheet'], absent: ['Confirm the first order'], note: 'Agent Tasks: only the overdue ones' },
   { as: 'leadgenlead', ask: 'what is on the deal board of our freight business and what are the open deals worth?', names: () => ['Lucia Ferrand', 'Omar Siddiqui'], numbers: () => [M.leads.filter((l) => l.status !== 'CLOSED_WON').reduce((s, l) => s + (l.value ?? 0), 0)], note: 'Deal Board: the deals and what the open ones add up to' },

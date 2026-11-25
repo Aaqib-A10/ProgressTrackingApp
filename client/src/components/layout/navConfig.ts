@@ -4,7 +4,6 @@ import {
   Contact,
   Receipt,
   FileUp,
-  Flag,
   FileBarChart,
   MessageSquare,
   ClipboardCheck,
@@ -286,11 +285,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Agent Tasks', to: '/app/leads/tasks', icon: ListChecks, flag: 'lead-management', leadsOnly: true },
       { label: 'Calls', to: '/app/leads/calls', icon: PhoneCall, flag: 'lead-management', leadsOnly: true },
       // The CMR flow (switch "cmr"): only people who work a CMR-kind business.
-      { label: 'Jesse Queue', to: '/app/leads/queue', icon: Flag, flag: 'cmr', cmrOnly: true },
-      // Jesse's own desk: what the SDRs sent him, answered by chat. Managers can look in too.
-      { label: 'Jesse Inbox', to: '/app/leads/inbox', icon: Inbox, flag: 'cmr', cmrOnly: true, leadsManagerOnly: true },
       { label: 'Daily Report', to: '/app/leads/report', icon: ClipboardPen, flag: 'cmr', cmrOnly: true },
-      { label: 'Jesse Summary', to: '/app/leads/summary', icon: BarChart3, flag: 'cmr', cmrOnly: true, leadsManagerOnly: true, badge: { text: 'TL', tone: 'accent' } },
       { label: 'Lead Settings', to: '/app/leads/settings', icon: SlidersHorizontal, flag: 'lead-management', hideFor: ['MEMBER', 'TEAM_LEAD', 'SUB_DEPT_LEAD', 'QA', 'QA_LEAD'] },
     ],
   },
@@ -339,9 +334,6 @@ function itemVisible(item: NavItem, u: NavUser): boolean {
 const TEAM_ONLY = new Set(['/app/team/members', '/app/attendance/team', '/app/admin/users', '/app/admin/targets', '/app/admin/tags', '/app/admin/leave', '/app/admin/activity', '/app/admin/networks', '/app/daily-report/team', '/app/reports/monthly', '/app/projects/dashboard', '/app/feedback', '/app/requests', '/app/people', '/app/report-builder'])
 
 /** Returns nav groups filtered for the given user, dropping empty groups + subgroups. */
-/** The head of a business who works no leads (Jesse): one inbox, nothing else to learn. */
-const HEAD_ITEMS = new Set(['/app/leads/inbox'])
-
 /**
  * What the Leads part is called. New companies see it as their CRM (that is what it is: leads,
  * a deal board, contacts, tasks, calls). 99 Technologies keeps the names its people already know.
@@ -361,8 +353,6 @@ export function filterNav(u: NavUser): NavGroup[] {
 }
 
 function navFor(u: NavUser): NavGroup[] {
-  // Jesse's desk: the queue and the summary, nothing else to learn.
-  if (u.leadsHead && u.role !== 'SUPER_ADMIN') return NAV_GROUPS.filter((g) => g.title === 'Leads').map((g) => ({ ...g, title: undefined, items: g.items.filter((i) => HEAD_ITEMS.has(i.to) && itemVisible(i, u)).map((i) => ({ ...i, badge: undefined })) })).filter((g) => g.items.length)
   // Department Studio: the department has its own menu for this person's role.
   if (u.blocks && u.role !== 'SUPER_ADMIN') return blockNav(u, u.blocks)
   if (u.company?.kind === 'PERSONAL') {

@@ -178,17 +178,13 @@ describe('CMR flow inside Lead Management', () => {
     const n = await notes(jesse, ['LEAD_REVIEW'])
     expect(n.at(-1)).toMatchObject({ title: 'Waiting on you: Acme Recycling', link: `/app/leads/${acmeId}` })
     expect((await openTasks(acmeId)).map((t) => t.kind)).toEqual(['HEAD_REVIEW'])
-    // The queue shows it to Jesse (and to Matthew, his own) but not to Mark.
-    expect((await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body).toMatchObject({ canDecide: true })
-    const q = (await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body.queue
-    expect(q.map((l: { id: string }) => l.id)).toEqual([acmeId])
-    expect(q[0].flaggedBy).toBeTruthy() // Jesse sees who sent it
+    // Waiting on Jesse (the Leads list's filter) shows it to Jesse, not to Mark.
+    expect((await api(jesse).get(`/?business=${cmrId}&flag=1`).expect(200)).body.leads.map((l: { id: string }) => l.id)).toEqual([acmeId])
     const asHead = (await api(jesse).get(`/${acmeId}`).expect(200)).body
     expect(asHead.can).toMatchObject({ headOnly: true, decide: true, manage: true })
     expect((await api(matthew).get(`/${acmeId}`).expect(200)).body.can.headOnly).toBe(false)
     await api(jesse).post(`/${acmeId}/events`, { kind: 'NOTE', text: 'Ask about drums vs gaylords.' }).expect(201) // a note from the head
-    expect((await api(mark).get(`/queue?business=${cmrId}`).expect(200)).body.queue).toHaveLength(0)
-    expect((await api(matthew).get(`/queue?business=${cmrId}`).expect(200)).body).toMatchObject({ canDecide: false })
+    expect((await api(mark).get(`/?business=${cmrId}&flag=1`).expect(200)).body.leads).toHaveLength(0)
   })
 
   it('Jesse answers in the chat: the flag clears, the SDR gets the instructions as a task; @Jesse from the SDR sends it back to his inbox; the SDR offers slots', async () => {
@@ -204,20 +200,16 @@ describe('CMR flow inside Lead Management', () => {
     const open = await openTasks(acmeId)
     expect(open.map((t) => t.kind)).toEqual(['RELAY'])
     expect(open[0].assigneeId).toBe(matthew.id)
-    // Jesse's inbox: nothing waiting, Acme under answered; the SDR's plain comment does not re-flag it.
-    let q = (await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body
-    expect(q.queue).toHaveLength(0)
-    expect(q.decided.map((l: { id: string }) => l.id)).toContain(acmeId)
-    expect(Array.isArray(q.closed)).toBe(true)
+    // Nothing waiting on Jesse now; the SDR's plain comment does not re-flag it.
+    expect((await api(jesse).get(`/?business=${cmrId}&flag=1`).expect(200)).body.leads).toHaveLength(0)
     await api(matthew).post(`/${acmeId}/comments`, { body: 'Yes, sorted and taped.' }).expect(201)
     expect((await notes(jesse, ['LEAD_COMMENT'])).at(-1)).toMatchObject({ title: 'Matthew on Acme Recycling' })
     expect((await prisma.lead.findUniqueOrThrow({ where: { id: acmeId }, include: { cmr: true } })).cmr?.jesseInputNeeded).toBe(false)
     // @Jesse sends it back to him, with that message as the ask.
     const back = (await api(matthew).post(`/${acmeId}/comments`, { body: '@Jesse they can do 4,000 lb a month. Meeting?', mentions: [jesse.id] }).expect(201)).body
     expect(back.backToHead).toBe(true)
-    q = (await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body
-    expect(q.queue.map((l: { id: string }) => l.id)).toEqual([acmeId])
-    expect(q.queue[0].jesseAsk).toContain('4,000 lb')
+    expect((await api(jesse).get(`/?business=${cmrId}&flag=1`).expect(200)).body.leads.map((l: { id: string }) => l.id)).toEqual([acmeId])
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: acmeId }, include: { cmr: true } })).cmr?.jesseAsk).toContain('4,000 lb')
     expect((await openTasks(acmeId)).map((t) => t.kind).sort()).toEqual(['HEAD_REVIEW', 'RELAY'])
     // Only Jesse decides.
     await api(lead).post(`/${acmeId}/decide`, { action: 'DIRECTION', text: 'x' }).expect(403)
@@ -283,7 +275,7 @@ describe('CMR flow inside Lead Management', () => {
     expect(l.tasks.filter((x: { doneAt: string | null }) => !x.doneAt).map((x: { kind: string }) => x.kind).sort()).toEqual(['NEXT_STEP', 'RELAY'])
   })
 
-  it('the list has LeadWise-style filters and the export; the dashboard and the Jesse Summary count', async () => {
+  it('the list has LeadWise-style filters and the export; the dashboard counts', async () => {
     const all = (await api(lead).get(`/?business=${cmrId}&status=all`).expect(200)).body
     expect(all.total).toBeGreaterThanOrEqual(3)
     expect(all.counts).toMatchObject({ waiting: 0 })
@@ -300,12 +292,6 @@ describe('CMR flow inside Lead Management', () => {
     expect(d.cards.total).toBeGreaterThanOrEqual(3)
     expect(d.cards.prohibited).toBeGreaterThanOrEqual(1)
     expect(d.byStatus.FOLLOW_UP).toBeGreaterThanOrEqual(1)
-    const s = (await api(jesse).get(`/summary?business=${cmrId}`).expect(200)).body
-    expect(s.keyNumbers.total).toBeGreaterThanOrEqual(3)
-    expect(s.keyNumbers.meetingsMonth).toBe(1)
-    expect(s.callsBySdr.find((x: { name: string }) => x.name === 'Matthew')?.calls).toBe(2)
-    expect(s.pipeline.find((x: { status: string }) => x.status === 'FOLLOW_UP')?.count).toBeGreaterThanOrEqual(1)
-    await api(matthew).get(`/summary?business=${cmrId}`).expect(403)
     // Calls: Matthew his own, the team lead all; the recording route is only for those.
     expect((await api(matthew).get(`/calls?business=${cmrId}`).expect(200)).body.calls.every((c: { userId: string }) => c.userId === matthew.id)).toBe(true)
     expect((await api(lead).get(`/calls?business=${cmrId}&minSecs=400`).expect(200)).body.total).toBe(1)
@@ -369,7 +355,7 @@ describe('CMR flow inside Lead Management', () => {
     expect(desert.cmr).toMatchObject({ handlesAlkaline: 'YES', lbsPerMonth: 4500, paysToday: 0.08, paysUnit: 'LB', jesseInputNeeded: true, jesseComment: 'Approve a meeting next week.' })
     expect(desert.calls).toHaveLength(2)
     expect(desert.comments[0]).toMatchObject({ userId: jesse.id, body: 'Approve a meeting next week.' })
-    expect((await api(jesse).get(`/queue?business=${cmrId}`).expect(200)).body.queue.map((l: { organization: string }) => l.organization)).toContain('Desert HHW')
+    expect((await api(jesse).get(`/?business=${cmrId}&flag=1`).expect(200)).body.leads.map((l: { organization: string }) => l.organization)).toContain('Desert HHW')
     const transit = await prisma.lead.findFirstOrThrow({ where: { businessId: cmrId, organization: 'Metro Transit' } })
     expect(transit).toMatchObject({ status: 'NOT_A_FIT', assigneeId: mark.id, state: 'TX', nextStep: null })
 
@@ -440,5 +426,31 @@ describe('CMR flow inside Lead Management', () => {
     expect((await api(mark).post(`/${l.id}/close`, { status: 'LOST', reason: 'Price', note: 'Went elsewhere' }).expect(200)).body.lead).toMatchObject({ status: 'LOST', lostReason: 'Price' })
     // Across both businesses: Mark's list spans them.
     expect((await api(mark).get('/?status=all').expect(200)).body.leads.some((x: { businessId: string }) => x.businessId === genId)).toBe(true)
+  })
+
+  it('lead tags: the business makes its own list; tags on leads follow its spelling; a rename and a removal follow onto the leads', async () => {
+    // Only someone who manages the business sets the list; two tags may not share a name.
+    await api(mark).patch(`/businesses/${genId}`, { tagList: [{ label: 'Wholesale', color: '#4F46E5' }] }).expect(403)
+    await api(admin).patch(`/businesses/${genId}`, { tagList: [{ label: 'Wholesale', color: '#4F46E5' }, { label: 'wholesale', color: '#0EA5E9' }] }).expect(422)
+    const set = (await api(admin).patch(`/businesses/${genId}`, { tagList: [{ label: 'Wholesale', color: '#4F46E5' }, { label: 'Retail', color: '#0EA5E9' }] }).expect(200)).body.business
+    expect(set.tagList).toEqual([{ label: 'Wholesale', color: '#4F46E5' }, { label: 'Retail', color: '#0EA5E9' }])
+    // The people of the business get the list with the rest of Lead Management.
+    const meta = (await api(mark).get('/meta').expect(200)).body
+    expect(meta.businesses.find((b: { id: string }) => b.id === genId).tagList.map((t: { label: string }) => t.label)).toEqual(['Wholesale', 'Retail'])
+
+    // Typed any way, a tag on the list is saved as the list spells it; one not on the list is kept as typed; no repeats.
+    const l = (await api(mark).post('/', { businessId: genId, name: 'Tag Buyer', organization: 'Tagged Traders', phone: '555-0177', tags: [' wholesale', 'WHOLESALE', 'VIP'] }).expect(201)).body.lead
+    expect(l.tags).toEqual(['Wholesale', 'VIP'])
+    expect((await api(mark).patch(`/${l.id}`, { tags: ['retail', 'vip'] }).expect(200)).body.lead.tags).toEqual(['Retail', 'vip'])
+    // The edit window sends every field; only what really changed goes in the timeline (empty fields sent again do not).
+    await api(mark).patch(`/${l.id}`, { name: 'Tag Buyer', organization: 'Tagged Traders', phone: '555-0177', email: '', jobTitle: '', website: '', street: '', value: null, tags: ['Wholesale', 'VIP'] }).expect(200)
+    expect((await prisma.leadEvent.findFirstOrThrow({ where: { leadId: l.id, kind: 'EDIT' }, orderBy: { createdAt: 'desc' } })).text).toBe('Changed tags')
+    const uses = (await api(admin).get('/businesses').expect(200)).body.businesses.find((b: { id: string }) => b.id === genId).tagUse
+    expect(uses).toMatchObject({ Wholesale: 1, VIP: 1 })
+
+    // Rename Wholesale to Trade: the lead follows. Remove VIP from the leads too.
+    await api(admin).patch(`/businesses/${genId}`, { tagList: [{ label: 'Trade', color: '#4F46E5' }, { label: 'Retail', color: '#0EA5E9' }], tagRenames: [{ from: 'Wholesale', to: 'Trade' }], tagRemove: ['VIP'] }).expect(200)
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: l.id } })).tags).toEqual(['Trade'])
+    expect((await api(mark).get(`/?business=${genId}&status=all&tag=Trade`).expect(200)).body.leads.map((x: { id: string }) => x.id)).toEqual([l.id])
   })
 })

@@ -30,10 +30,7 @@ export const MORE_SCREENS: Screen[] = [
   { key: 'leads-contacts', label: 'Contacts', menu: 'Lead Management', who: `${LEADS}; the Deal Board switch must be on too`, app: ['/app/leads/contacts'], description: 'The people behind the leads: name, role, company, email and phone.' },
   { key: 'leads-tasks', label: 'Agent Tasks', menu: 'Lead Management', who: LEADS, app: ['/app/leads/tasks'], description: 'Follow-up tasks on leads: due today, overdue, upcoming and done.' },
   { key: 'leads-calls', label: 'Calls', menu: 'Lead Management', who: LEADS, app: ['/app/leads/calls'], description: 'The calls logged on leads, and calls to numbers that are not a lead yet.' },
-  { key: 'leads-queue', label: 'Jesse Queue', menu: 'Lead Management', who: CMR, app: ['/app/leads/queue'], description: 'Qualified leads waiting for the head of the business to decide, with his decisions and comments.' },
-  { key: 'leads-inbox', label: 'Jesse Inbox', menu: 'Lead Management', who: `the head of the business and its managers (${CMR})`, app: ['/app/leads/inbox'], description: "The head's own desk: what the reps sent him, answered by chat." },
   { key: 'leads-report', label: 'Daily Report (leads)', menu: 'Lead Management', who: CMR, app: ['/app/leads/report'], description: 'Dials, connected calls, voicemails, emails and interested leads of a day, counted from the calls.' },
-  { key: 'leads-summary', label: 'Jesse Summary', menu: 'Lead Management', who: `managers (${CMR})`, app: ['/app/leads/summary'], description: 'The key numbers of the business, leads per stage, calls per rep and per segment.' },
   { key: 'leads-settings', label: 'Lead Settings', menu: 'Lead Management', who: 'the Super Admin', app: ['/app/leads/settings'], description: 'The businesses leads come in for, their people, stages, forms, inbox and phone system.' },
   // Quality Assurance
   { key: 'qa-evaluate', label: 'Evaluate', menu: 'Quality Assurance', who: QA, app: ['/app/qa/evaluate'], description: 'Score a call of an agent against a scorecard.' },

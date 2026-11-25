@@ -58,9 +58,9 @@ export interface CurrentUser {
   areasOff?: string[]
   /** Lead Management: MANAGER or REP when the person works the leads of at least one business. */
   leadsRole?: 'MANAGER' | 'REP' | null
-  /** Works a CMR-kind business: sees the Jesse Queue, Daily Report and Jesse Summary. */
+  /** Works a CMR-kind business: sees the Daily Report and the five facts. */
   leadsCmr?: boolean
-  /** The head of a business who works no leads (Jesse): the menu is only the queue and the summary. */
+  /** The head of a business who works no leads (Jesse): home is the Lead Dashboard; a lead opens with the Decide button. */
   leadsHead?: boolean
   /** Department Studio: the blocks in this person's menu, in order (null: the menu of their department's kind). */
   blocks?: string[] | null

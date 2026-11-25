@@ -76,17 +76,7 @@ describe('Metra reads the rest of the app as the person', () => {
     expect(tasks).toMatch(/Confirm the first order \|[^\n]*\| Done \|/)
   })
 
-  it('the review flow: the queue with what was asked of the head, the summary for managers only, and the lead daily report', async () => {
-    const waiting = M.review.find((l) => l.waiting)!
-    // The rep sees their own lead in the queue, with their question; the summary of the business is for its managers.
-    const rep = await read(w.leadgenMember, 'leads.queue')
-    expect(rep).toContain(waiting.name)
-    expect(rep).toContain(waiting.ask)
-    expect(rep).not.toContain('Summary of')
-    const manager = await read(w.leadgenLead, 'leads.queue')
-    expect(manager).toContain(`Summary of ${M.reviewBusiness}: ${M.review.length} leads in all, 1 waiting for the head, 1 qualified`)
-    expect(manager).toContain('Leads per stage: New 0, Info Sent 0, Follow Up 1, Qualified 1')
-
+  it('the lead daily report', async () => {
     // The daily report is counted from the calls of the day; the rep reads their own, a manager each rep's.
     const r = M.leadReport
     const line = `| ${r.dials} | ${r.connected} | ${r.voicemails} | ${r.emails} | ${r.interested} | 0 | Sent | ${r.note}`
@@ -109,7 +99,8 @@ describe('Metra reads the rest of the app as the person', () => {
         expect(text).not.toContain(M.business)
       }
     }
-    expect((await offered(w.leadgenMember)).filter((k) => k.startsWith('leads.')).length).toBe(8)
+    // Seven since the review queue (Jesse Queue) was removed, 25 Nov 2026.
+    expect((await offered(w.leadgenMember)).filter((k) => k.startsWith('leads.')).length).toBe(7)
     await switches(false, ['lead-management'])
     expect((await offered(w.leadgenMember)).filter((k) => k.startsWith('leads.'))).toEqual([])
     expect((await offered(w.superAdmin)).filter((k) => k.startsWith('leads.'))).toEqual([])

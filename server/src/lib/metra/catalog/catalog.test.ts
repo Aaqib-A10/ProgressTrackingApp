@@ -323,7 +323,7 @@ describe('screens read as they come, and the rest of the app (the full audit of 
     expect(leads(base)).toEqual([])
     // In a business, but the switch is off for the company (the LEAD source is then left out).
     expect(leads({ ...base, principals: new Set(['leads']) })).toEqual([])
-    expect(leads({ ...base, principals: new Set(['leads']), sources: new Set(['LEAD']) }).sort()).toEqual(['leads.board', 'leads.businesses', 'leads.calls', 'leads.contacts', 'leads.dashboard', 'leads.queue', 'leads.report', 'leads.tasks'])
+    expect(leads({ ...base, principals: new Set(['leads']), sources: new Set(['LEAD']) }).sort()).toEqual(['leads.board', 'leads.businesses', 'leads.calls', 'leads.contacts', 'leads.dashboard', 'leads.report', 'leads.tasks'])
   })
 
   it('the team lists, the register and a profile are for team leads; the QA team list for the QA lead; the social numbers for the social team and the leads', () => {

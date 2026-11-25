@@ -259,3 +259,34 @@ export function composeSummary(l: { company: string; contact: string | null; han
 
 /** Words an SDR may not put in the Send-info email (price, freight and pickup are Jesse's). */
 export const PROMISE_WORDS = /\$\s?\d|\d+\s?(c|¢|cents?)\b|per\s?(lb|pound)|\/lb|freight|pick-?up|we (will|can) (pay|cover|arrange|book)|guarantee/i
+
+// ------------------------------------------------------------------ tags (25 Nov 2026)
+
+/** A lead tag the business made (Wholesale, Retail...), with its colour. Leads keep the label in `Lead.tags`. */
+export interface LeadTag { label: string; color: string }
+/** Colours a new tag gets in turn (the person can change it). */
+export const TAG_COLORS = ['#4F46E5', '#0EA5E9', '#14B8A6', '#22C55E', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
+
+/** The business's tag list, in order (empty when it has none yet). */
+export function tagsOf(b: { tagList?: unknown }): LeadTag[] {
+  const raw = Array.isArray(b.tagList) ? b.tagList : []
+  return raw
+    .filter((t): t is LeadTag => !!t && typeof (t as LeadTag).label === 'string' && typeof (t as LeadTag).color === 'string')
+    .map((t) => ({ label: t.label, color: /^#[0-9a-fA-F]{6}$/.test(t.color) ? t.color : TAG_COLORS[0] }))
+}
+
+/**
+ * Tags as the business spells them: "wholesale" and " Wholesale " become the list's "Wholesale", repeats go. A tag
+ * that is not on the list is kept as typed (older leads, an import), so nothing is lost.
+ */
+export function canonTags(tags: string[], list: LeadTag[]): string[] {
+  const byKey = new Map(list.map((t) => [t.label.trim().toLowerCase(), t.label]))
+  const out: string[] = []
+  for (const raw of tags) {
+    const t = raw.trim().replace(/\s+/g, ' ').slice(0, 40)
+    if (!t) continue
+    const label = byKey.get(t.toLowerCase()) ?? t
+    if (!out.some((x) => x.toLowerCase() === label.toLowerCase())) out.push(label)
+  }
+  return out.slice(0, 20)
+}
